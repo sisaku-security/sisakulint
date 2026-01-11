@@ -526,6 +526,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewCachePoisoningPoisonableStepRule(),
 		NewSecretExposureRule(),        // Detects toJSON(secrets) and secrets[dynamic-access]
 		NewImproperAccessControlRule(), // Detects improper access control with label-based approval and synchronize events
+		NewSecretsInArtifactsRule(),    // Detects secrets exposure in artifact uploads (CWE-312)
 	}
 }
 
