@@ -1,0 +1,57 @@
+# Example workflow with archived actions that should trigger warnings
+# This file demonstrates the archived-uses rule detection
+
+name: Archived Actions Example
+on: [push, pull_request]
+
+jobs:
+  rust-build:
+    name: Rust Build (uses archived actions-rs)
+    runs-on: ubuntu-latest
+    steps:
+      # These actions-rs actions are archived and no longer maintained
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1  # ARCHIVED - should warn
+        with:
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1  # ARCHIVED - should warn
+        with:
+          command: build
+          args: --release
+
+  release:
+    name: Create Release (uses archived actions)
+    runs-on: ubuntu-latest
+    needs: rust-build
+    steps:
+      - uses: actions/checkout@v4
+      # These official actions are archived
+      - uses: actions/create-release@v1  # ARCHIVED - should warn
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - uses: actions/upload-release-asset@v1  # ARCHIVED - should warn
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./target/release/myapp
+          asset_name: myapp
+          asset_content_type: application/octet-stream
+
+  azure-scan:
+    name: Azure Container Scan (uses archived Azure action)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Azure/container-scan@v0  # ARCHIVED - should warn
+
+  reusable-workflow:
+    name: Call Reusable Workflow from Archived Repo
+    # This reusable workflow call references an archived repository
+    uses: actions-rs/cargo/.github/workflows/ci.yml@main  # ARCHIVED - should warn

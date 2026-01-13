@@ -1,0 +1,70 @@
+# Example workflow with maintained actions that should NOT trigger warnings
+# This file demonstrates safe alternatives to archived actions
+
+name: Safe Actions Example
+on: [push, pull_request]
+
+jobs:
+  rust-build:
+    name: Rust Build (uses maintained alternatives)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Use direct cargo commands instead of archived actions-rs
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+      - name: Build
+        run: cargo build --release
+      - name: Test
+        run: cargo test
+
+  release:
+    name: Create Release (uses maintained alternatives)
+    runs-on: ubuntu-latest
+    needs: rust-build
+    steps:
+      - uses: actions/checkout@v4
+      # Use gh CLI instead of archived create-release action
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes
+      # Use gh CLI to upload assets instead of archived upload-release-asset
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} ./target/release/myapp
+
+  ruby-build:
+    name: Ruby Build (uses maintained alternative)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Use ruby/setup-ruby instead of archived actions/setup-ruby
+      - uses: ruby/setup-ruby@v1  # Maintained alternative
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      - run: bundle exec rake
+
+  local-action:
+    name: Local Action (no warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Local actions are not checked
+      - uses: ./.github/actions/my-action
+
+  docker-action:
+    name: Docker Action (no warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Docker actions are not checked
+      - uses: docker://alpine:3.18
