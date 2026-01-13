@@ -6,18 +6,11 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
-// ArchivedUsesRule detects usage of actions from archived repositories.
-// Archived repositories are no longer maintained, which poses security risks:
-// - Security vulnerabilities are not patched
-// - Dependencies are not updated
-// - No support for new GitHub Actions features
-// - No community support for issues
 type ArchivedUsesRule struct {
 	BaseRule
 	archivedRepos map[string]struct{}
 }
 
-// NewArchivedUsesRule creates a new ArchivedUsesRule instance
 func NewArchivedUsesRule() *ArchivedUsesRule {
 	rule := &ArchivedUsesRule{
 		BaseRule: BaseRule{
@@ -29,8 +22,6 @@ func NewArchivedUsesRule() *ArchivedUsesRule {
 	return rule
 }
 
-// initArchivedReposList initializes the set of known archived repositories
-// This list is curated from GitHub searches for archived action repositories
 // Based on: https://github.com/zizmorcore/zizmor/blob/main/support/archived-action-repos.txt
 func (rule *ArchivedUsesRule) initArchivedReposList() {
 	archivedRepos := []string{
@@ -134,36 +125,26 @@ func (rule *ArchivedUsesRule) initArchivedReposList() {
 
 	rule.archivedRepos = make(map[string]struct{}, len(archivedRepos))
 	for _, repo := range archivedRepos {
-		// Normalize to lowercase for case-insensitive comparison
 		rule.archivedRepos[strings.ToLower(repo)] = struct{}{}
 	}
 }
 
-// isArchivedRepo checks if the given owner/repo is in the archived repository list
 func (rule *ArchivedUsesRule) isArchivedRepo(owner, repo string) bool {
-	// Normalize to lowercase for case-insensitive comparison
 	key := strings.ToLower(owner + "/" + repo)
 	_, exists := rule.archivedRepos[key]
 	return exists
 }
 
-// parseUsesValue parses a uses value and returns owner, repo, and ref
-// Returns empty strings if the uses value is not a valid external action reference
 func parseUsesValue(uses string) (owner, repo, ref string) {
-	// Skip local actions (starting with ./)
 	if strings.HasPrefix(uses, "./") {
 		return "", "", ""
 	}
-
-	// Skip Docker images (docker://)
 	if strings.HasPrefix(uses, "docker://") {
 		return "", "", ""
 	}
 
-	// Parse owner/repo@ref or owner/repo/path@ref format
 	atIndex := strings.LastIndex(uses, "@")
 	if atIndex == -1 {
-		// No ref specified, still valid
 		atIndex = len(uses)
 	} else {
 		ref = uses[atIndex+1:]
@@ -180,7 +161,6 @@ func parseUsesValue(uses string) (owner, repo, ref string) {
 	return owner, repo, ref
 }
 
-// VisitStep checks each step for usage of archived actions
 func (rule *ArchivedUsesRule) VisitStep(step *ast.Step) error {
 	if action, ok := step.Exec.(*ast.ExecAction); ok {
 		usesValue := action.Uses.Value
@@ -197,7 +177,6 @@ func (rule *ArchivedUsesRule) VisitStep(step *ast.Step) error {
 	return nil
 }
 
-// VisitJobPre checks reusable workflow calls for archived repositories
 func (rule *ArchivedUsesRule) VisitJobPre(job *ast.Job) error {
 	if job.WorkflowCall != nil && job.WorkflowCall.Uses != nil {
 		usesValue := job.WorkflowCall.Uses.Value
