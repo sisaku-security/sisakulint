@@ -1,0 +1,61 @@
+# Test workflow for unpinned-images rule
+# This file demonstrates safe container image patterns with SHA256 pinning
+
+on: [push, pull_request]
+
+jobs:
+  # Safe: container with SHA256 digest
+  container-pinned:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18@sha256:a6385a6bb2fdcb7c48fc871e35e32af8daaa82c518900be49b76d10c005864c2
+    steps:
+      - run: echo "Running with pinned image"
+
+  # Safe: container with tag and SHA256 digest
+  container-tag-and-digest:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18-alpine@sha256:b5b9467fe7b33aad47f1e8c47f2e59e4e4c2e4a9c9c7c3c2c1c0c9c8c7c6c5c4
+    steps:
+      - run: echo "Running with tag and digest"
+
+  # Safe: service with SHA256 digest
+  service-pinned:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14@sha256:abc123def456789abc123def456789abc123def456789abc123def456789abcdef
+        env:
+          POSTGRES_PASSWORD: test
+    steps:
+      - run: echo "Running with pinned service"
+
+  # Safe: multiple services all pinned
+  multiple-services-pinned:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18@sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    services:
+      postgres:
+        image: postgres:14@sha256:2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+        env:
+          POSTGRES_PASSWORD: test
+      redis:
+        image: redis:7@sha256:3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    steps:
+      - run: echo "Running with all pinned images"
+
+  # Safe: registry with SHA256 digest
+  registry-pinned:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/myorg/myimage:v1.0.0@sha256:4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    steps:
+      - run: echo "Running with registry pinned image"
+
+  # Safe: no container (only runs-on)
+  no-container:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running without container"
