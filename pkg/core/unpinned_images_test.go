@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -455,22 +456,10 @@ func TestUnpinnedImagesRule_ErrorMessages(t *testing.T) {
 				t.Fatalf("expected 1 error, got %d", len(errors))
 			}
 
-			if !containsSubstringUnpinnedImages(errors[0].Description, tt.wantMsgContains) {
+			if !strings.Contains(errors[0].Description, tt.wantMsgContains) {
 				t.Errorf("error message %q does not contain %q", errors[0].Description, tt.wantMsgContains)
 			}
 		})
 	}
 }
 
-func containsSubstringUnpinnedImages(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || findSubstringUnpinnedImages(s, substr))
-}
-
-func findSubstringUnpinnedImages(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
