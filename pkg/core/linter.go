@@ -539,6 +539,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewSelfHostedRunnersRule(),               // Detects self-hosted runner usage which may be dangerous in public repos
 		NewArchivedUsesRule(),                    // Detects usage of archived actions/reusable workflows
 		NewUnpinnedImagesRule(),                  // Detects container images not pinned by SHA256 digest
+		NewSecretsInArtifactsRule(),              // Detects secrets exposure in artifact uploads (CWE-312)
 	}
 }
 
