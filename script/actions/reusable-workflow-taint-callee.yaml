@@ -1,0 +1,67 @@
+# Vulnerable example: Reusable workflow that uses tainted inputs unsafely
+# This is the callee workflow that receives potentially tainted inputs
+# and uses them in dangerous contexts.
+#
+# This workflow should be analyzed and flagged because:
+# 1. It's a reusable workflow (has workflow_call trigger)
+# 2. It uses inputs.* directly in run scripts without sanitization
+# 3. The inputs could contain untrusted data from the caller
+
+name: Vulnerable Reusable Processor
+
+on:
+  workflow_call:
+    inputs:
+      pr_title:
+        description: 'Pull request title'
+        required: true
+        type: string
+      pr_body:
+        description: 'Pull request body'
+        required: false
+        type: string
+      branch_name:
+        description: 'Branch name'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment'
+        required: false
+        type: string
+        default: 'staging'
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # VULNERABLE: Using inputs.pr_title directly in run script
+      - name: Echo PR title (vulnerable)
+        run: |
+          echo "Processing PR: ${{ inputs.pr_title }}"
+
+      # VULNERABLE: Using inputs.pr_body in run script
+      - name: Process PR body (vulnerable)
+        run: |
+          echo "PR Body:"
+          echo "${{ inputs.pr_body }}"
+
+      # VULNERABLE: Using inputs in github-script
+      - name: Process with github-script (vulnerable)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('Branch: ${{ inputs.branch_name }}');
+            console.log('Title: ${{ inputs.pr_title }}');
+
+      # SAFE: Using input through environment variable
+      - name: Safe usage with env
+        env:
+          TITLE: ${{ inputs.pr_title }}
+        run: |
+          echo "Processing: $TITLE"
+
+      # SAFE: Using static input
+      - name: Echo environment (safe)
+        run: |
+          echo "Environment: ${{ inputs.environment }}"

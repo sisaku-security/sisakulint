@@ -252,6 +252,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 36. **SelfHostedRunnersRule** - Detects self-hosted runner usage which poses security risks in public repos
 37. **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
 38. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
+39. **ReusableWorkflowTaintRule** - Detects untrusted inputs passed to reusable workflows and used unsafely (auto-fix supported)
 
 ## Key Files
 

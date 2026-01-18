@@ -1,0 +1,18 @@
+# Safe example: Properly handling inputs in reusable workflows
+# This demonstrates the safe way to pass and use inputs in reusable workflows
+
+name: Safe Reusable Workflow Caller
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  call-safe-workflow:
+    uses: ./.github/workflows/reusable-processor-safe.yml
+    with:
+      # SAFE: Passing static values
+      environment: production
+      # SAFE: Passing non-user-controlled values
+      run_id: ${{ github.run_id }}
+      sha: ${{ github.sha }}
