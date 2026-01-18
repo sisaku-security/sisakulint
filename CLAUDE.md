@@ -9,7 +9,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files. It analy
 **Key Features:**
 - Detects injection vulnerabilities, credential exposure, and supply chain attacks
 - Validates permissions, timeouts, and workflow configurations
-- Supports auto-fixing for many security issues (20 rules with auto-fix as of Jan 2026)
+- Supports auto-fixing for many security issues (23 rules with auto-fix as of Jan 2026)
 - SARIF output format for CI/CD integration (e.g., reviewdog)
 - Fast parallel analysis with Go concurrency
 - Specialized detection for privileged workflow contexts (pull_request_target, issue_comment, workflow_run)
@@ -96,6 +96,12 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/artipacked.go` - **ArtipackedRule**: Detects credential leakage when checkout credentials are persisted and workspace is uploaded (with auto-fix)
      - `pkg/core/unsoundcontainsrule.go` - **UnsoundContainsRule**: Detects bypassable contains() function usage in conditions (with auto-fix)
      - `pkg/core/impostorcommit.go` - **ImpostorCommitRule**: Detects impostor commits from fork network - supply chain attack vector (with auto-fix)
+     - `pkg/core/refconfusion.go` - **RefConfusionRule**: Detects ref confusion attacks where both branch and tag have same name (with auto-fix)
+     - `pkg/core/obfuscation.go` - **ObfuscationRule**: Detects obfuscated workflow patterns that may evade security scanners (with auto-fix)
+     - `pkg/core/known_vulnerable_actions.go` - **KnownVulnerableActionsRule**: Detects actions with known security vulnerabilities via GitHub Security Advisories (with auto-fix)
+     - `pkg/core/selfhostedrunnersrule.go` - **SelfHostedRunnersRule**: Detects self-hosted runner usage which poses security risks in public repos
+     - `pkg/core/archived_uses.go` - **ArchivedUsesRule**: Detects usage of archived actions/reusable workflows that are no longer maintained
+     - `pkg/core/unpinned_images.go` - **UnpinnedImagesRule**: Detects container images not pinned by SHA256 digest
      - `pkg/core/rule_add_temp_normal.go` - **AddRule**: Template rule for adding new rules
 
 4. **AST Processing**:
@@ -206,7 +212,7 @@ See `docs/RULES_GUIDE.md` for detailed guide.
 
 ## Implemented Rules
 
-sisakulint includes the following security rules (as of pkg/core/linter.go:500-531):
+sisakulint includes the following security rules (as of pkg/core/linter.go:500-542):
 
 1. **CredentialsRule** - Detects hardcoded credentials and tokens (auto-fix supported)
 2. **JobNeedsRule** - Validates job dependencies
@@ -240,6 +246,12 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 30. **ArtipackedRule** - Detects credential leakage when checkout credentials are persisted and workspace is uploaded (auto-fix supported)
 31. **UnsoundContainsRule** - Detects bypassable contains() function usage in conditions (auto-fix supported)
 32. **ImpostorCommitRule** - Detects impostor commits from fork network that could be supply chain attacks (auto-fix supported)
+33. **RefConfusionRule** - Detects ref confusion attacks where both branch and tag have same name (auto-fix supported)
+34. **ObfuscationRule** - Detects obfuscated workflow patterns that may evade security scanners (auto-fix supported)
+35. **KnownVulnerableActionsRule** - Detects actions with known security vulnerabilities via GitHub Security Advisories (auto-fix supported)
+36. **SelfHostedRunnersRule** - Detects self-hosted runner usage which poses security risks in public repos
+37. **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
+38. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
 
 ## Key Files
 
@@ -359,6 +371,9 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 18. **UnsoundContainsRule** (`unsoundcontainsrule.go`) - Converts string literal to fromJSON() array format
 19. **CachePoisoningRule** (`cachepoisoningrule.go`) - Removes unsafe ref from checkout step
 20. **ConditionalRule** (`conditionalrule.go`) - Fixes conditional expression formatting
+21. **RefConfusionRule** (`refconfusion.go`) - Pins action to commit SHA when ref confusion is detected
+22. **ObfuscationRule** (`obfuscation.go`) - Normalizes obfuscated paths and shell commands
+23. **KnownVulnerableActionsRule** (`known_vulnerable_actions.go`) - Updates vulnerable actions to patched versions
 
 ## Recent Security Enhancements
 
@@ -398,6 +413,6 @@ Two new rules detect supply chain attacks:
 
 - When adding/modifying rules, ALWAYS update the rule list in this file
 - When adding example workflows to `script/actions/`, document them in `script/README.md`
-- Rule registration happens in `pkg/core/linter.go` around line 500-519
+- Rule registration happens in `pkg/core/linter.go` around line 500-542
 - The visitor pattern is depth-first: WorkflowPre → JobPre → Step → JobPost → WorkflowPost
 - Auto-fix is optional but highly recommended for actionable rules
