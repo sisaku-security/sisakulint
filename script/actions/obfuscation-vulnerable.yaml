@@ -1,0 +1,62 @@
+# Demonstration of obfuscated workflow patterns
+# This workflow contains patterns that may be used to evade security scanners
+
+name: Obfuscation Vulnerable Examples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    # shell: cmd is flagged as obfuscation-prone
+    shell: cmd
+
+jobs:
+  obfuscated-uses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Obfuscated uses: paths
+      - name: Checkout with dot component
+        uses: actions/checkout/./@v4  # Contains '.' - obfuscated path
+
+      - name: Checkout with double dot
+        uses: actions/cache/save/../save@v4  # Contains '..' - directory traversal
+
+      - name: Checkout with empty components
+        uses: actions/checkout////@v4  # Contains empty components - consecutive slashes
+
+      - name: CodeQL with dot
+        uses: github/codeql-action/./init@v2  # Contains '.' in subpath
+
+  shell-cmd-examples:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      # shell: cmd is difficult to analyze
+      - name: Run CMD script
+        run: |
+          rem This is Windows CMD
+          echo Hello World
+          set FOO=bar
+        shell: cmd  # Flagged as obfuscation-prone
+
+      - name: Another CMD step
+        run: echo test
+        shell: CMD  # Case-insensitive check
+
+  job-level-cmd:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: cmd  # Job-level default shell: cmd
+    steps:
+      - name: Uses job default shell
+        run: echo "Using job default cmd shell"
+
+  workflow-call-obfuscated:
+    uses: owner/repo/.github/workflows/./ci.yml@main  # Obfuscated workflow call path

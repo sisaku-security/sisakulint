@@ -1,0 +1,62 @@
+# Self-hosted runner detection examples
+# This file demonstrates various patterns of self-hosted runner usage
+# that pose security risks in public repositories.
+#
+# References:
+# - https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security
+
+name: Self-hosted Runner Detection Tests
+
+on:
+  pull_request:  # Anyone can send PRs - this makes self-hosted runners dangerous
+    branches: [main]
+
+jobs:
+  # VULNERABLE: Direct self-hosted label
+  direct-self-hosted:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./build.sh  # Attacker-controlled code runs on self-hosted runner
+
+  # VULNERABLE: self-hosted with additional labels
+  self-hosted-with-labels:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: make build
+
+  # VULNERABLE: Runner group (typically contains self-hosted runners)
+  runner-group:
+    runs-on:
+      group: my-self-hosted-runners
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install
+
+  # VULNERABLE: Matrix expansion with self-hosted
+  matrix-with-self-hosted:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, self-hosted]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Running on ${{ matrix.runner }}"
+
+  # VULNERABLE: Matrix with array labels containing self-hosted
+  matrix-array-labels:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+          - runner: [self-hosted, linux, arm64]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: uname -a

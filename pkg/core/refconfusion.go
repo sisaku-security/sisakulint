@@ -40,7 +40,7 @@ func isSymbolicRef(ref string) bool {
 	return !shaPattern.MatchString(ref)
 }
 
-func parseActionRef(usesValue string) (owner, repo, ref string, ok bool) {
+func parseActionRefForRefConfusion(usesValue string) (owner, repo, ref string, ok bool) {
 	// Skip local actions
 	if strings.HasPrefix(usesValue, "./") {
 		return "", "", "", false
@@ -148,7 +148,7 @@ func (rule *RefConfusion) VisitStep(step *ast.Step) error {
 
 	usesValue := action.Uses.Value
 
-	owner, repo, ref, ok := parseActionRef(usesValue)
+	owner, repo, ref, ok := parseActionRefForRefConfusion(usesValue)
 	if !ok {
 		return nil
 	}
@@ -195,7 +195,7 @@ func (rule *RefConfusion) FixStep(step *ast.Step) error {
 	action := step.Exec.(*ast.ExecAction)
 	usesValue := action.Uses.Value
 
-	owner, repo, ref, ok := parseActionRef(usesValue)
+	owner, repo, ref, ok := parseActionRefForRefConfusion(usesValue)
 	if !ok {
 		return FormattedError(step.Pos, rule.RuleName, "invalid action reference format: '%s'", usesValue)
 	}

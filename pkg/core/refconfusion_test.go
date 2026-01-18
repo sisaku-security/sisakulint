@@ -96,7 +96,7 @@ func TestIsSymbolicRef(t *testing.T) {
 	}
 }
 
-func TestParseActionRef(t *testing.T) {
+func TestParseActionRefForRefConfusion(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name          string
@@ -191,18 +191,18 @@ func TestParseActionRef(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			owner, repo, ref, ok := parseActionRef(tt.usesValue)
+			owner, repo, ref, ok := parseActionRefForRefConfusion(tt.usesValue)
 			if owner != tt.expectedOwner {
-				t.Errorf("parseActionRef(%q) owner = %q, want %q", tt.usesValue, owner, tt.expectedOwner)
+				t.Errorf("parseActionRefForRefConfusion(%q) owner = %q, want %q", tt.usesValue, owner, tt.expectedOwner)
 			}
 			if repo != tt.expectedRepo {
-				t.Errorf("parseActionRef(%q) repo = %q, want %q", tt.usesValue, repo, tt.expectedRepo)
+				t.Errorf("parseActionRefForRefConfusion(%q) repo = %q, want %q", tt.usesValue, repo, tt.expectedRepo)
 			}
 			if ref != tt.expectedRef {
-				t.Errorf("parseActionRef(%q) ref = %q, want %q", tt.usesValue, ref, tt.expectedRef)
+				t.Errorf("parseActionRefForRefConfusion(%q) ref = %q, want %q", tt.usesValue, ref, tt.expectedRef)
 			}
 			if ok != tt.expectedOk {
-				t.Errorf("parseActionRef(%q) ok = %v, want %v", tt.usesValue, ok, tt.expectedOk)
+				t.Errorf("parseActionRefForRefConfusion(%q) ok = %v, want %v", tt.usesValue, ok, tt.expectedOk)
 			}
 		})
 	}

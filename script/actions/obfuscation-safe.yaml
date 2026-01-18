@@ -1,0 +1,60 @@
+# Safe workflow patterns without obfuscation
+# This workflow demonstrates the correct way to write workflow files
+
+name: Obfuscation Safe Examples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    shell: bash  # bash is recommended
+
+jobs:
+  clean-uses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Clean uses: paths
+      - name: Checkout
+        uses: actions/checkout@v4  # Clean path
+
+      - name: Cache
+        uses: actions/cache/save@v4  # Clean path with subpath
+
+      - name: CodeQL Init
+        uses: github/codeql-action/init@v2  # Clean path with subpath
+
+  shell-bash-examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # bash is recommended
+      - name: Run bash script
+        run: |
+          echo "Hello World"
+          export FOO=bar
+        shell: bash
+
+      # powershell is also acceptable
+      - name: Run PowerShell
+        run: |
+          Write-Host "Hello World"
+          $FOO = "bar"
+        shell: pwsh
+
+  job-level-bash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash  # Job-level default shell: bash
+    steps:
+      - name: Uses job default shell
+        run: echo "Using job default bash shell"
+
+  workflow-call-clean:
+    uses: owner/repo/.github/workflows/ci.yml@main  # Clean workflow call path
