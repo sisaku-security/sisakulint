@@ -2,9 +2,11 @@ package core
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"gopkg.in/yaml.v3"
 )
 
 func TestPermissionsRule(t *testing.T) {
@@ -189,5 +191,230 @@ func TestPermissionRule_InvalidAllPermission(t *testing.T) {
 	rule.checkPermissions(permissions)
 	if len(rule.Errors()) == 0 {
 		t.Error("invalid-all should generate an error, but got none")
+	}
+}
+
+func TestPermissionRule_MissingPermissions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		workflow    *ast.Workflow
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name: "missing permissions - should error",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 2, Col: 1}}},
+				},
+				Permissions: nil,
+			},
+			wantErr:     true,
+			errContains: "does not have explicit 'permissions' block",
+		},
+		{
+			name: "has permissions - no error",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 2, Col: 1}}},
+				},
+				Permissions: &ast.Permissions{
+					All: &ast.String{Value: "read-all", Pos: &ast.Position{Line: 3, Col: 1}},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "reusable workflow without permissions - no error",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "reusable", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WorkflowCallEvent{Pos: &ast.Position{Line: 2, Col: 1}},
+				},
+				Permissions: nil,
+			},
+			wantErr: false,
+		},
+		{
+			// When workflow_call is present with other triggers, it's treated as reusable.
+			// This is because the workflow can be called with inherited permissions,
+			// even if it also responds to other events.
+			name: "reusable workflow with other triggers - no error for workflow_call",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "reusable", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WorkflowCallEvent{Pos: &ast.Position{Line: 2, Col: 1}},
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 3, Col: 1}}},
+				},
+				Permissions: nil,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rule := PermissionsRule()
+			err := rule.VisitWorkflowPre(tt.workflow)
+			if err != nil {
+				t.Errorf("VisitWorkflowPre() returned error: %v", err)
+			}
+
+			errors := rule.Errors()
+			if tt.wantErr {
+				if len(errors) == 0 {
+					t.Error("expected error but got none")
+				} else if tt.errContains != "" {
+					found := false
+					for _, e := range errors {
+						if strings.Contains(e.Description, tt.errContains) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got %v", tt.errContains, errors)
+					}
+				}
+			} else {
+				// Filter out any errors that are not about missing permissions
+				for _, e := range errors {
+					if strings.Contains(e.Description, "does not have explicit 'permissions' block") {
+						t.Errorf("expected no missing permissions error, but got: %v", e.Description)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPermissionRule_AutoFix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		input          string
+		wantPermission bool
+	}{
+		{
+			name: "adds permissions after on block",
+			input: `name: Test
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+`,
+			wantPermission: true,
+		},
+		{
+			name: "adds permissions after name when no on block found first",
+			input: `name: Test
+jobs:
+  test:
+    runs-on: ubuntu-latest
+`,
+			wantPermission: true,
+		},
+		{
+			name: "adds permissions after on block when no name field",
+			input: `on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+`,
+			wantPermission: true,
+		},
+		{
+			name: "adds permissions after on block with run-name instead of name",
+			input: `run-name: Deploy by @${{ github.actor }}
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+`,
+			wantPermission: true,
+		},
+		{
+			name: "adds permissions at beginning when only jobs field exists",
+			input: `jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello
+`,
+			wantPermission: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Parse the workflow
+			var node yaml.Node
+			if err := yaml.Unmarshal([]byte(tt.input), &node); err != nil {
+				t.Fatalf("failed to parse yaml: %v", err)
+			}
+
+			workflow := &ast.Workflow{
+				BaseNode:    node.Content[0],
+				Permissions: nil,
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 2, Col: 1}}},
+				},
+			}
+
+			rule := PermissionsRule()
+			_ = rule.VisitWorkflowPre(workflow)
+
+			// Check that auto-fixer was added
+			fixers := rule.AutoFixers()
+			if len(fixers) == 0 {
+				t.Fatal("expected auto-fixer to be added")
+			}
+
+			// Apply the fix
+			if err := fixers[0].Fix(); err != nil {
+				t.Fatalf("fix failed: %v", err)
+			}
+
+			// Check that permissions was added
+			if tt.wantPermission {
+				// BaseNode is MappingNode in test (not DocumentNode)
+				mappingNode := workflow.BaseNode
+				found := false
+				for i := 0; i < len(mappingNode.Content); i += 2 {
+					if mappingNode.Content[i].Value == "permissions" {
+						found = true
+						// Check that it's an empty mapping (permissions: {})
+						if mappingNode.Content[i+1].Kind != yaml.MappingNode {
+							t.Errorf("expected permissions to be a mapping node, got kind %d", mappingNode.Content[i+1].Kind)
+						}
+						if len(mappingNode.Content[i+1].Content) != 0 {
+							t.Errorf("expected empty permissions mapping, got %d items", len(mappingNode.Content[i+1].Content))
+						}
+						// Check that TODO comment is present
+						if !strings.Contains(mappingNode.Content[i].HeadComment, "TODO") {
+							t.Errorf("expected TODO comment on permissions key, got %q", mappingNode.Content[i].HeadComment)
+						}
+						break
+					}
+				}
+				if !found {
+					t.Error("permissions block was not added")
+				}
+			}
+		})
 	}
 }

@@ -1,0 +1,42 @@
+# Example workflow demonstrating SAFE bot detection conditions
+# These patterns use event-specific contexts that cannot be spoofed
+
+name: Bot Conditions Safe Examples
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  # SAFE: Using github.event.pull_request.user.login
+  # This context is tied to the PR author and cannot be spoofed
+  auto-merge-safe:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # SAFE: Using github.event.pull_request.user.id
+  auto-merge-safe-id:
+    if: github.event.pull_request.user.id == '49699333'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # SAFE: Multiple bot checks using safe context
+  auto-merge-multiple-bots-safe:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # SAFE: Non-bot condition (no [bot] pattern)
+  regular-build:
+    if: github.actor != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: npm build

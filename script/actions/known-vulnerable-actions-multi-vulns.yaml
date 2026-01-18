@@ -1,0 +1,20 @@
+# Test case for multiple vulnerabilities in the same action
+# tj-actions/changed-files@v35 has TWO known vulnerabilities:
+# 1. GHSA-mcph-m25j-8j63 - requires upgrade to v41+
+# 2. GHSA-mrrh-fwg8-r2c3 - requires upgrade to v46.0.1+
+#
+# Expected behavior: Should fix to the HIGHEST required version (v46.0.1)
+# Bug behavior: Multiple fixers might conflict
+
+name: Multiple Vulnerabilities Test
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vulnerable action with multiple CVEs
+        uses: tj-actions/changed-files@v35
+        with:
+          files: |
+            **/*.go

@@ -1,0 +1,45 @@
+# Example workflow demonstrating known-vulnerable-actions rule
+# This file contains actions with known security vulnerabilities for testing purposes
+
+name: Known Vulnerable Actions Example
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Example 1: Old version of actions/github-script with known Code Injection vulnerability
+      # GHSA-35jj-vqcf-f2jf - GitHub Script before v6.4.0 is vulnerable to code injection
+      - name: Run GitHub Script (vulnerable)
+        uses: actions/github-script@v3
+        with:
+          script: |
+            console.log('Hello, World!')
+
+      # Example 2: Old version of tj-actions/changed-files
+      # This action has had multiple security advisories
+      - name: Check Changed Files (vulnerable)
+        uses: tj-actions/changed-files@v35
+
+      # Example 3: Using a specific commit SHA that corresponds to a vulnerable version
+      # The auto-fix should update to the patched version's commit SHA
+      - name: Checkout (with SHA)
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Safe version - should not trigger warning
+      - name: Checkout (safe)
+        uses: actions/checkout@v4
+
+      # Safe version with commit SHA pinning
+      - name: Setup Node (safe)
+        uses: actions/setup-node@1a4442cacd436585916f1b3aa32a2f6e0758f6e3 # v4.2.0
+        with:
+          node-version: '20'

@@ -530,6 +530,10 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewUntrustedCheckoutTOCTOUCriticalRule(), // Detects TOCTOU with labeled event type and mutable refs
 		NewUntrustedCheckoutTOCTOUHighRule(),     // Detects TOCTOU with deployment environment and mutable refs
 		NewObfuscationRule(),                     // Detects obfuscated workflow patterns
+		NewKnownVulnerableActionsRule(),          // Detects actions with known security vulnerabilities
+		NewBotConditionsRule(),                   // Detects spoofable bot detection conditions
+		NewArtipackedRule(),                      // Detects credential leakage via artifact upload
+		NewUnsoundContainsRule(),                 // Detects bypassable contains() function usage in conditions
 	}
 }
 
