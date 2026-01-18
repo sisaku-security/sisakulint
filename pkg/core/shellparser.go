@@ -35,9 +35,6 @@ var shellCommandPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\b(?:sh|bash|zsh|ksh|dash)\s+-c\s+`),
 }
 
-// commandSubstPattern matches command substitution patterns
-var commandSubstPattern = regexp.MustCompile(`\$\([^)]*\)|` + "`[^`]*`")
-
 // envVarPattern matches environment variable references: $VAR or ${VAR}
 var envVarPattern = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
 

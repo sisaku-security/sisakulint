@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -208,29 +207,3 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 	}
 }
 
-// generateShellMetacharacterFixSuggestion generates a suggestion for fixing shell metacharacter issues
-func (rule *CodeInjectionRule) generateShellMetacharacterFixSuggestion(envVarName string, usage ShellVarUsage) string {
-	var suggestions []string
-
-	if !usage.IsQuoted {
-		suggestions = append(suggestions, fmt.Sprintf("use double quotes: \"$%s\"", envVarName))
-	}
-
-	if usage.InEval {
-		suggestions = append(suggestions, "avoid using eval with untrusted input, or use printf %%q for proper escaping")
-	}
-
-	if usage.InShellCmd {
-		suggestions = append(suggestions, "pass values via environment variables to the subshell instead of interpolation")
-	}
-
-	if usage.InCmdSubst {
-		suggestions = append(suggestions, "avoid using untrusted input in command substitution")
-	}
-
-	if len(suggestions) == 0 {
-		return "validate or sanitize input before use"
-	}
-
-	return strings.Join(suggestions, "; ")
-}
