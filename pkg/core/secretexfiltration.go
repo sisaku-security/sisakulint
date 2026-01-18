@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
-	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
 // SecretExfiltrationRule detects patterns where secrets may be exfiltrated to external services.
@@ -517,66 +516,3 @@ func (rule *SecretExfiltrationRule) reportExfiltration(pattern exfiltrationPatte
 	rule.Error(pattern.position, msg)
 }
 
-// extractAndParseExpressions extracts all ${{ }} expressions from a string and parses them
-func (rule *SecretExfiltrationRule) extractAndParseExpressions(str *ast.String) []parsedExpression {
-	if str == nil {
-		return nil
-	}
-
-	value := str.Value
-	var result []parsedExpression
-	offset := 0
-
-	for {
-		idx := strings.Index(value[offset:], "${{")
-		if idx == -1 {
-			break
-		}
-
-		start := offset + idx
-		endIdx := strings.Index(value[start:], "}}")
-		if endIdx == -1 {
-			break
-		}
-
-		exprContent := value[start+3 : start+endIdx]
-		exprContent = strings.TrimSpace(exprContent)
-
-		expr, parseErr := rule.parseExpression(exprContent)
-		if parseErr == nil && expr != nil {
-			lineIdx := strings.Count(value[:start], "\n")
-			col := start
-			if lastNewline := strings.LastIndex(value[:start], "\n"); lastNewline != -1 {
-				col = start - lastNewline - 1
-			}
-
-			pos := &ast.Position{
-				Line: str.Pos.Line + lineIdx,
-				Col:  str.Pos.Col + col,
-			}
-			if str.Literal {
-				pos.Line++
-			}
-
-			result = append(result, parsedExpression{
-				raw:  exprContent,
-				node: expr,
-				pos:  pos,
-			})
-		}
-
-		offset = start + endIdx + 2
-	}
-
-	return result
-}
-
-// parseExpression parses a single expression string into an AST node
-func (rule *SecretExfiltrationRule) parseExpression(exprStr string) (expressions.ExprNode, *expressions.ExprError) {
-	if !strings.HasSuffix(exprStr, "}}") {
-		exprStr = exprStr + "}}"
-	}
-	l := expressions.NewTokenizer(exprStr)
-	p := expressions.NewMiniParser()
-	return p.Parse(l)
-}
