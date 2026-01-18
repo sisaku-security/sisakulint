@@ -73,6 +73,8 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/exprrule.go` - **ExprRule**: GitHub Actions expression syntax validation
      - `pkg/core/conditionalrule.go` - **ConditionalRule**: Conditional expression validation
      - `pkg/core/codeinjection.go` - **CodeInjectionRule**: Shared implementation for code injection detection (with auto-fix)
+       - `pkg/core/codeinjection_shell.go` - **Shell Metacharacter Detection**: Detects shell metacharacter injection via environment variables (unquoted usage, eval, sh -c, command substitution)
+       - `pkg/core/shellparser.go` - **ShellParser**: Utility for parsing shell scripts and detecting unsafe variable usage patterns
        - `pkg/core/codeinjectioncritical.go` - **CodeInjectionCritical**: Detects untrusted input in privileged workflow triggers (pull_request_target, workflow_run, issue_comment)
        - `pkg/core/codeinjectionmedium.go` - **CodeInjectionMedium**: Detects untrusted input in normal workflow triggers (pull_request, push, schedule)
      - `pkg/core/envvarinjection.go` - **EnvVarInjectionRule**: Shared implementation for environment variable injection detection (with auto-fix)
