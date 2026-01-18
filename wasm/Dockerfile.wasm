@@ -1,0 +1,11 @@
+ARG ALPINE_VER=3.19
+
+FROM alpine:${ALPINE_VER}
+RUN apk add --no-cache busybox
+RUN mkdir -p /samples
+COPY wasm/sisakulint /usr/local/bin/sisakulint
+RUN chmod +x /usr/local/bin/sisakulint
+COPY script/actions/codeinjection-critical.yaml /samples/
+COPY script/actions/codeinjection-medium.yaml /samples/
+WORKDIR /work
+ENTRYPOINT ["/bin/sh"]
