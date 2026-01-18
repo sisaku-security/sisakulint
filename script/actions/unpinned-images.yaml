@@ -1,0 +1,77 @@
+# Test workflow for unpinned-images rule
+# This file demonstrates various vulnerable container image patterns
+
+on: [push, pull_request]
+
+jobs:
+  # Vulnerable: container with latest tag
+  container-latest-tag:
+    runs-on: ubuntu-latest
+    container:
+      image: node:latest
+    steps:
+      - run: echo "Running with latest tag"
+
+  # Vulnerable: container with no tag (implicit latest)
+  container-no-tag:
+    runs-on: ubuntu-latest
+    container:
+      image: node
+    steps:
+      - run: echo "Running with no tag"
+
+  # Vulnerable: container with specific tag but no digest
+  container-tag-only:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18
+    steps:
+      - run: echo "Running with tag only"
+
+  # Vulnerable: service with latest tag
+  service-latest-tag:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_PASSWORD: test
+    steps:
+      - run: echo "Running with service latest tag"
+
+  # Vulnerable: service with specific tag but no digest
+  service-tag-only:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+    steps:
+      - run: echo "Running with service tag only"
+
+  # Vulnerable: multiple services with various issues
+  multiple-services-vulnerable:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18-alpine
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: test
+      redis:
+        image: redis:latest
+      mysql:
+        image: mysql
+    steps:
+      - run: echo "Running with multiple vulnerable services"
+
+  # Vulnerable: expression-based image reference
+  expression-image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [node:18, node:20]
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - run: echo "Running with expression image"
