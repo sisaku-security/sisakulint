@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewObfuscationRule(t *testing.T) {
+	t.Parallel()
 	rule := NewObfuscationRule()
 	if rule.RuleName != "obfuscation" {
 		t.Errorf("expected rule name 'obfuscation', got '%s'", rule.RuleName)
@@ -18,6 +19,7 @@ func TestNewObfuscationRule(t *testing.T) {
 }
 
 func TestCheckUsesPathObfuscation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		usesValue  string
@@ -72,6 +74,7 @@ func TestCheckUsesPathObfuscation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			annotations := checkUsesPathObfuscation(tt.usesValue)
 			if len(annotations) != tt.wantIssues {
 				t.Errorf("checkUsesPathObfuscation(%q) = %d issues, want %d issues; annotations: %v",
@@ -82,6 +85,7 @@ func TestCheckUsesPathObfuscation(t *testing.T) {
 }
 
 func TestNormalizeUsesPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		usesValue  string
@@ -131,6 +135,7 @@ func TestNormalizeUsesPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := normalizeUsesPath(tt.usesValue)
 			if result != tt.wantResult {
 				t.Errorf("normalizeUsesPath(%q) = %q, want %q", tt.usesValue, result, tt.wantResult)
@@ -140,6 +145,7 @@ func TestNormalizeUsesPath(t *testing.T) {
 }
 
 func TestObfuscationRule_VisitStep_UsesPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		step       *ast.Step
@@ -201,6 +207,7 @@ func TestObfuscationRule_VisitStep_UsesPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := NewObfuscationRule()
 			err := rule.VisitStep(tt.step)
 			if err != nil {
@@ -214,6 +221,7 @@ func TestObfuscationRule_VisitStep_UsesPath(t *testing.T) {
 }
 
 func TestObfuscationRule_VisitStep_ShellCmd(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		step       *ast.Step
@@ -304,6 +312,7 @@ func TestObfuscationRule_VisitStep_ShellCmd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := NewObfuscationRule()
 			err := rule.VisitStep(tt.step)
 			if err != nil {
@@ -317,6 +326,7 @@ func TestObfuscationRule_VisitStep_ShellCmd(t *testing.T) {
 }
 
 func TestObfuscationRule_VisitJobPre_Defaults(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		job        *ast.Job
@@ -366,6 +376,7 @@ func TestObfuscationRule_VisitJobPre_Defaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := NewObfuscationRule()
 			err := rule.VisitJobPre(tt.job)
 			if err != nil {
@@ -379,6 +390,7 @@ func TestObfuscationRule_VisitJobPre_Defaults(t *testing.T) {
 }
 
 func TestObfuscationRule_VisitJobPre_WorkflowCall(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		job        *ast.Job
@@ -416,6 +428,7 @@ func TestObfuscationRule_VisitJobPre_WorkflowCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := NewObfuscationRule()
 			err := rule.VisitJobPre(tt.job)
 			if err != nil {
@@ -429,6 +442,7 @@ func TestObfuscationRule_VisitJobPre_WorkflowCall(t *testing.T) {
 }
 
 func TestObfuscationRule_VisitWorkflowPre(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		workflow   *ast.Workflow
@@ -471,6 +485,7 @@ func TestObfuscationRule_VisitWorkflowPre(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := NewObfuscationRule()
 			err := rule.VisitWorkflowPre(tt.workflow)
 			if err != nil {
@@ -484,6 +499,7 @@ func TestObfuscationRule_VisitWorkflowPre(t *testing.T) {
 }
 
 func TestObfuscationRule_FixStep(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		usesValue  string
@@ -513,6 +529,7 @@ func TestObfuscationRule_FixStep(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// Create a YAML node structure for the step
 			yamlContent := "uses: " + tt.usesValue
 
@@ -558,6 +575,7 @@ func TestObfuscationRule_FixStep(t *testing.T) {
 }
 
 func TestObfuscationRule_FixJob(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		usesValue  string
@@ -577,6 +595,7 @@ func TestObfuscationRule_FixJob(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			// Create a YAML node structure
 			yamlContent := "uses: " + tt.usesValue
 
@@ -622,6 +641,7 @@ func TestObfuscationRule_FixJob(t *testing.T) {
 }
 
 func TestIsPathObfuscated(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		usesValue string
@@ -656,6 +676,7 @@ func TestIsPathObfuscated(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := isPathObfuscated(tt.usesValue)
 			if result != tt.want {
 				t.Errorf("isPathObfuscated(%q) = %v, want %v", tt.usesValue, result, tt.want)
@@ -663,4 +684,3 @@ func TestIsPathObfuscated(t *testing.T) {
 		})
 	}
 }
-

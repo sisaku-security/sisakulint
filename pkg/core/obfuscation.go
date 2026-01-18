@@ -7,6 +7,8 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
+const shellCmd = "cmd"
+
 // ObfuscationRule detects obfuscated workflow patterns that may evade security scanners.
 type ObfuscationRule struct {
 	BaseRule
@@ -70,6 +72,7 @@ func normalizeUsesPath(usesValue string) string {
 	repo := parts[1]
 
 	if len(parts) < 3 || parts[2] == "" {
+		// Handle edge case: empty owner/repo from malformed input like "/@v4"
 		if owner == "" || repo == "" {
 			return ""
 		}
@@ -77,6 +80,8 @@ func normalizeUsesPath(usesValue string) string {
 	}
 
 	subpath := parts[2]
+	// Use path.Clean (not filepath.Clean) for consistent behavior across platforms.
+	// This normalizes ".", "..", and consecutive slashes in the subpath.
 	cleanedSubpath := path.Clean(subpath)
 
 	if cleanedSubpath == "." || cleanedSubpath == "/" {
@@ -106,7 +111,7 @@ func (rule *ObfuscationRule) VisitStep(step *ast.Step) error {
 			annotations := checkUsesPathObfuscation(usesValue)
 			if len(annotations) > 0 {
 				rule.Errorf(action.Uses.Pos,
-					"obfuscated 'uses' path detected in step '%s': %s. This may indicate an attempt to evade security scanning. Consider normalizing the path.",
+					"obfuscated 'uses' path in step '%s': %s. Consider normalizing the path.",
 					step.String(),
 					strings.Join(annotations, ", "))
 				rule.AddAutoFixer(NewStepFixer(step, rule))
@@ -117,9 +122,9 @@ func (rule *ObfuscationRule) VisitStep(step *ast.Step) error {
 	if execRun, ok := step.Exec.(*ast.ExecRun); ok {
 		if execRun.Shell != nil {
 			shellValue := strings.ToLower(execRun.Shell.Value)
-			if shellValue == "cmd" {
+			if shellValue == shellCmd {
 				rule.Errorf(execRun.Shell.Pos,
-					"'shell: cmd' detected in step '%s'. Windows CMD shell is difficult to analyze for security issues and may be used to obfuscate malicious commands. Consider using PowerShell or bash instead.",
+					"'shell: cmd' in step '%s'. CMD shell is difficult to analyze and may obfuscate malicious commands. Consider using PowerShell or bash.",
 					step.String())
 			}
 		}
@@ -131,9 +136,9 @@ func (rule *ObfuscationRule) VisitStep(step *ast.Step) error {
 func (rule *ObfuscationRule) VisitJobPre(job *ast.Job) error {
 	if job.Defaults != nil && job.Defaults.Run != nil && job.Defaults.Run.Shell != nil {
 		shellValue := strings.ToLower(job.Defaults.Run.Shell.Value)
-		if shellValue == "cmd" {
+		if shellValue == shellCmd {
 			rule.Errorf(job.Defaults.Run.Shell.Pos,
-				"'shell: cmd' detected in job '%s' defaults. Windows CMD shell is difficult to analyze for security issues and may be used to obfuscate malicious commands. Consider using PowerShell or bash instead.",
+				"'shell: cmd' in job '%s' defaults. CMD shell is difficult to analyze and may obfuscate malicious commands. Consider using PowerShell or bash.",
 				job.ID.Value)
 		}
 	}
@@ -143,7 +148,7 @@ func (rule *ObfuscationRule) VisitJobPre(job *ast.Job) error {
 		annotations := checkUsesPathObfuscation(usesValue)
 		if len(annotations) > 0 {
 			rule.Errorf(job.WorkflowCall.Uses.Pos,
-				"obfuscated 'uses' path detected in workflow call '%s': %s. This may indicate an attempt to evade security scanning. Consider normalizing the path.",
+				"obfuscated 'uses' path in workflow call '%s': %s. Consider normalizing the path.",
 				job.ID.Value,
 				strings.Join(annotations, ", "))
 			rule.AddAutoFixer(NewJobFixer(job, rule))
@@ -156,9 +161,9 @@ func (rule *ObfuscationRule) VisitJobPre(job *ast.Job) error {
 func (rule *ObfuscationRule) VisitWorkflowPre(workflow *ast.Workflow) error {
 	if workflow.Defaults != nil && workflow.Defaults.Run != nil && workflow.Defaults.Run.Shell != nil {
 		shellValue := strings.ToLower(workflow.Defaults.Run.Shell.Value)
-		if shellValue == "cmd" {
+		if shellValue == shellCmd {
 			rule.Errorf(workflow.Defaults.Run.Shell.Pos,
-				"'shell: cmd' detected in workflow defaults. Windows CMD shell is difficult to analyze for security issues and may be used to obfuscate malicious commands. Consider using PowerShell or bash instead.")
+				"'shell: cmd' in workflow defaults. CMD shell is difficult to analyze and may obfuscate malicious commands. Consider using PowerShell or bash.")
 		}
 	}
 	return nil
