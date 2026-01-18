@@ -521,6 +521,12 @@ func (sema *ExprSemanticsChecker) checkSpecialFunctionAvailability(n *FuncCallNo
 	)
 }
 
+func (sema *ExprSemanticsChecker) visitUntrustedCheckerOnEnterNode(n ExprNode) {
+	if sema.untrusted != nil {
+		sema.untrusted.OnVisitNodeEnter(n)
+	}
+}
+
 func (sema *ExprSemanticsChecker) visitUntrustedCheckerOnLeaveNode(n ExprNode) {
 	if sema.untrusted != nil {
 		sema.untrusted.OnVisitNodeLeave(n)
@@ -881,6 +887,7 @@ func (sema *ExprSemanticsChecker) checkLogicalOp(n *LogicalOpNode) ExprType {
 }
 
 func (sema *ExprSemanticsChecker) check(expr ExprNode) ExprType {
+	sema.visitUntrustedCheckerOnEnterNode(expr)       // Call this method in top-down order
 	defer sema.visitUntrustedCheckerOnLeaveNode(expr) // Call this method in bottom-up order
 
 	switch e := expr.(type) {
