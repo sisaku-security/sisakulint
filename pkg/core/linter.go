@@ -536,9 +536,10 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewBotConditionsRule(),                   // Detects spoofable bot detection conditions
 		NewArtipackedRule(),                      // Detects credential leakage via artifact upload
 		NewUnsoundContainsRule(),                 // Detects bypassable contains() function usage in conditions
-		NewSelfHostedRunnersRule(),               // Detects self-hosted runner usage which may be dangerous in public repos
-		NewArchivedUsesRule(),                    // Detects usage of archived actions/reusable workflows
-		NewUnpinnedImagesRule(),                  // Detects container images not pinned by SHA256 digest
+		NewSelfHostedRunnersRule(),                      // Detects self-hosted runner usage which may be dangerous in public repos
+		NewArchivedUsesRule(),                           // Detects usage of archived actions/reusable workflows
+		NewUnpinnedImagesRule(),                         // Detects container images not pinned by SHA256 digest
+		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
 	}
 }
 
