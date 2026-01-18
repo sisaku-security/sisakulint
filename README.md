@@ -59,204 +59,119 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 
 ## Tool features
 
-**Documentation**: https://sisaku-security.github.io/lint/
+**Full Documentation**: https://sisaku-security.github.io/lint/
 
-### Syntax & Configuration Rules
+### OWASP Top 10 CI/CD Security Risks Coverage
 
-- **id rule (ID collision detection)**
-  - Validates job IDs and environment variable names
-  - docs: https://sisaku-security.github.io/lint/docs/rules/idrule/
-  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
+| OWASP Risk | Description | sisakulint Rules |
+|:-----------|:------------|:-----------------|
+| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc] |
+| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm], [secret-exposure][r-se], [unmasked-secret-exposure][r-use] |
+| [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc] |
+| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [untrusted-checkout-*][r-uco] |
+| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr] |
+| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap] |
+| [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc] |
+| [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui] |
+| [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
+| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob] |
 
-- **env-var rule (Environment variable validation)**
-  - Validates environment variable name formatting
-  - Ensures variable names don't include invalid characters like '&', '=', or spaces
+### Complete Rule Reference
 
-- **permissions rule**
-  - Validates permission scopes and values
-  - docs: https://sisaku-security.github.io/lint/docs/rules/permissions/
-  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+| Category | Rule | Description | Fix | Docs | GitHub Ref |
+|:---------|:-----|:------------|:---:|:----:|:----------:|
+| **Syntax** | id | ID collision detection for jobs/env vars | | [docs][r-id] | [ref][gh-shell] |
+| | env-var | Environment variable name validation | | | |
+| | permissions | Permission scopes and values validation | | [docs][r-perm] | [ref][gh-perm] |
+| | workflow-call | Reusable workflow call validation | | [docs][r-wc] | [ref][gh-reuse] |
+| | job-needs | Job dependency validation | | [docs][r-jn] | |
+| | expression | Expression syntax validation | | | |
+| | cond | Conditional expression validation | | | |
+| | deprecated-commands | Deprecated workflow commands detection | | | [ref][gh-cmd] |
+| **Config** | timeout-minutes | Ensures timeout-minutes is set | Yes | [docs][r-tm] | [ref][gh-timeout] |
+| **Credentials** | credentials | Hardcoded credentials detection | Yes | [docs][r-cred] | |
+| | secret-exposure | Excessive secrets exposure detection | Yes | [docs][r-se] | |
+| | unmasked-secret-exposure | Unmasked derived secrets detection | Yes | [docs][r-use] | |
+| | artipacked | Credential leakage via persisted checkout | Yes | [docs][r-ap] | |
+| **Injection** | code-injection-critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] | [ref][gh-inject] |
+| | code-injection-medium | Untrusted input in normal triggers | Yes | [docs][r-cim] | |
+| | envvar-injection-critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] | |
+| | envvar-injection-medium | Untrusted input to $GITHUB_ENV (normal) | Yes | | |
+| | envpath-injection-critical | Untrusted input to $GITHUB_PATH (privileged) | Yes | [docs][r-epi] | |
+| | envpath-injection-medium | Untrusted input to $GITHUB_PATH (normal) | Yes | | |
+| **Checkout** | untrusted-checkout | Untrusted PR code in privileged contexts | Yes | [docs][r-uco] | [ref][gh-pwn] |
+| | untrusted-checkout-toctou-critical | TOCTOU with labeled events | Yes | | |
+| | untrusted-checkout-toctou-high | TOCTOU with deployment environment | Yes | | |
+| **Supply Chain** | commit-sha | Action version pinning validation | Yes | [docs][r-sha] | [ref][gh-3p] |
+| | action-list | Organization allowlist/blocklist enforcement | | [docs][r-al] | |
+| | impostor-commit | Fork network impostor commit detection | Yes | [docs][r-ic] | |
+| | ref-confusion | Branch/tag name collision detection | Yes | [docs][r-rc] | |
+| | known-vulnerable-actions | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] | |
+| | archived-uses | Archived action/workflow detection | | [docs][r-au] | |
+| | unpinned-images | Container image digest pinning | | [docs][r-ui] | |
+| **Poisoning** | artifact-poisoning-critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] | |
+| | artifact-poisoning-medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] | |
+| | cache-poisoning | Unsafe cache patterns with untrusted inputs | Yes | [docs][r-cp] | |
+| | cache-poisoning-poisonable-step | Untrusted code execution after unsafe checkout | Yes | | |
+| **Access Control** | improper-access-control | Label-based approval and synchronize events | Yes | [docs][r-iac] | |
+| | bot-conditions | Spoofable bot detection conditions | Yes | [docs][r-bot] | |
+| | unsound-contains | Bypassable contains() in conditions | Yes | [docs][r-uc] | |
+| **Other** | obfuscation | Obfuscated workflow pattern detection | Yes | [docs][r-ob] | |
+| | self-hosted-runners | Self-hosted runner security risks | | [docs][r-shr] | |
 
-- **workflow-call rule**
-  - Validates reusable workflow calls
-  - docs: https://sisaku-security.github.io/lint/docs/rules/workflowcall/
-  - github ref: https://docs.github.com/en/actions/sharing-automations/reusing-workflows
+<!-- OWASP Links -->
+[owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
+[owasp-02]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-02-Inadequate-Identity-and-Access-Management
+[owasp-03]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-03-Dependency-Chain-Abuse
+[owasp-04]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-04-Poisoned-Pipeline-Execution
+[owasp-05]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-05-Insufficient-PBAC
+[owasp-06]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-06-Insufficient-Credential-Hygiene
+[owasp-07]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-07-Insecure-System-Configuration
+[owasp-08]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-08-Ungoverned-Usage-of-Third-Party-Services
+[owasp-09]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation
+[owasp-10]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-10-Insufficient-Logging-and-Visibility
 
-- **job-needs rule**
-  - Validates job dependencies
-  - Ensures referenced jobs exist in the workflow
-  - docs: https://sisaku-security.github.io/lint/docs/rules/jobneeds/
+<!-- sisakulint Docs Links -->
+[r-id]: https://sisaku-security.github.io/lint/docs/rules/idrule/
+[r-perm]: https://sisaku-security.github.io/lint/docs/rules/permissions/
+[r-wc]: https://sisaku-security.github.io/lint/docs/rules/workflowcall/
+[r-jn]: https://sisaku-security.github.io/lint/docs/rules/jobneeds/
+[r-tm]: https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/
+[r-cred]: https://sisaku-security.github.io/lint/docs/rules/credentialrules/
+[r-se]: https://sisaku-security.github.io/lint/docs/rules/secretexposure/
+[r-use]: https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/
+[r-ap]: https://sisaku-security.github.io/lint/docs/rules/artipacked/
+[r-ci]: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
+[r-cim]: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
+[r-evi]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
+[r-epi]: https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/
+[r-uco]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/
+[r-sha]: https://sisaku-security.github.io/lint/docs/rules/commitsharule/
+[r-al]: https://sisaku-security.github.io/lint/docs/rules/actionlist/
+[r-ic]: https://sisaku-security.github.io/lint/docs/rules/impostorcommit/
+[r-rc]: https://sisaku-security.github.io/lint/docs/rules/refconfusion/
+[r-kva]: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
+[r-au]: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
+[r-ui]: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
+[r-apc]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
+[r-apm]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
+[r-cp]: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningrule/
+[r-iac]: https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/
+[r-bot]: https://sisaku-security.github.io/lint/docs/rules/botconditions/
+[r-uc]: https://sisaku-security.github.io/lint/docs/rules/unsoundcontains/
+[r-ob]: https://sisaku-security.github.io/lint/docs/rules/obfuscation/
+[r-shr]: https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/
+[r-dc]: https://sisaku-security.github.io/lint/docs/rules/deprecatedcommands/
 
-- **missing-timeout-minutes rule** (auto-fix)
-  - Ensures timeout-minutes is set for all jobs
-  - docs: https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/
-  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
-
-- **cond rule (Conditional expressions validation)**
-  - Validates conditional expressions in workflow files
-  - Detects conditions that always evaluate to true/false
-
-- **expression rule (Expression syntax validation)**
-  - Validates GitHub Actions expression syntax
-  - Detects invalid characters and syntax errors in expressions
-
-- **deprecated-commands rule**
-  - Detects use of deprecated workflow commands
-  - Suggests modern alternatives (e.g., GITHUB_OUTPUT instead of set-output)
-  - github ref: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
-
-### Credential & Secret Rules
-
-- **credentials rule (Hardcoded credentials detection)** (auto-fix)
-  - Detects hardcoded credentials using Rego query language
-  - docs: https://sisaku-security.github.io/lint/docs/rules/credentialrules/
-
-- **secret-exposure rule** (auto-fix)
-  - Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access]
-  - Replaces bracket notation secrets['NAME'] with dot notation secrets.NAME
-  - docs: https://sisaku-security.github.io/lint/docs/rules/secretexposure/
-
-- **unmasked-secret-exposure rule** (auto-fix)
-  - Detects unmasked secret exposure when secrets are derived using fromJson()
-  - Adds `::add-mask::` command for derived secrets
-  - docs: https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/
-
-- **artipacked rule** (auto-fix)
-  - Detects credential leakage when checkout credentials are persisted and workspace is uploaded
-  - Adds `persist-credentials: false` to checkout steps
-  - docs: https://sisaku-security.github.io/lint/docs/rules/artipacked/
-
-### Code Injection Rules
-
-- **code-injection-critical rule** (auto-fix)
-  - Detects untrusted input in privileged workflow triggers (pull_request_target, workflow_run, issue_comment)
-  - Moves untrusted expressions to environment variables
-  - docs: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
-  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
-
-- **code-injection-medium rule** (auto-fix)
-  - Detects untrusted input in normal workflow triggers (pull_request, push, schedule)
-  - Moves untrusted expressions to environment variables
-  - docs: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
-
-- **envvar-injection-critical rule** (auto-fix)
-  - Detects untrusted input written to $GITHUB_ENV in privileged triggers
-  - Sanitizes untrusted input with `tr -d '\n'` before writing
-  - docs: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
-
-- **envvar-injection-medium rule** (auto-fix)
-  - Detects untrusted input written to $GITHUB_ENV in normal triggers
-
-- **envpath-injection-critical rule** (auto-fix)
-  - Detects untrusted input written to $GITHUB_PATH in privileged triggers
-  - Validates untrusted paths with `realpath` before writing
-  - docs: https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/
-
-- **envpath-injection-medium rule** (auto-fix)
-  - Detects untrusted input written to $GITHUB_PATH in normal triggers
-
-### Untrusted Checkout Rules
-
-- **untrusted-checkout rule** (auto-fix)
-  - Detects checkout of untrusted PR code in privileged workflow contexts
-  - Flags risky patterns in pull_request_target, issue_comment, and workflow_run events
-  - Supports auto-fix to add explicit ref specifications
-  - docs: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/
-  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/keeping-your-github-actions-and-workflows-secure-preventing-pwn-requests
-
-- **untrusted-checkout-toctou-critical rule** (auto-fix)
-  - Detects TOCTOU vulnerabilities with labeled event type and mutable refs
-
-- **untrusted-checkout-toctou-high rule** (auto-fix)
-  - Detects TOCTOU vulnerabilities with deployment environment and mutable refs
-
-### Supply Chain Security Rules
-
-- **commitsha rule (Commit SHA validation)** (auto-fix)
-  - Validates proper use of commit SHAs in actions
-  - Converts action tags to commit SHAs with comment preservation
-  - docs: https://sisaku-security.github.io/lint/docs/rules/commitsharule/
-  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
-
-- **action-list rule**
-  - Validates actions against organization-specific allowlists/blocklists
-  - Enforces action usage policies across workflows
-  - Configurable via `.github/action.yaml`
-  - docs: https://sisaku-security.github.io/lint/docs/rules/actionlist/
-
-- **impostor-commit rule** (auto-fix)
-  - Detects impostor commits from fork network - supply chain attack vector
-  - Pins action to commit SHA when impostor commit is detected
-  - docs: https://sisaku-security.github.io/lint/docs/rules/impostorcommit/
-
-- **ref-confusion rule** (auto-fix)
-  - Detects ref confusion attacks where both branch and tag have same name
-  - Pins action to commit SHA when ref confusion is detected
-  - docs: https://sisaku-security.github.io/lint/docs/rules/refconfusion/
-
-- **known-vulnerable-actions rule** (auto-fix)
-  - Detects actions with known security vulnerabilities via GitHub Security Advisories
-  - Updates vulnerable actions to patched versions
-  - docs: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
-
-- **archived-uses rule**
-  - Detects usage of archived actions/reusable workflows that are no longer maintained
-  - docs: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
-
-- **unpinned-images rule**
-  - Detects container images not pinned by SHA256 digest
-  - docs: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
-
-### Cache & Artifact Poisoning Rules
-
-- **artifact-poisoning-critical rule** (auto-fix)
-  - Detects artifact poisoning vulnerabilities in workflows
-  - Identifies unsafe artifact download patterns and path traversal risks
-  - Supports auto-fix to add validation steps
-  - docs: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
-
-- **artifact-poisoning-medium rule** (auto-fix)
-  - Detects third-party artifact download actions in untrusted triggers
-  - Adds safe extraction path to `${{ runner.temp }}/artifacts`
-  - docs: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
-
-- **cache-poisoning rule** (auto-fix)
-  - Detects cache poisoning vulnerabilities
-  - Identifies unsafe cache patterns with untrusted inputs
-  - Validates cache key construction for security risks
-  - docs: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningrule/
-
-- **cache-poisoning-poisonable-step rule** (auto-fix)
-  - Detects cache poisoning via execution of untrusted code after unsafe checkout
-  - Removes unsafe ref from checkout step
-
-### Access Control Rules
-
-- **improper-access-control rule** (auto-fix)
-  - Detects improper access control with label-based approval and synchronize events
-  - Adds safe conditions for label-based and synchronize events
-  - docs: https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/
-
-- **bot-conditions rule** (auto-fix)
-  - Detects spoofable bot detection conditions using github.actor or similar contexts
-  - Replaces spoofable bot conditions with safe alternatives
-  - docs: https://sisaku-security.github.io/lint/docs/rules/botconditions/
-
-- **unsound-contains rule** (auto-fix)
-  - Detects bypassable contains() function usage in conditions
-  - Converts string literal to fromJSON() array format
-  - docs: https://sisaku-security.github.io/lint/docs/rules/unsoundcontains/
-
-### Other Security Rules
-
-- **obfuscation rule** (auto-fix)
-  - Detects obfuscated workflow patterns that may evade security scanners
-  - Normalizes obfuscated paths and shell commands
-  - docs: https://sisaku-security.github.io/lint/docs/rules/obfuscation/
-
-- **self-hosted-runners rule**
-  - Detects self-hosted runner usage which poses security risks in public repos
-  - docs: https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/
+<!-- GitHub Reference Links -->
+[gh-shell]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
+[gh-perm]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+[gh-reuse]: https://docs.github.com/en/actions/sharing-automations/reusing-workflows
+[gh-cmd]: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
+[gh-timeout]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
+[gh-inject]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
+[gh-pwn]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/keeping-your-github-actions-and-workflows-secure-preventing-pwn-requests
+[gh-3p]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
 
 ## install for macOS user
 
@@ -287,229 +202,91 @@ sisakulint automatically searches for YAML files in the `.github/workflows` dire
 - ⚖️ **Rule Engine** - Applies security and best practice validation rules
 - 📊 **Output Formatters** - Custom error format and SARIF support for CI/CD integration
 
-## Usage test
-Create a file called test.yaml in the `.github/workflows` directory or go to your repository where your workflows file is located.
+## Quick Start
+
+```bash
+# Run in your repository (auto-detects .github/workflows/)
+$ sisakulint
+
+# Analyze specific file
+$ sisakulint .github/workflows/ci.yaml
+
+# Preview auto-fixes without modifying files
+$ sisakulint -fix dry-run
+
+# Apply auto-fixes
+$ sisakulint -fix on
+
+# Output in SARIF format for CI/CD integration
+$ sisakulint -format "{{sarif .}}"
+```
+
+## Example: Detecting Security Vulnerabilities
+
+Given a workflow file with common security issues:
+
 ```yaml
-name: Upload Release Archive
+name: PR Comment Handler
 
 on:
-  push:
-    tags:
-      - "v[0-9]+\\.[0-9]+\\.[0-9]+"
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
 
 jobs:
-  build:
-    name: Upload Release Asset
-    runs-on: macos-latest
-    env:
-          SIIISA=AAKUUU: foo
-    steps:
-      - name: Set version
-        id: version
-        run: |
-          REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##")
-          echo ::set-output name=filename::$REPOSITORY-$VERSION
-      - name: Checkout code
-        uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          submodules: true
-      - name: Archive
-        run: |
-          zip -r ${{ steps.version.outputs.filename }}.zip ./ -x "*.git*"
-      - run: echo 'Commit is pushed'
-        # ERROR: It is always evaluated to true
-        if: |
-          ${{ github.event_name == 'push' }}
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FOO=BAR: foo
-          FOO BAR: foo
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.version.outputs.filename }}.zip
-          asset_name: ${{ steps.version.outputs.filename }}.zip
-          asset_content_type: application/zip
-
-  test:
+  process-pr:
     runs-on: ubuntu-latest
-    permissions:
-      # ERROR: "checks" is correct scope name
-      check: write
-      # ERROR: Available values are "read", "write" or "none"
-      issues: readable
     steps:
-      - run: echo '${{ "hello" }}'
-      - run: echo "${{ toJson(hashFiles('**/lock', '**/cache/') }}"
-      - run: echo '${{ github.event. }}'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  run shell:
-    steps:
-      - run: echo 'hello'
-```
-execute following commands
-```bash
-$ sisakulint -h
-$ sisakulint -debug
-```
-you will likely receive the following result...
-```bash
-[sisaku:🤔] linting repository... .
-[sisaku:🤔] Detected project: /Users/para/go/src/github.com/ultra-supara/go_rego
-[sisaku:🤔] the number of corrected yaml file 1 yaml files
-[sisaku:🤔] validating workflow... .github/workflows/a.yaml
-[sisaku:🤔] Detected project: /Users/para/go/src/github.com/ultra-supara/go_rego
-[linter mode] no configuration file
-[sisaku:🤔] parsed workflow in 2 0 ms .github/workflows/a.yaml
-[SyntaxTreeVisitor] VisitStep was tooking line:61,col:9 steps, at step "2024-03-10 15:51:10.192583 +0900 JST m=+0.006376196" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:62,col:9 steps, at step "2024-03-10 15:51:10.192746 +0900 JST m=+0.006539807" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:63,col:9 steps, at step "2024-03-10 15:51:10.19276 +0900 JST m=+0.006553743" took 0 ms
-[SyntaxTreeVisitor] VisitJobPost was tooking 3 jobs, at job "test" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking 3 steps took 0 ms
-[SyntaxTreeVisitor] VisitJobPre took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:67,col:9 steps, at step "2024-03-10 15:51:10.192781 +0900 JST m=+0.006574644" took 0 ms
-[SyntaxTreeVisitor] VisitJobPost was tooking 1 jobs, at job "run shell" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking 1 steps took 0 ms
-[SyntaxTreeVisitor] VisitJobPre took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:15,col:9 steps, at step "2024-03-10 15:51:10.192799 +0900 JST m=+0.006592356" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:20,col:9 steps, at step "2024-03-10 15:51:10.192825 +0900 JST m=+0.006618901" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:25,col:9 steps, at step "2024-03-10 15:51:10.192845 +0900 JST m=+0.006638101" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:28,col:9 steps, at step "2024-03-10 15:51:10.192854 +0900 JST m=+0.006647451" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:32,col:9 steps, at step "2024-03-10 15:51:10.192865 +0900 JST m=+0.006658325" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking line:44,col:9 steps, at step "2024-03-10 15:51:10.192878 +0900 JST m=+0.006671659" took 0 ms
-[SyntaxTreeVisitor] VisitJobPost was tooking 6 jobs, at job "build" took 0 ms
-[SyntaxTreeVisitor] VisitStep was tooking 6 steps took 0 ms
-[SyntaxTreeVisitor] VisitJobPre took 0 ms
-[SyntaxTreeVisitor] VisitWorkflowPost took 0 ms
-[SyntaxTreeVisitor] VisitJob was tooking 3 jobs took 0 ms
-[SyntaxTreeVisitor] VisitWorkflowPre took 0 ms
-[linter mode] env-var found 1 errors
-[linter mode] id found 1 errors
-[linter mode] permissions found 2 errors
-[linter mode] workflow-call found 0 errors
-[linter mode] expression found 3 errors
-[linter mode] deprecated-commands found 1 errors
-[linter mode] cond found 1 errors
-[linter mode] missing-timeout-minutes found 3 errors
-[linter mode] issue-injection found 5 errors
-[sisaku:🤔] Found total 19 errors found in 0 found in ms .github/workflows/a.yaml
-.github/workflows/a.yaml:9:3: timeout-minutes is not set for job build; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details. [missing-timeout-minutes]
-      9 👈|  build:
-        
-.github/workflows/a.yaml:13:11: Environment variable name '"SIIISA=AAKUUU"' is not formatted correctly. Please ensure that it does not include characters such as '&', '=', or spaces, as these are not allowed in variable names. [env-var]
-       13 👈|          SIIISA=AAKUUU: foo
-                 
-.github/workflows/a.yaml:17:14: workflow command "set-output" was deprecated. You should use `echo "{name}={value}" >> $GITHUB_OUTPUT` reference: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions [deprecated-commands]
-       17 👈|        run: |
-                    
-.github/workflows/a.yaml:18:14: Direct use of ${{ ... }} in run steps; Use env instead. see also https://docs.github.com/ja/enterprise-cloud@latest/actions/security-guides/security-hardening-for-github-actions#example-of-a-script-injection-attack [issue-injection]
-       18 👈|          REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##")
-                    
-.github/workflows/a.yaml:27:14: Direct use of ${{ ... }} in run steps; Use env instead. see also https://docs.github.com/ja/enterprise-cloud@latest/actions/security-guides/security-hardening-for-github-actions#example-of-a-script-injection-attack [issue-injection]
-       27 👈|          zip -r ${{ steps.version.outputs.filename }}.zip ./ -x "*.git*"
-                    
-.github/workflows/a.yaml:30:13: The condition '${{ github.event_name == 'push' }}
-' will always evaluate to true. If you intended to use a literal value, please use ${{ true }}. Ensure there are no extra characters within the ${{ }} brackets in conditions. [cond]
-       30 👈|        if: |
-                   
-.github/workflows/a.yaml:35:9: unexpected key "env" for "element of \"steps\" sequence" section. expected one of  [syntax]
-       35 👈|        env:
-               
-.github/workflows/a.yaml:53:3: timeout-minutes is not set for job test; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details. [missing-timeout-minutes]
-       53 👈|  test:
-         
-.github/workflows/a.yaml:57:7: unknown permission scope "check". all available permission scopes are "actions", "checks", "contents", "deployments", "discussions", "id-token", "issues", "packages", "pages", "pull-requests", "repository-projects", "security-events", "statuses" [permissions]
-       57 👈|      check: write
-             
-.github/workflows/a.yaml:59:15: The value "readable" is not a valid permission for the scope "issues". Only 'read', 'write', or 'none' are acceptable values. [permissions]
-       59 👈|      issues: readable
-                     
-.github/workflows/a.yaml:61:14: Direct use of ${{ ... }} in run steps; Use env instead. see also https://docs.github.com/ja/enterprise-cloud@latest/actions/security-guides/security-hardening-for-github-actions#example-of-a-script-injection-attack [issue-injection]
-       61 👈|      - run: echo '${{ "hello" }}'
-                    
-.github/workflows/a.yaml:61:24: got unexpected char '"' while lexing expression, expecting 'a'..'z', 'A'..'Z', '_', '0'..'9', '', '}', '(', ')', '[', ']', '.', '!', '<', '>', '=', '&', '|', '*', ',', ' '. do you mean string literals? only single quotes are available for string delimiter [expression]
-       61 👈|      - run: echo '${{ "hello" }}'
-                              
-.github/workflows/a.yaml:62:14: Direct use of ${{ ... }} in run steps; Use env instead. see also https://docs.github.com/ja/enterprise-cloud@latest/actions/security-guides/security-hardening-for-github-actions#example-of-a-script-injection-attack [issue-injection]
-       62 👈|      - run: echo "${{ toJson(hashFiles('**/lock', '**/cache/') }}"
-                    
-.github/workflows/a.yaml:62:65: unexpected end of expression, while parsing arguments of function call, expected ",", ")" [expression]
-       62 👈|      - run: echo "${{ toJson(hashFiles('**/lock', '**/cache/') }}"
-                                                                       
-.github/workflows/a.yaml:63:14: Direct use of ${{ ... }} in run steps; Use env instead. see also https://docs.github.com/ja/enterprise-cloud@latest/actions/security-guides/security-hardening-for-github-actions#example-of-a-script-injection-attack [issue-injection]
-       63 👈|      - run: echo '${{ github.event. }}'
-                    
-.github/workflows/a.yaml:63:38: unexpected end of expression, while parsing expected an object property dereference (like 'a.b') or an array element dereference (like 'a.*'), expected "IDENT", "*" [expression]
-       63 👈|      - run: echo '${{ github.event. }}'
-                                            
-.github/workflows/a.yaml:65:3: "runs-on" section is missing in job "run shell" [syntax]
-       65 👈|  run shell:
-         
-.github/workflows/a.yaml:65:3: Invalid job ID "run shell". job IDs must start with a letter or '_', and may contain only alphanumeric characters, '-', or '_'. [id]
-       65 👈|  run shell:
-         
-.github/workflows/a.yaml:65:3: timeout-minutes is not set for job run shell; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details. [missing-timeout-minutes]
-       65 👈|  run shell:
+      - name: Echo PR title
+        run: |
+          echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+      - name: Run build
+        run: npm install && npm run build
 ```
 
-1. Missing Timeout Minutes for Jobs
+Running `sisakulint` detects multiple security issues:
 
-- Error: `timeout-minutes is not set for job build; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details.`
+```
+.github/workflows/test.yaml:1:1: workflow does not have explicit 'permissions' block.
+  Add a 'permissions:' block to follow the principle of least privilege. [permissions]
 
-- Scenario: If a job runs indefinitely due to an unexpected error (e.g., a script hangs), it can consume resources unnecessarily, leading to increased costs and potential service disruptions. For example, if the `build` job is stuck, subsequent jobs that depend on its completion will also be delayed, causing the entire CI/CD pipeline to stall.
+.github/workflows/test.yaml:10:3: timeout-minutes is not set for job process-pr [missing-timeout-minutes]
 
-2. Incorrectly Formatted Environment Variable
+.github/workflows/test.yaml:13:9: the action ref should be a full length commit SHA
+  for immutability and security. [commit-sha]
 
-- Error: `Environment variable name '"SIIISA=AAKUUU"' is not formatted correctly.`
+.github/workflows/test.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false'.
+  Consider adding it to prevent credential exposure. [artipacked]
 
-- Scenario: If environment variables are not formatted correctly, the job may fail to execute as intended. For instance, if the variable is meant to be used in a command but is incorrectly defined, it could lead to runtime errors or unexpected behavior, such as failing to authenticate with an external service.
+.github/workflows/test.yaml:15:16: checking out untrusted code from pull request
+  in workflow with privileged trigger 'issue_comment'. This allows potentially
+  malicious code to execute with access to repository secrets. [untrusted-checkout]
 
-3. Deprecated Command Usage
+.github/workflows/test.yaml:19:35: code injection (critical): "github.event.pull_request.title"
+  is potentially untrusted. Avoid using it directly in inline scripts.
+  Instead, pass it through an environment variable. [code-injection-critical]
 
-- Error: `workflow command "set-output" was deprecated.`
+.github/workflows/test.yaml:21:9: cache poisoning risk via build command: 'Run build'
+  runs untrusted code after checking out PR head. [cache-poisoning-poisonable-step]
+```
 
-- Scenario: Using deprecated commands can lead to future compatibility issues. If GitHub Actions removes support for the `set-output` command, workflows relying on it will break, causing failures in automated processes. This could delay releases or lead to incomplete deployments.
+### What sisakulint detected
 
-4. Direct Use of `${{ ... }}` in Run Steps
-
-- Error: `Direct use of ${{ ... }} in run steps; Use env instead.`
-
-- Scenario: Directly using expressions in run steps can expose the workflow to script injection attacks. For example, if an attacker can manipulate the input to the workflow, they could inject malicious commands that execute during the job, potentially compromising the repository or the CI/CD environment.
-
-5. Always True Condition
-
-- Error: `The condition '${{ github.event_name == 'push' }}' will always evaluate to true.`
-
-- Scenario: If conditions are not set correctly, it can lead to unintended behavior in the workflow. For instance, if the intention was to run a step only for specific events, but the condition is always true, it could result in unnecessary steps being executed, wasting resources and time.
-
-6. Invalid Permission Scopes
-
-- Error: `unknown permission scope "check".`
-
-- Scenario: Using invalid permission scopes can lead to failures in accessing necessary resources. For example, if the `test` job requires write access to checks but is incorrectly defined, it may not be able to create or update checks, leading to incomplete test results and a lack of visibility into the CI/CD process.
-
-7. Invalid Job ID
-
-- Error: `Invalid job ID "run shell". job IDs must start with a letter or '_'.`
-
-- Scenario: If job IDs are not valid, the workflow will fail to execute. For example, if the job `run shell` is intended to run a shell command but is not recognized due to an invalid ID, it will not run at all, potentially skipping important steps in the workflow.
-
-8. Missing Timeout Minutes for Additional Jobs
-
-- Error: `timeout-minutes is not set for job test; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details.`
-
-- Scenario: Similar to the first issue, if the `test` job runs indefinitely, it can block the workflow and lead to resource exhaustion. This can delay the entire CI/CD process, affecting deployment timelines and potentially leading to missed deadlines.
+| Finding | OWASP Risk | Severity | Auto-fix |
+|:--------|:-----------|:---------|:--------:|
+| Missing permissions block | CICD-SEC-02 | Medium | |
+| Missing timeout-minutes | CICD-SEC-07 | Low | Yes |
+| Action not pinned to SHA | CICD-SEC-08 | Medium | Yes |
+| Credential exposure risk | CICD-SEC-06 | Medium | Yes |
+| Untrusted checkout | CICD-SEC-04 | Critical | Yes |
+| Code injection | CICD-SEC-04 | Critical | Yes |
+| Cache poisoning | CICD-SEC-09 | High | Yes |
 
 ## SARIF Output & Integration with reviewdog
 
@@ -559,7 +336,7 @@ jobs:
 
 ### SARIF format usage
 
-To output results in SARIF format:
+To output results in SARIF format
 
 ```bash
 # Output to stdout
