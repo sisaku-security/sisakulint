@@ -1,0 +1,79 @@
+# Vulnerable patterns for unsound-contains rule
+# These patterns can be bypassed by attackers creating branches with specific names
+name: Unsound Contains Examples
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  # VULNERABLE: String literal as first argument with user-controllable second argument
+  vulnerable-job-ref:
+    if: contains('refs/heads/main refs/heads/develop', github.ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy to production"
+
+  vulnerable-job-head-ref:
+    if: contains('feature release hotfix', github.head_ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running on allowed branch"
+
+  vulnerable-job-actor:
+    if: contains('admin bot service-account', github.actor)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running as trusted actor"
+
+  vulnerable-job-with-expression:
+    if: ${{ contains('refs/heads/main refs/heads/develop', github.ref) }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy with expression wrapper"
+
+  vulnerable-step-condition:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vulnerable step
+        if: contains('main develop', github.ref_name)
+        run: echo "Vulnerable step condition"
+
+      - name: Vulnerable step with triggering actor
+        if: contains('admin moderator', github.triggering_actor)
+        run: echo "Running as trusted triggering actor"
+
+      - name: Vulnerable step with inputs
+        if: contains('option1 option2 option3', inputs.choice)
+        run: echo "Running with allowed input"
+
+      - name: Vulnerable step with env
+        if: contains('dev staging production', env.ENVIRONMENT)
+        run: echo "Running in allowed environment"
+
+  # Complex conditions with vulnerable contains
+  complex-vulnerable:
+    if: github.event_name == 'push' && contains('main develop', github.ref_name)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Negated vulnerable contains
+        if: "!contains('blocked-branch forbidden-branch', github.ref_name)"
+        run: echo "Not in blocked branches"
+
+      - name: OR condition with vulnerable contains
+        if: github.event_name == 'schedule' || contains('admin', github.actor)
+        run: echo "Scheduled or admin"
+
+  # INFORMATIONAL: Non user-controllable contexts still flagged but with lower severity
+  informational-contains:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Contains with step output
+        if: contains('success failure', steps.build.outputs.status)
+        run: echo "This is informational severity"
+
+      - name: Contains with needs output
+        if: contains('completed skipped', needs.setup.outputs.result)
+        run: echo "This is also informational"

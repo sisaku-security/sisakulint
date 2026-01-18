@@ -1,0 +1,52 @@
+# ref-confusion-safe - Safe patterns that do not trigger ref-confusion detection
+#
+# This workflow demonstrates safe patterns that are not vulnerable to
+# branch/tag name collision attacks.
+
+name: Ref Confusion Safe Examples
+on: [push, pull_request]
+
+jobs:
+  safe-full-sha:
+    name: Safe - Full Commit SHA References
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # SAFE: Full 40-character commit SHA - immutable and unambiguous
+      - name: Checkout with full SHA
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # SAFE: Another full SHA example
+      - name: Setup Node with full SHA
+        uses: actions/setup-node@39cd14951b08e6e8b9cb455b2e99031efca36c16
+
+      # SAFE: Cache with full SHA
+      - name: Cache with full SHA
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57
+
+  safe-local:
+    name: Safe - Local Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # SAFE: Local action - not subject to ref confusion
+      - name: Local action without version
+        uses: ./local/action
+
+      # SAFE: Local action with path
+      - name: Local composite action
+        uses: ./.github/actions/my-action
+
+  safe-run:
+    name: Safe - Run Commands
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # SAFE: Run commands - not an action reference
+      - name: Run script
+        run: echo "This is not an action reference"
+
+      - name: Run multi-line script
+        run: |
+          echo "Multiple lines"
+          echo "Are also safe"
