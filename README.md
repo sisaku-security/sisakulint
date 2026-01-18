@@ -57,39 +57,40 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 
 ---
 
-## Main Tool features:
+## Tool features
+
+**Documentation**: https://sisaku-security.github.io/lint/
+
+### Syntax & Configuration Rules
+
 - **id rule (ID collision detection)**
- 	- Validates job IDs and environment variable names
- 	- docs : https://sisaku-security.github.io/lint/docs/idrule/
- 	- github ref : https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
+  - Validates job IDs and environment variable names
+  - docs: https://sisaku-security.github.io/lint/docs/rules/idrule/
+  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
 
 - **env-var rule (Environment variable validation)**
- 	- Validates environment variable name formatting
- 	- Ensures variable names don't include invalid characters like '&', '=', or spaces
-
-- **credentials rule (Hardcoded credentials detection)**
- 	- Detects hardcoded credentials using Rego query language
- 	- docs : https://sisaku-security.github.io/lint/docs/credentialsrule/
-
-- **commitsha rule (Commit SHA validation)**
- 	- Validates proper use of commit SHAs in actions
- 	- docs : https://sisaku-security.github.io/lint/docs/commitsharule/
- 	- github ref : https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
+  - Validates environment variable name formatting
+  - Ensures variable names don't include invalid characters like '&', '=', or spaces
 
 - **permissions rule**
- 	- Validates permission scopes and values
- 	- docs : https://sisaku-security.github.io/lint/docs/permissions/
- 	- github ref : https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
+  - Validates permission scopes and values
+  - docs: https://sisaku-security.github.io/lint/docs/rules/permissions/
+  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
 
 - **workflow-call rule**
   - Validates reusable workflow calls
-  - docs : https://sisaku-security.github.io/lint/docs/workflowcall/
-  - github ref : https://docs.github.com/en/actions/sharing-automations/reusing-workflows
+  - docs: https://sisaku-security.github.io/lint/docs/rules/workflowcall/
+  - github ref: https://docs.github.com/en/actions/sharing-automations/reusing-workflows
 
-- **missing-timeout-minutes rule**
+- **job-needs rule**
+  - Validates job dependencies
+  - Ensures referenced jobs exist in the workflow
+  - docs: https://sisaku-security.github.io/lint/docs/rules/jobneeds/
+
+- **missing-timeout-minutes rule** (auto-fix)
   - Ensures timeout-minutes is set for all jobs
-  - docs : https://sisaku-security.github.io/lint/docs/timeoutminutesrule/
-  - github ref : https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
+  - docs: https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/
+  - github ref: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
 
 - **cond rule (Conditional expressions validation)**
   - Validates conditional expressions in workflow files
@@ -99,40 +100,163 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
   - Validates GitHub Actions expression syntax
   - Detects invalid characters and syntax errors in expressions
 
-- **issue-injection rule (Script injection detection)**
-  - Detects potential script injection vulnerabilities
-  - Ensures proper use of environment variables instead of direct ${{ }} in run steps
-  - github ref : https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
-
 - **deprecated-commands rule**
   - Detects use of deprecated workflow commands
   - Suggests modern alternatives (e.g., GITHUB_OUTPUT instead of set-output)
-  - github ref : https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
+  - github ref: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
 
-- **untrusted-checkout rule**
+### Credential & Secret Rules
+
+- **credentials rule (Hardcoded credentials detection)** (auto-fix)
+  - Detects hardcoded credentials using Rego query language
+  - docs: https://sisaku-security.github.io/lint/docs/rules/credentialrules/
+
+- **secret-exposure rule** (auto-fix)
+  - Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access]
+  - Replaces bracket notation secrets['NAME'] with dot notation secrets.NAME
+  - docs: https://sisaku-security.github.io/lint/docs/rules/secretexposure/
+
+- **unmasked-secret-exposure rule** (auto-fix)
+  - Detects unmasked secret exposure when secrets are derived using fromJson()
+  - Adds `::add-mask::` command for derived secrets
+  - docs: https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/
+
+- **artipacked rule** (auto-fix)
+  - Detects credential leakage when checkout credentials are persisted and workspace is uploaded
+  - Adds `persist-credentials: false` to checkout steps
+  - docs: https://sisaku-security.github.io/lint/docs/rules/artipacked/
+
+### Code Injection Rules
+
+- **code-injection-critical rule** (auto-fix)
+  - Detects untrusted input in privileged workflow triggers (pull_request_target, workflow_run, issue_comment)
+  - Moves untrusted expressions to environment variables
+  - docs: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
+  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
+
+- **code-injection-medium rule** (auto-fix)
+  - Detects untrusted input in normal workflow triggers (pull_request, push, schedule)
+  - Moves untrusted expressions to environment variables
+  - docs: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
+
+- **envvar-injection-critical rule** (auto-fix)
+  - Detects untrusted input written to $GITHUB_ENV in privileged triggers
+  - Sanitizes untrusted input with `tr -d '\n'` before writing
+  - docs: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
+
+- **envvar-injection-medium rule** (auto-fix)
+  - Detects untrusted input written to $GITHUB_ENV in normal triggers
+
+- **envpath-injection-critical rule** (auto-fix)
+  - Detects untrusted input written to $GITHUB_PATH in privileged triggers
+  - Validates untrusted paths with `realpath` before writing
+  - docs: https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/
+
+- **envpath-injection-medium rule** (auto-fix)
+  - Detects untrusted input written to $GITHUB_PATH in normal triggers
+
+### Untrusted Checkout Rules
+
+- **untrusted-checkout rule** (auto-fix)
   - Detects checkout of untrusted PR code in privileged workflow contexts
   - Flags risky patterns in pull_request_target, issue_comment, and workflow_run events
   - Supports auto-fix to add explicit ref specifications
-  - docs : https://sisaku-security.github.io/lint/docs/untrustedcheckout/
-  - github ref : https://docs.github.com/en/actions/security-for-github-actions/security-guides/keeping-your-github-actions-and-workflows-secure-preventing-pwn-requests
+  - docs: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/
+  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/keeping-your-github-actions-and-workflows-secure-preventing-pwn-requests
 
-- **artifact-poisoning rule**
-  - Detects artifact poisoning vulnerabilities in workflows
-  - Identifies unsafe artifact download patterns and path traversal risks
-  - Supports auto-fix to add validation steps
-  - docs : https://sisaku-security.github.io/lint/docs/artifactpoisoningcritical/
+- **untrusted-checkout-toctou-critical rule** (auto-fix)
+  - Detects TOCTOU vulnerabilities with labeled event type and mutable refs
 
-- **cache-poisoning rule**
-  - Detects cache poisoning vulnerabilities
-  - Identifies unsafe cache patterns with untrusted inputs
-  - Validates cache key construction for security risks
-  - docs : https://sisaku-security.github.io/lint/docs/cachepoisoningrule/
+- **untrusted-checkout-toctou-high rule** (auto-fix)
+  - Detects TOCTOU vulnerabilities with deployment environment and mutable refs
+
+### Supply Chain Security Rules
+
+- **commitsha rule (Commit SHA validation)** (auto-fix)
+  - Validates proper use of commit SHAs in actions
+  - Converts action tags to commit SHAs with comment preservation
+  - docs: https://sisaku-security.github.io/lint/docs/rules/commitsharule/
+  - github ref: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
 
 - **action-list rule**
   - Validates actions against organization-specific allowlists/blocklists
   - Enforces action usage policies across workflows
   - Configurable via `.github/action.yaml`
-  - docs : https://sisaku-security.github.io/lint/docs/actionlist/
+  - docs: https://sisaku-security.github.io/lint/docs/rules/actionlist/
+
+- **impostor-commit rule** (auto-fix)
+  - Detects impostor commits from fork network - supply chain attack vector
+  - Pins action to commit SHA when impostor commit is detected
+  - docs: https://sisaku-security.github.io/lint/docs/rules/impostorcommit/
+
+- **ref-confusion rule** (auto-fix)
+  - Detects ref confusion attacks where both branch and tag have same name
+  - Pins action to commit SHA when ref confusion is detected
+  - docs: https://sisaku-security.github.io/lint/docs/rules/refconfusion/
+
+- **known-vulnerable-actions rule** (auto-fix)
+  - Detects actions with known security vulnerabilities via GitHub Security Advisories
+  - Updates vulnerable actions to patched versions
+  - docs: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
+
+- **archived-uses rule**
+  - Detects usage of archived actions/reusable workflows that are no longer maintained
+  - docs: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
+
+- **unpinned-images rule**
+  - Detects container images not pinned by SHA256 digest
+  - docs: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
+
+### Cache & Artifact Poisoning Rules
+
+- **artifact-poisoning-critical rule** (auto-fix)
+  - Detects artifact poisoning vulnerabilities in workflows
+  - Identifies unsafe artifact download patterns and path traversal risks
+  - Supports auto-fix to add validation steps
+  - docs: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
+
+- **artifact-poisoning-medium rule** (auto-fix)
+  - Detects third-party artifact download actions in untrusted triggers
+  - Adds safe extraction path to `${{ runner.temp }}/artifacts`
+  - docs: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
+
+- **cache-poisoning rule** (auto-fix)
+  - Detects cache poisoning vulnerabilities
+  - Identifies unsafe cache patterns with untrusted inputs
+  - Validates cache key construction for security risks
+  - docs: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningrule/
+
+- **cache-poisoning-poisonable-step rule** (auto-fix)
+  - Detects cache poisoning via execution of untrusted code after unsafe checkout
+  - Removes unsafe ref from checkout step
+
+### Access Control Rules
+
+- **improper-access-control rule** (auto-fix)
+  - Detects improper access control with label-based approval and synchronize events
+  - Adds safe conditions for label-based and synchronize events
+  - docs: https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/
+
+- **bot-conditions rule** (auto-fix)
+  - Detects spoofable bot detection conditions using github.actor or similar contexts
+  - Replaces spoofable bot conditions with safe alternatives
+  - docs: https://sisaku-security.github.io/lint/docs/rules/botconditions/
+
+- **unsound-contains rule** (auto-fix)
+  - Detects bypassable contains() function usage in conditions
+  - Converts string literal to fromJSON() array format
+  - docs: https://sisaku-security.github.io/lint/docs/rules/unsoundcontains/
+
+### Other Security Rules
+
+- **obfuscation rule** (auto-fix)
+  - Detects obfuscated workflow patterns that may evade security scanners
+  - Normalizes obfuscated paths and shell commands
+  - docs: https://sisaku-security.github.io/lint/docs/rules/obfuscation/
+
+- **self-hosted-runners rule**
+  - Detects self-hosted runner usage which poses security risks in public repos
+  - docs: https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/
 
 ## install for macOS user
 
