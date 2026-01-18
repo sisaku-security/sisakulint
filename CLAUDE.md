@@ -102,6 +102,9 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/selfhostedrunnersrule.go` - **SelfHostedRunnersRule**: Detects self-hosted runner usage which poses security risks in public repos
      - `pkg/core/archived_uses.go` - **ArchivedUsesRule**: Detects usage of archived actions/reusable workflows that are no longer maintained
      - `pkg/core/unpinned_images.go` - **UnpinnedImagesRule**: Detects container images not pinned by SHA256 digest
+     - `pkg/core/argumentinjection.go` - **ArgumentInjectionRule**: Shared implementation for argument injection detection (with auto-fix)
+       - `pkg/core/argumentinjectioncritical.go` - **ArgumentInjectionCritical**: Detects untrusted input used as command arguments in privileged triggers
+       - `pkg/core/argumentinjectionmedium.go` - **ArgumentInjectionMedium**: Detects untrusted input used as command arguments in normal triggers
      - `pkg/core/rule_add_temp_normal.go` - **AddRule**: Template rule for adding new rules
 
 4. **AST Processing**:
@@ -252,6 +255,8 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 36. **SelfHostedRunnersRule** - Detects self-hosted runner usage which poses security risks in public repos
 37. **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
 38. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
+39. **ArgumentInjectionCriticalRule** - Detects argument injection in command-line args with privileged triggers (auto-fix supported)
+40. **ArgumentInjectionMediumRule** - Detects argument injection in command-line args with normal triggers (auto-fix supported)
 
 ## Key Files
 
@@ -374,6 +379,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 21. **RefConfusionRule** (`refconfusion.go`) - Pins action to commit SHA when ref confusion is detected
 22. **ObfuscationRule** (`obfuscation.go`) - Normalizes obfuscated paths and shell commands
 23. **KnownVulnerableActionsRule** (`known_vulnerable_actions.go`) - Updates vulnerable actions to patched versions
+24. **ArgumentInjectionRule** (`argumentinjection.go`) - Moves untrusted input to environment variables and adds `--` end-of-options marker
 
 ## Recent Security Enhancements
 
