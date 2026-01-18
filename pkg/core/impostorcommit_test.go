@@ -108,106 +108,106 @@ func TestIsFullSha(t *testing.T) {
 	}
 }
 
-// TestParseActionRef tests the parseActionRef function.
-func TestParseActionRef(t *testing.T) {
+// TestParseImpostorActionRef tests the parseImpostorActionRef function.
+func TestParseImpostorActionRef(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		usesValue   string
-		wantOwner   string
-		wantRepo    string
-		wantRef     string
-		wantIsLocal bool
+		name      string
+		usesValue string
+		wantOwner string
+		wantRepo  string
+		wantRef   string
+		wantSkip  bool
 	}{
 		{
-			name:        "standard action reference",
-			usesValue:   "actions/checkout@v4",
-			wantOwner:   "actions",
-			wantRepo:    "checkout",
-			wantRef:     "v4",
-			wantIsLocal: false,
+			name:      "standard action reference",
+			usesValue: "actions/checkout@v4",
+			wantOwner: "actions",
+			wantRepo:  "checkout",
+			wantRef:   "v4",
+			wantSkip:  false,
 		},
 		{
-			name:        "action with SHA",
-			usesValue:   "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675",
-			wantOwner:   "actions",
-			wantRepo:    "checkout",
-			wantRef:     "a81bbbf8298c0fa03ea29cdc473d45769f953675",
-			wantIsLocal: false,
+			name:      "action with SHA",
+			usesValue: "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675",
+			wantOwner: "actions",
+			wantRepo:  "checkout",
+			wantRef:   "a81bbbf8298c0fa03ea29cdc473d45769f953675",
+			wantSkip:  false,
 		},
 		{
-			name:        "nested path action",
-			usesValue:   "actions/aws/ec2@v1",
-			wantOwner:   "actions",
-			wantRepo:    "aws",
-			wantRef:     "v1",
-			wantIsLocal: false,
+			name:      "nested path action",
+			usesValue: "actions/aws/ec2@v1",
+			wantOwner: "actions",
+			wantRepo:  "aws",
+			wantRef:   "v1",
+			wantSkip:  false,
 		},
 		{
-			name:        "local action with ./ prefix",
-			usesValue:   "./.github/actions/my-action",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "local action with ./ prefix",
+			usesValue: "./.github/actions/my-action",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 		{
-			name:        "local action with .\\ prefix",
-			usesValue:   ".\\.github\\actions\\my-action",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "local action with .\\ prefix",
+			usesValue: ".\\.github\\actions\\my-action",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 		{
-			name:        "docker image",
-			usesValue:   "docker://alpine:3.18",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "docker image",
+			usesValue: "docker://alpine:3.18",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 		{
-			name:        "missing @ symbol",
-			usesValue:   "actions/checkout",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "missing @ symbol",
+			usesValue: "actions/checkout",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 		{
-			name:        "no slash in owner/repo",
-			usesValue:   "checkout@v4",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "no slash in owner/repo",
+			usesValue: "checkout@v4",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 		{
-			name:        "empty string",
-			usesValue:   "",
-			wantOwner:   "",
-			wantRepo:    "",
-			wantRef:     "",
-			wantIsLocal: true,
+			name:      "empty string",
+			usesValue: "",
+			wantOwner: "",
+			wantRepo:  "",
+			wantRef:   "",
+			wantSkip:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			owner, repo, ref, isLocal := parseActionRef(tt.usesValue)
+			owner, repo, ref, skip := parseImpostorActionRef(tt.usesValue)
 			if owner != tt.wantOwner {
-				t.Errorf("parseActionRef(%q) owner = %q, want %q", tt.usesValue, owner, tt.wantOwner)
+				t.Errorf("parseImpostorActionRef(%q) owner = %q, want %q", tt.usesValue, owner, tt.wantOwner)
 			}
 			if repo != tt.wantRepo {
-				t.Errorf("parseActionRef(%q) repo = %q, want %q", tt.usesValue, repo, tt.wantRepo)
+				t.Errorf("parseImpostorActionRef(%q) repo = %q, want %q", tt.usesValue, repo, tt.wantRepo)
 			}
 			if ref != tt.wantRef {
-				t.Errorf("parseActionRef(%q) ref = %q, want %q", tt.usesValue, ref, tt.wantRef)
+				t.Errorf("parseImpostorActionRef(%q) ref = %q, want %q", tt.usesValue, ref, tt.wantRef)
 			}
-			if isLocal != tt.wantIsLocal {
-				t.Errorf("parseActionRef(%q) isLocal = %v, want %v", tt.usesValue, isLocal, tt.wantIsLocal)
+			if skip != tt.wantSkip {
+				t.Errorf("parseImpostorActionRef(%q) skip = %v, want %v", tt.usesValue, skip, tt.wantSkip)
 			}
 		})
 	}

@@ -64,21 +64,16 @@ func isFullSha(ref string) bool {
 	return fullShaPattern.MatchString(ref)
 }
 
-func parseActionRef(usesValue string) (owner, repo, ref string, isLocal bool) {
-	if strings.HasPrefix(usesValue, "docker://") || strings.HasPrefix(usesValue, "./") || strings.HasPrefix(usesValue, ".\\") {
+func parseImpostorActionRef(usesValue string) (owner, repo, ref string, skip bool) {
+	if isLocalAction(usesValue) || isDockerAction(usesValue) || strings.HasPrefix(usesValue, ".\\") {
 		return "", "", "", true
 	}
 
-	parts := strings.Split(usesValue, "@")
-	if len(parts) != 2 {
+	owner, repo, ref, ok := parseActionRef(usesValue)
+	if !ok {
 		return "", "", "", true
 	}
-
-	ownerRepo := strings.Split(parts[0], "/")
-	if len(ownerRepo) < 2 {
-		return "", "", "", true
-	}
-	return ownerRepo[0], ownerRepo[1], parts[1], false
+	return owner, repo, ref, false
 }
 
 func (rule *ImpostorCommitRule) getGitHubClient() *github.Client {
@@ -105,8 +100,8 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 	}
 
 	usesValue := action.Uses.Value
-	owner, repo, ref, isLocal := parseActionRef(usesValue)
-	if isLocal || !isFullSha(ref) {
+	owner, repo, ref, skip := parseImpostorActionRef(usesValue)
+	if skip || !isFullSha(ref) {
 		return nil
 	}
 
