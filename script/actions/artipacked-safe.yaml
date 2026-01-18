@@ -1,0 +1,52 @@
+# Safe pattern: credentials not persisted
+# This workflow demonstrates the correct way to prevent credential leakage
+name: Artipacked Safe Example
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-safe:
+    runs-on: ubuntu-latest
+    steps:
+      # Safe: explicitly disable credential persistence
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: npm run build
+
+      # This is now safe to upload entire workspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-artifact
+          path: .
+
+  build-specific-path:
+    runs-on: ubuntu-latest
+    steps:
+      # Even without persist-credentials: false, uploading specific paths is safe
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: npm run build
+
+      # Safe: only uploading specific build output, not the entire workspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist
+
+  build-no-upload:
+    runs-on: ubuntu-latest
+    steps:
+      # Even without persist-credentials: false, no upload means no credential leak
+      # (though best practice is still to use persist-credentials: false)
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build
+        run: npm run build

@@ -341,7 +341,7 @@ func (rule *CodeInjectionRule) generateEnvVarName(path string) string {
 	}
 
 	// Common patterns
-	if len(parts) >= 4 && parts[0] == "github" && parts[1] == "event" {
+	if len(parts) >= 4 && parts[0] == ContextGithub && parts[1] == EventCategory {
 		category := parts[2]         // pull_request, issue, comment, etc.
 		field := parts[len(parts)-1] // title, body, etc.
 
@@ -350,7 +350,7 @@ func (rule *CodeInjectionRule) generateEnvVarName(path string) string {
 		fieldUpper := strings.ToUpper(field)
 
 		// Create readable name
-		if categoryUpper == "PULLREQUEST" {
+		if categoryUpper == EventCategoryPR {
 			categoryUpper = "PR"
 		}
 

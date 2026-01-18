@@ -1,0 +1,44 @@
+# Vulnerable: TOCTOU (Time-of-Check to Time-of-Use) with labeled event
+# This workflow is vulnerable because:
+# 1. It uses 'labeled' event type which indicates label-based approval
+# 2. It checks out using a mutable reference (head.ref instead of head.sha)
+# 3. An attacker can modify code after the label is applied
+#
+# Attack scenario:
+# 1. Attacker submits PR with safe code
+# 2. Reviewer reviews and applies "safe-to-test" label
+# 3. Attacker quickly pushes malicious commits to their PR branch
+# 4. Workflow runs with the malicious code (not the reviewed code)
+#
+# Reference: https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-critical/
+name: Vulnerable TOCTOU Critical
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'safe-to-test')
+    steps:
+      # VULNERABLE: Uses mutable branch reference
+      # The branch can be modified after the label is applied
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'approved'
+    steps:
+      # VULNERABLE: Uses github.head_ref which is also mutable
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Build
+        run: npm run build

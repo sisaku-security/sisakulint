@@ -1,0 +1,33 @@
+# Safe example: Patterns that don't trigger impostor-commit rule
+# Note: The impostor-commit rule only checks full 40-char SHA references
+name: Impostor Commit Safe Example
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Safe: Using version tags (not checked by impostor-commit rule)
+      # The commit-sha rule will handle these
+      - uses: actions/checkout@v4
+        timeout-minutes: 5
+
+      # Safe: Local actions (skipped by impostor-commit rule)
+      - uses: ./.github/actions/my-local-action
+        timeout-minutes: 5
+
+      # Safe: Docker images (skipped by impostor-commit rule)
+      - uses: docker://alpine:3.18
+        timeout-minutes: 5
+
+      # Safe: Short SHA (not full 40-char, skipped by impostor-commit rule)
+      - uses: actions/checkout@b4ffde6
+        timeout-minutes: 5
+
+      # Safe: Branch reference (not SHA, skipped by impostor-commit rule)
+      - uses: actions/checkout@main
+        timeout-minutes: 5

@@ -1,0 +1,45 @@
+# Vulnerable: TOCTOU with deployment environment approval
+# This workflow is vulnerable because:
+# 1. It uses a deployment environment (which typically requires manual approval)
+# 2. It checks out using a mutable reference (head.ref instead of head.sha)
+# 3. An attacker can modify code after approval is granted
+#
+# Attack scenario:
+# 1. Attacker submits PR with safe code
+# 2. Approver reviews and approves the deployment
+# 3. Attacker quickly pushes malicious commits to their PR branch
+# 4. Workflow runs with the malicious code (not the approved code)
+#
+# Reference: https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-high/
+name: Vulnerable TOCTOU High
+
+on: pull_request_target
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      # VULNERABLE: Uses mutable branch reference
+      # The branch can be modified after approval is granted
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Deploy to staging
+        run: ./deploy.sh staging
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+    needs: deploy-staging
+    steps:
+      # VULNERABLE: Uses github.head_ref which is also mutable
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Deploy to production
+        run: ./deploy.sh production

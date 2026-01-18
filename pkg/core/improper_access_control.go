@@ -82,7 +82,7 @@ func (rule *ImproperAccessControlRule) VisitWorkflowPre(n *ast.Workflow) error {
 			continue
 		}
 
-		if webhookEvent.EventName() != "pull_request_target" {
+		if webhookEvent.EventName() != EventPullRequestTarget {
 			continue
 		}
 
@@ -98,7 +98,7 @@ func (rule *ImproperAccessControlRule) VisitWorkflowPre(n *ast.Workflow) error {
 		} else {
 			// Check if 'synchronize' is explicitly in the types
 			for _, eventType := range webhookEvent.Types {
-				if eventType.Value == "synchronize" {
+				if eventType.Value == EventTypeSynchronize {
 					rule.hasSynchronizeType = true
 					rule.Debug("Found pull_request_target with explicit 'synchronize' type at %s", webhookEvent.Pos)
 					break
@@ -313,10 +313,10 @@ func (f *improperAccessControlFixer) fixWebhookEventTypes() {
 	synchronizeIdx := -1
 
 	for i, eventType := range f.webhookEvent.Types {
-		if eventType.Value == "labeled" {
+		if eventType.Value == EventTypeLabeled {
 			hasLabeled = true
 		}
-		if eventType.Value == "synchronize" {
+		if eventType.Value == EventTypeSynchronize {
 			synchronizeIdx = i
 		}
 	}
@@ -324,9 +324,9 @@ func (f *improperAccessControlFixer) fixWebhookEventTypes() {
 	// If 'synchronize' exists, replace it with 'labeled' (if 'labeled' doesn't already exist)
 	if synchronizeIdx >= 0 {
 		if !hasLabeled {
-			f.webhookEvent.Types[synchronizeIdx].Value = "labeled"
+			f.webhookEvent.Types[synchronizeIdx].Value = EventTypeLabeled
 			if f.webhookEvent.Types[synchronizeIdx].BaseNode != nil {
-				f.webhookEvent.Types[synchronizeIdx].BaseNode.Value = "labeled"
+				f.webhookEvent.Types[synchronizeIdx].BaseNode.Value = EventTypeLabeled
 			}
 		} else {
 			// Remove 'synchronize' if 'labeled' already exists

@@ -1,0 +1,59 @@
+# Example workflow demonstrating spoofable bot detection conditions
+# This workflow is VULNERABLE - do not use these patterns in production
+
+name: Bot Conditions Vulnerable Examples
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  # VULNERABLE: Using github.actor for bot detection
+  # An attacker could create an account with a similar name to bypass this check
+  auto-merge-actor:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # VULNERABLE: Using github.triggering_actor
+  auto-merge-triggering-actor:
+    if: github.triggering_actor == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: npm ci && npm run deploy
+
+  # VULNERABLE: Using github.event.pull_request.sender.login
+  approve-sender:
+    if: github.event.pull_request.sender.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr review --approve
+
+  # VULNERABLE: Using github.actor_id with known bot ID
+  auto-merge-actor-id:
+    if: github.actor_id == '49699333'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # VULNERABLE: OR chain of bot checks (High confidence - dominant condition)
+  auto-merge-multiple-bots:
+    if: github.actor == 'dependabot[bot]' || github.actor == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: gh pr merge --auto
+
+  # VULNERABLE: Step-level bot check
+  build-with-step-condition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Auto-merge for bots
+        if: github.actor == 'dependabot[bot]'
+        run: gh pr merge --auto

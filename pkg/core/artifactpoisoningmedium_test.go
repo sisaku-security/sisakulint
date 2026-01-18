@@ -282,7 +282,7 @@ func TestArtifactPoisoningMedium_VisitStep(t *testing.T) {
 					Hook: &ast.String{Value: trigger},
 				})
 			}
-			rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitWorkflowPre(workflow)
 
 			// Visit the step
 			err := rule.VisitStep(tt.step)
@@ -473,7 +473,7 @@ func TestArtifactPoisoningMedium_Integration(t *testing.T) {
 					Hook: &ast.String{Value: trigger},
 				})
 			}
-			rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitWorkflowPre(workflow)
 
 			// Visit step
 			err := rule.VisitStep(tt.step)

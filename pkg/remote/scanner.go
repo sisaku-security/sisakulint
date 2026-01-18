@@ -111,7 +111,6 @@ func (s *Scanner) scanRepositories(ctx context.Context, repos []*RepositoryInfo)
 	results := make([]*ScanResult, 0, len(repos))
 
 	for _, repo := range repos {
-		repo := repo
 		eg.Go(func() error {
 			sem <- struct{}{}
 			defer func() { <-sem }()

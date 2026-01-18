@@ -1,0 +1,53 @@
+# Vulnerable pattern: credentials persisted in .git/config and workspace uploaded
+# This workflow demonstrates the artipacked vulnerability where GITHUB_TOKEN
+# stored in .git/config is leaked via artifact upload.
+name: Artipacked Vulnerable Example
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Vulnerable: persist-credentials defaults to true
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: npm run build
+
+      # Dangerous: uploads entire workspace including .git/config with credentials
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-artifact
+          path: .
+
+  build-with-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: npm run build
+
+      # Dangerous: explicitly using github.workspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: full-workspace
+          path: ${{ github.workspace }}
+
+  build-v6:
+    runs-on: ubuntu-latest
+    steps:
+      # checkout v6 stores credentials in $RUNNER_TEMP (safer but still risky)
+      - uses: actions/checkout@v6
+
+      - name: Build
+        run: npm run build
+
+      # Still dangerous pattern
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-v6
+          path: ./

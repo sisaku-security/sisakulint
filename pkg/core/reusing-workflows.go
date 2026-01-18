@@ -165,9 +165,9 @@ type LocalReusableWorkflowCache struct {
 	dbg   io.Writer
 }
 
-func (c *LocalReusableWorkflowCache) debugf(format string, args ...interface{}) {
-	if c.dbg != nil {
-		fmt.Fprintf(c.dbg, format, args...)
+func (c *LocalReusableWorkflowCache) debugf(format string, args ...any) {
+	if c.dbg == nil {
+		return
 	}
 	format = "[local reusable workflow cache] " + format + "\n"
 	fmt.Fprintf(c.dbg, format, args...)
@@ -195,13 +195,16 @@ func (c *LocalReusableWorkflowCache) writeCache(key string, m *ReusableWorkflowM
 //単にnilが返されます。この挙動は、同じエラーを複数の場所から繰り返し報告することを防ぎます。
 
 func (c *LocalReusableWorkflowCache) FindMetadata(spec string) (*ReusableWorkflowMetadata, error) {
-	if c.proj == nil || !strings.HasPrefix(spec, "./") {
+	if !strings.HasPrefix(spec, "./") {
 		return nil, nil
 	}
-	//key := c.proj.Rel(spec)
+	// Check cache first
 	if m, ok := c.readCache(spec); ok {
 		c.debugf("cache hit: %s , : %v", spec, m)
 		return m, nil
+	}
+	if c.proj == nil {
+		return nil, nil
 	}
 	file := filepath.Join(c.proj.RootDirectory(), filepath.FromSlash(spec))
 	file = filepath.Clean(file)
@@ -349,7 +352,7 @@ func parseReusableWorkflowMetadata(src []byte) (*ReusableWorkflowMetadata, error
 		// on:-workflow_call: ...
 		for i := 0; i < len(node.Content); i += 2 {
 			k := strings.ToLower(node.Content[i].Value)
-			if k == "workflow_call" {
+			if k == SubWorkflowCall {
 				var m ReusableWorkflowMetadata
 				if err := node.Content[i+1].Decode(&m); err != nil {
 					return nil, err

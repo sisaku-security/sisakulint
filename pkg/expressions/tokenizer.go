@@ -248,8 +248,6 @@ func (t *Tokenizer) lexIdent() *Token {
 }
 
 // lexNum は数値を字句解析します。
-// NOTE: This function is currently unused but kept for potential future use.
-// nolint:unused
 func (t *Tokenizer) lexNum() *Token {
 	r := t.scanner.Peek()
 	if r == '-' {
@@ -314,8 +312,6 @@ func (t *Tokenizer) lexNum() *Token {
 }
 
 // lexHexInt は16進数を字句解析します。
-// NOTE: This function is currently unused but kept for potential future use.
-// nolint:unused
 func (t *Tokenizer) lexHexInt() *Token {
 	r := t.scanner.Peek()
 	if r == '0' {
@@ -440,8 +436,8 @@ func (t *Tokenizer) AnalyzeToken() *Token {
 		return t.lexIdent()
 	}
 
-	if isNum(r) || r == '-' {
-		return t.lexIdent()
+	if isNum(r) {
+		return t.lexNum()
 	}
 
 	switch r {

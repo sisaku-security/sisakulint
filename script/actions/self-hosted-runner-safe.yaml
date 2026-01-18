@@ -1,0 +1,52 @@
+# Safe runner patterns - using GitHub-hosted runners only
+# These patterns do NOT use self-hosted runners and are safe for public repositories.
+
+name: Safe Runner Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  # SAFE: GitHub-hosted ubuntu-latest
+  ubuntu-latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Running on GitHub-hosted runner"
+
+  # SAFE: GitHub-hosted macos-latest
+  macos-latest:
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: sw_vers
+
+  # SAFE: GitHub-hosted windows-latest
+  windows-latest:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: systeminfo
+
+  # SAFE: Matrix with GitHub-hosted runners only
+  matrix-github-hosted:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Running on ${{ matrix.os }}"
+
+  # SAFE: Specific GitHub-hosted runner versions
+  specific-versions:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: lsb_release -a

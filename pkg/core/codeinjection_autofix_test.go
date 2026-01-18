@@ -73,8 +73,8 @@ func TestCodeInjectionCritical_AutoFix_YAMLOutput(t *testing.T) {
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
 			// Visit workflow and job
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			// Should detect the vulnerability
 			if len(rule.Errors()) == 0 {
@@ -180,8 +180,8 @@ func TestCodeInjectionMedium_AutoFix_YAMLOutput(t *testing.T) {
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
 			// Visit workflow and job
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			// Should detect the vulnerability
 			if len(rule.Errors()) == 0 {
@@ -264,8 +264,8 @@ func TestCodeInjectionCritical_AutoFix_GitHubScript_YAMLOutput(t *testing.T) {
 	job := &ast.Job{Steps: []*ast.Step{step}}
 
 	// Visit workflow and job
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
 
 	// Should detect the vulnerability
 	if len(rule.Errors()) == 0 {

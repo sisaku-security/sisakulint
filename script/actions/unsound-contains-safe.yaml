@@ -1,0 +1,87 @@
+# Safe patterns that should NOT trigger the unsound-contains rule
+name: Safe Contains Examples
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  # SAFE: Using fromJSON with array for branch matching
+  safe-job-fromjson:
+    if: contains(fromJSON('["refs/heads/main", "refs/heads/develop"]'), github.ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Safe deployment check"
+
+  # SAFE: Array as first argument
+  safe-job-array:
+    if: contains(github.event.pull_request.labels.*.name, 'approved')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "PR has approved label"
+
+  # SAFE: String literal second argument (searching within a variable)
+  safe-job-string-search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Search for substring in title
+        if: contains(github.event.pull_request.title, 'WIP')
+        run: echo "PR title contains WIP"
+
+      - name: Search for substring in body
+        if: contains(github.event.pull_request.body, 'BREAKING CHANGE')
+        run: echo "PR body contains breaking change notice"
+
+  # SAFE: Both arguments are literals
+  safe-literal-search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Literal contains check
+        if: contains('hello world', 'world')
+        run: echo "World found in hello world"
+
+  # SAFE: Variable/context as first argument
+  safe-variable-first:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check matrix contains value
+        if: contains(matrix.os, 'ubuntu')
+        run: echo "Running on ubuntu"
+
+      - name: Check env contains value
+        if: contains(env.MY_LIST, 'item1')
+        run: echo "MY_LIST contains item1"
+
+  # SAFE: Using equality or startsWith instead
+  safe-alternatives:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Use equality check
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: echo "On main or develop"
+
+      - name: Use startsWith
+        if: startsWith(github.ref, 'refs/heads/release/')
+        run: echo "On a release branch"
+
+      - name: Use endsWith
+        if: endsWith(github.ref, '/main')
+        run: echo "Ref ends with /main"
+
+  # SAFE: Complex safe patterns
+  safe-complex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Multiple label check
+        if: |
+          contains(github.event.pull_request.labels.*.name, 'ready') &&
+          contains(github.event.pull_request.labels.*.name, 'approved')
+        run: echo "Has both ready and approved labels"
+
+      - name: Safe fromJSON with logical operators
+        if: |
+          github.event_name == 'push' &&
+          contains(fromJSON('["refs/heads/main", "refs/heads/staging"]'), github.ref)
+        run: echo "Push to main or staging"

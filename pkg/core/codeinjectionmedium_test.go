@@ -192,8 +192,8 @@ echo "${{ github.event.pull_request.body }}"`,
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -281,8 +281,8 @@ func TestCodeInjectionMedium_GitHubScript(t *testing.T) {
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -320,12 +320,12 @@ func TestCodeInjectionMedium_NoOverlapWithCritical(t *testing.T) {
 	mediumRule := CodeInjectionMediumRule()
 
 	// Visit with critical rule
-	criticalRule.VisitWorkflowPre(workflow)
-	criticalRule.VisitJobPre(job)
+	_ = criticalRule.VisitWorkflowPre(workflow)
+	_ = criticalRule.VisitJobPre(job)
 
 	// Visit with medium rule
-	mediumRule.VisitWorkflowPre(workflow)
-	mediumRule.VisitJobPre(job)
+	_ = mediumRule.VisitWorkflowPre(workflow)
+	_ = mediumRule.VisitJobPre(job)
 
 	criticalErrors := len(criticalRule.Errors())
 	mediumErrors := len(mediumRule.Errors())

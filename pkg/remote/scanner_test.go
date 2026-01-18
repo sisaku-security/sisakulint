@@ -2,6 +2,7 @@ package remote
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"testing"
@@ -272,7 +273,7 @@ func TestScanWorkflowRecursive_ContextCancellation(t *testing.T) {
 	result := scanner.scanWorkflowRecursive(ctx, wf, 0, &scanned)
 
 	if result {
-		t.Errorf("scanWorkflowRecursive with cancelled context should return false")
+		t.Errorf("scanWorkflowRecursive with canceled context should return false")
 	}
 }
 
@@ -330,9 +331,9 @@ func TestScanRepository_ContextCancellation(t *testing.T) {
 	result := scanner.scanRepository(ctx, repo)
 
 	if result.Error == nil {
-		t.Errorf("scanRepository with cancelled context should return error")
+		t.Errorf("scanRepository with canceled context should return error")
 	}
-	if result.Error != context.Canceled {
+	if !errors.Is(result.Error, context.Canceled) {
 		t.Errorf("scanRepository error = %v, want context.Canceled", result.Error)
 	}
 }

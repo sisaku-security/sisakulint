@@ -345,7 +345,7 @@ func (project *parser) parseJob(id *ast.String, n *yaml.Node) *ast.Job {
 				}
 			}
 			callOnlyKey = key
-		case "secrets":
+		case ContextSecrets:
 			if keyvalue.val.Kind == yaml.ScalarNode {
 				//*https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callsecretsinherit
 				if keyvalue.val.Value == "inherit" {

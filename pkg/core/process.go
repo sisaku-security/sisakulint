@@ -28,7 +28,7 @@ func NewConcurrentExecutor(par int) *ConcurrentExecutor {
 }
 
 func executeWithStdin(exe string, args []string, stdin string) ([]byte, error) {
-	cmd := exec.Command(exe, args...)
+	cmd := exec.CommandContext(context.Background(), exe, args...) //nolint:gosec
 	cmd.Stderr = nil
 	p, err := cmd.StdinPipe()
 	if err != nil {

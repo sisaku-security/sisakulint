@@ -383,10 +383,10 @@ func TestCachePoisoningPoisonableStepRule_DetectsLocalScript(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) == 0 {
@@ -430,10 +430,10 @@ func TestCachePoisoningPoisonableStepRule_DetectsBuildCommand(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) == 0 {
@@ -477,10 +477,10 @@ func TestCachePoisoningPoisonableStepRule_DetectsLocalAction(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(localActionStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(localActionStep)
 
 	errs := rule.Errors()
 	if len(errs) == 0 {
@@ -527,10 +527,10 @@ func TestCachePoisoningPoisonableStepRule_DetectsGitHubScript(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(githubScriptStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(githubScriptStep)
 
 	errs := rule.Errors()
 	if len(errs) == 0 {
@@ -574,10 +574,10 @@ func TestCachePoisoningPoisonableStepRule_NoErrorWithSafeTrigger(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) != 0 {
@@ -616,10 +616,10 @@ func TestCachePoisoningPoisonableStepRule_NoErrorWithoutUnsafeCheckout(t *testin
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) != 0 {
@@ -660,10 +660,10 @@ func TestCachePoisoningPoisonableStepRule_NoErrorForExternalAction(t *testing.T)
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(externalActionStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(externalActionStep)
 
 	errs := rule.Errors()
 	if len(errs) != 0 {
@@ -704,10 +704,10 @@ func TestCachePoisoningPoisonableStepRule_NoErrorForSafeCommand(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) != 0 {
@@ -753,17 +753,17 @@ func TestCachePoisoningPoisonableStepRule_JobIsolation(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitWorkflowPre(workflow)
 
 	// Process job 1
-	rule.VisitJobPre(job1)
-	rule.VisitStep(checkoutStep1)
-	rule.VisitJobPost(job1)
+	_ = rule.VisitJobPre(job1)
+	_ = rule.VisitStep(checkoutStep1)
+	_ = rule.VisitJobPost(job1)
 
 	// Process job 2
-	rule.VisitJobPre(job2)
-	rule.VisitStep(runStep2)
-	rule.VisitJobPost(job2)
+	_ = rule.VisitJobPre(job2)
+	_ = rule.VisitStep(runStep2)
+	_ = rule.VisitJobPost(job2)
 
 	errs := rule.Errors()
 	if len(errs) != 0 {
@@ -810,11 +810,11 @@ func TestCachePoisoningPoisonableStepRule_AutoFixerRegisteredOnce(t *testing.T) 
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep1)
-	rule.VisitStep(runStep2)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep1)
+	_ = rule.VisitStep(runStep2)
 
 	// Should have 2 errors but only 1 auto-fixer
 	errs := rule.Errors()
@@ -863,10 +863,10 @@ func TestCachePoisoningPoisonableStepRule_MultipleUnsafeTriggers(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
-	rule.VisitJobPre(job)
-	rule.VisitStep(checkoutStep)
-	rule.VisitStep(runStep)
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitStep(checkoutStep)
+	_ = rule.VisitStep(runStep)
 
 	errs := rule.Errors()
 	if len(errs) == 0 {

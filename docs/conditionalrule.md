@@ -329,6 +329,58 @@ name: Deploy to production
 if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && github.actor != 'dependabot[bot]' }}
 ```
 
+### Auto-Fix Support
+
+sisakulint can automatically fix conditional rule violations by removing unnecessary `${{ }}` wrappers from conditions.
+
+#### Auto-Fix Example
+
+**Before (Problematic):**
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.repository.owner.id }} == ${{ github.event.sender.id }}
+    steps:
+      - name: Test
+        if: ${{ steps.previous.outputs.status }} == 'success'
+        run: echo test
+```
+
+**After Auto-Fix:**
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.repository.owner.id  ==  github.event.sender.id
+    steps:
+      - name: Test
+        if: steps.previous.outputs.status  == 'success'
+        run: echo test
+```
+
+#### How to Apply Auto-Fix
+
+```bash
+# Preview changes without modifying files
+sisakulint -fix dry-run .github/workflows/
+
+# Apply fixes to files
+sisakulint -fix on .github/workflows/
+```
+
+#### What the Auto-Fix Does
+
+1. **Removes `${{ }}` wrappers**: Strips the expression brackets while preserving the content
+2. **Fixes both job and step conditions**: Applies to `if:` at job level and step level
+3. **Preserves operators**: Keeps `==`, `!=`, `&&`, `||` and other operators intact
+
+#### Limitations
+
+- The auto-fix removes all `${{ }}` wrappers, which may leave extra whitespace
+- Manual review is recommended after applying fixes
+- Complex multi-line conditions may need manual adjustment
+
 ### Relationship to Other Rules
 
 - **[expression]({{< ref "expressionrule.md" >}})**: Validates expression syntax within `${{ }}`

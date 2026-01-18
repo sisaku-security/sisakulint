@@ -85,7 +85,7 @@ func RemoveRefFromWith(stepNode *yaml.Node) error {
 		key := stepNode.Content[i]
 		val := stepNode.Content[i+1]
 
-		if key.Value == "with" && val.Kind == yaml.MappingNode {
+		if key.Value == SBOMWith && val.Kind == yaml.MappingNode {
 			newContent := make([]*yaml.Node, 0, len(val.Content))
 			for j := 0; j < len(val.Content); j += 2 {
 				if j+1 >= len(val.Content) {

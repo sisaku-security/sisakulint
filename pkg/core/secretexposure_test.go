@@ -87,7 +87,7 @@ func TestSecretExposure_ToJSONSecrets(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -162,7 +162,7 @@ func TestSecretExposure_DynamicAccess(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -220,7 +220,7 @@ func TestSecretExposure_ActionInputs(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -266,7 +266,7 @@ func TestSecretExposure_RunScript(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -294,7 +294,7 @@ func TestSecretExposure_WorkflowLevelEnv(t *testing.T) {
 		},
 	}
 
-	rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitWorkflowPre(workflow)
 
 	gotErrors := len(rule.Errors())
 	if gotErrors != 1 {
@@ -321,7 +321,7 @@ func TestSecretExposure_JobLevelEnv(t *testing.T) {
 		Steps: []*ast.Step{},
 	}
 
-	rule.VisitJobPre(job)
+	_ = rule.VisitJobPre(job)
 
 	gotErrors := len(rule.Errors())
 	if gotErrors != 1 {
@@ -348,7 +348,7 @@ func TestSecretExposure_MultipleExpressions(t *testing.T) {
 	}
 
 	job := &ast.Job{Steps: []*ast.Step{step}}
-	rule.VisitJobPre(job)
+	_ = rule.VisitJobPre(job)
 
 	gotErrors := len(rule.Errors())
 	if gotErrors != 2 {
@@ -403,7 +403,7 @@ func TestSecretExposure_ErrorMessages(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			errors := rule.Errors()
 			if len(errors) == 0 {
@@ -524,7 +524,7 @@ func TestSecretExposure_AutoFix(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			// Check number of fixers
 			fixers := rule.AutoFixers()
@@ -578,7 +578,7 @@ func TestSecretExposure_AutoFix_ActionInputs(t *testing.T) {
 	}
 
 	job := &ast.Job{Steps: []*ast.Step{step}}
-	rule.VisitJobPre(job)
+	_ = rule.VisitJobPre(job)
 
 	// Should have one fixer
 	fixers := rule.AutoFixers()
@@ -618,7 +618,7 @@ func TestSecretExposure_AutoFix_WorkflowLevel(t *testing.T) {
 	}
 
 	// Note: Workflow-level env doesn't have a step context, so no auto-fix should be added
-	rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitWorkflowPre(workflow)
 
 	fixers := rule.AutoFixers()
 	// Workflow-level violations won't have fixers because there's no step context
@@ -756,7 +756,7 @@ func TestSecretExposure_AutoFix_EdgeCases(t *testing.T) {
 			}
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
-			rule.VisitJobPre(job)
+			_ = rule.VisitJobPre(job)
 
 			// Check number of fixers
 			fixers := rule.AutoFixers()

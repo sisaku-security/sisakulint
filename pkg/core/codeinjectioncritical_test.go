@@ -184,8 +184,8 @@ func TestCodeInjectionCritical_RunScript(t *testing.T) {
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -273,8 +273,8 @@ func TestCodeInjectionCritical_GitHubScript(t *testing.T) {
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {
@@ -361,8 +361,8 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 
 			job := &ast.Job{Steps: []*ast.Step{step}}
 
-			rule.VisitWorkflowPre(workflow)
-			rule.VisitJobPre(job)
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
 
 			gotErrors := len(rule.Errors())
 			if gotErrors != tt.wantErrors {

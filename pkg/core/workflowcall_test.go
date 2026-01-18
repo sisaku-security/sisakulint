@@ -752,7 +752,7 @@ func TestLocalReusableWorkflowCache(t *testing.T) {
 	t.Run("NewLocalReusableWorkflowCache", func(t *testing.T) {
 		cache := NewLocalReusableWorkflowCache(nil, "/test/cwd", nil)
 		if cache == nil {
-			t.Error("NewLocalReusableWorkflowCache() returned nil")
+			t.Fatal("NewLocalReusableWorkflowCache() returned nil")
 		}
 		if cache.cwd != "/test/cwd" {
 			t.Errorf("cache.cwd = %v, want /test/cwd", cache.cwd)

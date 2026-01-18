@@ -86,7 +86,7 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 			// workflow_run: Runs in base repo context with access to secrets
 			// workflow_call: Inherits security context from caller, can be privileged if called from privileged workflow
 			switch triggerName {
-			case "pull_request_target", "issue_comment", "workflow_run", "workflow_call":
+			case EventPullRequestTarget, "issue_comment", "workflow_run", "workflow_call":
 				rule.hasDangerousTrigger = true
 				rule.dangerousTriggerPos = triggerPos
 				rule.dangerousTriggerName = triggerName

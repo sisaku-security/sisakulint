@@ -181,10 +181,10 @@ var BuiltinFuncSignatures = map[string][]*FuncSignature{
 		Ret:    BoolType{},
 		Params: []ExprType{},
 	}},
-	// cancelled is an alias for canceled (British English spelling)
+	// British English spelling alias for canceled function
 	// https://docs.github.com/en/actions/learn-github-actions/expressions#status-check-functions
-	"cancelled": {{
-		Name:   "cancelled",
+	"cancelled": {{ //nolint:misspell
+		Name:   "cancelled", //nolint:misspell
 		Ret:    BoolType{},
 		Params: []ExprType{},
 	}},
@@ -492,7 +492,7 @@ func (sema *ExprSemanticsChecker) checkSpecialFunctionAvailability(n *FuncCallNo
 	var SpecialFunctionNames = map[string][]string{
 		"always":    {"jobs.<job_id>.if", "jobs.<job_id>.steps.if"},
 		"canceled":  {"jobs.<job_id>.if", "jobs.<job_id>.steps.if"},
-		"cancelled": {"jobs.<job_id>.if", "jobs.<job_id>.steps.if"},
+		"cancelled": {"jobs.<job_id>.if", "jobs.<job_id>.steps.if"}, //nolint:misspell
 		"failure":   {"jobs.<job_id>.if", "jobs.<job_id>.steps.if"},
 		"hashfiles": {"jobs.<job_id>.steps.continue-on-error",
 			"jobs.<job_id>.steps.env", "jobs.<job_id>.steps.if",

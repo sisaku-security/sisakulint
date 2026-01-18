@@ -36,16 +36,36 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "parent relative path", path: "../artifacts", wantUnsafe: true},
 		{name: "github.workspace", path: "${{ github.workspace }}/artifacts", wantUnsafe: true},
 		{name: "GITHUB_WORKSPACE env", path: "$GITHUB_WORKSPACE/artifacts", wantUnsafe: true},
-		{name: "absolute path without runner.temp", path: "/tmp/artifacts", wantUnsafe: true},
 		{name: "simple directory name", path: "artifacts", wantUnsafe: true},
 		{name: "nested directory", path: "build/artifacts", wantUnsafe: true},
 
-		// Safe paths
+		// Safe paths - runner.temp (cross-platform recommended)
 		{name: "runner.temp basic", path: "${{ runner.temp }}/artifacts", wantUnsafe: false},
 		{name: "runner.temp nested", path: "${{ runner.temp }}/build/artifacts", wantUnsafe: false},
 		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", wantUnsafe: false},
 		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", wantUnsafe: false},
 		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", wantUnsafe: false},
+
+		// Safe paths - /tmp only (system temporary directory)
+		{name: "/tmp absolute path", path: "/tmp/artifacts", wantUnsafe: false},
+		{name: "/tmp root", path: "/tmp", wantUnsafe: false},
+		{name: "/tmp with nested dirs", path: "/tmp/build/artifacts", wantUnsafe: false},
+
+		// Unsafe paths - other absolute paths (too broad without OS context)
+		{name: "/var absolute path", path: "/var/temp/artifacts", wantUnsafe: true},
+		{name: "/var/folders macOS", path: "/var/folders/tmp/artifacts", wantUnsafe: true},
+		{name: "/home absolute path", path: "/home/runner/artifacts", wantUnsafe: true},
+		{name: "workspace-like absolute path", path: "/home/runner/work/repo/artifacts", wantUnsafe: true},
+
+		// Unsafe paths - Windows absolute paths (cannot validate safely without OS context)
+		{name: "Windows C drive backslash", path: "C:\\Temp\\artifacts", wantUnsafe: true},
+		{name: "Windows C drive forward slash", path: "C:/Temp/artifacts", wantUnsafe: true},
+		{name: "Windows D drive backslash", path: "D:\\temp\\build", wantUnsafe: true},
+		{name: "Windows D drive forward slash", path: "D:/temp/build", wantUnsafe: true},
+		{name: "Windows lowercase c drive", path: "c:\\temp", wantUnsafe: true},
+		{name: "Windows lowercase d drive", path: "d:/temp", wantUnsafe: true},
+		{name: "Windows Z drive", path: "Z:\\artifacts", wantUnsafe: true},
+		{name: "Windows workspace-like path", path: "C:\\actions-runner\\_work\\repo\\artifacts", wantUnsafe: true},
 	}
 
 	for _, tt := range tests {
@@ -225,7 +245,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			wantErrors: 1,
 		},
 		{
-			name: "download-artifact with absolute path (no runner.temp) - should error",
+			name: "download-artifact with /tmp path - no error (safe absolute path)",
 			step: &ast.Step{
 				ID: &ast.String{Value: "download"},
 				Exec: &ast.ExecAction{
@@ -239,7 +259,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				},
 				Pos: &ast.Position{Line: 10, Col: 5},
 			},
-			wantErrors: 1,
+			wantErrors: 0,
 		},
 		{
 			name: "download-artifact with RUNNER_TEMP env var - no error",

@@ -17,7 +17,7 @@ func AddEnvVarsToStepNode(stepNode *yaml.Node, envVars map[string]string) error 
 	// Find or create 'env' section
 	envIndex := -1
 	for i := 0; i < len(stepNode.Content); i += 2 {
-		if stepNode.Content[i].Value == "env" {
+		if stepNode.Content[i].Value == AvailableEnv {
 			envIndex = i
 			break
 		}
@@ -81,7 +81,7 @@ func ReplaceInRunScript(stepNode *yaml.Node, replacements map[string]string) err
 
 	// Find 'run' section
 	for i := 0; i < len(stepNode.Content); i += 2 {
-		if stepNode.Content[i].Value == "run" {
+		if stepNode.Content[i].Value == SBOMRun {
 			runNode := stepNode.Content[i+1]
 			if runNode.Kind == yaml.ScalarNode {
 				// Apply all replacements

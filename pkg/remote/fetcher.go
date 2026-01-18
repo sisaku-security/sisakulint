@@ -69,7 +69,7 @@ func getToken() string {
 }
 
 func getTokenFromGhCLI() (string, error) {
-	cmd := exec.Command("gh", "auth", "token")
+	cmd := exec.CommandContext(context.Background(), "gh", "auth", "token")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -78,7 +78,7 @@ func getTokenFromGhCLI() (string, error) {
 }
 
 func getTokenFromGitCredential() (string, error) {
-	cmd := exec.Command("git", "credential", "fill")
+	cmd := exec.CommandContext(context.Background(), "git", "credential", "fill")
 	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n")
 	output, err := cmd.Output()
 	if err != nil {

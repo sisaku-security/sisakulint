@@ -352,7 +352,7 @@ func setRunScriptValue(stepNode *yaml.Node, newValue string) error {
 
 	// Find 'run' section
 	for i := 0; i < len(stepNode.Content); i += 2 {
-		if stepNode.Content[i].Value == "run" {
+		if stepNode.Content[i].Value == SBOMRun {
 			runNode := stepNode.Content[i+1]
 			if runNode.Kind == yaml.ScalarNode {
 				runNode.Value = newValue

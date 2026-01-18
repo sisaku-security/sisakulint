@@ -236,8 +236,8 @@ func TestCachePoisoningRule_VisitWorkflowPre(t *testing.T) {
 	if len(rule.unsafeTriggers) != 1 {
 		t.Errorf("unsafeTriggers length = %d, want 1", len(rule.unsafeTriggers))
 	}
-	if rule.unsafeTriggers[0] != "pull_request_target" {
-		t.Errorf("unsafeTriggers[0] = %q, want %q", rule.unsafeTriggers[0], "pull_request_target")
+	if rule.unsafeTriggers[0] != EventPullRequestTarget {
+		t.Errorf("unsafeTriggers[0] = %q, want %q", rule.unsafeTriggers[0], EventPullRequestTarget)
 	}
 }
 

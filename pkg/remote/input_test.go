@@ -75,7 +75,7 @@ func TestParseInput_URL(t *testing.T) {
 			name:      "valid https URL",
 			input:     "https://github.com/sisaku-security/sisakulint",
 			wantType:  InputTypeURL,
-			wantOwner: "ultra-supara",
+			wantOwner: "sisaku-security",
 			wantRepo:  "sisakulint",
 			wantErr:   false,
 		},

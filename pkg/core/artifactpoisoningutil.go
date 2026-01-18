@@ -24,7 +24,7 @@ func AddPathToWithSection(stepNode *yaml.Node, path string) {
 	// Find the 'with' section
 	withIndex := -1
 	for i := 0; i < len(stepNode.Content); i += 2 {
-		if stepNode.Content[i].Value == "with" {
+		if stepNode.Content[i].Value == SBOMWith {
 			withIndex = i
 			break
 		}
@@ -39,7 +39,7 @@ func AddPathToWithSection(stepNode *yaml.Node, path string) {
 		if withNode.Kind == yaml.MappingNode {
 			// Check if path already exists
 			for i := 0; i < len(withNode.Content); i += 2 {
-				if withNode.Content[i].Value == "path" {
+				if withNode.Content[i].Value == SBOMPath {
 					// Update existing path (overwrite unsafe path)
 					withNode.Content[i+1] = pathValue
 					return
@@ -54,7 +54,7 @@ func AddPathToWithSection(stepNode *yaml.Node, path string) {
 	// 'with' section doesn't exist, create it after 'uses'
 	usesIndex := -1
 	for i := 0; i < len(stepNode.Content); i += 2 {
-		if stepNode.Content[i].Value == "uses" {
+		if stepNode.Content[i].Value == SBOMUses {
 			usesIndex = i
 			break
 		}

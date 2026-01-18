@@ -264,10 +264,9 @@ func TestExprRule_checkIfCondition(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name:        "invalid - non-boolean type",
-			value:       "${{ 'string value' }}",
-			wantError:   true,
-			errorSubstr: "should be type \"bool\"",
+			name:      "valid - string is truthy in if condition",
+			value:     "${{ 'string value' }}",
+			wantError: false,
 		},
 	}
 
@@ -284,7 +283,7 @@ func TestExprRule_checkIfCondition(t *testing.T) {
 				Pos:    pos,
 			}
 
-			rule.checkIfCondition(str, "")
+			rule.checkIfCondition(str, KeyPathJobStepsIf)
 
 			hasError := len(rule.Errors()) > 0
 			if hasError != tt.wantError {
@@ -574,7 +573,7 @@ func TestExprRule_checkEnv(t *testing.T) {
 			}
 
 			env := tt.setupEnv()
-			rule.checkEnv(env, "env")
+			rule.checkEnv(env, KeyPathJobStepsEnv)
 
 			hasError := len(rule.Errors()) > 0
 			if hasError != tt.wantError {

@@ -1,0 +1,38 @@
+# Safe: TOCTOU mitigation with immutable SHA reference
+# This workflow is safe because:
+# 1. Even though it uses 'labeled' event type
+# 2. It checks out using an immutable reference (head.sha)
+# 3. The exact code that was reviewed is what gets executed
+#
+# Reference: https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-critical/
+name: Safe TOCTOU Critical
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'safe-to-test')
+    steps:
+      # SAFE: Uses immutable commit SHA reference
+      # The exact commit that was reviewed is checked out
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'approved'
+    steps:
+      # SAFE: Uses immutable commit SHA
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build
+        run: npm run build

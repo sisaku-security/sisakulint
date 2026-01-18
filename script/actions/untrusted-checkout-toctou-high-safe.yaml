@@ -1,0 +1,39 @@
+# Safe: TOCTOU mitigation with immutable SHA reference
+# This workflow is safe because:
+# 1. Even though it uses deployment environments (requiring approval)
+# 2. It checks out using an immutable reference (head.sha)
+# 3. The exact code that was approved is what gets deployed
+#
+# Reference: https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-high/
+name: Safe TOCTOU High
+
+on: pull_request_target
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      # SAFE: Uses immutable commit SHA reference
+      # The exact commit that was approved is checked out
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Deploy to staging
+        run: ./deploy.sh staging
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+    needs: deploy-staging
+    steps:
+      # SAFE: Uses immutable commit SHA
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Deploy to production
+        run: ./deploy.sh production

@@ -9,7 +9,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files. It analy
 **Key Features:**
 - Detects injection vulnerabilities, credential exposure, and supply chain attacks
 - Validates permissions, timeouts, and workflow configurations
-- Supports auto-fixing for many security issues (5 rules with auto-fix as of Jan 2026)
+- Supports auto-fixing for many security issues (23 rules with auto-fix as of Jan 2026)
 - SARIF output format for CI/CD integration (e.g., reviewdog)
 - Fast parallel analysis with Go concurrency
 - Specialized detection for privileged workflow contexts (pull_request_target, issue_comment, workflow_run)
@@ -88,6 +88,21 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/cachepoisoningrule.go` - **CachePoisoningRule**: Detects cache poisoning with untrusted inputs
      - `pkg/core/improper_access_control.go` - **ImproperAccessControlRule**: Detects improper access control with label-based approval and synchronize events (with auto-fix)
      - `pkg/core/secretsinartifacts.go` - **SecretsInArtifactsRule**: Detects sensitive information in artifact uploads like .git directory or .env files (CWE-312, with auto-fix)
+     - `pkg/core/untrustedcheckouttoctoucritical.go` - **UntrustedCheckoutTOCTOUCriticalRule**: Detects TOCTOU vulnerabilities with labeled event type and mutable refs (with auto-fix)
+     - `pkg/core/untrustedcheckouttoctouhigh.go` - **UntrustedCheckoutTOCTOUHighRule**: Detects TOCTOU vulnerabilities with deployment environment and mutable refs (with auto-fix)
+     - `pkg/core/botconditionsrule.go` - **BotConditionsRule**: Detects spoofable bot detection conditions using github.actor or similar contexts (with auto-fix)
+     - `pkg/core/artifactpoisoningmedium.go` - **ArtifactPoisoningMediumRule**: Detects third-party artifact download actions in untrusted triggers (with auto-fix)
+     - `pkg/core/cachepoisoningpoisonablestep.go` - **CachePoisoningPoisonableStepRule**: Detects cache poisoning via execution of untrusted code after unsafe checkout (with auto-fix)
+     - `pkg/core/secretexposure.go` - **SecretExposureRule**: Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access] (with auto-fix)
+     - `pkg/core/artipacked.go` - **ArtipackedRule**: Detects credential leakage when checkout credentials are persisted and workspace is uploaded (with auto-fix)
+     - `pkg/core/unsoundcontainsrule.go` - **UnsoundContainsRule**: Detects bypassable contains() function usage in conditions (with auto-fix)
+     - `pkg/core/impostorcommit.go` - **ImpostorCommitRule**: Detects impostor commits from fork network - supply chain attack vector (with auto-fix)
+     - `pkg/core/refconfusion.go` - **RefConfusionRule**: Detects ref confusion attacks where both branch and tag have same name (with auto-fix)
+     - `pkg/core/obfuscation.go` - **ObfuscationRule**: Detects obfuscated workflow patterns that may evade security scanners (with auto-fix)
+     - `pkg/core/known_vulnerable_actions.go` - **KnownVulnerableActionsRule**: Detects actions with known security vulnerabilities via GitHub Security Advisories (with auto-fix)
+     - `pkg/core/selfhostedrunnersrule.go` - **SelfHostedRunnersRule**: Detects self-hosted runner usage which poses security risks in public repos
+     - `pkg/core/archived_uses.go` - **ArchivedUsesRule**: Detects usage of archived actions/reusable workflows that are no longer maintained
+     - `pkg/core/unpinned_images.go` - **UnpinnedImagesRule**: Detects container images not pinned by SHA256 digest
      - `pkg/core/rule_add_temp_normal.go` - **AddRule**: Template rule for adding new rules
 
 4. **AST Processing**:
@@ -198,7 +213,7 @@ See `docs/RULES_GUIDE.md` for detailed guide.
 
 ## Implemented Rules
 
-sisakulint includes the following security rules (as of pkg/core/linter.go:500-519):
+sisakulint includes the following security rules (as of pkg/core/linter.go:500-542):
 
 1. **CredentialsRule** - Detects hardcoded credentials and tokens (auto-fix supported)
 2. **JobNeedsRule** - Validates job dependencies
@@ -223,6 +238,22 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 21. **UntrustedCheckoutRule** - Detects checkout of untrusted PR code in privileged contexts (auto-fix supported)
 22. **ImproperAccessControlRule** - Detects improper access control with label-based approval and synchronize events (auto-fix supported)
 23. **SecretsInArtifactsRule** - Detects sensitive information in artifact uploads (CWE-312, auto-fix supported)
+24. **UnmaskedSecretExposureRule** - Detects unmasked secret exposure when secrets are derived using fromJson() (auto-fix supported)
+25. **UntrustedCheckoutTOCTOUCriticalRule** - Detects TOCTOU vulnerabilities with labeled event type and mutable refs (auto-fix supported)
+26. **UntrustedCheckoutTOCTOUHighRule** - Detects TOCTOU vulnerabilities with deployment environment and mutable refs (auto-fix supported)
+27. **BotConditionsRule** - Detects spoofable bot detection conditions using github.actor or similar contexts (auto-fix supported)
+28. **ArtifactPoisoningMediumRule** - Detects third-party artifact download actions in untrusted triggers (auto-fix supported)
+29. **CachePoisoningPoisonableStepRule** - Detects cache poisoning via execution of untrusted code after unsafe checkout (auto-fix supported)
+30. **SecretExposureRule** - Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access] (auto-fix supported)
+31. **ArtipackedRule** - Detects credential leakage when checkout credentials are persisted and workspace is uploaded (auto-fix supported)
+32. **UnsoundContainsRule** - Detects bypassable contains() function usage in conditions (auto-fix supported)
+33. **ImpostorCommitRule** - Detects impostor commits from fork network that could be supply chain attacks (auto-fix supported)
+34. **RefConfusionRule** - Detects ref confusion attacks where both branch and tag have same name (auto-fix supported)
+35. **ObfuscationRule** - Detects obfuscated workflow patterns that may evade security scanners (auto-fix supported)
+36. **KnownVulnerableActionsRule** - Detects actions with known security vulnerabilities via GitHub Security Advisories (auto-fix supported)
+37. **SelfHostedRunnersRule** - Detects self-hosted runner usage which poses security risks in public repos
+38. **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
+39. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
 
 ## Key Files
 
@@ -330,7 +361,22 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 6. **EnvPathInjectionRule** (`envpathinjection.go`) - Validates untrusted paths with `realpath` before writing to $GITHUB_PATH
 7. **UntrustedCheckoutRule** (`untrustedcheckout.go`) - Adds explicit ref to checkout in privileged contexts
 8. **ArtifactPoisoningRule** (`artifactpoisoningcritical.go`) - Adds validation steps for artifact downloads
-9. **SecretsInArtifactsRule** (`secretsinartifacts.go`) - Fixes unsafe artifact uploads by adding include-hidden-files: false for v3, or updating unsafe paths
+9. **UnmaskedSecretExposureRule** (`unmasked_secret_exposure.go`) - Adds `::add-mask::` command for derived secrets from fromJson()
+10. **ImproperAccessControlRule** (`improper_access_control.go`) - Adds safe conditions for label-based and synchronize events
+11. **UntrustedCheckoutTOCTOUCriticalRule** (`untrustedcheckouttoctoucritical.go`) - Fixes TOCTOU vulnerabilities with labeled event type
+12. **UntrustedCheckoutTOCTOUHighRule** (`untrustedcheckouttoctouhigh.go`) - Fixes TOCTOU vulnerabilities with deployment environment
+13. **BotConditionsRule** (`botconditionsrule.go`) - Replaces spoofable bot conditions with safe alternatives
+14. **ArtifactPoisoningMediumRule** (`artifactpoisoningmedium.go`) - Adds safe extraction path to `${{ runner.temp }}/artifacts`
+15. **CachePoisoningPoisonableStepRule** (`cachepoisoningpoisonablestep.go`) - Removes unsafe ref from checkout step
+16. **SecretExposureRule** (`secretexposure.go`) - Replaces bracket notation secrets['NAME'] with dot notation secrets.NAME
+17. **ArtipackedRule** (`artipacked.go`) - Adds `persist-credentials: false` to checkout steps
+18. **UnsoundContainsRule** (`unsoundcontainsrule.go`) - Converts string literal to fromJSON() array format
+19. **CachePoisoningRule** (`cachepoisoningrule.go`) - Removes unsafe ref from checkout step
+20. **ConditionalRule** (`conditionalrule.go`) - Fixes conditional expression formatting
+21. **RefConfusionRule** (`refconfusion.go`) - Pins action to commit SHA when ref confusion is detected
+22. **ObfuscationRule** (`obfuscation.go`) - Normalizes obfuscated paths and shell commands
+23. **KnownVulnerableActionsRule** (`known_vulnerable_actions.go`) - Updates vulnerable actions to patched versions
+24. **SecretsInArtifactsRule** (`secretsinartifacts.go`) - Fixes unsafe artifact uploads by adding include-hidden-files: false for v3, or updating unsafe paths
 
 ## Recent Security Enhancements
 
@@ -370,6 +416,6 @@ Two new rules detect supply chain attacks:
 
 - When adding/modifying rules, ALWAYS update the rule list in this file
 - When adding example workflows to `script/actions/`, document them in `script/README.md`
-- Rule registration happens in `pkg/core/linter.go` around line 500-519
+- Rule registration happens in `pkg/core/linter.go` around line 500-542
 - The visitor pattern is depth-first: WorkflowPre → JobPre → Step → JobPost → WorkflowPost
 - Auto-fix is optional but highly recommended for actionable rules

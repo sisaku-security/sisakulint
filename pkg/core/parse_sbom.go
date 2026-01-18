@@ -552,7 +552,7 @@ func (project *parser) parseWorkflowCallEvent(pos *ast.Position, node *yaml.Node
 				}
 				ret.Inputs = append(ret.Inputs, input)
 			}
-		case "secrets":
+		case ContextSecrets:
 			secrets := project.parseSectionMapping("secrets", kv.val, true, false)
 			ret.Secrets = make(map[string]*ast.WorkflowCallEventSecret, len(secrets))
 			for _, kv := range secrets {

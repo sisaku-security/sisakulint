@@ -17,6 +17,14 @@ const (
 	SBOMUses        = "uses"
 	SBOMWith        = "with"
 	SBOMRun         = "run"
+	SBOMPath        = "path"
+
+	// GitHub event constants
+	EventPullRequestTarget = "pull_request_target"
+	EventTypeSynchronize   = "synchronize"
+	EventTypeLabeled       = "labeled"
+	EventCategory          = "event"
+	EventCategoryPR        = "PULLREQUEST"
 
 	// Parse sub constants
 	SubWorkflowDispatch   = "workflow_dispatch"

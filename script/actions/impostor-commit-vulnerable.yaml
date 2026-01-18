@@ -1,0 +1,31 @@
+# Vulnerable example: This workflow demonstrates impostor commit vulnerability
+# An attacker can create a fork, add malicious code in a commit, and trick users
+# into referencing that commit as if it were from the original repository.
+name: Impostor Commit Vulnerable Example
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Safe: Using a known version tag (will be converted to SHA by commit-sha rule)
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Using a commit SHA that doesn't exist in the official repository
+      # This is a fake SHA that simulates an impostor commit attack
+      # In a real attack, this would be a valid SHA from an attacker's fork
+      - uses: actions/checkout@deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+
+      # VULNERABLE: Another example with a different action
+      - uses: actions/setup-node@cafebabecafebabecafebabecafebabecafebabe
+        with:
+          node-version: '20'
+
+      # Safe: Using a proper tag reference
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
