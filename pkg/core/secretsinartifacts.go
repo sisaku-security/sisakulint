@@ -2,6 +2,7 @@ package core
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -59,23 +60,14 @@ var sensitivePathPatterns = []*regexp.Regexp{
 // isUnsafeArtifactPath checks if the path might expose sensitive files.
 func isUnsafeArtifactPath(path string) bool {
 	path = strings.TrimSpace(path)
-
-	// Check for exact matches of dangerous paths
-	for _, unsafePath := range unsafeArtifactPaths {
-		if path == unsafePath {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(unsafeArtifactPaths, path)
 }
 
 // containsSensitivePath checks if any path in a multi-line path spec directly references sensitive files.
 // This only checks for explicit sensitive file patterns (e.g., .git, .env), NOT broad paths like "." or "**".
 func containsSensitivePath(pathSpec string) bool {
 	// Split by newlines for multi-line path specs
-	lines := strings.Split(pathSpec, "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(pathSpec, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -174,6 +166,14 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 	}
 
 	// Check for unsafe conditions
+	//
+	// Detection cases:
+	// - Case 1: Path explicitly includes sensitive file patterns (e.g., .git, .env)
+	// - Case 2: v3 or earlier (hidden files included by default)
+	// - Case 3: v4+ with include-hidden-files: true and broad path
+	//
+	// Note: v4+ with broad path (e.g., path: .) but WITHOUT include-hidden-files is SAFE
+	// because v4+ defaults include-hidden-files to false, excluding .git and other hidden files.
 
 	// Case 1: path explicitly includes sensitive file patterns (e.g., .git, .env)
 	if hasPath && containsSensitivePath(pathValue) {
@@ -186,8 +186,8 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 		return nil
 	}
 
-	// Case 3: Using v3 or earlier (hidden files included by default)
-	// In v4+, include-hidden-files defaults to false
+	// Case 2: Using v3 or earlier (hidden files included by default)
+	// In v4+, include-hidden-files defaults to false, so broad paths are safe without explicit enable
 	if majorVersion > 0 && majorVersion < 4 {
 		// Check if include-hidden-files is explicitly set to false (safe)
 		if hiddenInput, exists := action.Inputs["include-hidden-files"]; exists && hiddenInput != nil && hiddenInput.Value != nil {
@@ -206,7 +206,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 		rule.AddAutoFixer(NewStepFixer(node, rule))
 	}
 
-	// Case 4: v4+ with include-hidden-files: true and path: . is dangerous
+	// Case 3: v4+ with include-hidden-files: true and broad path is dangerous
 	if majorVersion >= 4 {
 		if hiddenInput, exists := action.Inputs["include-hidden-files"]; exists && hiddenInput != nil && hiddenInput.Value != nil {
 			if hiddenInput.Value.Value == "true" && hasPath && isUnsafeArtifactPath(pathValue) {
