@@ -1,0 +1,58 @@
+# ref-confusion - Branch/Tag Name Collision Attack Detection
+#
+# This workflow demonstrates vulnerable patterns where the same ref name
+# exists as both a branch and a tag, which can lead to supply chain attacks.
+#
+# Attack scenario:
+# 1. Attacker sends a PR to create a branch named "v1.0.0" (same as existing tag)
+# 2. Or attacker manipulates to delete the tag
+# 3. User's workflow unintentionally executes malicious branch code
+#
+# Why dangerous:
+# - User thinks they're referencing a tag, but branches can be modified
+# - If the tag is deleted, the branch takes precedence
+# - Entry point for supply chain attacks
+
+name: Ref Confusion Test
+on: [push, pull_request]
+
+jobs:
+  vulnerable:
+    name: Vulnerable - Symbolic Ref References
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # VULNERABLE: Using symbolic ref that could exist as both branch and tag
+      # Note: To trigger this detection, the referenced repo must have
+      # both a branch AND tag with the same name
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # VULNERABLE: Short version tag
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      # VULNERABLE: Full version tag (could still have branch collision)
+      - name: Setup Python
+        uses: actions/setup-python@v5.3.0
+
+      # VULNERABLE: Branch name reference
+      - name: Cache
+        uses: actions/cache@main
+
+  safe:
+    name: Safe - Full Commit SHA References
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # SAFE: Full commit SHA - immutable reference
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # SAFE: Full commit SHA - cannot be confused
+      - name: Setup Node
+        uses: actions/setup-node@39cd14951b08e6e8b9cb455b2e99031efca36c16
+
+      # SAFE: Local action - not subject to ref confusion
+      - name: Local Action
+        uses: ./local/action
