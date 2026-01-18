@@ -1,0 +1,49 @@
+# Direct Cache Poisoning Vulnerability Example
+# This workflow demonstrates cache poisoning via untrusted inputs in cache key/restore-keys/path
+# The vulnerability exists regardless of trigger type (pull_request, push, etc.)
+name: Vulnerable Direct Cache Poisoning
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Untrusted input in cache key
+      # Attacker can control github.event.pull_request.head.ref to poison cache
+      - name: Cache with untrusted key
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.event.pull_request.head.ref }}-${{ hashFiles('**/package-lock.json') }}
+
+      # VULNERABLE: Untrusted input in restore-keys
+      # Attacker can control github.head_ref to restore malicious cache
+      - name: Cache with untrusted restore-keys
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ github.sha }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-${{ github.head_ref }}-
+            pip-
+
+      # VULNERABLE: Untrusted input in path
+      # Attacker can control the path to cache arbitrary files
+      - name: Cache with untrusted path
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.event.pull_request.title }}
+          key: data-${{ github.sha }}
+
+      # VULNERABLE: Multiple untrusted inputs
+      - name: Cache with multiple untrusted inputs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: ${{ github.event.pull_request.body }}-${{ github.event.issue.title }}
+          restore-keys: |
+            ${{ github.event.comment.body }}-
