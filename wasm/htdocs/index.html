@@ -82,20 +82,46 @@
             background: #0d0d1a;
             height: 400px;
             overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 4px;
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 13px;
         }
-        .error {
-            color: #ff6b6b;
+        .error-item {
+            padding: 8px;
+            margin: 4px 0;
+            border-radius: 4px;
+            border-left: 3px solid;
         }
-        .warning {
-            color: #ffd93d;
+        .error-item.critical {
+            background: rgba(255, 107, 107, 0.1);
+            border-color: #ff6b6b;
+        }
+        .error-item.warning {
+            background: rgba(255, 217, 61, 0.1);
+            border-color: #ffd93d;
+        }
+        .error-item.info {
+            background: rgba(77, 150, 255, 0.1);
+            border-color: #4d96ff;
+        }
+        .error-location {
+            color: #888;
+            font-size: 12px;
+        }
+        .error-message {
+            margin-top: 4px;
+        }
+        .error-rule {
+            color: #00d9ff;
+            font-size: 11px;
+            margin-top: 4px;
         }
         .success {
             color: #6bcb77;
-        }
-        .info {
-            color: #4d96ff;
+            padding: 20px;
+            text-align: center;
         }
         .status {
             padding: 10px;
@@ -128,12 +154,6 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        .examples {
-            margin-top: 20px;
-        }
-        .examples h3 {
-            color: #00d9ff;
-        }
         .example-btn {
             background: #2d2d44;
             font-size: 14px;
@@ -141,6 +161,11 @@
         }
         .example-btn:hover {
             background: #3d3d54;
+        }
+        .stats {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
         }
     </style>
 </head>
@@ -172,10 +197,12 @@ jobs:
                 <button id="analyzeBtn" disabled onclick="analyzeWorkflow()">Analyze</button>
                 <button class="example-btn" onclick="loadExample('critical')">Critical Example</button>
                 <button class="example-btn" onclick="loadExample('medium')">Medium Example</button>
+                <button class="example-btn" onclick="loadExample('safe')">Safe Example</button>
             </div>
             <div class="panel">
                 <label>Analysis Results</label>
-                <div id="output" class="output"></div>
+                <div id="output"></div>
+                <div id="stats" class="stats"></div>
             </div>
         </div>
     </div>
@@ -184,58 +211,19 @@ jobs:
     <script>
         const go = new Go();
         let wasmReady = false;
-        let outputBuffer = [];
-
-        // Override console for capturing output
-        const originalLog = console.log;
-        const originalError = console.error;
-
-        console.log = function(...args) {
-            outputBuffer.push({ type: 'info', message: args.join(' ') });
-            originalLog.apply(console, args);
-            updateOutput();
-        };
-
-        console.error = function(...args) {
-            outputBuffer.push({ type: 'error', message: args.join(' ') });
-            originalError.apply(console, args);
-            updateOutput();
-        };
-
-        function updateOutput() {
-            const output = document.getElementById('output');
-            output.innerHTML = outputBuffer.map(item => {
-                let className = 'info';
-                if (item.message.includes('[critical]') || item.message.includes('error')) {
-                    className = 'error';
-                } else if (item.message.includes('[warning]') || item.message.includes('medium')) {
-                    className = 'warning';
-                } else if (item.message.includes('success') || item.message.includes('no issues')) {
-                    className = 'success';
-                }
-                return `<div class="${className}">${escapeHtml(item.message)}</div>`;
-            }).join('');
-            output.scrollTop = output.scrollHeight;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
 
         async function initWasm() {
             const statusEl = document.getElementById('status');
             try {
                 const result = await WebAssembly.instantiateStreaming(
-                    fetch('sisakulint-js.wasm'),
+                    fetch('sisakulint.wasm'),
                     go.importObject
                 );
                 go.run(result.instance);
                 wasmReady = true;
                 document.getElementById('analyzeBtn').disabled = false;
                 statusEl.className = 'status ready';
-                statusEl.innerHTML = '<span>WASM module loaded successfully!</span>';
+                statusEl.innerHTML = '<span>WASM module loaded. Ready to analyze!</span>';
             } catch (err) {
                 statusEl.className = 'status error';
                 statusEl.innerHTML = `<span>Failed to load WASM: ${err.message}</span>`;
@@ -249,36 +237,55 @@ jobs:
                 return;
             }
 
-            outputBuffer = [];
+            const output = document.getElementById('output');
+            const stats = document.getElementById('stats');
             const workflow = document.getElementById('workflow').value;
 
-            outputBuffer.push({ type: 'info', message: '=== Starting analysis ===' });
-            updateOutput();
+            output.innerHTML = '<div style="color: #888;">Analyzing...</div>';
+            stats.innerHTML = '';
 
-            // Create a temporary file-like object
-            // Note: sisakulint expects file paths, so we need to simulate
             try {
-                // Try to call the analyze function if exposed
-                if (typeof window.sisakulintAnalyze === 'function') {
-                    window.sisakulintAnalyze(workflow);
+                if (typeof sisakulintAnalyze !== 'function') {
+                    output.innerHTML = '<div class="error-item critical"><div class="error-message">sisakulintAnalyze function not available</div></div>';
+                    return;
+                }
+
+                const resultJson = sisakulintAnalyze(workflow, 'workflow.yaml');
+                const result = JSON.parse(resultJson);
+
+                if (result.success) {
+                    output.innerHTML = '<div class="success">No security issues found!</div>';
+                    stats.innerHTML = '0 issues detected';
                 } else {
-                    outputBuffer.push({
-                        type: 'warning',
-                        message: 'sisakulint WASM is loaded but analyze function is not exposed to JavaScript.'
+                    let html = '';
+                    const criticalRules = ['code-injection-critical', 'envvar-injection-critical', 'untrusted-checkout'];
+
+                    result.errors.forEach(err => {
+                        const isCritical = criticalRules.some(r => err.rule.includes(r));
+                        const className = isCritical ? 'critical' : 'warning';
+
+                        html += `
+                            <div class="error-item ${className}">
+                                <div class="error-location">Line ${err.line}, Column ${err.column}</div>
+                                <div class="error-message">${escapeHtml(err.message)}</div>
+                                <div class="error-rule">[${err.rule}]</div>
+                            </div>
+                        `;
                     });
-                    outputBuffer.push({
-                        type: 'info',
-                        message: 'The Go WASM binary started with main(), but CLI tools expect file paths.'
-                    });
-                    outputBuffer.push({
-                        type: 'info',
-                        message: 'For browser usage, the Go code needs modification to expose a JS-callable function.'
-                    });
+
+                    output.innerHTML = html;
+                    stats.innerHTML = `${result.errors.length} issue(s) detected`;
                 }
             } catch (err) {
-                outputBuffer.push({ type: 'error', message: `Error: ${err.message}` });
+                output.innerHTML = `<div class="error-item critical"><div class="error-message">Error: ${escapeHtml(err.message)}</div></div>`;
+                console.error('Analysis error:', err);
             }
-            updateOutput();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         function loadExample(type) {
@@ -315,13 +322,32 @@ jobs:
         run: |
           npm install
           npm run build -- --name="\${{ github.event.pull_request.title }}"
+`,
+                safe: `name: Safe CI Workflow
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Safe - Using environment variable
+        env:
+          PR_TITLE: \${{ github.event.pull_request.title }}
+        run: |
+          echo "PR Title: $PR_TITLE"
 `
             };
 
             document.getElementById('workflow').value = examples[type] || '';
         }
 
-        // Initialize
         initWasm();
     </script>
 </body>
