@@ -428,7 +428,7 @@ func parseVersionParts(version string) []int {
 	result := make([]int, 0, len(parts))
 	for _, p := range parts {
 		var num int
-		fmt.Sscanf(p, "%d", &num)
+		_, _ = fmt.Sscanf(p, "%d", &num)
 		result = append(result, num)
 	}
 	return result

@@ -42,10 +42,9 @@ type stepWithTaintedInput struct {
 
 // taintedInputInfo contains information about a tainted input usage
 type taintedInputInfo struct {
-	inputName    string   // e.g., "title"
-	inputPath    string   // e.g., "inputs.title"
-	sourcePaths  []string // e.g., ["github.event.pull_request.title"]
-	pos          *ast.Position
+	inputName     string // e.g., "title"
+	inputPath     string // e.g., "inputs.title"
+	pos           *ast.Position
 	isInRunScript bool
 }
 
