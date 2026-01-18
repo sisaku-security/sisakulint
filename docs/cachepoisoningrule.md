@@ -11,20 +11,26 @@ weight: 1
 
 ### Cache Poisoning Rule Overview
 
-This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It identifies dangerous combinations of untrusted triggers with cache operations that could allow attackers to inject malicious payloads into the cache.
+This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It identifies two types of cache poisoning attacks:
+
+1. **Indirect Cache Poisoning**: Dangerous combinations of untrusted triggers with unsafe checkout and cache operations
+2. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
 
 #### Key Features
 
-- **Precise Detection**: Only triggers when all three risk conditions are present
+- **Dual Detection Mode**: Detects both indirect (trigger-based) and direct (input-based) cache poisoning
 - **Multiple Trigger Detection**: Identifies `issue_comment`, `pull_request_target`, and `workflow_run` triggers
 - **Comprehensive Cache Detection**: Detects both `actions/cache` and setup-* actions with cache enabled
+- **Direct Cache Input Validation**: Checks for untrusted expressions in `key`, `restore-keys`, and `path` inputs
 - **Job Isolation**: Correctly scopes detection to individual jobs
 - **Smart Checkout Tracking**: Resets unsafe state when a safe checkout follows an unsafe one
 - **Conservative Pattern Matching**: Detects direct, indirect, and unknown expression patterns
 - **CodeQL Compatible**: Based on CodeQL's query with enhanced detection capabilities
-- **Auto-fix Support**: Removes unsafe `ref` input from checkout steps
+- **Auto-fix Support**: Removes unsafe `ref` input from checkout steps or replaces untrusted cache keys with `github.sha`
 
 ### Detection Conditions
+
+#### Indirect Cache Poisoning (Trigger-Based)
 
 The rule triggers when all three conditions are met
 
@@ -52,9 +58,37 @@ The rule triggers when all three conditions are met
    - `actions/setup-go` with `cache` input
    - `actions/setup-java` with `cache` input
 
+#### Direct Cache Poisoning (Input-Based)
+
+The rule triggers when untrusted input is used in cache configuration, regardless of trigger type:
+
+1. Untrusted input in `key`:
+   - `key: npm-${{ github.event.pull_request.head.ref }}`
+   - `key: ${{ github.event.pull_request.title }}`
+   - `key: ${{ github.head_ref }}`
+
+2. Untrusted input in `restore-keys`:
+   - `restore-keys: ${{ github.head_ref }}-`
+   - `restore-keys: ${{ github.event.comment.body }}`
+
+3. Untrusted input in `path`:
+   - `path: ${{ github.event.pull_request.title }}`
+   - `path: ${{ github.event.issue.body }}`
+
+**Untrusted inputs include:**
+- `github.event.pull_request.head.ref`
+- `github.event.pull_request.head.sha`
+- `github.event.pull_request.title`
+- `github.event.pull_request.body`
+- `github.event.issue.title`
+- `github.event.issue.body`
+- `github.event.comment.body`
+- `github.head_ref`
+- And other user-controllable values
+
 ### Example Vulnerable Workflows
 
-#### Example 1: Direct PR Head Reference
+#### Example 1: Indirect Cache Poisoning (Trigger-Based)
 
 ```yaml
 name: PR Build
@@ -81,7 +115,7 @@ jobs:
           key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
 ```
 
-#### Example 2: Indirect Reference via Step Output (CodeQL Pattern)
+#### Example 2: Indirect Cache Poisoning via Step Output (CodeQL Pattern)
 
 ```yaml
 name: Comment Build
@@ -106,7 +140,38 @@ jobs:
           cache: 'pip'  # Cache can be poisoned
 ```
 
+#### Example 3: Direct Cache Poisoning (Input-Based)
+
+```yaml
+name: PR Build with Unsafe Cache Key
+on:
+  pull_request:  # Safe trigger, but cache key is still vulnerable
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Untrusted input in cache key
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.event.pull_request.head.ref }}-${{ hashFiles('**/package-lock.json') }}
+
+      # VULNERABLE: Untrusted input in restore-keys
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ github.sha }}
+          restore-keys: |
+            pip-${{ github.head_ref }}-
+```
+
 ### Example Output
+
+#### Indirect Cache Poisoning Output
 
 ```bash
 $ sisakulint ./vulnerable-workflow.yaml
@@ -116,6 +181,18 @@ $ sisakulint ./vulnerable-workflow.yaml
 
 ./vulnerable-workflow.yaml:20:9: cache poisoning risk: 'actions/cache@v3' used after checking out untrusted PR code (triggers: pull_request_target). Validate cached content or scope cache to PR level [cache-poisoning]
       20 👈|      - uses: actions/cache@v3
+```
+
+#### Direct Cache Poisoning Output
+
+```bash
+$ sisakulint ./cache-poisoning-direct.yaml
+
+./cache-poisoning-direct.yaml:11:14: cache poisoning via untrusted input: 'github.event.pull_request.head.ref' in cache key is potentially untrusted. An attacker can control the cache key to poison the cache. Use trusted inputs like github.sha, hashFiles(), or static values instead [cache-poisoning]
+      11 👈|          key: npm-${{ github.event.pull_request.head.ref }}-${{ hashFiles('**/package-lock.json') }}
+
+./cache-poisoning-direct.yaml:18:22: cache poisoning via untrusted input: 'github.head_ref' in cache restore-keys is potentially untrusted. An attacker can control the cache key to poison the cache. Use trusted inputs like github.sha, hashFiles(), or static values instead [cache-poisoning]
+      18 👈|            pip-${{ github.head_ref }}-
 ```
 
 ### Safe Patterns
@@ -185,7 +262,7 @@ jobs:
 
 ### Auto-fix Support
 
-The cache-poisoning rule supports auto-fixing by removing the unsafe `ref` input from `actions/checkout`
+The cache-poisoning rule supports auto-fixing for both types of vulnerabilities:
 
 ```bash
 # Preview changes without applying
@@ -194,6 +271,8 @@ sisakulint -fix dry-run
 # Apply fixes
 sisakulint -fix on
 ```
+
+#### Auto-fix for Indirect Cache Poisoning
 
 The auto-fix removes the `ref` input that checks out untrusted PR code, causing the workflow to checkout the base branch instead. This ensures the cached content is based on trusted code.
 
@@ -209,12 +288,67 @@ After fix
 - uses: actions/checkout@v4
 ```
 
+#### Auto-fix for Direct Cache Poisoning
+
+The auto-fix replaces untrusted expressions in cache `key` and `restore-keys` with `github.sha`, which is immutable and trusted.
+
+Before fix
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: npm-${{ github.event.pull_request.head.ref }}-${{ hashFiles('**/package-lock.json') }}
+```
+
+After fix
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: npm-${{ github.sha }}-${{ hashFiles('**/package-lock.json') }}
+```
+
+**Note**: Auto-fix for `path` input is not supported because the appropriate path depends on project structure. Users should manually replace untrusted paths with static or trusted values.
+
 ### Mitigation Strategies
+
+#### For Indirect Cache Poisoning
 
 1. **Validate Cached Content**: Verify integrity of restored cache before use
 2. **Scope Cache to PR**: Use PR-specific cache keys to isolate caches
 3. **Isolate Workflows**: Separate untrusted code execution from privileged operations
 4. **Use Safe Checkout**: Avoid checking out PR code in workflows with untrusted triggers and caching
+
+#### For Direct Cache Poisoning
+
+1. **Use Immutable Identifiers**: Use `github.sha` instead of branch names or other mutable references
+2. **Use Content Hashing**: Use `hashFiles()` for content-based cache keys
+3. **Avoid User-Controllable Values**: Never use values from PR titles, bodies, comments, or labels in cache keys
+4. **Use Static Paths**: Use fixed paths for cache storage, not user-provided values
+
+**Safe cache key patterns:**
+```yaml
+# Good: Using github.sha (immutable)
+key: cache-${{ github.sha }}
+
+# Good: Using hashFiles for content-based caching
+key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+# Good: Using static values with trusted contexts
+key: build-${{ runner.os }}-${{ runner.arch }}
+```
+
+**Unsafe cache key patterns (avoid):**
+```yaml
+# Bad: Using branch ref (attacker can create malicious branch)
+key: cache-${{ github.head_ref }}
+
+# Bad: Using PR title (attacker controls this)
+key: cache-${{ github.event.pull_request.title }}
+
+# Bad: Using any user-provided input
+key: cache-${{ github.event.comment.body }}
+```
 
 ### Detection Strategy and CodeQL Compatibility
 
