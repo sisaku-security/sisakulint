@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sisakulint - GitHub Actions Security Linter (WASM)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #00d9ff;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+        }
+        .editor-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .panel {
+            flex: 1;
+            min-width: 400px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #00d9ff;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            height: 400px;
+            background: #0d0d1a;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        button {
+            background: #00d9ff;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #00b3cc;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        #output {
+            background: #0d0d1a;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+        }
+        .error {
+            color: #ff6b6b;
+        }
+        .warning {
+            color: #ffd93d;
+        }
+        .success {
+            color: #6bcb77;
+        }
+        .info {
+            color: #4d96ff;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status.loading {
+            background: #1e3a5f;
+            color: #4d96ff;
+        }
+        .status.ready {
+            background: #1e3f2e;
+            color: #6bcb77;
+        }
+        .status.error {
+            background: #3f1e1e;
+            color: #ff6b6b;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #4d96ff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .examples {
+            margin-top: 20px;
+        }
+        .examples h3 {
+            color: #00d9ff;
+        }
+        .example-btn {
+            background: #2d2d44;
+            font-size: 14px;
+            padding: 8px 15px;
+        }
+        .example-btn:hover {
+            background: #3d3d54;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>sisakulint</h1>
+        <p class="subtitle">GitHub Actions Security Linter - WebAssembly Demo</p>
+
+        <div id="status" class="status loading">
+            <div class="spinner"></div>
+            <span>Loading WASM module...</span>
+        </div>
+
+        <div class="editor-container">
+            <div class="panel">
+                <label for="workflow">GitHub Actions Workflow (YAML)</label>
+                <textarea id="workflow" placeholder="Paste your GitHub Actions workflow YAML here...">name: Example Workflow
+on:
+  pull_request_target:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Unsafe command
+        run: echo "${{ github.event.pull_request.title }}"
+</textarea>
+                <button id="analyzeBtn" disabled onclick="analyzeWorkflow()">Analyze</button>
+                <button class="example-btn" onclick="loadExample('critical')">Critical Example</button>
+                <button class="example-btn" onclick="loadExample('medium')">Medium Example</button>
+            </div>
+            <div class="panel">
+                <label>Analysis Results</label>
+                <div id="output" class="output"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        let wasmReady = false;
+        let outputBuffer = [];
+
+        // Override console for capturing output
+        const originalLog = console.log;
+        const originalError = console.error;
+
+        console.log = function(...args) {
+            outputBuffer.push({ type: 'info', message: args.join(' ') });
+            originalLog.apply(console, args);
+            updateOutput();
+        };
+
+        console.error = function(...args) {
+            outputBuffer.push({ type: 'error', message: args.join(' ') });
+            originalError.apply(console, args);
+            updateOutput();
+        };
+
+        function updateOutput() {
+            const output = document.getElementById('output');
+            output.innerHTML = outputBuffer.map(item => {
+                let className = 'info';
+                if (item.message.includes('[critical]') || item.message.includes('error')) {
+                    className = 'error';
+                } else if (item.message.includes('[warning]') || item.message.includes('medium')) {
+                    className = 'warning';
+                } else if (item.message.includes('success') || item.message.includes('no issues')) {
+                    className = 'success';
+                }
+                return `<div class="${className}">${escapeHtml(item.message)}</div>`;
+            }).join('');
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function initWasm() {
+            const statusEl = document.getElementById('status');
+            try {
+                const result = await WebAssembly.instantiateStreaming(
+                    fetch('sisakulint-js.wasm'),
+                    go.importObject
+                );
+                go.run(result.instance);
+                wasmReady = true;
+                document.getElementById('analyzeBtn').disabled = false;
+                statusEl.className = 'status ready';
+                statusEl.innerHTML = '<span>WASM module loaded successfully!</span>';
+            } catch (err) {
+                statusEl.className = 'status error';
+                statusEl.innerHTML = `<span>Failed to load WASM: ${err.message}</span>`;
+                console.error('WASM load error:', err);
+            }
+        }
+
+        function analyzeWorkflow() {
+            if (!wasmReady) {
+                alert('WASM module not ready yet');
+                return;
+            }
+
+            outputBuffer = [];
+            const workflow = document.getElementById('workflow').value;
+
+            outputBuffer.push({ type: 'info', message: '=== Starting analysis ===' });
+            updateOutput();
+
+            // Create a temporary file-like object
+            // Note: sisakulint expects file paths, so we need to simulate
+            try {
+                // Try to call the analyze function if exposed
+                if (typeof window.sisakulintAnalyze === 'function') {
+                    window.sisakulintAnalyze(workflow);
+                } else {
+                    outputBuffer.push({
+                        type: 'warning',
+                        message: 'sisakulint WASM is loaded but analyze function is not exposed to JavaScript.'
+                    });
+                    outputBuffer.push({
+                        type: 'info',
+                        message: 'The Go WASM binary started with main(), but CLI tools expect file paths.'
+                    });
+                    outputBuffer.push({
+                        type: 'info',
+                        message: 'For browser usage, the Go code needs modification to expose a JS-callable function.'
+                    });
+                }
+            } catch (err) {
+                outputBuffer.push({ type: 'error', message: `Error: ${err.message}` });
+            }
+            updateOutput();
+        }
+
+        function loadExample(type) {
+            const examples = {
+                critical: `name: CI with Code Injection (Critical)
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: \${{ github.event.pull_request.head.sha }}
+
+      - name: Dangerous - Untrusted input in run
+        run: |
+          echo "PR Title: \${{ github.event.pull_request.title }}"
+          echo "PR Body: \${{ github.event.pull_request.body }}"
+`,
+                medium: `name: CI with Code Injection (Medium)
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build with untrusted input
+        run: |
+          npm install
+          npm run build -- --name="\${{ github.event.pull_request.title }}"
+`
+            };
+
+            document.getElementById('workflow').value = examples[type] || '';
+        }
+
+        // Initialize
+        initWasm();
+    </script>
+</body>
+</html>

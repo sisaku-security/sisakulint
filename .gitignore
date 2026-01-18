@@ -11,3 +11,8 @@ sisakulint
 .DS_Store
 dist/
 .claude
+
+# WASM build artifacts
+wasm/sisakulint
+wasm/htdocs/*.wasm
+wasm/htdocs/wasm_exec.js
