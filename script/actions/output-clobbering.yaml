@@ -1,0 +1,92 @@
+name: Output Clobbering - Vulnerable Examples
+on:
+  # Privileged triggers that have write access or secrets
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # CRITICAL: Untrusted input written to GITHUB_OUTPUT with privileged trigger
+  # Attack: Attacker sets PR title to "malicious\nresult=pwned" to overwrite 'result' output
+  unsafe-pr-target:
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.extract.outputs.title }}
+      result: ${{ steps.extract.outputs.result }}
+    steps:
+      - name: Extract PR info
+        id: extract
+        run: |
+          echo "title=${{ github.event.pull_request.title }}" >> "$GITHUB_OUTPUT"
+          echo "result=safe" >> "$GITHUB_OUTPUT"
+
+      - name: Use outputs (could be compromised)
+        run: |
+          echo "Title: ${{ steps.extract.outputs.title }}"
+          echo "Result: ${{ steps.extract.outputs.result }}"
+
+  # CRITICAL: Multiple untrusted inputs in GITHUB_OUTPUT
+  unsafe-multiple-outputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set multiple outputs
+        id: info
+        run: |
+          echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          echo "body=${{ github.event.pull_request.body }}" >> $GITHUB_OUTPUT
+          echo "comment=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+
+  # CRITICAL: Untrusted input in workflow_run trigger
+  unsafe-workflow-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set output from workflow run
+        id: branch
+        run: |
+          echo "branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+
+  # CRITICAL: Various GITHUB_OUTPUT format patterns (all vulnerable)
+  unsafe-format-variants:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Standard format
+        id: std
+        run: echo "value=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+
+      - name: Double quoted
+        id: dq
+        run: echo "value=${{ github.event.issue.title }}" >> "$GITHUB_OUTPUT"
+
+      - name: Single quoted
+        id: sq
+        run: echo "value=${{ github.event.issue.title }}" >> '$GITHUB_OUTPUT'
+
+      - name: With braces
+        id: braces
+        run: echo "value=${{ github.event.issue.title }}" >> ${GITHUB_OUTPUT}
+
+      - name: No space after >>
+        id: nospace
+        run: echo "value=${{ github.event.issue.title }}" >>$GITHUB_OUTPUT
+
+  # CRITICAL: Using output in security-sensitive decision
+  unsafe-security-decision:
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+    steps:
+      - name: Check approval (vulnerable to clobbering)
+        id: check
+        run: |
+          # Attacker can inject newlines to set approved=true
+          echo "user=${{ github.event.comment.body }}" >> "$GITHUB_OUTPUT"
+          echo "approved=false" >> "$GITHUB_OUTPUT"
+
+      - name: Conditional deployment
+        if: steps.check.outputs.approved == 'true'
+        run: |
+          echo "DANGER: This should not run but can be triggered by clobbering!"
