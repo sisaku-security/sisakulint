@@ -529,6 +529,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewImproperAccessControlRule(),           // Detects improper access control with label-based approval and synchronize events
 		NewUntrustedCheckoutTOCTOUCriticalRule(), // Detects TOCTOU with labeled event type and mutable refs
 		NewUntrustedCheckoutTOCTOUHighRule(),     // Detects TOCTOU with deployment environment and mutable refs
+		NewObfuscationRule(),                     // Detects obfuscated workflow patterns
 		NewKnownVulnerableActionsRule(),          // Detects actions with known security vulnerabilities
 		NewBotConditionsRule(),                   // Detects spoofable bot detection conditions
 		NewArtipackedRule(),                      // Detects credential leakage via artifact upload
