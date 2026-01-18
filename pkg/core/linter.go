@@ -527,6 +527,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewSecretExposureRule(),                  // Detects toJSON(secrets) and secrets[dynamic-access]
 		NewUnmaskedSecretExposureRule(),          // Detects fromJson(secrets.XXX).yyy unmasked exposure
 		NewImproperAccessControlRule(),           // Detects improper access control with label-based approval and synchronize events
+		ImpostorCommitRuleFactory(),              // Detects impostor commits from fork network
 		NewUntrustedCheckoutTOCTOUCriticalRule(), // Detects TOCTOU with labeled event type and mutable refs
 		NewUntrustedCheckoutTOCTOUHighRule(),     // Detects TOCTOU with deployment environment and mutable refs
 		NewRefConfusionRule(),                    // Detects ref confusion attacks (same name branch and tag)

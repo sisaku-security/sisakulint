@@ -95,6 +95,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/secretexposure.go` - **SecretExposureRule**: Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access] (with auto-fix)
      - `pkg/core/artipacked.go` - **ArtipackedRule**: Detects credential leakage when checkout credentials are persisted and workspace is uploaded (with auto-fix)
      - `pkg/core/unsoundcontainsrule.go` - **UnsoundContainsRule**: Detects bypassable contains() function usage in conditions (with auto-fix)
+     - `pkg/core/impostorcommit.go` - **ImpostorCommitRule**: Detects impostor commits from fork network - supply chain attack vector (with auto-fix)
      - `pkg/core/rule_add_temp_normal.go` - **AddRule**: Template rule for adding new rules
 
 4. **AST Processing**:
@@ -238,6 +239,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 29. **SecretExposureRule** - Detects excessive secrets exposure via toJSON(secrets) or secrets[dynamic-access] (auto-fix supported)
 30. **ArtipackedRule** - Detects credential leakage when checkout credentials are persisted and workspace is uploaded (auto-fix supported)
 31. **UnsoundContainsRule** - Detects bypassable contains() function usage in conditions (auto-fix supported)
+32. **ImpostorCommitRule** - Detects impostor commits from fork network that could be supply chain attacks (auto-fix supported)
 
 ## Key Files
 
