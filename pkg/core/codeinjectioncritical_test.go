@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -336,6 +337,48 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 			wantErrors:  0,
 			description: "trusted inputs should not trigger errors",
 		},
+		{
+			name:        "nested function calls with untrusted object",
+			runScript:   "echo ${{ format('{0}', toJSON(github.event.pull_request)) }}",
+			wantErrors:  1,
+			description: "nested functions with whole untrusted object should be detected",
+		},
+		{
+			name:        "deeply nested function calls",
+			runScript:   "echo ${{ format('{0}', format('{0}', github.event.pull_request.title)) }}",
+			wantErrors:  1,
+			description: "deeply nested functions should detect untrusted input",
+		},
+		{
+			name:        "multiple untrusted arguments in function",
+			runScript:   "echo ${{ format('{0} - {1}', github.event.pull_request.title, github.event.issue.title) }}",
+			wantErrors:  1,
+			description: "multiple untrusted inputs are reported together in a single error",
+		},
+		{
+			name:        "array expansion with labels description",
+			runScript:   "echo ${{ join(github.event.pull_request.labels.*.description, ', ') }}",
+			wantErrors:  1,
+			description: "array expansion with labels.*.description should be detected",
+		},
+		{
+			name:        "toJSON with nested untrusted object",
+			runScript:   "echo ${{ toJSON(github.event) }}",
+			wantErrors:  1,
+			description: "toJSON with parent object containing untrusted properties should be detected",
+		},
+		{
+			name:        "function with mixed trusted and untrusted args",
+			runScript:   "echo ${{ format('{0} - {1}', github.sha, github.event.pull_request.title) }}",
+			wantErrors:  1,
+			description: "function with mixed inputs should detect only untrusted ones",
+		},
+		{
+			name:        "join with trusted array",
+			runScript:   "echo ${{ join(github.event.commits.*.sha, ', ') }}",
+			wantErrors:  0,
+			description: "join with trusted array (commit SHAs) should not trigger error",
+		},
 	}
 
 	for _, tt := range tests {
@@ -370,5 +413,82 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 					tt.description, gotErrors, tt.wantErrors, rule.Errors())
 			}
 		})
+	}
+}
+
+// TestCodeInjectionCritical_FuncArgDepthReset tests that funcArgDepth is correctly
+// reset between different expressions and steps to ensure no state leakage.
+func TestCodeInjectionCritical_FuncArgDepthReset(t *testing.T) {
+	rule := CodeInjectionCriticalRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target"},
+			},
+		},
+	}
+
+	// Create multiple steps with different patterns to test state isolation
+	step1 := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ toJSON(github.event.pull_request) }}",
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+
+	step2 := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ github.event.pull_request.title }}",
+				Pos:   &ast.Position{Line: 2, Col: 1},
+			},
+		},
+	}
+
+	step3 := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ format('{0}', toJSON(github.event.issue)) }}",
+				Pos:   &ast.Position{Line: 3, Col: 1},
+			},
+		},
+	}
+
+	job := &ast.Job{Steps: []*ast.Step{step1, step2, step3}}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+
+	// Should detect 3 untrusted usages (one per step)
+	gotErrors := len(rule.Errors())
+	wantErrors := 3
+
+	if gotErrors != wantErrors {
+		t.Errorf("funcArgDepth reset test: got %d errors, want %d", gotErrors, wantErrors)
+		for i, err := range rule.Errors() {
+			t.Logf("Error %d: %s", i+1, err.Description)
+		}
+	}
+
+	// Verify each step's error is detected correctly
+	errors := rule.Errors()
+	if len(errors) >= 3 {
+		// First error should be about the intermediate node in function
+		if !strings.Contains(errors[0].Description, "github.event.pull_request") {
+			t.Errorf("First error should mention github.event.pull_request, got: %s", errors[0].Description)
+		}
+
+		// Second error should be a normal leaf node detection
+		if !strings.Contains(errors[1].Description, "github.event.pull_request.title") {
+			t.Errorf("Second error should mention github.event.pull_request.title, got: %s", errors[1].Description)
+		}
+
+		// Third error should be about intermediate node in nested function
+		if !strings.Contains(errors[2].Description, "github.event.issue") {
+			t.Errorf("Third error should mention github.event.issue, got: %s", errors[2].Description)
+		}
 	}
 }
