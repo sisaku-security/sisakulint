@@ -1,0 +1,161 @@
+name: Output Clobbering - Safe Examples
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # SAFE: Using heredoc syntax with delimiter
+  # This prevents newline injection because the delimiter must match exactly
+  safe-heredoc:
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.extract.outputs.title }}
+    steps:
+      - name: Extract PR info safely
+        id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          {
+            echo "title<<EOF"
+            echo "$PR_TITLE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # SAFE: Using heredoc with unique/random delimiter
+  safe-heredoc-unique:
+    runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.extract.outputs.body }}
+    steps:
+      - name: Extract PR body safely with unique delimiter
+        id: extract
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          DELIMITER="EOF_$(openssl rand -hex 16)"
+          {
+            echo "body<<$DELIMITER"
+            echo "$PR_BODY"
+            echo "$DELIMITER"
+          } >> "$GITHUB_OUTPUT"
+
+  # SAFE: Using environment variable indirection (avoids direct expression injection)
+  safe-env-indirect:
+    runs-on: ubuntu-latest
+    outputs:
+      comment: ${{ steps.extract.outputs.comment }}
+    steps:
+      - name: Extract comment safely
+        id: extract
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          # Using heredoc with env var prevents injection
+          {
+            echo "comment<<HEREDOC_END"
+            echo "$COMMENT_BODY"
+            echo "HEREDOC_END"
+          } >> "$GITHUB_OUTPUT"
+
+  # SAFE: Sanitizing input before writing to output
+  safe-sanitized:
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.extract.outputs.title }}
+    steps:
+      - name: Extract and sanitize PR title
+        id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Remove newlines to prevent clobbering
+          SANITIZED_TITLE=$(echo "$PR_TITLE" | tr -d '\n\r')
+          echo "title=$SANITIZED_TITLE" >> "$GITHUB_OUTPUT"
+
+  # SAFE: Using trusted input (github.sha, github.ref, etc.)
+  safe-trusted-input:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.info.outputs.sha }}
+      ref: ${{ steps.info.outputs.ref }}
+    steps:
+      - name: Set trusted outputs
+        id: info
+        run: |
+          # These are controlled by GitHub, not user input
+          echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+          echo "run_id=${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+  # SAFE: Validating input before use
+  safe-validated:
+    runs-on: ubuntu-latest
+    outputs:
+      validated: ${{ steps.validate.outputs.validated }}
+    steps:
+      - name: Validate and output
+        id: validate
+        env:
+          USER_INPUT: ${{ github.event.issue.title }}
+        run: |
+          # Validate input format (example: only allow alphanumeric)
+          if [[ "$USER_INPUT" =~ ^[a-zA-Z0-9[:space:]]+$ ]]; then
+            {
+              echo "validated<<EOF"
+              echo "$USER_INPUT"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "validated=invalid_input" >> "$GITHUB_OUTPUT"
+          fi
+
+  # SAFE: Using JSON encoding for complex data
+  safe-json-encoded:
+    runs-on: ubuntu-latest
+    outputs:
+      data: ${{ steps.encode.outputs.data }}
+    steps:
+      - name: Encode as JSON
+        id: encode
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # JSON encoding escapes special characters including newlines
+          DATA=$(jq -n --arg title "$PR_TITLE" --arg body "$PR_BODY" '{title: $title, body: $body}')
+          {
+            echo "data<<EOF"
+            echo "$DATA"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  # SAFE: Multiple heredoc outputs in sequence
+  safe-multiple-heredoc:
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.extract.outputs.title }}
+      body: ${{ steps.extract.outputs.body }}
+    steps:
+      - name: Extract multiple values safely
+        id: extract
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          {
+            echo "title<<EOF_TITLE"
+            echo "$PR_TITLE"
+            echo "EOF_TITLE"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "body<<EOF_BODY"
+            echo "$PR_BODY"
+            echo "EOF_BODY"
+          } >> "$GITHUB_OUTPUT"
