@@ -63,13 +63,6 @@ func isUnsafeArtifactPath(path string) bool {
 		}
 	}
 
-	// Check if path starts with ./
-	if strings.HasPrefix(path, "./") && !strings.Contains(path[2:], "/") {
-		// path like "./" or "./something" where something is not a subdirectory
-		// This could still be problematic if it's the entire repo
-		return false // We'll be more conservative here
-	}
-
 	return false
 }
 
@@ -96,8 +89,8 @@ func containsSensitivePath(pathSpec string) bool {
 // extractMajorVersion extracts the major version number from a version string.
 // Returns -1 if not a semantic version.
 func extractMajorVersion(version string) int {
-	// Handle commit SHA (40 hex chars)
-	if len(version) == 40 && isHexString(version) {
+	// Handle commit SHA (both full 40-char and short 7+ char hex strings)
+	if len(version) >= 7 && len(version) <= 40 && isHexString(version) {
 		return -1 // Can't determine version from SHA
 	}
 

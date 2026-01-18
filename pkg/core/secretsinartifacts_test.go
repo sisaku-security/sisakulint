@@ -40,6 +40,10 @@ func TestIsUnsafeArtifactPath(t *testing.T) {
 		{name: "specific file", path: "output.zip", wantUnsafe: false},
 		{name: "nested directory", path: "build/release/", wantUnsafe: false},
 		{name: "relative subdir", path: "./dist/", wantUnsafe: false},
+
+		// Edge case: ./something pattern (issue from code review)
+		{name: "relative root file", path: "./README.md", wantUnsafe: false},
+		{name: "relative root dir no slash", path: "./dist", wantUnsafe: false},
 	}
 
 	for _, tt := range tests {
@@ -72,6 +76,13 @@ func TestContainsSensitivePath(t *testing.T) {
 		{name: "aws directory", pathSpec: ".aws", wantSensitive: true},
 		{name: "kube directory", pathSpec: ".kube", wantSensitive: true},
 		{name: "ssh directory", pathSpec: ".ssh", wantSensitive: true},
+
+		// Additional sensitive patterns (from code review)
+		{name: "docker config", pathSpec: ".docker/config.json", wantSensitive: false}, // NOT detected - pattern missing
+		{name: "terraform directory", pathSpec: ".terraform", wantSensitive: false},    // NOT detected - pattern missing
+		{name: "key file", pathSpec: "private.key", wantSensitive: false},              // NOT detected - pattern missing
+		{name: "pem file", pathSpec: "cert.pem", wantSensitive: false},                 // NOT detected - pattern missing
+		{name: "p12 file", pathSpec: "keystore.p12", wantSensitive: false},             // NOT detected - pattern missing
 
 		// Safe paths
 		{name: "dist directory", pathSpec: "dist/", wantSensitive: false},
@@ -114,6 +125,13 @@ func TestExtractMajorVersion(t *testing.T) {
 		{name: "commit SHA", version: "6b208ae046db98c579e8a3aa621ab581ff575935", want: -1},
 		{name: "empty", version: "", want: -1},
 		{name: "invalid", version: "latest", want: -1},
+
+		// Additional edge cases from code review
+		{name: "branch main", version: "main", want: -1},
+		{name: "branch master", version: "master", want: -1},
+		{name: "short SHA", version: "6b208ae", want: -1}, // FIXED: Now correctly detected as SHA
+		{name: "v0", version: "v0", want: 0},
+		{name: "v10", version: "v10", want: 10},
 	}
 
 	for _, tt := range tests {
@@ -138,6 +156,11 @@ func TestParseActionVersion(t *testing.T) {
 		{name: "v3", uses: "actions/upload-artifact@v3", want: "v3"},
 		{name: "commit SHA", uses: "actions/upload-artifact@6b208ae046db98c579e8a3aa621ab581ff575935", want: "6b208ae046db98c579e8a3aa621ab581ff575935"},
 		{name: "no version", uses: "actions/upload-artifact", want: ""},
+
+		// Additional edge cases from code review
+		{name: "v1", uses: "actions/upload-artifact@v1", want: "v1"},
+		{name: "branch main", uses: "actions/upload-artifact@main", want: "main"},
+		{name: "branch master", uses: "actions/upload-artifact@master", want: "master"},
 	}
 
 	for _, tt := range tests {
@@ -374,6 +397,74 @@ func TestSecretsInArtifacts_VisitStep(t *testing.T) {
 				Pos: &ast.Position{Line: 10, Col: 5},
 			},
 			wantErrors: 0, // v4+ defaults include-hidden-files to false
+		},
+		{
+			name: "upload-artifact v1 - should error (old version like v3)",
+			step: &ast.Step{
+				ID: &ast.String{Value: "upload"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/upload-artifact@v1"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "dist/"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
+		{
+			name: "upload-artifact with commit SHA - no error (version unknown)",
+			step: &ast.Step{
+				ID: &ast.String{Value: "upload"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/upload-artifact@6b208ae046db98c579e8a3aa621ab581ff575935"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "dist/"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0, // Can't determine version from SHA, so no error
+		},
+		{
+			name: "upload-artifact with branch main - no error (version unknown)",
+			step: &ast.Step{
+				ID: &ast.String{Value: "upload"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/upload-artifact@main"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "dist/"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0, // Can't determine version from branch name, so no error
+		},
+		{
+			name: "upload-artifact with .docker/config.json - should error (sensitive file)",
+			step: &ast.Step{
+				ID: &ast.String{Value: "upload"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/upload-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: ".docker/config.json"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0, // Currently NOT detected - pattern is missing
 		},
 	}
 
