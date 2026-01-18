@@ -405,7 +405,7 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Build replacement map for the run script
-	// Replace ${{ expr }} with -- "$ENV_VAR" (with end-of-options marker)
+	// Replace ${{ expr }} or bare $ENV_VAR with -- "$ENV_VAR" (with end-of-options marker)
 	script := run.Run.Value
 	lines := strings.Split(script, "\n")
 
@@ -416,27 +416,54 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 			exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
 			exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
 
+			// Pattern for bare environment variable (already replaced by code-injection rule)
+			bareEnvPattern := fmt.Sprintf("$%s", envVarName)
+
 			if strings.Contains(line, exprPattern1) || strings.Contains(line, exprPattern2) {
 				// Replace the expression with the safe pattern
 				// Use -- before the argument if the command supports it
 				newValue := fmt.Sprintf("\"$%s\"", envVarName)
 
 				// Insert -- before the untrusted input if not already present
-				if !rule.hasEndOfOptionsMarker(line, untrustedInfo.expr.raw) {
-					// Find position to insert --
-					exprPos := strings.Index(line, exprPattern1)
-					if exprPos == -1 {
-						exprPos = strings.Index(line, exprPattern2)
-					}
-
-					if exprPos != -1 {
-						// Insert -- before the expression
-						newValue = "-- " + newValue
-					}
+				if !rule.hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2) {
+					newValue = "-- " + newValue
 				}
 
 				line = strings.ReplaceAll(line, exprPattern1, newValue)
 				line = strings.ReplaceAll(line, exprPattern2, newValue)
+			} else if strings.Contains(line, bareEnvPattern) {
+				// The expression was already replaced by code-injection rule
+				// We need to add -- marker and quotes
+				// Check if it's already properly quoted and has -- marker
+				quotedPattern := fmt.Sprintf("\"$%s\"", envVarName)
+				safePattern := fmt.Sprintf("-- \"$%s\"", envVarName)
+
+				if strings.Contains(line, safePattern) {
+					// Already safe, skip
+					continue
+				}
+
+				if strings.Contains(line, quotedPattern) {
+					// Has quotes but no -- marker
+					if !rule.hasEndOfOptionsMarkerForEnvVar(line, envVarName) {
+						line = strings.ReplaceAll(line, quotedPattern, safePattern)
+					}
+				} else {
+					// Bare $ENV_VAR without quotes
+					// Need to add both -- and quotes
+					// But be careful not to match $ENV_VAR inside other strings
+					// Use word boundary matching
+					newValue := fmt.Sprintf("-- \"$%s\"", envVarName)
+
+					if rule.hasEndOfOptionsMarkerForEnvVar(line, envVarName) {
+						// Has -- marker, just add quotes
+						newValue = fmt.Sprintf("\"$%s\"", envVarName)
+					}
+
+					// Replace bare $ENV_VAR with -- "$ENV_VAR"
+					// Be careful with word boundaries
+					line = rule.replaceBareEnvVar(line, envVarName, newValue)
+				}
 			}
 		}
 		lines[i] = line
@@ -455,6 +482,82 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	return nil
+}
+
+// hasEndOfOptionsMarkerForExpr checks if `--` is used before the expression pattern
+func (rule *ArgumentInjectionRule) hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2 string) bool {
+	exprPos := strings.Index(line, exprPattern1)
+	if exprPos == -1 {
+		exprPos = strings.Index(line, exprPattern2)
+	}
+	if exprPos == -1 {
+		return false
+	}
+
+	beforeExpr := line[:exprPos]
+	endOfOptionsMatch := regexp.MustCompile(`\s--\s`)
+	return endOfOptionsMatch.MatchString(beforeExpr + " ")
+}
+
+// hasEndOfOptionsMarkerForEnvVar checks if `--` is used before the environment variable
+func (rule *ArgumentInjectionRule) hasEndOfOptionsMarkerForEnvVar(line, envVarName string) bool {
+	// Look for $ENV_VAR or "$ENV_VAR"
+	patterns := []string{
+		fmt.Sprintf("$%s", envVarName),
+		fmt.Sprintf("\"$%s\"", envVarName),
+	}
+
+	minPos := -1
+	for _, pattern := range patterns {
+		pos := strings.Index(line, pattern)
+		if pos != -1 && (minPos == -1 || pos < minPos) {
+			minPos = pos
+		}
+	}
+
+	if minPos == -1 {
+		return false
+	}
+
+	beforeExpr := line[:minPos]
+	endOfOptionsMatch := regexp.MustCompile(`\s--\s`)
+	return endOfOptionsMatch.MatchString(beforeExpr + " ")
+}
+
+// replaceBareEnvVar replaces bare $ENV_VAR with newValue, being careful about word boundaries
+func (rule *ArgumentInjectionRule) replaceBareEnvVar(line, envVarName, newValue string) string {
+	barePattern := fmt.Sprintf("$%s", envVarName)
+	pos := 0
+
+	for {
+		idx := strings.Index(line[pos:], barePattern)
+		if idx == -1 {
+			break
+		}
+
+		actualPos := pos + idx
+		endPos := actualPos + len(barePattern)
+
+		// Check if this is a word boundary (not part of a longer variable name)
+		// Valid end characters: space, newline, quote, end of string, or non-alphanumeric
+		isWordBoundary := endPos >= len(line) ||
+			!isAlphanumericOrUnderscore(line[endPos])
+
+		if isWordBoundary {
+			// Replace this occurrence
+			line = line[:actualPos] + newValue + line[endPos:]
+			pos = actualPos + len(newValue)
+		} else {
+			pos = endPos
+		}
+	}
+
+	return line
+}
+
+// isAlphanumericOrUnderscore checks if a byte is alphanumeric or underscore
+func isAlphanumericOrUnderscore(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
 // generateEnvVarName generates an environment variable name from an untrusted path
