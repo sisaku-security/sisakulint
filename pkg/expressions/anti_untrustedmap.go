@@ -119,6 +119,13 @@ var BuiltinUntrustedInputs = ContextPropertySearchRoots{
 						NewContextPropertyMap("default_branch"),
 					),
 				),
+				// github.event.pull_request.labels.*.name - ラベル名は攻撃者が制御可能
+				NewContextPropertyMap("labels",
+					NewContextPropertyMap("*",
+						NewContextPropertyMap("name"),
+						NewContextPropertyMap("description"),
+					),
+				),
 			),
 			//todo: github.event.comment.body
 			NewContextPropertyMap("comment",

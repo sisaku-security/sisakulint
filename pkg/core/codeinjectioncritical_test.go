@@ -309,14 +309,14 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 		{
 			name:        "join with untrusted input",
 			runScript:   "echo ${{ join(github.event.pull_request.labels.*.name, ', ') }}",
-			wantErrors:  0, // TODO: Currently not detected by expression semantics checker
-			description: "join() with array expansion - not yet detected",
+			wantErrors:  1, // Array expansion with untrusted labels is now detected
+			description: "join() with array expansion - detected",
 		},
 		{
 			name:        "toJSON with untrusted input",
 			runScript:   "echo ${{ toJSON(github.event.pull_request) }}",
-			wantErrors:  0, // TODO: Currently not detected when whole object is passed
-			description: "toJSON() with whole object - not yet detected",
+			wantErrors:  1, // Whole object containing untrusted properties is now detected
+			description: "toJSON() with whole object - detected",
 		},
 		{
 			name:        "nested expression with untrusted input",
