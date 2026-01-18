@@ -102,6 +102,9 @@ sisakulint is a static analysis tool for GitHub Actions workflow files (.github/
      - `pkg/core/selfhostedrunnersrule.go` - **SelfHostedRunnersRule**: Detects self-hosted runner usage which poses security risks in public repos
      - `pkg/core/archived_uses.go` - **ArchivedUsesRule**: Detects usage of archived actions/reusable workflows that are no longer maintained
      - `pkg/core/unpinned_images.go` - **UnpinnedImagesRule**: Detects container images not pinned by SHA256 digest
+     - `pkg/core/requestforgery.go` - **RequestForgeryRule**: Shared implementation for SSRF detection (with auto-fix)
+       - `pkg/core/requestforgerycritical.go` - **RequestForgeryCriticalRule**: Detects SSRF in privileged workflow triggers
+       - `pkg/core/requestforgerymedium.go` - **RequestForgeryMediumRule**: Detects SSRF in normal workflow triggers
      - `pkg/core/rule_add_temp_normal.go` - **AddRule**: Template rule for adding new rules
 
 4. **AST Processing**:
@@ -252,6 +255,8 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 36. **SelfHostedRunnersRule** - Detects self-hosted runner usage which poses security risks in public repos
 37. **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
 38. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
+39. **RequestForgeryCriticalRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with privileged triggers (auto-fix supported)
+40. **RequestForgeryMediumRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with normal triggers (auto-fix supported)
 
 ## Key Files
 
