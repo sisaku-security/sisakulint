@@ -97,6 +97,9 @@ github.event.commits.*.author.name
 github.event.pull_request.head.ref
 github.event.pull_request.head.label
 github.event.pull_request.head.repo.default_branch
+github.event.workflow_run.head_branch
+github.event.workflow_run.head_repository.full_name
+github.event.workflow_run.pull_requests.*.head.ref
 github.head_ref
 */
 var BuiltinUntrustedInputs = ContextPropertySearchRoots{
@@ -166,6 +169,20 @@ var BuiltinUntrustedInputs = ContextPropertySearchRoots{
 			NewContextPropertyMap("discussion",
 				NewContextPropertyMap("title"),
 				NewContextPropertyMap("body"),
+			),
+			// github.event.workflow_run.head_branch, github.event.workflow_run.head_repository.full_name
+			NewContextPropertyMap("workflow_run",
+				NewContextPropertyMap("head_branch"),
+				NewContextPropertyMap("head_repository",
+					NewContextPropertyMap("full_name"),
+				),
+				NewContextPropertyMap("pull_requests",
+					NewContextPropertyMap("*",
+						NewContextPropertyMap("head",
+							NewContextPropertyMap("ref"),
+						),
+					),
+				),
 			),
 		),
 		//todo: github.head_ref
