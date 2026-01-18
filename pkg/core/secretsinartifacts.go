@@ -12,6 +12,10 @@ import (
 // This includes uploading entire repositories (path: .) or using older versions of upload-artifact
 // that include hidden files by default.
 //
+// Limitation: This rule only detects semantic versions (v1, v2, v3, v4).
+// Actions using SHA commits (@6b208ae) or branch names (@main, @master) are not analyzed.
+// See issue #297 for potential enhancement using GitHub API version resolution.
+//
 // Based on CodeQL query: https://codeql.github.com/codeql-query-help/actions/actions-secrets-in-artifacts/
 // CWE-312: Cleartext Storage of Sensitive Information
 // Security severity: 7.5
@@ -87,11 +91,17 @@ func containsSensitivePath(pathSpec string) bool {
 }
 
 // extractMajorVersion extracts the major version number from a version string.
-// Returns -1 if not a semantic version.
+// Returns -1 if not a semantic version (e.g., SHA commits, branch names).
+//
+// Supported formats: v1, v2, v3, v4, v3.0.0, v4.1.2
+// Unsupported (returns -1): SHA commits (6b208ae, 6b208ae046db...), branch names (main, master)
+//
+// Note: GitHub API integration could resolve SHA/branch to versions (see issue #297),
+// but is not implemented for simplicity and offline operation.
 func extractMajorVersion(version string) int {
 	// Handle commit SHA (both full 40-char and short 7+ char hex strings)
 	if len(version) >= 7 && len(version) <= 40 && isHexString(version) {
-		return -1 // Can't determine version from SHA
+		return -1 // Can't determine version from SHA without GitHub API
 	}
 
 	// Handle v1, v2, v3, v4 format
