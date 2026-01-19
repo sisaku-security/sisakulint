@@ -542,6 +542,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewArchivedUsesRule(),                    // Detects usage of archived actions/reusable workflows
 		NewUnpinnedImagesRule(),                  // Detects container images not pinned by SHA256 digest
 		NewSecretsInArtifactsRule(),              // Detects secrets exposure in artifact uploads (CWE-312)
+		NewSecretExfiltrationRule(),              // Detects secret exfiltration via network commands
 	}
 }
 
