@@ -26,9 +26,9 @@ func TestNewReusableWorkflowTaintRule(t *testing.T) {
 
 func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 	tests := []struct {
-		name                   string
-		workflow               *ast.Workflow
-		wantIsReusable         bool
+		name                     string
+		workflow                 *ast.Workflow
+		wantIsReusable           bool
 		wantHasPrivilegedTrigger bool
 	}{
 		{
@@ -40,7 +40,7 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 					},
 				},
 			},
-			wantIsReusable:         true,
+			wantIsReusable:           true,
 			wantHasPrivilegedTrigger: false,
 		},
 		{
@@ -52,7 +52,7 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 					},
 				},
 			},
-			wantIsReusable:         false,
+			wantIsReusable:           false,
 			wantHasPrivilegedTrigger: false,
 		},
 		{
@@ -64,7 +64,7 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 					},
 				},
 			},
-			wantIsReusable:         false,
+			wantIsReusable:           false,
 			wantHasPrivilegedTrigger: true,
 		},
 		{
@@ -79,7 +79,7 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 					},
 				},
 			},
-			wantIsReusable:         true,
+			wantIsReusable:           true,
 			wantHasPrivilegedTrigger: true,
 		},
 	}

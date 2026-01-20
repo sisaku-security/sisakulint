@@ -22,14 +22,11 @@ import (
 // - Reports when tainted inputs are used in dangerous contexts within reusable workflows
 type ReusableWorkflowTaintRule struct {
 	BaseRule
-	workflow            *ast.Workflow
-	workflowPath        string
-	cache               *LocalReusableWorkflowCache
-	isReusableWorkflow  bool
+	workflow             *ast.Workflow
+	workflowPath         string
+	cache                *LocalReusableWorkflowCache
+	isReusableWorkflow   bool
 	hasPrivilegedTrigger bool
-	// taintedInputs maps input names to their untrusted sources
-	// e.g., "title" -> ["github.event.pull_request.title"]
-	taintedInputs map[string][]string
 	// stepsWithTaintedInputs tracks steps that use tainted inputs
 	stepsWithTaintedInputs []*stepWithTaintedInput
 }
@@ -55,9 +52,8 @@ func NewReusableWorkflowTaintRule(workflowPath string, cache *LocalReusableWorkf
 			RuleName: "reusable-workflow-taint",
 			RuleDesc: "Detects when untrusted inputs are passed to reusable workflows and used in dangerous contexts. See https://securitylab.github.com/research/github-actions-untrusted-input/",
 		},
-		workflowPath:  workflowPath,
-		cache:         cache,
-		taintedInputs: make(map[string][]string),
+		workflowPath: workflowPath,
+		cache:        cache,
 	}
 }
 
@@ -277,8 +273,8 @@ func (rule *ReusableWorkflowTaintRule) findTaintedInputUsagesInString(str *ast.S
 
 			// Extract input name from path (e.g., "inputs.title" -> "title")
 			inputName := ""
-			if strings.HasPrefix(inputPath, "inputs.") {
-				inputName = strings.TrimPrefix(inputPath, "inputs.")
+			if suffix, found := strings.CutPrefix(inputPath, "inputs."); found {
+				inputName = suffix
 				// Handle nested properties
 				if dotIdx := strings.Index(inputName, "."); dotIdx != -1 {
 					inputName = inputName[:dotIdx]
@@ -329,7 +325,7 @@ func (rule *ReusableWorkflowTaintRule) collectInputRefsFromNode(node expressions
 	case *expressions.IndexAccessNode:
 		// Check if this is inputs["something"]
 		if varNode, ok := n.Operand.(*expressions.VariableNode); ok {
-			if varNode.Name == "inputs" {
+			if varNode.Name == ContextInputs {
 				if strNode, ok := n.Index.(*expressions.StringNode); ok {
 					*refs = append(*refs, fmt.Sprintf("inputs.%s", strNode.Value))
 				} else {
