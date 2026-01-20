@@ -70,8 +70,8 @@ func TestCodeInjection_ShellMetacharacterInjection_Unquoted(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := newCodeInjectionRule("critical", tt.trigger == "pull_request_target")
-			if tt.trigger != "pull_request_target" {
+			rule := newCodeInjectionRule("critical", tt.trigger == EventPullRequestTarget)
+			if tt.trigger != EventPullRequestTarget {
 				rule = newCodeInjectionRule("medium", false)
 			}
 
@@ -138,9 +138,9 @@ func TestCodeInjection_ShellMetacharacterInjection_Eval(t *testing.T) {
 			description: "Should detect eval with untrusted input even when quoted",
 		},
 		{
-			name:      "eval with untrusted expression directly",
-			trigger:   "pull_request_target",
-			runScript: `eval "echo ${{ github.event.pull_request.title }}"`,
+			name:        "eval with untrusted expression directly",
+			trigger:     "pull_request_target",
+			runScript:   `eval "echo ${{ github.event.pull_request.title }}"`,
 			wantErrors:  2, // Both direct injection and eval pattern
 			description: "Should detect eval with direct untrusted input",
 		},
@@ -233,9 +233,9 @@ func TestCodeInjection_ShellMetacharacterInjection_ShellCommand(t *testing.T) {
 			description: "Should detect bash -c with untrusted input",
 		},
 		{
-			name:      "bash -c with untrusted expression directly",
-			trigger:   "pull_request_target",
-			runScript: `bash -c "echo ${{ github.event.pull_request.title }}"`,
+			name:        "bash -c with untrusted expression directly",
+			trigger:     "pull_request_target",
+			runScript:   `bash -c "echo ${{ github.event.pull_request.title }}"`,
 			wantErrors:  2, // Both direct injection and shell command pattern
 			description: "Should detect bash -c with direct untrusted input",
 		},

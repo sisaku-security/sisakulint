@@ -74,23 +74,23 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 			wantQuoted: []bool{false, true},
 		},
 		{
-			name:       "variable not found",
-			script:     "echo $OTHER_VAR",
-			varName:    "MY_VAR",
-			wantCount:  0,
+			name:      "variable not found",
+			script:    "echo $OTHER_VAR",
+			varName:   "MY_VAR",
+			wantCount: 0,
 		},
 		{
-			name:    "multiline script with unquoted var",
-			script:  "echo \"start\"\necho $TITLE\necho \"end\"",
-			varName: "TITLE",
-			wantCount: 1,
+			name:       "multiline script with unquoted var",
+			script:     "echo \"start\"\necho $TITLE\necho \"end\"",
+			varName:    "TITLE",
+			wantCount:  1,
 			wantQuoted: []bool{false},
 		},
 		{
-			name:    "variable in command substitution",
-			script:  `result=$(echo $MY_VAR)`,
-			varName: "MY_VAR",
-			wantCount: 1,
+			name:       "variable in command substitution",
+			script:     `result=$(echo $MY_VAR)`,
+			varName:    "MY_VAR",
+			wantCount:  1,
 			wantQuoted: []bool{false},
 		},
 	}
@@ -277,10 +277,10 @@ func TestShellParser_GetDangerousPatternType(t *testing.T) {
 
 func TestShellParser_CommandSubstitution(t *testing.T) {
 	tests := []struct {
-		name        string
-		script      string
-		varName     string
-		inCmdSubst  bool
+		name       string
+		script     string
+		varName    string
+		inCmdSubst bool
 	}{
 		{
 			name:       "variable in $() substitution",

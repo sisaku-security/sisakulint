@@ -206,4 +206,3 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 		}
 	}
 }
-

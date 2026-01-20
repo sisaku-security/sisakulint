@@ -40,10 +40,10 @@ var envVarPattern = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
 
 // FindEnvVarUsages finds all usages of the specified environment variable in the script
 func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
-	var usages []ShellVarUsage
-
 	// Find all $VAR and ${VAR} patterns
 	matches := envVarPattern.FindAllStringSubmatchIndex(p.script, -1)
+
+	usages := make([]ShellVarUsage, 0, len(matches))
 
 	for _, match := range matches {
 		if len(match) < 4 {
@@ -210,7 +210,7 @@ func (p *ShellParser) isInShellCommand(pos int) bool {
 	return shellPattern.MatchString(commandPart)
 }
 
-// isInCommandSubstitution checks if the position is inside $() or ``
+// isInCommandSubstitution checks if the position is inside $() or “
 func (p *ShellParser) isInCommandSubstitution(start, end int) bool {
 	// Check for $() substitution
 	parenDepth := 0
