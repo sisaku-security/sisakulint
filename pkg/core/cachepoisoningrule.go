@@ -13,6 +13,9 @@ import (
 // It checks for:
 // 1. Indirect cache poisoning: Untrusted triggers + unsafe checkout + cache actions
 // 2. Direct cache poisoning: Untrusted input in cache key/restore-keys/path (any trigger)
+// 3. Predictable cache keys: Cache keys using only hashFiles() without unique prefix
+// 4. High-risk context: Cache usage in release/deploy workflows
+// 5. Cache scope: PR workflows that can write to shared cache
 type CachePoisoningRule struct {
 	BaseRule
 	unsafeTriggers      []string
@@ -20,6 +23,10 @@ type CachePoisoningRule struct {
 	unsafeCheckoutStep  *ast.Step
 	autoFixerRegistered bool
 	directCacheFixSteps []*directCacheFixInfo
+	// New fields for extended detection
+	isReleaseWorkflow  bool
+	isPullRequestEvent bool
+	workflowTriggers   []string
 }
 
 // directCacheFixInfo stores information needed for auto-fixing direct cache poisoning
@@ -68,12 +75,31 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.unsafeTriggers = nil
 	rule.directCacheFixSteps = make([]*directCacheFixInfo, 0)
+	rule.isReleaseWorkflow = false
+	rule.isPullRequestEvent = false
+	rule.workflowTriggers = nil
 
 	for _, event := range node.On {
 		switch e := event.(type) {
 		case *ast.WebhookEvent:
-			if e.Hook != nil && IsUnsafeTrigger(e.Hook.Value) {
-				rule.unsafeTriggers = append(rule.unsafeTriggers, e.Hook.Value)
+			if e.Hook != nil {
+				triggerName := e.Hook.Value
+				rule.workflowTriggers = append(rule.workflowTriggers, triggerName)
+
+				if IsUnsafeTrigger(triggerName) {
+					rule.unsafeTriggers = append(rule.unsafeTriggers, triggerName)
+				}
+
+				// Check for release/deploy workflows (high-risk context)
+				if triggerName == "release" || triggerName == "deployment" ||
+					triggerName == "deployment_status" {
+					rule.isReleaseWorkflow = true
+				}
+
+				// Check for PR workflows (cache scope concern)
+				if triggerName == EventPullRequest || triggerName == EventPullRequestTarget {
+					rule.isPullRequestEvent = true
+				}
 			}
 		}
 	}
@@ -159,6 +185,8 @@ func (rule *CachePoisoningRule) checkDirectCachePoisoning(node *ast.Step, action
 	// Check key input
 	if keyInput, ok := action.Inputs["key"]; ok && keyInput != nil && keyInput.Value != nil {
 		rule.checkCacheInputForUntrustedExprs(node, "key", keyInput.Value)
+		// Check for predictable cache keys
+		rule.checkPredictableCacheKey(node, keyInput.Value)
 	}
 
 	// Check restore-keys input
@@ -169,6 +197,49 @@ func (rule *CachePoisoningRule) checkDirectCachePoisoning(node *ast.Step, action
 	// Check path input
 	if pathInput, ok := action.Inputs["path"]; ok && pathInput != nil && pathInput.Value != nil {
 		rule.checkCacheInputForUntrustedExprs(node, "path", pathInput.Value)
+	}
+
+	// Check for high-risk context (release/deploy workflows)
+	if rule.isReleaseWorkflow {
+		rule.Errorf(
+			node.Pos,
+			"cache poisoning risk in release workflow: cache usage in release/deployment workflows is high-risk. "+
+				"Attackers can poison the cache to inject malicious code into releases. "+
+				"Consider disabling cache or using isolated cache keys with github.sha",
+		)
+	}
+}
+
+// checkPredictableCacheKey checks if the cache key is predictable (e.g., only hashFiles without unique prefix)
+// This enables cache poisoning via Dependabot or similar automated PRs
+func (rule *CachePoisoningRule) checkPredictableCacheKey(node *ast.Step, keyValue *ast.String) {
+	if keyValue == nil {
+		return
+	}
+
+	key := keyValue.Value
+
+	// Check if key only contains hashFiles() without unique identifiers
+	// Patterns that make keys predictable:
+	// - key: npm-${{ hashFiles('package-lock.json') }}
+	// - key: ${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+	// These are predictable because Dependabot PRs update lock files predictably
+
+	hasHashFiles := strings.Contains(key, "hashFiles(")
+	hasUniqueIdentifier := strings.Contains(key, "github.sha") ||
+		strings.Contains(key, "github.run_id") ||
+		strings.Contains(key, "github.run_number") ||
+		strings.Contains(key, "github.run_attempt")
+
+	// If using hashFiles without unique identifier and PR events are enabled,
+	// the cache key becomes predictable for Dependabot-style attacks
+	if hasHashFiles && !hasUniqueIdentifier && rule.isPullRequestEvent {
+		rule.Errorf(
+			keyValue.Pos,
+			"cache poisoning via predictable key: cache key using hashFiles() without unique identifier (github.sha, github.run_id) "+
+				"is predictable in PR workflows. Attackers can pre-poison the cache before Dependabot PRs. "+
+				"Add github.sha or github.run_id to make the key unpredictable",
+		)
 	}
 }
 

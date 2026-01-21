@@ -20,6 +20,7 @@ const (
 	SBOMPath        = "path"
 
 	// GitHub event constants
+	EventPullRequest       = "pull_request"
 	EventPullRequestTarget = "pull_request_target"
 	EventTypeSynchronize   = "synchronize"
 	EventTypeLabeled       = "labeled"
