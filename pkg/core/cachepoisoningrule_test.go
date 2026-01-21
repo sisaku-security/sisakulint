@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -663,5 +664,274 @@ func TestCachePoisoningRule_CodeQLVulnerableExample(t *testing.T) {
 
 	if errors[0].LineNumber != 20 {
 		t.Errorf("Error line = %d, want 20", errors[0].LineNumber)
+	}
+}
+
+func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		triggers       []ast.Event
+		expectedErrors int
+		errorContains  string
+	}{
+		{
+			name: "external trigger + push to default branch",
+			triggers: []ast.Event{
+				&ast.WorkflowDispatchEvent{},
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+			expectedErrors: 1,
+			errorContains:  "cache hierarchy exploitation risk",
+		},
+		{
+			name: "schedule + push to default branch",
+			triggers: []ast.Event{
+				&ast.ScheduledEvent{},
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+			expectedErrors: 1,
+			errorContains:  "cache hierarchy exploitation risk",
+		},
+		{
+			name: "repository_dispatch only (no push)",
+			triggers: []ast.Event{
+				&ast.RepositoryDispatchEvent{},
+			},
+			expectedErrors: 1,
+			errorContains:  "cache hierarchy exploitation risk",
+		},
+		{
+			name: "workflow_dispatch only (no push)",
+			triggers: []ast.Event{
+				&ast.WorkflowDispatchEvent{},
+			},
+			expectedErrors: 1,
+			errorContains:  "writes to default branch cache",
+		},
+		{
+			name: "push only (safe)",
+			triggers: []ast.Event{
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+			expectedErrors: 0,
+		},
+		{
+			name: "pull_request only (safe)",
+			triggers: []ast.Event{
+				&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+			},
+			expectedErrors: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewCachePoisoningRule()
+
+			workflow := &ast.Workflow{
+				On: tt.triggers,
+			}
+			_ = rule.VisitWorkflowPre(workflow)
+
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
+
+			// Add a cache action to trigger the check
+			cacheStep := &ast.Step{
+				Pos: &ast.Position{Line: 10, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses:   &ast.String{Value: "actions/cache@v3"},
+					Inputs: map[string]*ast.Input{},
+				},
+			}
+			_ = rule.VisitStep(cacheStep)
+
+			errors := rule.Errors()
+			if len(errors) != tt.expectedErrors {
+				t.Errorf("Expected %d errors, got %d", tt.expectedErrors, len(errors))
+				for i, e := range errors {
+					t.Logf("Error %d: %s", i, e.Description)
+				}
+			}
+
+			if tt.expectedErrors > 0 && tt.errorContains != "" {
+				found := false
+				for _, e := range errors {
+					if strings.Contains(e.Description, tt.errorContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected error containing %q, got %v", tt.errorContains, errors)
+				}
+			}
+		})
+	}
+}
+
+func TestCachePoisoningRule_CacheEvictionRisk(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		cacheCount     int
+		expectedErrors int
+	}{
+		{
+			name:           "4 cache actions (safe)",
+			cacheCount:     4,
+			expectedErrors: 0,
+		},
+		{
+			name:           "5 cache actions (warning)",
+			cacheCount:     5,
+			expectedErrors: 1,
+		},
+		{
+			name:           "10 cache actions (warning)",
+			cacheCount:     10,
+			expectedErrors: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewCachePoisoningRule()
+
+			workflow := &ast.Workflow{
+				Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+				},
+			}
+			_ = rule.VisitWorkflowPre(workflow)
+
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
+
+			// Add multiple cache actions
+			for i := 0; i < tt.cacheCount; i++ {
+				cacheStep := &ast.Step{
+					Pos: &ast.Position{Line: 10 + i, Col: 1},
+					Exec: &ast.ExecAction{
+						Uses:   &ast.String{Value: "actions/cache@v3"},
+						Inputs: map[string]*ast.Input{},
+					},
+				}
+				_ = rule.VisitStep(cacheStep)
+			}
+
+			_ = rule.VisitJobPost(job)
+			_ = rule.VisitWorkflowPost(workflow)
+
+			errors := rule.Errors()
+			if len(errors) != tt.expectedErrors {
+				t.Errorf("Expected %d errors, got %d", tt.expectedErrors, len(errors))
+				for i, e := range errors {
+					t.Logf("Error %d: %s", i, e.Description)
+				}
+			}
+
+			if tt.expectedErrors > 0 {
+				found := false
+				for _, e := range errors {
+					if strings.Contains(e.Description, "cache eviction risk") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected error containing 'cache eviction risk'")
+				}
+			}
+		})
+	}
+}
+
+func TestCachePoisoningRule_IsPushToDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		event    *ast.WebhookEvent
+		expected bool
+	}{
+		{
+			name: "no branch filter (includes default)",
+			event: &ast.WebhookEvent{
+				Hook:     &ast.String{Value: "push"},
+				Branches: nil,
+			},
+			expected: true,
+		},
+		{
+			name: "main branch filter",
+			event: &ast.WebhookEvent{
+				Hook: &ast.String{Value: "push"},
+				Branches: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "main"}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "master branch filter",
+			event: &ast.WebhookEvent{
+				Hook: &ast.String{Value: "push"},
+				Branches: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "master"}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "wildcard filter",
+			event: &ast.WebhookEvent{
+				Hook: &ast.String{Value: "push"},
+				Branches: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "**"}},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "feature branch only",
+			event: &ast.WebhookEvent{
+				Hook: &ast.String{Value: "push"},
+				Branches: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "feature/*"}},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "release branch only",
+			event: &ast.WebhookEvent{
+				Hook: &ast.String{Value: "push"},
+				Branches: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "release-*"}},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewCachePoisoningRule()
+			got := rule.isPushToDefaultBranch(tt.event)
+			if got != tt.expected {
+				t.Errorf("isPushToDefaultBranch() = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }
