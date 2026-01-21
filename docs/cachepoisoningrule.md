@@ -13,6 +13,11 @@ weight: 1
 
 This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It identifies dangerous combinations of untrusted triggers with cache operations that could allow attackers to inject malicious payloads into the cache.
 
+The rule detects three types of cache poisoning attacks:
+1. **Indirect Cache Poisoning**: Untrusted triggers + unsafe checkout + cache actions
+2. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
+3. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
+
 #### Key Features
 
 - **Precise Detection**: Only triggers when all three risk conditions are present
@@ -23,6 +28,8 @@ This rule detects potential cache poisoning vulnerabilities in GitHub Actions wo
 - **Conservative Pattern Matching**: Detects direct, indirect, and unknown expression patterns
 - **CodeQL Compatible**: Based on CodeQL's query with enhanced detection capabilities
 - **Auto-fix Support**: Removes unsafe `ref` input from checkout steps
+- **Cache Hierarchy Exploitation Detection**: Identifies workflows with external triggers that can poison default branch cache
+- **Cache Eviction Risk Detection**: Warns when workflows use excessive cache actions (5+)
 
 ### Detection Conditions
 
@@ -216,6 +223,134 @@ After fix
 3. **Isolate Workflows**: Separate untrusted code execution from privileged operations
 4. **Use Safe Checkout**: Avoid checking out PR code in workflows with untrusted triggers and caching
 
+---
+
+### Cache Hierarchy Exploitation
+
+GitHub Actions caches are scoped by branch - PRs can read caches from their base branch. This creates a risk where attackers can poison the default branch cache, affecting all downstream PRs.
+
+#### Attack Scenario
+
+1. **Attacker triggers workflow_dispatch**: Manually triggers a workflow on the default branch
+2. **Poisoned cache is written**: Malicious content is cached under the default branch scope
+3. **PRs read poisoned cache**: All subsequent PRs inherit the poisoned cache from the base branch
+4. **Supply chain compromise**: Malicious code executes in PR builds
+
+#### Detection Conditions
+
+The rule detects two patterns:
+
+**Pattern 1: External trigger + push to default branch**
+```yaml
+on:
+  workflow_dispatch:  # External trigger - can be triggered by attackers
+  push:
+    branches: [main]  # Writes to default branch cache
+
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v3  # WARNING: Cache hierarchy exploitation risk
+```
+
+**Pattern 2: External trigger only (no push filter)**
+```yaml
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs on default branch
+
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v3  # WARNING: Writes to default branch cache
+```
+
+#### Example Output
+
+```bash
+$ sisakulint ./workflow.yaml
+
+./workflow.yaml:10:9: cache hierarchy exploitation risk: workflow with external triggers
+(workflow_dispatch, push) and push to default branch can be exploited to poison caches.
+Attacker can trigger workflow_dispatch/schedule to write malicious cache that all PRs will read.
+Consider using PR-scoped cache keys or separate workflows [cache-poisoning]
+```
+
+#### Mitigation Strategies
+
+1. **Use immutable cache keys**: Include `github.sha` in cache keys
+   ```yaml
+   key: build-${{ runner.os }}-${{ github.sha }}
+   ```
+
+2. **Separate workflows**: Use different workflows for external triggers and PR builds
+
+3. **Restrict workflow_dispatch**: Limit who can trigger workflows manually
+
+4. **Use PR-scoped cache keys**: Include PR number in cache keys for PR builds
+   ```yaml
+   key: build-${{ runner.os }}-pr-${{ github.event.pull_request.number }}
+   ```
+
+---
+
+### Cache Eviction Risk
+
+GitHub repositories have a 10GB cache limit. When this limit is exceeded, older caches are evicted using LRU (Least Recently Used) policy. Attackers can exploit this by flooding the cache to evict legitimate caches.
+
+#### Attack Scenario
+
+1. **Attacker identifies cache-heavy workflow**: Finds workflows using multiple cache actions
+2. **Floods cache storage**: Creates many cache entries to fill the 10GB limit
+3. **Legitimate caches evicted**: Important build caches are removed
+4. **Build performance degraded**: CI/CD pipelines slow down significantly
+5. **Potential security impact**: Developers may disable caching, leading to other vulnerabilities
+
+#### Detection Conditions
+
+The rule warns when a workflow uses **5 or more cache actions**, indicating potential vulnerability to cache flooding attacks.
+
+```yaml
+jobs:
+  build:
+    steps:
+      - uses: actions/cache@v3  # Cache 1
+      - uses: actions/setup-node@v4
+        with:
+          cache: 'npm'          # Cache 2
+      - uses: actions/setup-python@v5
+        with:
+          cache: 'pip'          # Cache 3
+      - uses: actions/cache@v3  # Cache 4
+      - uses: actions/cache@v3  # Cache 5 - WARNING triggered
+```
+
+#### Example Output
+
+```bash
+$ sisakulint ./workflow.yaml
+
+./workflow.yaml:1:1: cache eviction risk: workflow uses 5 cache actions.
+Multiple caches increase risk of cache flooding attacks where attackers fill
+the 10GB repository limit to evict legitimate caches. Consider consolidating
+caches or using cache-read-only for non-critical jobs [cache-poisoning]
+```
+
+#### Mitigation Strategies
+
+1. **Consolidate caches**: Combine multiple caches into fewer, larger caches
+
+2. **Use cache-read-only**: For non-critical jobs, only read caches without writing
+   ```yaml
+   - uses: actions/cache/restore@v3  # Read-only cache
+   ```
+
+3. **Implement cache cleanup**: Regularly clean up old or unused caches
+
+4. **Monitor cache usage**: Set up alerts for abnormal cache growth
+
+5. **Use branch-specific limits**: Scope cache keys to limit blast radius
+
 ### Detection Strategy and CodeQL Compatibility
 
 This rule is based on [CodeQL's `actions-cache-poisoning-direct-cache` query](https://codeql.github.com/codeql-query-help/actions/actions-cache-poisoning-direct-cache/) but implements additional detection capabilities:
@@ -250,9 +385,12 @@ This rule addresses CICD-SEC-9: Improper Artifact Integrity Validation and helps
 - [CodeQL: Cache Poisoning via Caching of Untrusted Files](https://codeql.github.com/codeql-query-help/actions/actions-cache-poisoning-direct-cache/)
 - [GitHub Actions Security: Preventing Pwn Requests](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)
 - [OWASP CI/CD Top 10: CICD-SEC-9](https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation)
+- [The Monsters in Your Build Cache - GitHub Actions Cache Poisoning](https://adnanthekhan.com/2024/05/06/the-monsters-in-your-build-cache-github-actions-cache-poisoning/) - Detailed analysis of cache hierarchy exploitation
 
 {{< popup_link2 href="https://codeql.github.com/codeql-query-help/actions/actions-cache-poisoning-direct-cache/" >}}
 
 {{< popup_link2 href="https://securitylab.github.com/research/github-actions-preventing-pwn-requests/" >}}
 
 {{< popup_link2 href="https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation" >}}
+
+{{< popup_link2 href="https://adnanthekhan.com/2024/05/06/the-monsters-in-your-build-cache-github-actions-cache-poisoning/" >}}
