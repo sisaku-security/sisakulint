@@ -15,12 +15,11 @@ import (
 // 2. Direct cache poisoning: Untrusted input in cache key/restore-keys/path (any trigger)
 type CachePoisoningRule struct {
 	BaseRule
-	unsafeTriggers       []string
-	checkoutUnsafeRef    bool
-	unsafeCheckoutStep   *ast.Step
-	autoFixerRegistered  bool
-	directCacheFixSteps  []*directCacheFixInfo
-	workflow             *ast.Workflow
+	unsafeTriggers      []string
+	checkoutUnsafeRef   bool
+	unsafeCheckoutStep  *ast.Step
+	autoFixerRegistered bool
+	directCacheFixSteps []*directCacheFixInfo
 }
 
 // directCacheFixInfo stores information needed for auto-fixing direct cache poisoning
@@ -57,7 +56,7 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 
 	if strings.HasPrefix(actionName, "actions/setup-") {
 		if cacheInput, ok := inputs["cache"]; ok && cacheInput != nil {
-			if cacheInput.Value != nil && cacheInput.Value.Value != "" && cacheInput.Value.Value != "false" {
+			if cacheInput.Value != nil && cacheInput.Value.Value != "" && cacheInput.Value.Value != ExprFalseValue {
 				return true
 			}
 		}
@@ -68,7 +67,6 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 
 func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.unsafeTriggers = nil
-	rule.workflow = node
 	rule.directCacheFixSteps = make([]*directCacheFixInfo, 0)
 
 	for _, event := range node.On {
@@ -333,7 +331,7 @@ func (rule *CachePoisoningRule) fixDirectCachePoisoning(node *ast.Step, fixInfo 
 	case "key", "restore-keys":
 		// Replace the untrusted expression with github.sha
 		return rule.replaceUntrustedExprInCacheInput(node.BaseNode, fixInfo.inputName, fixInfo.expr)
-	case "path":
+	case SBOMPath:
 		// For path, we cannot safely auto-fix as it depends on the project structure
 		// The warning is sufficient to alert users
 		return nil
@@ -355,7 +353,7 @@ func (rule *CachePoisoningRule) replaceUntrustedExprInCacheInput(stepNode *yaml.
 		key := stepNode.Content[i]
 		val := stepNode.Content[i+1]
 
-		if key.Value == SBOMWith && val.Kind == 4 { // MappingNode
+		if key.Value == SBOMWith && val.Kind == yaml.MappingNode {
 			for j := 0; j < len(val.Content); j += 2 {
 				if j+1 >= len(val.Content) {
 					break

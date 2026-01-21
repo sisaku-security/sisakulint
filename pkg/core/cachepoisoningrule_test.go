@@ -670,6 +670,7 @@ func TestCachePoisoningRule_CodeQLVulnerableExample(t *testing.T) {
 // Tests for direct cache poisoning (untrusted input in cache key/restore-keys/path)
 
 func TestCachePoisoningRule_DirectCachePoison_UntrustedKey(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	// Direct cache poisoning works with any trigger (even safe ones like pull_request)
@@ -713,6 +714,7 @@ func TestCachePoisoningRule_DirectCachePoison_UntrustedKey(t *testing.T) {
 }
 
 func TestCachePoisoningRule_DirectCachePoison_UntrustedRestoreKeys(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	workflow := &ast.Workflow{
@@ -753,6 +755,7 @@ func TestCachePoisoningRule_DirectCachePoison_UntrustedRestoreKeys(t *testing.T)
 }
 
 func TestCachePoisoningRule_DirectCachePoison_UntrustedPath(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	workflow := &ast.Workflow{
@@ -792,6 +795,7 @@ func TestCachePoisoningRule_DirectCachePoison_UntrustedPath(t *testing.T) {
 }
 
 func TestCachePoisoningRule_DirectCachePoison_SafeKey(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	workflow := &ast.Workflow{
@@ -834,6 +838,7 @@ func TestCachePoisoningRule_DirectCachePoison_SafeKey(t *testing.T) {
 }
 
 func TestCachePoisoningRule_DirectCachePoison_MultipleUntrustedInputs(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	workflow := &ast.Workflow{
@@ -873,6 +878,7 @@ func TestCachePoisoningRule_DirectCachePoison_MultipleUntrustedInputs(t *testing
 }
 
 func TestCachePoisoningRule_DirectCachePoison_CombinedWithIndirect(t *testing.T) {
+	t.Parallel()
 	rule := NewCachePoisoningRule()
 
 	// With unsafe trigger, we can have both indirect and direct cache poisoning
