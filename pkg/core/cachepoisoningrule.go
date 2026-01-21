@@ -212,7 +212,7 @@ func (rule *CachePoisoningRule) checkDirectCachePoisoning(node *ast.Step, action
 
 // checkPredictableCacheKey checks if the cache key is predictable (e.g., only hashFiles without unique prefix)
 // This enables cache poisoning via Dependabot or similar automated PRs
-func (rule *CachePoisoningRule) checkPredictableCacheKey(node *ast.Step, keyValue *ast.String) {
+func (rule *CachePoisoningRule) checkPredictableCacheKey(_ *ast.Step, keyValue *ast.String) {
 	if keyValue == nil {
 		return
 	}
