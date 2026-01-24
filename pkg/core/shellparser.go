@@ -1,8 +1,11 @@
 package core
 
 import (
+	"bytes"
 	"regexp"
 	"strings"
+
+	"mvdan.cc/sh/v3/syntax"
 )
 
 // ShellVarUsage represents how an environment variable is used in a shell script
@@ -17,32 +20,199 @@ type ShellVarUsage struct {
 	Context    string // Surrounding context for debugging
 }
 
-// ShellParser provides utilities for parsing shell scripts
+// ShellParser provides utilities for parsing shell scripts using mvdan/sh
 type ShellParser struct {
 	script string
+	file   *syntax.File
+	parser *syntax.Parser
 }
 
 // NewShellParser creates a new shell parser
 func NewShellParser(script string) *ShellParser {
-	return &ShellParser{script: script}
+	p := &ShellParser{
+		script: script,
+		parser: syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash)),
+	}
+
+	// Parse the script into AST
+	reader := strings.NewReader(script)
+	file, err := p.parser.Parse(reader, "")
+	if err == nil {
+		p.file = file
+	}
+
+	return p
 }
 
-// shellCommandPatterns matches dangerous shell execution patterns
+// shellCommandPatterns matches dangerous shell execution patterns (for fallback)
 var shellCommandPatterns = []*regexp.Regexp{
-	// eval "..." or eval '...' or eval $...
 	regexp.MustCompile(`\beval\s+`),
-	// sh -c, bash -c, zsh -c, ksh -c, dash -c
 	regexp.MustCompile(`\b(?:sh|bash|zsh|ksh|dash)\s+-c\s+`),
 }
 
-// envVarPattern matches environment variable references: $VAR or ${VAR}
+// envVarPattern matches environment variable references: $VAR or ${VAR} (for fallback)
 var envVarPattern = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
 
 // FindEnvVarUsages finds all usages of the specified environment variable in the script
 func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
-	// Find all $VAR and ${VAR} patterns
-	matches := envVarPattern.FindAllStringSubmatchIndex(p.script, -1)
+	if p.file == nil {
+		// Fallback to regex-based parsing if AST parsing failed
+		return p.findEnvVarUsagesFallback(varName)
+	}
 
+	var usages []ShellVarUsage
+
+	// Track context during AST walk
+	var inEval, inShellCmd, inCmdSubst bool
+	var evalDepth, shellCmdDepth, cmdSubstDepth int
+
+	syntax.Walk(p.file, func(node syntax.Node) bool {
+		switch x := node.(type) {
+		case *syntax.CallExpr:
+			// Check if this is eval or sh -c
+			cmdName := p.getCommandName(x)
+			if cmdName == "eval" {
+				evalDepth++
+				inEval = true
+			} else if p.isShellCommand(x) {
+				shellCmdDepth++
+				inShellCmd = true
+			}
+
+		case *syntax.CmdSubst:
+			cmdSubstDepth++
+			inCmdSubst = true
+
+		case *syntax.ParamExp:
+			if x.Param != nil && x.Param.Value == varName {
+				usage := ShellVarUsage{
+					VarName:    varName,
+					StartPos:   int(x.Pos().Offset()),
+					EndPos:     int(x.End().Offset()),
+					IsQuoted:   p.isParamExpQuoted(x),
+					InEval:     inEval,
+					InShellCmd: inShellCmd,
+					InCmdSubst: inCmdSubst,
+					Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
+				}
+				usages = append(usages, usage)
+			}
+		}
+		return true
+	})
+
+	// If no usages found via AST but script contains the variable, fallback
+	if len(usages) == 0 && strings.Contains(p.script, "$"+varName) {
+		return p.findEnvVarUsagesFallback(varName)
+	}
+
+	return usages
+}
+
+// isParamExpQuoted checks if a parameter expansion is properly double-quoted
+func (p *ShellParser) isParamExpQuoted(pe *syntax.ParamExp) bool {
+	var quoted bool
+
+	syntax.Walk(p.file, func(node syntax.Node) bool {
+		switch x := node.(type) {
+		case *syntax.DblQuoted:
+			for _, part := range x.Parts {
+				if paramExp, ok := part.(*syntax.ParamExp); ok {
+					if paramExp == pe {
+						quoted = true
+						return false
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return quoted
+}
+
+// getCommandName extracts the command name from a CallExpr
+func (p *ShellParser) getCommandName(call *syntax.CallExpr) string {
+	if len(call.Args) == 0 {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	printer := syntax.NewPrinter()
+	if err := printer.Print(&buf, call.Args[0]); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(buf.String())
+}
+
+// isShellCommand checks if a CallExpr is a shell invocation (sh -c, bash -c, etc.)
+func (p *ShellParser) isShellCommand(call *syntax.CallExpr) bool {
+	if len(call.Args) < 2 {
+		return false
+	}
+
+	cmdName := p.getCommandName(call)
+	shellCmds := []string{"sh", "bash", "zsh", "ksh", "dash"}
+
+	for _, shell := range shellCmds {
+		if cmdName == shell {
+			for i := 1; i < len(call.Args); i++ {
+				var buf bytes.Buffer
+				printer := syntax.NewPrinter()
+				if err := printer.Print(&buf, call.Args[i]); err != nil {
+					continue
+				}
+				arg := strings.TrimSpace(buf.String())
+				if arg == "-c" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// getContextFromPos returns the surrounding line for error messages
+func (p *ShellParser) getContextFromPos(start, end int) string {
+	if start < 0 || end > len(p.script) {
+		return ""
+	}
+
+	lineStart := strings.LastIndex(p.script[:start], "\n")
+	if lineStart == -1 {
+		lineStart = 0
+	} else {
+		lineStart++
+	}
+
+	lineEnd := strings.Index(p.script[end:], "\n")
+	if lineEnd == -1 {
+		lineEnd = len(p.script)
+	} else {
+		lineEnd += end
+	}
+
+	line := p.script[lineStart:lineEnd]
+
+	if len(line) > 80 {
+		relStart := start - lineStart
+		contextStart := relStart - 30
+		if contextStart < 0 {
+			contextStart = 0
+		}
+		contextEnd := relStart + 50
+		if contextEnd > len(line) {
+			contextEnd = len(line)
+		}
+		line = "..." + line[contextStart:contextEnd] + "..."
+	}
+
+	return strings.TrimSpace(line)
+}
+
+// findEnvVarUsagesFallback uses regex for scripts that can't be parsed
+func (p *ShellParser) findEnvVarUsagesFallback(varName string) []ShellVarUsage {
+	matches := envVarPattern.FindAllStringSubmatchIndex(p.script, -1)
 	usages := make([]ShellVarUsage, 0, len(matches))
 
 	for _, match := range matches {
@@ -61,60 +231,23 @@ func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
 		}
 
 		usage := ShellVarUsage{
-			VarName:  foundVar,
-			StartPos: fullStart,
-			EndPos:   fullEnd,
+			VarName:    foundVar,
+			StartPos:   fullStart,
+			EndPos:     fullEnd,
+			IsQuoted:   p.isQuotedAtPos(fullStart, fullEnd),
+			InEval:     p.isInEvalAtPos(fullStart),
+			InShellCmd: p.isInShellCommandAtPos(fullStart),
+			InCmdSubst: p.isInCmdSubstAtPos(fullStart),
+			Context:    p.getContextFromPos(fullStart, fullEnd),
 		}
-
-		// Check if properly quoted
-		usage.IsQuoted = p.isProperlyQuoted(fullStart, fullEnd)
-
-		// Check if in eval
-		usage.InEval = p.isInEval(fullStart)
-
-		// Check if in sh -c, bash -c, etc.
-		usage.InShellCmd = p.isInShellCommand(fullStart)
-
-		// Check if in command substitution
-		usage.InCmdSubst = p.isInCommandSubstitution(fullStart, fullEnd)
-
-		// Get surrounding context (for error messages)
-		usage.Context = p.getSurroundingContext(fullStart, fullEnd)
-
 		usages = append(usages, usage)
 	}
 
 	return usages
 }
 
-// IsUnsafeUsage checks if a variable usage is potentially unsafe
-func (u *ShellVarUsage) IsUnsafeUsage() bool {
-	// Unquoted usage is unsafe
-	if !u.IsQuoted {
-		return true
-	}
-
-	// Usage inside eval is unsafe even when quoted
-	if u.InEval {
-		return true
-	}
-
-	// Usage inside sh -c is unsafe even when quoted (shell parses again)
-	if u.InShellCmd {
-		return true
-	}
-
-	// Usage inside command substitution is unsafe even when quoted
-	if u.InCmdSubst {
-		return true
-	}
-
-	return false
-}
-
-// isProperlyQuoted checks if the variable at the given position is properly double-quoted
-func (p *ShellParser) isProperlyQuoted(start, end int) bool {
-	// Count unescaped double quotes before the position
+// isQuotedAtPos checks if position is inside double quotes (fallback)
+func (p *ShellParser) isQuotedAtPos(start, end int) bool {
 	doubleQuotes := 0
 	singleQuotes := 0
 	escaped := false
@@ -140,13 +273,9 @@ func (p *ShellParser) isProperlyQuoted(start, end int) bool {
 		}
 	}
 
-	// If we're inside an odd number of double quotes, we're quoted
-	// If we're inside single quotes, variable expansion doesn't happen (so it's "safe" in a different way)
 	isInsideDoubleQuotes := doubleQuotes%2 == 1 && singleQuotes%2 == 0
 
-	// Also need to verify the closing quote exists after the variable
 	if isInsideDoubleQuotes {
-		// Check there's a closing quote after the variable
 		afterVar := p.script[end:]
 		quotesAfter := 0
 		escapedAfter := false
@@ -175,48 +304,36 @@ func (p *ShellParser) isProperlyQuoted(start, end int) bool {
 	return false
 }
 
-// isInEval checks if the position is inside an eval command
-func (p *ShellParser) isInEval(pos int) bool {
-	// Look backward for 'eval' followed by the variable
+// isInEvalAtPos checks if position is inside eval (fallback)
+func (p *ShellParser) isInEvalAtPos(pos int) bool {
 	before := p.script[:pos]
-
-	// Find the last newline or semicolon (command separator)
 	lastSep := strings.LastIndexAny(before, "\n;")
 	if lastSep == -1 {
 		lastSep = 0
 	}
-
 	commandPart := before[lastSep:]
-
-	// Check if 'eval' appears in this command part
 	evalPattern := regexp.MustCompile(`\beval\s+`)
 	return evalPattern.MatchString(commandPart)
 }
 
-// isInShellCommand checks if the position is inside sh -c, bash -c, etc.
-func (p *ShellParser) isInShellCommand(pos int) bool {
+// isInShellCommandAtPos checks if position is inside sh -c (fallback)
+func (p *ShellParser) isInShellCommandAtPos(pos int) bool {
 	before := p.script[:pos]
-
-	// Find the last command separator
 	lastSep := strings.LastIndexAny(before, "\n;|&")
 	if lastSep == -1 {
 		lastSep = 0
 	}
-
 	commandPart := before[lastSep:]
-
-	// Check for shell command patterns
 	shellPattern := regexp.MustCompile(`\b(?:sh|bash|zsh|ksh|dash)\s+-c\s+`)
 	return shellPattern.MatchString(commandPart)
 }
 
-// isInCommandSubstitution checks if the position is inside $() or “
-func (p *ShellParser) isInCommandSubstitution(start, end int) bool {
-	// Check for $() substitution
+// isInCmdSubstAtPos checks if position is inside $() or `` (fallback)
+func (p *ShellParser) isInCmdSubstAtPos(pos int) bool {
 	parenDepth := 0
 	dollarParenStart := -1
 
-	for i := 0; i < start; i++ {
+	for i := 0; i < pos; i++ {
 		if i > 0 && p.script[i-1] == '$' && p.script[i] == '(' {
 			parenDepth++
 			dollarParenStart = i - 1
@@ -225,27 +342,13 @@ func (p *ShellParser) isInCommandSubstitution(start, end int) bool {
 		}
 	}
 
-	if parenDepth > 0 {
-		// Verify there's a closing paren after
-		remaining := p.script[end:]
-		depth := parenDepth
-		for i := 0; i < len(remaining) && depth > 0; i++ {
-			if remaining[i] == ')' {
-				depth--
-			} else if i > 0 && remaining[i-1] == '$' && remaining[i] == '(' {
-				depth++
-			}
-		}
-		if dollarParenStart >= 0 && depth == 0 {
-			return true
-		}
+	if parenDepth > 0 && dollarParenStart >= 0 {
+		return true
 	}
 
-	// Check for backtick substitution
 	backtickCount := 0
-	for i := 0; i < start; i++ {
+	for i := 0; i < pos; i++ {
 		if p.script[i] == '`' {
-			// Check if escaped
 			escaped := false
 			for j := i - 1; j >= 0 && p.script[j] == '\\'; j-- {
 				escaped = !escaped
@@ -255,68 +358,96 @@ func (p *ShellParser) isInCommandSubstitution(start, end int) bool {
 			}
 		}
 	}
-
 	return backtickCount%2 == 1
 }
 
-// getSurroundingContext returns the surrounding context for error messages
-func (p *ShellParser) getSurroundingContext(start, end int) string {
-	// Get surrounding line
-	lineStart := strings.LastIndex(p.script[:start], "\n")
-	if lineStart == -1 {
-		lineStart = 0
-	} else {
-		lineStart++ // Skip the newline itself
+// IsUnsafeUsage checks if a variable usage is potentially unsafe
+func (u *ShellVarUsage) IsUnsafeUsage() bool {
+	if !u.IsQuoted {
+		return true
 	}
 
-	lineEnd := strings.Index(p.script[end:], "\n")
-	if lineEnd == -1 {
-		lineEnd = len(p.script)
-	} else {
-		lineEnd += end
+	if u.InEval {
+		return true
 	}
 
-	line := p.script[lineStart:lineEnd]
-
-	// Truncate if too long
-	if len(line) > 80 {
-		relStart := start - lineStart
-		contextStart := relStart - 30
-		if contextStart < 0 {
-			contextStart = 0
-		}
-		contextEnd := relStart + 50
-		if contextEnd > len(line) {
-			contextEnd = len(line)
-		}
-		line = "..." + line[contextStart:contextEnd] + "..."
+	if u.InShellCmd {
+		return true
 	}
 
-	return strings.TrimSpace(line)
+	if u.InCmdSubst {
+		return true
+	}
+
+	return false
 }
 
 // HasDangerousPattern checks if the script contains dangerous patterns like eval or sh -c
 func (p *ShellParser) HasDangerousPattern() bool {
+	// Always check with string matching first for patterns that might be in command arguments
+	// (e.g., xargs sh -c, find -exec sh -c)
 	for _, pattern := range shellCommandPatterns {
 		if pattern.MatchString(p.script) {
 			return true
 		}
 	}
+
+	if p.file != nil {
+		var found bool
+		syntax.Walk(p.file, func(node syntax.Node) bool {
+			if call, ok := node.(*syntax.CallExpr); ok {
+				cmdName := p.getCommandName(call)
+				if cmdName == "eval" || p.isShellCommand(call) {
+					found = true
+					return false
+				}
+			}
+			return true
+		})
+		if found {
+			return true
+		}
+	}
+
 	return false
 }
 
 // GetDangerousPatternType returns the type of dangerous pattern found
 func (p *ShellParser) GetDangerousPatternType() string {
-	before := p.script
-
-	if regexp.MustCompile(`\beval\s+`).MatchString(before) {
+	// Check string patterns first (for patterns in command arguments like xargs sh -c)
+	if regexp.MustCompile(`\beval\s+`).MatchString(p.script) {
 		return "eval"
 	}
 
-	shellPattern := regexp.MustCompile(`\b(sh|bash|zsh|ksh|dash)\s+-c\s+`)
-	match := shellPattern.FindStringSubmatch(before)
-	if len(match) > 1 {
-		return match[1] + " -c"
+	// Check longer shell names first to avoid "sh -c" matching inside "bash -c"
+	shells := []string{"bash", "dash", "zsh", "ksh", "sh"}
+	for _, shell := range shells {
+		shellPattern := regexp.MustCompile(`\b` + shell + `\s+-c\s+`)
+		if shellPattern.MatchString(p.script) {
+			return shell + " -c"
+		}
+	}
+
+	// Also check via AST for direct command calls
+	if p.file != nil {
+		var patternType string
+		syntax.Walk(p.file, func(node syntax.Node) bool {
+			if call, ok := node.(*syntax.CallExpr); ok {
+				cmdName := p.getCommandName(call)
+				if cmdName == "eval" {
+					patternType = "eval"
+					return false
+				}
+				if p.isShellCommand(call) {
+					patternType = cmdName + " -c"
+					return false
+				}
+			}
+			return true
+		})
+		if patternType != "" {
+			return patternType
+		}
 	}
 
 	return ""

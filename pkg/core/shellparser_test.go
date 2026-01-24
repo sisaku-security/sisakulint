@@ -323,3 +323,148 @@ func TestShellParser_CommandSubstitution(t *testing.T) {
 		})
 	}
 }
+
+// TestShellParser_ComplexShellSyntax tests complex shell constructs using mvdan/sh
+func TestShellParser_ComplexShellSyntax(t *testing.T) {
+	tests := []struct {
+		name       string
+		script     string
+		varName    string
+		wantCount  int
+		wantQuoted []bool
+	}{
+		{
+			name: "heredoc with variable",
+			script: `cat <<EOF
+Hello $MY_VAR
+EOF`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+		{
+			name:       "array expansion",
+			script:     `echo "${MY_VAR[@]}"`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{true},
+		},
+		{
+			name:       "parameter expansion with default",
+			script:     `echo ${MY_VAR:-default}`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+		{
+			name:       "variable in for loop",
+			script:     `for i in $MY_VAR; do echo $i; done`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+		{
+			name:       "variable in if condition",
+			script:     `if [ -n "$MY_VAR" ]; then echo ok; fi`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{true},
+		},
+		{
+			name:       "variable in case statement",
+			script:     `case $MY_VAR in *) echo match;; esac`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+		{
+			name: "function with variable",
+			script: `myfunc() {
+  echo $MY_VAR
+}`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+		{
+			name:       "process substitution",
+			script:     `diff <(echo $MY_VAR) <(echo test)`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewShellParser(tt.script)
+			usages := parser.FindEnvVarUsages(tt.varName)
+
+			if len(usages) != tt.wantCount {
+				t.Errorf("got %d usages, want %d", len(usages), tt.wantCount)
+				return
+			}
+
+			for i, usage := range usages {
+				if i < len(tt.wantQuoted) && usage.IsQuoted != tt.wantQuoted[i] {
+					t.Errorf("usage[%d].IsQuoted = %v, want %v", i, usage.IsQuoted, tt.wantQuoted[i])
+				}
+			}
+		})
+	}
+}
+
+// TestShellParser_DangerousPatterns tests detection of dangerous shell patterns
+func TestShellParser_DangerousPatterns(t *testing.T) {
+	tests := []struct {
+		name        string
+		script      string
+		dangerous   bool
+		patternType string
+	}{
+		{
+			name:        "xargs with sh -c",
+			script:      `echo "$files" | xargs -I{} sh -c 'process {}'`,
+			dangerous:   true,
+			patternType: "sh -c",
+		},
+		{
+			name:        "find with exec sh -c",
+			script:      `find . -name "*.txt" -exec sh -c 'cat "$1"' _ {} \;`,
+			dangerous:   true,
+			patternType: "sh -c",
+		},
+		{
+			name:        "eval with command substitution",
+			script:      `eval "$(generate_cmd)"`,
+			dangerous:   true,
+			patternType: "eval",
+		},
+		{
+			name:        "bash -c command",
+			script:      `bash -c 'echo test'`,
+			dangerous:   true,
+			patternType: "bash -c",
+		},
+		{
+			name:        "safe command",
+			script:      `echo "Hello World" | grep "Hello"`,
+			dangerous:   false,
+			patternType: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewShellParser(tt.script)
+
+			if got := parser.HasDangerousPattern(); got != tt.dangerous {
+				t.Errorf("HasDangerousPattern() = %v, want %v", got, tt.dangerous)
+			}
+
+			if got := parser.GetDangerousPatternType(); got != tt.patternType {
+				t.Errorf("GetDangerousPatternType() = %v, want %v", got, tt.patternType)
+			}
+		})
+	}
+}
