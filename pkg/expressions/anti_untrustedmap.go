@@ -189,3 +189,59 @@ var BuiltinUntrustedInputs = ContextPropertySearchRoots{
 		NewContextPropertyMap("head_ref"),
 	),
 }
+
+// CreateUntrustedInputsWithTaintedReusableWorkflowInputs creates a new ContextPropertySearchRoots
+// that includes the standard untrusted inputs plus tainted inputs from reusable workflows.
+// This should be used when checking a reusable workflow that may receive untrusted data
+// through its inputs.
+//
+// taintedInputNames is a list of input names that are known to be tainted
+// (i.e., they receive untrusted data from the caller workflow)
+func CreateUntrustedInputsWithTaintedReusableWorkflowInputs(taintedInputNames []string) ContextPropertySearchRoots {
+	// Create a copy of the builtin untrusted inputs
+	roots := make(ContextPropertySearchRoots, len(BuiltinUntrustedInputs)+1)
+	for k, v := range BuiltinUntrustedInputs {
+		roots[k] = v
+	}
+
+	// Add inputs.* for tainted input names
+	if len(taintedInputNames) > 0 {
+		inputChildren := make([]*ContextPropertyMap, len(taintedInputNames))
+		for i, name := range taintedInputNames {
+			inputChildren[i] = NewContextPropertyMap(name)
+		}
+		roots["inputs"] = NewContextPropertyMap("inputs", inputChildren...)
+	}
+
+	return roots
+}
+
+// CreateUntrustedInputsForReusableWorkflow creates untrusted inputs that treat ALL inputs.*
+// as potentially tainted. This is a conservative approach used when the caller's
+// input values are not known at analysis time.
+//
+// inputNames is a list of all input names defined in the reusable workflow
+func CreateUntrustedInputsForReusableWorkflow(inputNames []string) ContextPropertySearchRoots {
+	// Create a copy of the builtin untrusted inputs
+	roots := make(ContextPropertySearchRoots, len(BuiltinUntrustedInputs)+1)
+	for k, v := range BuiltinUntrustedInputs {
+		roots[k] = v
+	}
+
+	// Add all inputs as potentially tainted
+	if len(inputNames) > 0 {
+		inputChildren := make([]*ContextPropertyMap, len(inputNames))
+		for i, name := range inputNames {
+			inputChildren[i] = NewContextPropertyMap(name)
+		}
+		roots["inputs"] = NewContextPropertyMap("inputs", inputChildren...)
+	} else {
+		// If no input names provided, treat any inputs.* access as tainted
+		// by using a wildcard
+		roots["inputs"] = NewContextPropertyMap("inputs",
+			NewContextPropertyMap("*"),
+		)
+	}
+
+	return roots
+}
