@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 // envVarWithUntrustedInput tracks an environment variable that contains untrusted input
@@ -26,7 +27,7 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 	}
 
 	script := run.Run.Value
-	parser := NewShellParser(script)
+	parser := shell.NewShellParser(script)
 
 	for _, envVar := range envVarsWithUntrusted {
 		usages := parser.FindEnvVarUsages(envVar.envVarName)
@@ -61,7 +62,7 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 }
 
 // getUnsafeUsageReason returns a human-readable reason for why the usage is unsafe
-func (rule *CodeInjectionRule) getUnsafeUsageReason(usage ShellVarUsage) string {
+func (rule *CodeInjectionRule) getUnsafeUsageReason(usage shell.ShellVarUsage) string {
 	reasons := []string{}
 
 	if !usage.IsQuoted {
@@ -135,7 +136,7 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 	}
 
 	script := run.Run.Value
-	parser := NewShellParser(script)
+	parser := shell.NewShellParser(script)
 
 	// Check if script contains eval or sh -c patterns
 	if !parser.HasDangerousPattern() {
