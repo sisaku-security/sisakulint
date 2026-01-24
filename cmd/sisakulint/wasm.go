@@ -24,8 +24,7 @@ type LintResult struct {
 	Success  bool        `json:"success"`
 }
 
-// makeWASMRules creates rules that are compatible with WASM environment.
-// Rules that require HTTP requests or use sync.Once are excluded.
+// makeWASMRules returns WASM-compatible rules (excludes rules requiring HTTP/sync.Once)
 func makeWASMRules() []core.Rule {
 	return []core.Rule{
 		core.CredentialsRule(),
@@ -67,14 +66,11 @@ func analyzeYAML(_ js.Value, args []js.Value) any {
 	yamlContent := args[0].String()
 	filename := args[1].String()
 
-	// Parse the workflow YAML directly
 	parsedWorkflow, parseErrors := core.Parse([]byte(yamlContent))
 
-	// Collect all errors
 	var allErrors []*core.LintingError
 	allErrors = append(allErrors, parseErrors...)
 
-	// Apply WASM-compatible rules if parsing succeeded
 	if parsedWorkflow != nil {
 		rules := makeWASMRules()
 
@@ -128,6 +124,5 @@ func init() {
 }
 
 func main() {
-	// Block forever to keep the Go runtime alive for JavaScript callbacks
 	<-make(chan struct{})
 }
