@@ -13,6 +13,7 @@ type UntiChecker struct {
 	cur             []*ContextPropertyMap      // 現在のノードの信頼できない入力マップ
 	start           ExprNode                   // 現在の式の開始ノード
 	errs            []*ExprError               // 現在の式で見つかったエラー
+	funcArgDepth    int                        // 関数引数内のネスト深度（0の場合は関数引数外）
 }
 
 // NewUntiCheckerは、新しいUntiCheckerインスタンスを作成します。
@@ -32,6 +33,7 @@ func (u *UntiChecker) reset() {
 	u.start = nil
 	u.filteringObject = false
 	u.cur = u.cur[:0]
+	// funcArgDepthはリセットしない（関数引数のコンテキストは維持する）
 }
 
 // compactは、現在のノードの信頼できない入力マップをコンパクトにし、nil値を削除します。
@@ -142,17 +144,40 @@ func (u *UntiChecker) onObjectFilter() {
 // 1つの信頼できない入力のみが見つかった場合、その入力に対してエラーを追加します。
 // 複数の信頼できない入力が見つかった場合、それらすべてに対してエラーを追加します。
 func (u *UntiChecker) end() {
+	u.endWithIntermediateCheck(false)
+}
+
+// endInFuncArgは、関数引数内でノードの訪問が終了したときに呼び出されます。
+// 中間ノード（Childrenを持つノード）も検出対象とします。
+// これにより、toJSON(github.event.pull_request)のようなパターンを検出できます。
+func (u *UntiChecker) endInFuncArg() {
+	u.endWithIntermediateCheck(true)
+}
+
+// endWithIntermediateCheckは、ノードの訪問が終了したときの共通処理です。
+// checkIntermediateがtrueの場合、中間ノードも検出対象とします。
+func (u *UntiChecker) endWithIntermediateCheck(checkIntermediate bool) {
 	// Preallocate inputs slice with a reasonable capacity based on the expected number of inputs
 	inputs := make([]string, 0, len(u.cur))
+	intermediateInputs := make([]string, 0)
+
 	for _, cur := range u.cur {
 		if cur.Children != nil {
-			continue // `Children`がnilの場合、ノードは葉です
+			// 中間ノード（リーフではない）
+			if checkIntermediate {
+				var b strings.Builder
+				cur.buildPath(&b)
+				intermediateInputs = append(intermediateInputs, b.String())
+			}
+			continue
 		}
+		// リーフノード
 		var b strings.Builder
 		cur.buildPath(&b)
 		inputs = append(inputs, b.String())
 	}
 
+	// リーフノードのエラー報告
 	if len(inputs) == 1 {
 		err := errorfAtExpr(
 			u.start,
@@ -170,7 +195,35 @@ func (u *UntiChecker) end() {
 		u.errs = append(u.errs, err)
 	}
 
+	// 中間ノードのエラー報告（関数引数として渡された場合）
+	if len(intermediateInputs) > 0 && len(inputs) == 0 {
+		// リーフノードがなく、中間ノードのみが検出された場合
+		if len(intermediateInputs) == 1 {
+			err := errorfAtExpr(
+				u.start,
+				"%q contains potentially untrusted properties. Avoid passing entire objects to functions in inline scripts. Instead, access specific safe properties or pass values through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
+				intermediateInputs[0],
+			)
+			u.errs = append(u.errs, err)
+		} else {
+			err := errorfAtExpr(
+				u.start,
+				"Objects %s contain potentially untrusted properties. Avoid passing entire objects to functions in inline scripts. Instead, access specific safe properties or pass values through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
+				SortedQuotes(intermediateInputs),
+			)
+			u.errs = append(u.errs, err)
+		}
+	}
+
 	u.reset()
+}
+
+// OnVisitNodeEnterは、子ノードの訪問前にノードを訪問する際に呼び出されるべきコールバックです。
+// 関数呼び出しに入ったときにfuncArgDepthをインクリメントします。
+func (u *UntiChecker) OnVisitNodeEnter(n ExprNode) {
+	if _, ok := n.(*FuncCallNode); ok {
+		u.funcArgDepth++
+	}
 }
 
 // OnVisitNodeLeaveは、子ノードの訪問後にノードを訪問する際に呼び出されるべきコールバックです。
@@ -178,7 +231,11 @@ func (u *UntiChecker) end() {
 func (u *UntiChecker) OnVisitNodeLeave(n ExprNode) {
 	switch n := n.(type) {
 	case *VariableNode:
-		u.end()
+		if u.funcArgDepth > 0 {
+			u.endInFuncArg()
+		} else {
+			u.end()
+		}
 		u.onVar(n)
 	case *ObjectDerefNode:
 		u.onPropAccess(n.Property)
@@ -191,8 +248,16 @@ func (u *UntiChecker) OnVisitNodeLeave(n ExprNode) {
 		u.onIndexAccess()
 	case *ArrayDerefNode:
 		u.onObjectFilter()
+	case *FuncCallNode:
+		// 関数呼び出しの場合、引数内のuntrustedオブジェクト（中間ノード含む）を検出
+		u.endInFuncArg()
+		u.funcArgDepth-- // 関数引数のコンテキストを終了
 	default:
-		u.end()
+		if u.funcArgDepth > 0 {
+			u.endInFuncArg()
+		} else {
+			u.end()
+		}
 	}
 }
 
@@ -211,5 +276,6 @@ func (u *UntiChecker) Errs() []*ExprError {
 // Init initializes a state of checker.
 func (u *UntiChecker) Init() {
 	u.errs = u.errs[:0]
+	u.funcArgDepth = 0
 	u.reset()
 }
