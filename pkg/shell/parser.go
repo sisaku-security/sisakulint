@@ -7,48 +7,39 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// ShellVarUsage represents how an environment variable is used in a shell script
 type ShellVarUsage struct {
-	VarName    string // Variable name (e.g., "MY_VAR")
-	StartPos   int    // Start position in the script
-	EndPos     int    // End position in the script
-	IsQuoted   bool   // Whether the variable is properly double-quoted
-	InEval     bool   // Whether it's inside eval
-	InShellCmd bool   // Whether it's inside sh -c, bash -c, etc.
-	InCmdSubst bool   // Whether it's inside $() or ``
-	Context    string // Surrounding context for debugging
+	VarName    string
+	StartPos   int
+	EndPos     int
+	IsQuoted   bool
+	InEval     bool
+	InShellCmd bool
+	InCmdSubst bool
+	Context    string
 }
 
-// ShellParser provides utilities for parsing shell scripts using mvdan/sh
 type ShellParser struct {
 	script string
 	file   *syntax.File
 }
 
-// NewShellParser creates a new shell parser
 func NewShellParser(script string) *ShellParser {
 	p := &ShellParser{script: script}
-
-	// Parse the script into AST
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
 	reader := strings.NewReader(script)
 	file, err := parser.Parse(reader, "")
 	if err == nil {
 		p.file = file
 	}
-
 	return p
 }
 
-// FindEnvVarUsages finds all usages of the specified environment variable in the script
 func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
 	if p.file == nil {
 		return nil
 	}
 
 	var usages []ShellVarUsage
-
-	// Track context during AST walk
 	var inEval, inShellCmd, inCmdSubst bool
 
 	syntax.Walk(p.file, func(node syntax.Node) bool {
@@ -85,7 +76,6 @@ func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
 	return usages
 }
 
-// isParamExpQuoted checks if a parameter expansion is properly double-quoted
 func (p *ShellParser) isParamExpQuoted(pe *syntax.ParamExp) bool {
 	var quoted bool
 
@@ -106,7 +96,6 @@ func (p *ShellParser) isParamExpQuoted(pe *syntax.ParamExp) bool {
 	return quoted
 }
 
-// getCommandName extracts the command name from a CallExpr
 func (p *ShellParser) getCommandName(call *syntax.CallExpr) string {
 	if len(call.Args) == 0 {
 		return ""
@@ -120,7 +109,6 @@ func (p *ShellParser) getCommandName(call *syntax.CallExpr) string {
 	return strings.TrimSpace(buf.String())
 }
 
-// isShellCommand checks if a CallExpr is a shell invocation (sh -c, bash -c, etc.)
 func (p *ShellParser) isShellCommand(call *syntax.CallExpr) bool {
 	if len(call.Args) < 2 {
 		return false
@@ -146,7 +134,6 @@ func (p *ShellParser) isShellCommand(call *syntax.CallExpr) bool {
 	return false
 }
 
-// getContextFromPos returns the surrounding line for error messages
 func (p *ShellParser) getContextFromPos(start, end int) string {
 	if start < 0 || end > len(p.script) {
 		return ""
@@ -184,7 +171,6 @@ func (p *ShellParser) getContextFromPos(start, end int) string {
 	return strings.TrimSpace(line)
 }
 
-// IsUnsafeUsage checks if a variable usage is potentially unsafe
 func (u *ShellVarUsage) IsUnsafeUsage() bool {
 	if !u.IsQuoted {
 		return true
@@ -201,7 +187,6 @@ func (u *ShellVarUsage) IsUnsafeUsage() bool {
 	return false
 }
 
-// HasDangerousPattern checks if the script contains dangerous patterns like eval or sh -c
 func (p *ShellParser) HasDangerousPattern() bool {
 	if p.file == nil {
 		return false
@@ -222,7 +207,6 @@ func (p *ShellParser) HasDangerousPattern() bool {
 	return found
 }
 
-// GetDangerousPatternType returns the type of dangerous pattern found
 func (p *ShellParser) GetDangerousPatternType() string {
 	if p.file == nil {
 		return ""

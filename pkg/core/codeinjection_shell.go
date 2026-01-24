@@ -7,15 +7,12 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
-// envVarWithUntrustedInput tracks an environment variable that contains untrusted input
 type envVarWithUntrustedInput struct {
-	envVarName     string   // The environment variable name
-	untrustedPaths []string // The untrusted input paths it contains
+	envVarName     string
+	untrustedPaths []string
 	pos            *ast.Position
 }
 
-// checkShellMetacharacterInjection checks for shell metacharacter injection vulnerabilities
-// when an environment variable containing untrusted input is used unsafely in a run script
 func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, envVarsWithUntrusted []envVarWithUntrustedInput) {
 	if step.Exec == nil || step.Exec.Kind() != ast.ExecKindRun {
 		return
@@ -61,7 +58,6 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 	}
 }
 
-// getUnsafeUsageReason returns a human-readable reason for why the usage is unsafe
 func (rule *CodeInjectionRule) getUnsafeUsageReason(usage shell.ShellVarUsage) string {
 	reasons := []string{}
 
@@ -88,7 +84,6 @@ func (rule *CodeInjectionRule) getUnsafeUsageReason(usage shell.ShellVarUsage) s
 	return strings.Join(reasons, "; ")
 }
 
-// extractEnvVarsWithUntrustedInput extracts environment variables that contain untrusted input
 func (rule *CodeInjectionRule) extractEnvVarsWithUntrustedInput(step *ast.Step) []envVarWithUntrustedInput {
 	var result []envVarWithUntrustedInput
 
@@ -101,7 +96,6 @@ func (rule *CodeInjectionRule) extractEnvVarsWithUntrustedInput(step *ast.Step) 
 			continue
 		}
 
-		// Extract expressions from the env var value
 		exprs := rule.extractAndParseExpressions(envVar.Value)
 		var untrustedPaths []string
 
@@ -123,8 +117,6 @@ func (rule *CodeInjectionRule) extractEnvVarsWithUntrustedInput(step *ast.Step) 
 	return result
 }
 
-// checkDangerousShellPatterns checks for dangerous shell patterns (eval, sh -c, etc.)
-// containing untrusted input even when properly quoted
 func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 	if step.Exec == nil || step.Exec.Kind() != ast.ExecKindRun {
 		return
@@ -138,14 +130,11 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 	script := run.Run.Value
 	parser := shell.NewShellParser(script)
 
-	// Check if script contains eval or sh -c patterns
 	if !parser.HasDangerousPattern() {
 		return
 	}
 
 	patternType := parser.GetDangerousPatternType()
-
-	// Find all expressions in the script
 	exprs := rule.extractAndParseExpressions(run.Run)
 
 	for _, expr := range exprs {
@@ -174,12 +163,10 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 		}
 	}
 
-	// Also check environment variables in dangerous patterns
 	envVarsWithUntrusted := rule.extractEnvVarsWithUntrustedInput(step)
 	for _, envVar := range envVarsWithUntrusted {
 		usages := parser.FindEnvVarUsages(envVar.envVarName)
 		for _, usage := range usages {
-			// In eval/sh -c context, even quoted variables are dangerous
 			if usage.InEval || usage.InShellCmd {
 				paths := strings.Join(envVar.untrustedPaths, "\", \"")
 

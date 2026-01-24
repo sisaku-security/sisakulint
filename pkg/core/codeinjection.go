@@ -165,14 +165,10 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 			rule.AddAutoFixer(NewStepFixer(s, rule))
 		}
 
-		// Check for shell metacharacter injection via environment variables
-		// This detects unsafe usage of env vars that contain untrusted input
 		envVarsWithUntrusted := rule.extractEnvVarsWithUntrustedInput(s)
 		if len(envVarsWithUntrusted) > 0 {
 			rule.checkShellMetacharacterInjection(s, envVarsWithUntrusted)
 		}
-
-		// Check for dangerous shell patterns (eval, sh -c, etc.)
 		rule.checkDangerousShellPatterns(s)
 	}
 	return nil
