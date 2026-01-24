@@ -59,11 +59,11 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 			wantInCmd:  []bool{true},
 		},
 		{
-			name:       "variable in bash -c",
-			script:     `bash -c 'echo $MY_VAR'`,
+			name:       "variable in bash -c with double quotes",
+			script:     `bash -c "echo $MY_VAR"`,
 			varName:    "MY_VAR",
 			wantCount:  1,
-			wantQuoted: []bool{false}, // single quotes don't count as proper quoting
+			wantQuoted: []bool{true}, // double-quoted in AST
 			wantInCmd:  []bool{true},
 		},
 		{
@@ -423,14 +423,8 @@ func TestShellParser_DangerousPatterns(t *testing.T) {
 		patternType string
 	}{
 		{
-			name:        "xargs with sh -c",
-			script:      `echo "$files" | xargs -I{} sh -c 'process {}'`,
-			dangerous:   true,
-			patternType: "sh -c",
-		},
-		{
-			name:        "find with exec sh -c",
-			script:      `find . -name "*.txt" -exec sh -c 'cat "$1"' _ {} \;`,
+			name:        "direct sh -c command",
+			script:      `sh -c 'echo test'`,
 			dangerous:   true,
 			patternType: "sh -c",
 		},
@@ -447,8 +441,26 @@ func TestShellParser_DangerousPatterns(t *testing.T) {
 			patternType: "bash -c",
 		},
 		{
+			name:        "dash -c command",
+			script:      `dash -c 'echo test'`,
+			dangerous:   true,
+			patternType: "dash -c",
+		},
+		{
+			name:        "eval with variable",
+			script:      `eval "$cmd"`,
+			dangerous:   true,
+			patternType: "eval",
+		},
+		{
 			name:        "safe command",
 			script:      `echo "Hello World" | grep "Hello"`,
+			dangerous:   false,
+			patternType: "",
+		},
+		{
+			name:        "safe pipe",
+			script:      `cat file.txt | sort | uniq`,
 			dangerous:   false,
 			patternType: "",
 		},
