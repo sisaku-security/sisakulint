@@ -1,0 +1,15 @@
+# Partial mitigation: pull_request_target with only label condition
+# This should trigger dangerous-triggers-medium rule
+name: Dangerous Triggers Medium Example
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'safe-to-run')
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Building approved PR"

@@ -515,10 +515,10 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		CodeInjectionMediumRule(),      // Detects untrusted input in normal workflow triggers
 		EnvVarInjectionCriticalRule(),  // Detects envvar injection in privileged workflow triggers
 		EnvVarInjectionMediumRule(),    // Detects envvar injection in normal workflow triggers
-		EnvPathInjectionCriticalRule(),  // Detects PATH injection in privileged workflow triggers
-		EnvPathInjectionMediumRule(),    // Detects PATH injection in normal workflow triggers
-		OutputClobberingCriticalRule(),  // Detects output clobbering in privileged workflow triggers
-		OutputClobberingMediumRule(),    // Detects output clobbering in normal workflow triggers
+		EnvPathInjectionCriticalRule(), // Detects PATH injection in privileged workflow triggers
+		EnvPathInjectionMediumRule(),   // Detects PATH injection in normal workflow triggers
+		OutputClobberingCriticalRule(), // Detects output clobbering in privileged workflow triggers
+		OutputClobberingMediumRule(),   // Detects output clobbering in normal workflow triggers
 		CommitShaRule(),
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
@@ -544,6 +544,8 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
 		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
+		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
+		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 	}
 }
 
