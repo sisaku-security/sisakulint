@@ -8,6 +8,7 @@ import (
 
 type ArtifactPoisoning struct {
 	BaseRule
+	hasCheckout bool // Tracks if the current job checks out the repository
 }
 
 func ArtifactPoisoningRule() *ArtifactPoisoning {
@@ -71,6 +72,27 @@ func isUnsafePath(path string) bool {
 	return true
 }
 
+// VisitJobPre tracks whether the current job checks out the repository.
+// Jobs without checkout have no source code to overwrite, making artifact
+// poisoning non-exploitable even with workspace-relative paths.
+func (rule *ArtifactPoisoning) VisitJobPre(job *ast.Job) error {
+	rule.hasCheckout = false
+	for _, step := range job.Steps {
+		if action, ok := step.Exec.(*ast.ExecAction); ok {
+			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/checkout@") {
+				rule.hasCheckout = true
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// VisitJobPost is a no-op but required by the Rule interface.
+func (rule *ArtifactPoisoning) VisitJobPost(job *ast.Job) error {
+	return nil
+}
+
 func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	action, ok := step.Exec.(*ast.ExecAction)
 	if !ok {
@@ -78,6 +100,13 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	}
 
 	if !strings.HasPrefix(action.Uses.Value, "actions/download-artifact@") {
+		return nil
+	}
+
+	// Skip if job doesn't checkout repository - no files to overwrite
+	// This prevents false positives in publish/deploy jobs that only download
+	// artifacts to package and publish them (e.g., PyPI, npm publishing)
+	if !rule.hasCheckout {
 		return nil
 	}
 
