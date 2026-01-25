@@ -398,14 +398,8 @@ func (p *ShellParser) getContextFromPos(start, end int) string {
 
 	if len(line) > 80 {
 		relStart := start - lineStart
-		contextStart := relStart - 30
-		if contextStart < 0 {
-			contextStart = 0
-		}
-		contextEnd := relStart + 50
-		if contextEnd > len(line) {
-			contextEnd = len(line)
-		}
+		contextStart := max(relStart-30, 0)
+		contextEnd := min(relStart+50, len(line))
 		line = "..." + line[contextStart:contextEnd] + "..."
 	}
 
@@ -413,18 +407,21 @@ func (p *ShellParser) getContextFromPos(start, end int) string {
 }
 
 func (u *ShellVarUsage) IsUnsafeUsage() bool {
+	// Unquoted variables are always unsafe (word splitting and glob expansion)
 	if !u.IsQuoted {
 		return true
 	}
+	// Variables inside eval are unsafe even when quoted (eval parses the value again)
 	if u.InEval {
 		return true
 	}
+	// Variables inside sh -c / bash -c are unsafe even when quoted (nested shell parsing)
 	if u.InShellCmd {
 		return true
 	}
-	if u.InCmdSubst {
-		return true
-	}
+	// Quoted variables inside command substitution are safe
+	// e.g., $(echo "$VAR") is safe because the variable is quoted
+	// Only unquoted variables in command substitution are dangerous (handled by !u.IsQuoted above)
 	return false
 }
 

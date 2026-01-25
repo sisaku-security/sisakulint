@@ -192,9 +192,19 @@ func TestShellVarUsage_IsUnsafeUsage(t *testing.T) {
 			unsafe: true,
 		},
 		{
-			name: "quoted but in command substitution",
+			name: "quoted in command substitution - safe",
 			usage: ShellVarUsage{
 				IsQuoted:   true,
+				InEval:     false,
+				InShellCmd: false,
+				InCmdSubst: true,
+			},
+			unsafe: false,
+		},
+		{
+			name: "unquoted in command substitution - unsafe",
+			usage: ShellVarUsage{
+				IsQuoted:   false,
 				InEval:     false,
 				InShellCmd: false,
 				InCmdSubst: true,
