@@ -1,0 +1,14 @@
+# Vulnerable: pull_request_target without any security mitigations
+# This should trigger dangerous-triggers-critical rule
+name: Dangerous Triggers Critical Example
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Building PR"

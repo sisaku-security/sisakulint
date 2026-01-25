@@ -231,28 +231,7 @@ func (rule *OutputClobberingRule) usesHeredocSyntax(lines []string, currentLineI
 
 // hasPrivilegedTriggers checks if the workflow has privileged triggers
 func (rule *OutputClobberingRule) hasPrivilegedTriggers() bool {
-	if rule.workflow == nil || rule.workflow.On == nil {
-		return false
-	}
-
-	// Check for privileged triggers
-	// These triggers have write access or run with secrets
-	privilegedTriggers := map[string]bool{
-		"pull_request_target": true,
-		"workflow_run":        true,
-		"issue_comment":       true,
-		"issues":              true,
-		"discussion_comment":  true,
-	}
-
-	for _, event := range rule.workflow.On {
-		eventName := strings.ToLower(event.EventName())
-		if privilegedTriggers[eventName] {
-			return true
-		}
-	}
-
-	return false
+	return HasPrivilegedTriggers(rule.workflow)
 }
 
 // RuleNames implements StepFixer interface
