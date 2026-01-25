@@ -376,7 +376,26 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
-			err := rule.VisitStep(tt.step)
+
+			// Simulate a job with checkout to enable artifact poisoning detection
+			jobWithCheckout := &ast.Job{
+				Steps: []*ast.Step{
+					{
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: "actions/checkout@v4"},
+						},
+					},
+					tt.step,
+				},
+			}
+
+			// Initialize job context
+			err := rule.VisitJobPre(jobWithCheckout)
+			if err != nil {
+				t.Fatalf("VisitJobPre() unexpected error: %v", err)
+			}
+
+			err = rule.VisitStep(tt.step)
 			if err != nil {
 				t.Errorf("VisitStep() unexpected error: %v", err)
 			}
@@ -389,6 +408,58 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestArtifactPoisoning_JobWithoutCheckout tests that the rule does not flag
+// artifact downloads in jobs that don't check out the repository (false positive fix).
+func TestArtifactPoisoning_JobWithoutCheckout(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	// Job without checkout step (e.g., publish job)
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist/"}, // Workspace path, but job has no checkout
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	jobWithoutCheckout := &ast.Job{
+		Steps: []*ast.Step{
+			downloadStep,
+			{
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "pypa/gh-action-pypi-publish@release/v1"},
+				},
+			},
+		},
+	}
+
+	// Initialize job context (no checkout)
+	err := rule.VisitJobPre(jobWithoutCheckout)
+	if err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+
+	// Should not trigger error because job has no checkout
+	err = rule.VisitStep(downloadStep)
+	if err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("VisitStep() for job without checkout got %d errors, want 0 errors. This is a false positive.", len(errors))
+		for i, e := range errors {
+			t.Logf("Error %d: %s", i, e.Description)
+		}
 	}
 }
 
@@ -573,7 +644,26 @@ func TestArtifactPoisoning_Integration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
-			err := rule.VisitStep(tt.step)
+
+			// Simulate a job with checkout to enable artifact poisoning detection
+			jobWithCheckout := &ast.Job{
+				Steps: []*ast.Step{
+					{
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: "actions/checkout@v4"},
+						},
+					},
+					tt.step,
+				},
+			}
+
+			// Initialize job context
+			err := rule.VisitJobPre(jobWithCheckout)
+			if err != nil {
+				t.Fatalf("VisitJobPre() unexpected error: %v", err)
+			}
+
+			err = rule.VisitStep(tt.step)
 			if err != nil {
 				t.Errorf("VisitStep() unexpected error: %v", err)
 			}

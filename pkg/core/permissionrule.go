@@ -68,18 +68,31 @@ func (rule *PermissionRule) VisitWorkflowPre(n *ast.Workflow) error {
 	// Check for missing permissions block (CodeQL: actions-missing-workflow-permissions)
 	// Skip this check for reusable workflows as they inherit permissions from caller
 	if n.Permissions == nil && !rule.isReusableWorkflow {
-		pos := &ast.Position{Line: 1, Col: 1}
-		if n.BaseNode != nil && n.BaseNode.Line > 0 {
-			pos = &ast.Position{Line: n.BaseNode.Line, Col: n.BaseNode.Column}
+		// Check if all jobs have explicit permissions defined
+		// If all jobs have permissions, workflow-level permissions are not required
+		allJobsHavePermissions := len(n.Jobs) > 0 // At least one job must exist
+		for _, job := range n.Jobs {
+			if job.Permissions == nil {
+				allJobsHavePermissions = false
+				break
+			}
 		}
-		rule.Errorf(pos,
-			"workflow does not have explicit 'permissions' block. "+
-				"Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. "+
-				"Add a 'permissions:' block to follow the principle of least privilege. "+
-				"See: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token")
-		rule.AddAutoFixer(NewFuncFixer(rule.RuleNames(), func() error {
-			return rule.fixMissingPermissions(n)
-		}))
+
+		// Only report missing permissions if not all jobs have explicit permissions
+		if !allJobsHavePermissions {
+			pos := &ast.Position{Line: 1, Col: 1}
+			if n.BaseNode != nil && n.BaseNode.Line > 0 {
+				pos = &ast.Position{Line: n.BaseNode.Line, Col: n.BaseNode.Column}
+			}
+			rule.Errorf(pos,
+				"workflow does not have explicit 'permissions' block. "+
+					"Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. "+
+					"Add a 'permissions:' block to follow the principle of least privilege. "+
+					"See: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token")
+			rule.AddAutoFixer(NewFuncFixer(rule.RuleNames(), func() error {
+				return rule.fixMissingPermissions(n)
+			}))
+		}
 	}
 
 	rule.checkPermissions(n.Permissions)

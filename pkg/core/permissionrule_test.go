@@ -254,6 +254,66 @@ func TestPermissionRule_MissingPermissions(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "all jobs have permissions - no error",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 2, Col: 1}}},
+				},
+				Permissions: nil,
+				Jobs: map[string]*ast.Job{
+					"job1": {
+						Permissions: &ast.Permissions{
+							Scopes: map[string]*ast.PermissionScope{
+								"issues": {
+									Name:  &ast.String{Value: "issues", Pos: &ast.Position{Line: 5, Col: 1}},
+									Value: &ast.String{Value: "write", Pos: &ast.Position{Line: 5, Col: 10}},
+								},
+							},
+						},
+					},
+					"job2": {
+						Permissions: &ast.Permissions{
+							Scopes: map[string]*ast.PermissionScope{
+								"contents": {
+									Name:  &ast.String{Value: "contents", Pos: &ast.Position{Line: 10, Col: 1}},
+									Value: &ast.String{Value: "read", Pos: &ast.Position{Line: 10, Col: 10}},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "some jobs missing permissions - should error",
+			workflow: &ast.Workflow{
+				Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push", Pos: &ast.Position{Line: 2, Col: 1}}},
+				},
+				Permissions: nil,
+				Jobs: map[string]*ast.Job{
+					"job1": {
+						Permissions: &ast.Permissions{
+							Scopes: map[string]*ast.PermissionScope{
+								"issues": {
+									Name:  &ast.String{Value: "issues", Pos: &ast.Position{Line: 5, Col: 1}},
+									Value: &ast.String{Value: "write", Pos: &ast.Position{Line: 5, Col: 10}},
+								},
+							},
+						},
+					},
+					"job2": {
+						Permissions: nil, // Missing permissions
+					},
+				},
+			},
+			wantErr:     true,
+			errContains: "does not have explicit 'permissions' block",
+		},
 	}
 
 	for _, tt := range tests {

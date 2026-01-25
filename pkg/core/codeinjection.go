@@ -164,6 +164,12 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 			rule.stepsWithUntrusted = append(rule.stepsWithUntrusted, stepUntrusted)
 			rule.AddAutoFixer(NewStepFixer(s, rule))
 		}
+
+		envVarsWithUntrusted := rule.extractEnvVarsWithUntrustedInput(s)
+		if len(envVarsWithUntrusted) > 0 {
+			rule.checkShellMetacharacterInjection(s, envVarsWithUntrusted)
+		}
+		rule.checkDangerousShellPatterns(s)
 	}
 	return nil
 }
@@ -395,12 +401,17 @@ func (rule *CodeInjectionRule) extractAndParseExpressions(str *ast.String) []par
 				col = start - lastNewline - 1
 			}
 
-			pos := &ast.Position{
-				Line: str.Pos.Line + lineIdx,
-				Col:  str.Pos.Col + col,
-			}
-			if str.Literal {
-				pos.Line += 1
+			var pos *ast.Position
+			if str.Pos != nil {
+				pos = &ast.Position{
+					Line: str.Pos.Line + lineIdx,
+					Col:  str.Pos.Col + col,
+				}
+				if str.Literal {
+					pos.Line += 1
+				}
+			} else {
+				pos = &ast.Position{Line: lineIdx + 1, Col: col + 1}
 			}
 
 			result = append(result, parsedExpression{
