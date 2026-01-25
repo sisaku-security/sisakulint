@@ -34,46 +34,287 @@ func NewShellParser(script string) *ShellParser {
 	return p
 }
 
+// walkContext tracks the current context during AST traversal.
+type walkContext struct {
+	inEval     bool
+	inShellCmd bool
+	inCmdSubst bool
+}
+
 func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
 	if p.file == nil {
 		return nil
 	}
 
 	var usages []ShellVarUsage
-	var inEval, inShellCmd, inCmdSubst bool
-
-	syntax.Walk(p.file, func(node syntax.Node) bool {
-		switch x := node.(type) {
-		case *syntax.CallExpr:
-			cmdName := p.getCommandName(x)
-			if cmdName == "eval" {
-				inEval = true
-			} else if p.isShellCommand(x) {
-				inShellCmd = true
-			}
-
-		case *syntax.CmdSubst:
-			inCmdSubst = true
-
-		case *syntax.ParamExp:
-			if x.Param != nil && x.Param.Value == varName {
-				usage := ShellVarUsage{
-					VarName:    varName,
-					StartPos:   int(x.Pos().Offset()),
-					EndPos:     int(x.End().Offset()),
-					IsQuoted:   p.isParamExpQuoted(x),
-					InEval:     inEval,
-					InShellCmd: inShellCmd,
-					InCmdSubst: inCmdSubst,
-					Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
-				}
-				usages = append(usages, usage)
-			}
-		}
-		return true
-	})
-
+	ctx := &walkContext{}
+	p.walkNode(p.file, varName, ctx, &usages)
 	return usages
+}
+
+// walkNode recursively traverses the AST with proper context tracking.
+func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContext, usages *[]ShellVarUsage) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.File:
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, ctx, usages)
+		}
+
+	case *syntax.Stmt:
+		p.walkNode(x.Cmd, varName, ctx, usages)
+		for _, redirect := range x.Redirs {
+			p.walkNode(redirect, varName, ctx, usages)
+		}
+
+	case *syntax.CallExpr:
+		cmdName := p.getCommandName(x)
+		newCtx := *ctx
+		if cmdName == "eval" {
+			newCtx.inEval = true
+		} else if p.isShellCommand(x) {
+			newCtx.inShellCmd = true
+		}
+		for _, assign := range x.Assigns {
+			p.walkNode(assign, varName, &newCtx, usages)
+		}
+		for _, arg := range x.Args {
+			p.walkNode(arg, varName, &newCtx, usages)
+		}
+
+	case *syntax.Assign:
+		if x.Value != nil {
+			p.walkNode(x.Value, varName, ctx, usages)
+		}
+		if x.Array != nil {
+			p.walkNode(x.Array, varName, ctx, usages)
+		}
+
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.walkNode(part, varName, ctx, usages)
+		}
+
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.walkNode(part, varName, ctx, usages)
+		}
+
+	case *syntax.SglQuoted:
+		// Single quotes don't expand variables
+
+	case *syntax.ParamExp:
+		if x.Param != nil && x.Param.Value == varName {
+			usage := ShellVarUsage{
+				VarName:    varName,
+				StartPos:   int(x.Pos().Offset()),
+				EndPos:     int(x.End().Offset()),
+				IsQuoted:   p.isParamExpQuoted(x),
+				InEval:     ctx.inEval,
+				InShellCmd: ctx.inShellCmd,
+				InCmdSubst: ctx.inCmdSubst,
+				Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
+			}
+			*usages = append(*usages, usage)
+		}
+		// Also check nested expressions (e.g., ${var:-$default})
+		if x.Exp != nil && x.Exp.Word != nil {
+			p.walkNode(x.Exp.Word, varName, ctx, usages)
+		}
+
+	case *syntax.CmdSubst:
+		newCtx := *ctx
+		newCtx.inCmdSubst = true
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, &newCtx, usages)
+		}
+
+	case *syntax.ArithmExp:
+		if x.X != nil {
+			p.walkArithm(x.X, varName, ctx, usages)
+		}
+
+	case *syntax.ProcSubst:
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, ctx, usages)
+		}
+
+	case *syntax.BinaryCmd:
+		p.walkNode(x.X, varName, ctx, usages)
+		p.walkNode(x.Y, varName, ctx, usages)
+
+	case *syntax.IfClause:
+		for _, cond := range x.Cond {
+			p.walkNode(cond, varName, ctx, usages)
+		}
+		for _, then := range x.Then {
+			p.walkNode(then, varName, ctx, usages)
+		}
+		if x.Else != nil {
+			p.walkNode(x.Else, varName, ctx, usages)
+		}
+
+	case *syntax.WhileClause:
+		for _, cond := range x.Cond {
+			p.walkNode(cond, varName, ctx, usages)
+		}
+		for _, do := range x.Do {
+			p.walkNode(do, varName, ctx, usages)
+		}
+
+	case *syntax.ForClause:
+		if x.Loop != nil {
+			p.walkLoop(x.Loop, varName, ctx, usages)
+		}
+		for _, do := range x.Do {
+			p.walkNode(do, varName, ctx, usages)
+		}
+
+	case *syntax.CaseClause:
+		if x.Word != nil {
+			p.walkNode(x.Word, varName, ctx, usages)
+		}
+		for _, item := range x.Items {
+			p.walkNode(item, varName, ctx, usages)
+		}
+
+	case *syntax.CaseItem:
+		for _, pattern := range x.Patterns {
+			p.walkNode(pattern, varName, ctx, usages)
+		}
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, ctx, usages)
+		}
+
+	case *syntax.Block:
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, ctx, usages)
+		}
+
+	case *syntax.Subshell:
+		for _, stmt := range x.Stmts {
+			p.walkNode(stmt, varName, ctx, usages)
+		}
+
+	case *syntax.FuncDecl:
+		p.walkNode(x.Body, varName, ctx, usages)
+
+	case *syntax.ArithmCmd:
+		if x.X != nil {
+			p.walkArithm(x.X, varName, ctx, usages)
+		}
+
+	case *syntax.TestClause:
+		if x.X != nil {
+			p.walkTest(x.X, varName, ctx, usages)
+		}
+
+	case *syntax.DeclClause:
+		for _, assign := range x.Args {
+			p.walkNode(assign, varName, ctx, usages)
+		}
+
+	case *syntax.Redirect:
+		if x.Word != nil {
+			p.walkNode(x.Word, varName, ctx, usages)
+		}
+		// Handle heredoc content
+		if x.Hdoc != nil {
+			p.walkNode(x.Hdoc, varName, ctx, usages)
+		}
+
+	case *syntax.ArrayExpr:
+		for _, elem := range x.Elems {
+			p.walkNode(elem, varName, ctx, usages)
+		}
+
+	case *syntax.ArrayElem:
+		if x.Value != nil {
+			p.walkNode(x.Value, varName, ctx, usages)
+		}
+
+	case *syntax.ExtGlob:
+		if x.Pattern != nil {
+			p.walkNode(x.Pattern, varName, ctx, usages)
+		}
+
+	case *syntax.BraceExp:
+		for _, elem := range x.Elems {
+			p.walkNode(elem, varName, ctx, usages)
+		}
+
+	case *syntax.CoprocClause:
+		p.walkNode(x.Stmt, varName, ctx, usages)
+
+	case *syntax.LetClause:
+		for _, expr := range x.Exprs {
+			p.walkArithm(expr, varName, ctx, usages)
+		}
+
+	case *syntax.TimeClause:
+		if x.Stmt != nil {
+			p.walkNode(x.Stmt, varName, ctx, usages)
+		}
+	}
+}
+
+// walkArithm handles arithmetic expression nodes.
+func (p *ShellParser) walkArithm(node syntax.ArithmExpr, varName string, ctx *walkContext, usages *[]ShellVarUsage) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.BinaryArithm:
+		p.walkArithm(x.X, varName, ctx, usages)
+		p.walkArithm(x.Y, varName, ctx, usages)
+	case *syntax.UnaryArithm:
+		p.walkArithm(x.X, varName, ctx, usages)
+	case *syntax.ParenArithm:
+		p.walkArithm(x.X, varName, ctx, usages)
+	case *syntax.Word:
+		p.walkNode(x, varName, ctx, usages)
+	}
+}
+
+// walkTest handles test expression nodes.
+func (p *ShellParser) walkTest(node syntax.TestExpr, varName string, ctx *walkContext, usages *[]ShellVarUsage) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.BinaryTest:
+		p.walkTest(x.X, varName, ctx, usages)
+		p.walkTest(x.Y, varName, ctx, usages)
+	case *syntax.UnaryTest:
+		p.walkTest(x.X, varName, ctx, usages)
+	case *syntax.ParenTest:
+		p.walkTest(x.X, varName, ctx, usages)
+	case *syntax.Word:
+		p.walkNode(x, varName, ctx, usages)
+	}
+}
+
+// walkLoop handles loop nodes.
+func (p *ShellParser) walkLoop(node syntax.Loop, varName string, ctx *walkContext, usages *[]ShellVarUsage) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.WordIter:
+		for _, word := range x.Items {
+			p.walkNode(word, varName, ctx, usages)
+		}
+	case *syntax.CStyleLoop:
+		p.walkArithm(x.Init, varName, ctx, usages)
+		p.walkArithm(x.Cond, varName, ctx, usages)
+		p.walkArithm(x.Post, varName, ctx, usages)
+	}
 }
 
 func (p *ShellParser) isParamExpQuoted(pe *syntax.ParamExp) bool {

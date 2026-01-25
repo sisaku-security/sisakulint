@@ -93,6 +93,29 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 			wantCount:  1,
 			wantQuoted: []bool{false},
 		},
+		{
+			name:       "context reset after eval",
+			script:     "eval \"echo $MY_VAR\"\necho $MY_VAR",
+			varName:    "MY_VAR",
+			wantCount:  2,
+			wantQuoted: []bool{true, false},
+			wantInEval: []bool{true, false}, // second usage should NOT be in eval
+		},
+		{
+			name:       "context reset after sh -c",
+			script:     "sh -c \"echo $MY_VAR\"\necho $MY_VAR",
+			varName:    "MY_VAR",
+			wantCount:  2,
+			wantQuoted: []bool{true, false},
+			wantInCmd:  []bool{true, false}, // second usage should NOT be in shell cmd
+		},
+		{
+			name:       "context reset after command substitution",
+			script:     "result=$(echo $MY_VAR)\necho $MY_VAR",
+			varName:    "MY_VAR",
+			wantCount:  2,
+			wantQuoted: []bool{false, false},
+		},
 	}
 
 	for _, tt := range tests {
