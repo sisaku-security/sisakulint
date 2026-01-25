@@ -1,0 +1,42 @@
+# Safe Cache Usage Example
+# This workflow demonstrates safe cache configuration with trusted inputs
+name: Safe Cache Usage
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SAFE: Using github.sha (immutable commit SHA)
+      - name: Cache with trusted key (github.sha)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ github.sha }}
+
+      # SAFE: Using hashFiles() for content-based caching
+      - name: Cache with hashFiles
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      # SAFE: Static values only
+      - name: Cache with static key
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-deps
+
+      # SAFE: Using trusted context values
+      - name: Cache with trusted context
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}

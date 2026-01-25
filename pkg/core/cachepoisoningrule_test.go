@@ -667,6 +667,492 @@ func TestCachePoisoningRule_CodeQLVulnerableExample(t *testing.T) {
 	}
 }
 
+// Tests for direct cache poisoning (untrusted input in cache key/restore-keys/path)
+
+func TestCachePoisoningRule_DirectCachePoison_UntrustedKey(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// Direct cache poisoning works with any trigger (even safe ones like pull_request)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with untrusted input in key
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ github.event.pull_request.head.ref }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for untrusted cache key, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "cache poisoning via untrusted input") {
+		t.Errorf("Expected direct cache poisoning message, got: %s", errors[0].Description)
+	}
+	if !strings.Contains(errors[0].Description, "github.event.pull_request.head.ref") {
+		t.Errorf("Expected message to contain untrusted input path, got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DirectCachePoison_UntrustedRestoreKeys(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with untrusted input in restore-keys
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 11, Col: 14}}},
+				"restore-keys": {Value: &ast.String{
+					Value: "npm-${{ github.head_ref }}",
+					Pos:   &ast.Position{Line: 13, Col: 22},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for untrusted restore-keys, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "restore-keys") {
+		t.Errorf("Expected message to mention restore-keys, got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DirectCachePoison_UntrustedPath(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with untrusted input in path
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{
+					Value: "${{ github.event.pull_request.title }}",
+					Pos:   &ast.Position{Line: 12, Col: 15},
+				}},
+				"key": {Value: &ast.String{Value: "cache-${{ github.sha }}", Pos: &ast.Position{Line: 11, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for untrusted path, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "path") {
+		t.Errorf("Expected message to mention path, got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DirectCachePoison_SafeKey(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with safe inputs (github.sha, hashFiles, static values)
+	// Note: In PR workflows, key must include github.sha to avoid predictable key attacks
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/package-lock.json') }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+				"restore-keys": {Value: &ast.String{
+					Value: "npm-${{ runner.os }}-",
+					Pos:   &ast.Position{Line: 13, Col: 22},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("Expected 0 errors for safe cache inputs, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("Error: %s", err.Description)
+		}
+	}
+}
+
+func TestCachePoisoningRule_DirectCachePoison_MultipleUntrustedInputs(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with untrusted input in both key and restore-keys
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ github.event.pull_request.title }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+				"restore-keys": {Value: &ast.String{
+					Value: "npm-${{ github.head_ref }}",
+					Pos:   &ast.Position{Line: 13, Col: 22},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 2 {
+		t.Fatalf("Expected 2 errors for multiple untrusted inputs, got %d", len(errors))
+	}
+}
+
+func TestCachePoisoningRule_DirectCachePoison_CombinedWithIndirect(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// With unsafe trigger, we can have both indirect and direct cache poisoning
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Unsafe checkout
+	checkoutStep := &ast.Step{
+		Pos: &ast.Position{Line: 5, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+			Inputs: map[string]*ast.Input{
+				"ref": {Value: &ast.String{Value: "${{ github.head_ref }}"}},
+			},
+		},
+	}
+	_ = rule.VisitStep(checkoutStep)
+
+	// Cache action with untrusted input in key (direct) + used after unsafe checkout (indirect)
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ github.event.pull_request.title }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	// Should have 2 errors: one for direct (untrusted key) and one for indirect (unsafe checkout + cache)
+	if len(errors) != 2 {
+		t.Fatalf("Expected 2 errors (direct + indirect), got %d", len(errors))
+	}
+
+	hasDirectError := false
+	hasIndirectError := false
+	for _, err := range errors {
+		if strings.Contains(err.Description, "cache poisoning via untrusted input") {
+			hasDirectError = true
+		}
+		if strings.Contains(err.Description, "cache poisoning risk:") {
+			hasIndirectError = true
+		}
+	}
+
+	if !hasDirectError {
+		t.Error("Expected direct cache poisoning error")
+	}
+	if !hasIndirectError {
+		t.Error("Expected indirect cache poisoning error")
+	}
+}
+
+// Tests for new cache poisoning patterns (predictable keys, release workflows)
+
+func TestCachePoisoningRule_PredictableCacheKey(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// PR workflow with predictable cache key (hashFiles only, no github.sha)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with predictable key (vulnerable to Dependabot attack)
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for predictable cache key, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "predictable key") {
+		t.Errorf("Expected predictable key warning, got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_PredictableCacheKey_SafeWithGithubSha(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// PR workflow with unpredictable cache key (includes github.sha)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with unpredictable key (safe)
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/package-lock.json') }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("Expected 0 errors for unpredictable cache key with github.sha, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("Error: %s", err.Description)
+		}
+	}
+}
+
+func TestCachePoisoningRule_PredictableCacheKey_SafeOnPush(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// Push workflow - predictable keys are less risky (not PR context)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action with predictable key but on push trigger (safe)
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("Expected 0 errors for push workflow, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("Error: %s", err.Description)
+		}
+	}
+}
+
+func TestCachePoisoningRule_ReleaseWorkflowCache(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// Release workflow with cache (high-risk)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "release"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action in release workflow
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ github.sha }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for release workflow cache, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "release workflow") {
+		t.Errorf("Expected release workflow warning, got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DeploymentWorkflowCache(t *testing.T) {
+	t.Parallel()
+	rule := NewCachePoisoningRule()
+
+	// Deployment workflow with cache (high-risk)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "deployment"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	// Cache action in deployment workflow
+	cacheStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 12, Col: 15}}},
+				"key": {Value: &ast.String{
+					Value: "npm-${{ github.sha }}",
+					Pos:   &ast.Position{Line: 11, Col: 14},
+				}},
+			},
+		},
+	}
+	_ = rule.VisitStep(cacheStep)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for deployment workflow cache, got %d", len(errors))
+	}
+
+	if !strings.Contains(errors[0].Description, "release workflow") {
+		t.Errorf("Expected release workflow warning, got: %s", errors[0].Description)
+	}
+}
+
+// Tests for cache hierarchy exploitation and cache eviction risk
+
 func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 	t.Parallel()
 
