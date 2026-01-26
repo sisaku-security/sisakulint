@@ -8,7 +8,7 @@ The `argument-injection-critical` and `argument-injection-medium` rules detect c
 
 Attackers can craft malicious branch names, PR titles, or other user-controlled inputs that contain command-line options. For example:
 
-```
+```text
 Branch name: --output=/etc/passwd
 PR title: -o /root/.ssh/authorized_keys
 Issue body: --config=malicious.conf

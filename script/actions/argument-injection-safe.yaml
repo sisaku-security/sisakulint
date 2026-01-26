@@ -80,7 +80,8 @@ jobs:
             exit 1
           fi
 
-  # SAFE: Using environment variable with end-of-options
+  # SAFE: Using environment variable with validation
+  # Note: Docker doesn't support -- as an end-of-options marker, so we rely on input validation
   safe-docker:
     runs-on: ubuntu-latest
     steps:
@@ -90,7 +91,7 @@ jobs:
         run: |
           # Validate tag format
           if [[ "$IMAGE_TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
-            docker run -- "myimage:${IMAGE_TAG}"
+            docker run "myimage:${IMAGE_TAG}"
           else
             echo "Invalid image tag format"
             exit 1
@@ -113,6 +114,7 @@ jobs:
           fi
 
   # SAFE: Using environment variable with path validation
+  # Note: Python doesn't support -- as an end-of-options marker, so we rely on input validation
   safe-python:
     runs-on: ubuntu-latest
     steps:
@@ -122,13 +124,15 @@ jobs:
         run: |
           # Validate script path (only allow alphanumeric and specific chars)
           if [[ "$SCRIPT_NAME" =~ ^[a-zA-Z0-9_]+\.py$ ]]; then
-            python -- "$SCRIPT_NAME"
+            python "$SCRIPT_NAME"
           else
             echo "Invalid script name format"
             exit 1
           fi
 
   # SAFE: Multiple commands with proper environment variable usage
+  # Note: git checkout/log with -- treats arguments as pathspecs, not branch refs
+  # For branch refs, use quoted variables without --
   safe-multiline:
     runs-on: ubuntu-latest
     steps:
@@ -139,8 +143,13 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          git checkout -- "$PR_REF"
-          git log -- "$HEAD_REF"
+          # For branch refs, validate format and use quoted variable
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git checkout "$PR_REF"
+          fi
+          if [[ "$HEAD_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git log "$HEAD_REF"
+          fi
           # For curl, encode the input
           ENCODED_TITLE=$(echo "$PR_TITLE" | jq -sRr @uri)
           curl -s "https://example.com/${ENCODED_TITLE}"

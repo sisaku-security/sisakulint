@@ -438,9 +438,31 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 
 		// Generate environment variable name from the untrusted path
 		envVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
+		envVarValue := fmt.Sprintf("${{ %s }}", expr.raw)
 
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
+			// Check for name collision with existing env vars that have different values
+			for i := 0; ; i++ {
+				key := strings.ToLower(envVarName)
+				existing, ok := step.Env.Vars[key]
+				if !ok {
+					// No collision, we can use this name
+					break
+				}
+				// Check if existing env var has the same value
+				if existing.Value != nil && normalizeExpression(existing.Value.Value) == normalizeExpression(envVarValue) {
+					// Same value, we can reuse this name
+					break
+				}
+				// Collision with different value, generate unique name
+				if i == 0 {
+					envVarName = fmt.Sprintf("%s_%d", envVarName, 1)
+				} else {
+					envVarName = fmt.Sprintf("%s_%d", rule.generateEnvVarName(untrustedInfo.paths[0]), i+1)
+				}
+			}
+
 			envVarMap[expr.raw] = envVarName
 
 			// Add to env if not already present
@@ -451,12 +473,12 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 						Pos:   expr.pos,
 					},
 					Value: &ast.String{
-						Value: fmt.Sprintf("${{ %s }}", expr.raw),
+						Value: envVarValue,
 						Pos:   expr.pos,
 					},
 				}
 				// Also track for BaseNode update
-				envVarsForYAML[envVarName] = fmt.Sprintf("${{ %s }}", expr.raw)
+				envVarsForYAML[envVarName] = envVarValue
 			}
 		}
 	}
@@ -484,17 +506,44 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 			bareEnvPattern := fmt.Sprintf("$%s", envVarName)
 
 			if strings.Contains(line, exprPattern1) || strings.Contains(line, exprPattern2) {
-				// Replace the expression with the safe pattern
-				// Use -- before the argument if the command supports it
-				newValue := fmt.Sprintf("\"$%s\"", envVarName)
-
-				// Insert -- before the untrusted input if not already present
-				if !rule.hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2) {
-					newValue = "-- " + newValue
+				// Find expression position
+				exprPos := strings.Index(line, exprPattern1)
+				exprLen := len(exprPattern1)
+				if exprPos == -1 {
+					exprPos = strings.Index(line, exprPattern2)
+					exprLen = len(exprPattern2)
+				}
+				if exprPos == -1 {
+					continue
 				}
 
-				line = strings.ReplaceAll(line, exprPattern1, newValue)
-				line = strings.ReplaceAll(line, exprPattern2, newValue)
+				// Check if expression is a standalone token (not part of a larger argument)
+				// Skip auto-fix if expression is embedded in another string
+				isStandalone := (exprPos == 0 || isShellWhitespace(line[exprPos-1])) &&
+					(exprPos+exprLen >= len(line) || isShellWhitespace(line[exprPos+exprLen]))
+
+				if !isStandalone {
+					// Expression is embedded (e.g., curl https://example.com/${{ ... }})
+					// Only replace with env var, don't add -- marker
+					newValue := fmt.Sprintf("\"$%s\"", envVarName)
+					if exprPos > 0 && line[exprPos-1] != ' ' && line[exprPos-1] != '\t' {
+						// Expression is part of a larger string, just use $ENV without quotes
+						newValue = fmt.Sprintf("$%s", envVarName)
+					}
+					line = strings.Replace(line, exprPattern1, newValue, 1)
+					line = strings.Replace(line, exprPattern2, newValue, 1)
+				} else {
+					// Standalone expression - apply full fix with -- marker
+					newValue := fmt.Sprintf("\"$%s\"", envVarName)
+
+					// Insert -- before the untrusted input if not already present
+					if !rule.hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2) {
+						newValue = "-- " + newValue
+					}
+
+					line = strings.Replace(line, exprPattern1, newValue, 1)
+					line = strings.Replace(line, exprPattern2, newValue, 1)
+				}
 			} else if strings.Contains(line, bareEnvPattern) {
 				// The expression was already replaced by code-injection rule
 				// We need to add -- marker and quotes
@@ -510,7 +559,7 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 				if strings.Contains(line, quotedPattern) {
 					// Has quotes but no -- marker
 					if !rule.hasEndOfOptionsMarkerForEnvVar(line, envVarName) {
-						line = strings.ReplaceAll(line, quotedPattern, safePattern)
+						line = strings.Replace(line, quotedPattern, safePattern, 1)
 					}
 				} else {
 					// Bare $ENV_VAR without quotes
@@ -622,6 +671,11 @@ func (rule *ArgumentInjectionRule) replaceBareEnvVar(line, envVarName, newValue 
 // isAlphanumericOrUnderscore checks if a byte is alphanumeric or underscore
 func isAlphanumericOrUnderscore(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+// isShellWhitespace checks if a byte is a shell whitespace character
+func isShellWhitespace(b byte) bool {
+	return b == ' ' || b == '\t'
 }
 
 // generateEnvVarName generates an environment variable name from an untrusted path
