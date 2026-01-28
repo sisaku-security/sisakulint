@@ -50,7 +50,7 @@ func NewReusableWorkflowTaintRule(workflowPath string, cache *LocalReusableWorkf
 	return &ReusableWorkflowTaintRule{
 		BaseRule: BaseRule{
 			RuleName: "reusable-workflow-taint",
-			RuleDesc: "Detects when untrusted inputs are passed to reusable workflows and used in dangerous contexts. See https://securitylab.github.com/research/github-actions-untrusted-input/",
+			RuleDesc: "Detects when untrusted inputs are passed to reusable workflows and used in dangerous contexts. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
 		},
 		workflowPath: workflowPath,
 		cache:        cache,
@@ -116,7 +116,7 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 
 			rule.Errorf(
 				input.Value.Pos,
-				"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://securitylab.github.com/research/github-actions-untrusted-input/",
+				"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
 				severity,
 				inputName,
 				strings.Join(untrustedPaths, ", "),
@@ -151,7 +151,7 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 
 						rule.Errorf(
 							usage.pos,
-							"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+							"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
 							usage.inputPath,
 						)
 					}
@@ -175,7 +175,7 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 
 							rule.Errorf(
 								usage.pos,
-								"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+								"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
 								usage.inputPath,
 							)
 						}

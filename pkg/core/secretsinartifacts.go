@@ -179,7 +179,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 	if hasPath && containsSensitivePath(pathValue) {
 		rule.Errorf(
 			node.Pos,
-			"secrets exposure risk: artifact upload path %q may include sensitive files. Avoid uploading directories that might contain credentials or tokens. See https://codeql.github.com/codeql-query-help/actions/actions-secrets-in-artifacts/",
+			"secrets exposure risk: artifact upload path %q may include sensitive files. Avoid uploading directories that might contain credentials or tokens. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 			pathValue,
 		)
 		// No auto-fix for this case as user may have intentional reasons
@@ -200,7 +200,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 		// v3 and earlier include hidden files by default
 		rule.Errorf(
 			node.Pos,
-			"secrets exposure risk: actions/upload-artifact@%s includes hidden files by default. This can expose .git directory containing GITHUB_TOKEN. Upgrade to v4+ or explicitly set 'include-hidden-files: false'. See https://codeql.github.com/codeql-query-help/actions/actions-secrets-in-artifacts/",
+			"secrets exposure risk: actions/upload-artifact@%s includes hidden files by default. This can expose .git directory containing GITHUB_TOKEN. Upgrade to v4+ or explicitly set 'include-hidden-files: false'. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 			version,
 		)
 		rule.AddAutoFixer(NewStepFixer(node, rule))
@@ -212,7 +212,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 			if hiddenInput.Value.Value == "true" && hasPath && isUnsafeArtifactPath(pathValue) {
 				rule.Errorf(
 					node.Pos,
-					"secrets exposure risk: artifact upload with 'include-hidden-files: true' and path %q may expose sensitive files. Remove 'include-hidden-files: true' or use a specific directory. See https://codeql.github.com/codeql-query-help/actions/actions-secrets-in-artifacts/",
+					"secrets exposure risk: artifact upload with 'include-hidden-files: true' and path %q may expose sensitive files. Remove 'include-hidden-files: true' or use a specific directory. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 					pathValue,
 				)
 				rule.AddAutoFixer(NewStepFixer(node, rule))

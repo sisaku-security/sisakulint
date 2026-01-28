@@ -37,7 +37,7 @@ func (rule *CommitSha) VisitStep(step *ast.Step) error {
 		usesValue := action.Uses.Value
 		if !isFullLengthSha(usesValue) {
 			rule.Errorf(step.Pos,
-				"the action ref in 'uses' for step '%s' should be a full length commit SHA for immutability and security. See documents: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions",
+				"the action ref in 'uses' for step '%s' should be a full length commit SHA for immutability and security. See https://sisaku-security.github.io/lint/docs/rules/commitsharule/",
 				step.String())
 			rule.AddAutoFixer(NewStepFixer(step, rule)) // add autofix for this CommitSha rule
 		}

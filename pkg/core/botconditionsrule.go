@@ -278,7 +278,7 @@ func (rule *BotConditionsRule) reportSpoofableCondition(condition *ast.String, c
 		"spoofable bot condition detected (%s confidence): using '%s' for bot detection is vulnerable to spoofing. "+
 			"Attackers can create accounts with similar names to bypass this check. "+
 			"Use '%s' instead which is tied to the specific event. "+
-			"See https://github.com/woodruffw/zizmor/blob/main/docs/audits.md#bot-conditions",
+			"See https://sisaku-security.github.io/lint/docs/rules/botconditions/",
 		confidence,
 		context,
 		safeCtx,

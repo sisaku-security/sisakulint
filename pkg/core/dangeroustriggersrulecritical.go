@@ -25,7 +25,7 @@ func NewDangerousTriggersCriticalRule() *DangerousTriggersCriticalRule {
 	return &DangerousTriggersCriticalRule{
 		BaseRule: BaseRule{
 			RuleName: "dangerous-triggers-critical",
-			RuleDesc: "Detects workflows using privileged triggers without any security mitigations. These triggers grant elevated privileges (write access, secrets) that can be exploited by malicious actors. See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+			RuleDesc: "Detects workflows using privileged triggers without any security mitigations. These triggers grant elevated privileges (write access, secrets) that can be exploited by malicious actors. See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/",
 		},
 	}
 }
@@ -58,7 +58,7 @@ func (rule *DangerousTriggersCriticalRule) VisitWorkflowPre(node *ast.Workflow) 
 			"These triggers grant write access and secrets access to potentially untrusted code. "+
 			"Add at least one mitigation: restrict permissions (permissions: read-all or permissions: {}), "+
 			"use environment protection, add label conditions, or check github.actor. "+
-			"See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+			"See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/",
 		triggerList,
 	)
 

@@ -44,9 +44,9 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 	var desc string
 
 	if checkPrivileged {
-		desc = "Checks for code injection vulnerabilities when untrusted input is used directly in run scripts or script actions with privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://codeql.github.com/codeql-query-help/actions/actions-code-injection-critical/"
+		desc = "Checks for code injection vulnerabilities when untrusted input is used directly in run scripts or script actions with privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/"
 	} else {
-		desc = "Checks for code injection vulnerabilities when untrusted input is used directly in run scripts or script actions with normal workflow triggers (pull_request, push, etc.). See https://codeql.github.com/codeql-query-help/actions/actions-code-injection-medium/"
+		desc = "Checks for code injection vulnerabilities when untrusted input is used directly in run scripts or script actions with normal workflow triggers (pull_request, push, etc.). See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/"
 	}
 
 	return &CodeInjectionRule{
@@ -107,13 +107,13 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 					if rule.checkPrivileged {
 						rule.Errorf(
 							expr.pos,
-							"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+							"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					} else {
 						rule.Errorf(
 							expr.pos,
-							"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+							"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					}
@@ -144,13 +144,13 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 							if rule.checkPrivileged {
 								rule.Errorf(
 									expr.pos,
-									"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+									"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
 									strings.Join(untrustedPaths, "\", \""),
 								)
 							} else {
 								rule.Errorf(
 									expr.pos,
-									"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+									"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
 									strings.Join(untrustedPaths, "\", \""),
 								)
 							}

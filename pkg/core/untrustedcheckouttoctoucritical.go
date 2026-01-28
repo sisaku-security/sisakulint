@@ -142,7 +142,7 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitStep(step *ast.Step) error
 		"TOCTOU vulnerability: checkout uses mutable reference with 'labeled' event type on '%s' trigger (line %d). "+
 			"An attacker can modify code after label approval. The checked-out code may differ from what was reviewed. "+
 			"Use immutable '${{ github.event.pull_request.head.sha }}' instead of mutable branch references. "+
-			"See https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-critical/",
+			"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctoucritical/",
 		rule.triggerEventName,
 		rule.labeledTriggerPos.Line,
 	)

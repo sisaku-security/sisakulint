@@ -56,7 +56,7 @@ func (rule *RuleDeprecatedCommands) VisitStep(step *ast.Step) error {
 
 			rule.Errorf(
 				execRun.Run.Pos,
-				"workflow command %q was deprecated. You should use `%s` reference: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions",
+				"workflow command %q was deprecated. You should use `%s` reference: https://sisaku-security.github.io/lint/docs/rules/deprecatedcommandsrule/",
 				command,
 				replacement,
 			)
