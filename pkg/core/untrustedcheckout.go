@@ -37,11 +37,13 @@ import (
 // - https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
 type UntrustedCheckoutRule struct {
 	BaseRule
-	// workflowTriggers stores all trigger names from the workflow
-	workflowTriggers []string
+	// workflowTriggerInfos stores all trigger info (name + position) from the workflow
+	workflowTriggerInfos []TriggerInfo
 	// dangerousTriggerPos stores the position of the dangerous trigger for error reporting
+	// This is updated per-job to reflect the actual trigger that matches the job's if condition
 	dangerousTriggerPos *ast.Position
 	// dangerousTriggerName stores the name of the dangerous trigger (e.g., "pull_request_target")
+	// This is updated per-job to reflect the actual trigger that matches the job's if condition
 	dangerousTriggerName string
 	// jobHasDangerousTrigger indicates if the current job can execute on a dangerous trigger
 	// This is set in VisitJobPre after analyzing job-level if conditions
@@ -63,12 +65,12 @@ func NewUntrustedCheckoutRule() *UntrustedCheckoutRule {
 // These triggers run in the context of the base repository with access to secrets
 func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 	// Reset state for each workflow
-	rule.workflowTriggers = nil
+	rule.workflowTriggerInfos = nil
 	rule.dangerousTriggerPos = nil
 	rule.dangerousTriggerName = ""
 	rule.jobHasDangerousTrigger = false
 
-	// Collect all workflow triggers
+	// Collect all workflow triggers with their positions
 	for _, event := range n.On {
 		var triggerName string
 		var triggerPos *ast.Position
@@ -84,21 +86,11 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 		}
 
 		if triggerName != "" {
-			rule.workflowTriggers = append(rule.workflowTriggers, triggerName)
-
-			// Track the first dangerous trigger for error messages
-			// pull_request_target: Runs in base repo context with write permissions and secrets
-			// issue_comment: Runs in base repo context, can be triggered by external contributors
-			// workflow_run: Runs in base repo context with access to secrets
-			// workflow_call: Inherits security context from caller, can be privileged if called from privileged workflow
-			if rule.dangerousTriggerName == "" {
-				switch triggerName {
-				case EventPullRequestTarget, "issue_comment", "workflow_run", "workflow_call":
-					rule.dangerousTriggerPos = triggerPos
-					rule.dangerousTriggerName = triggerName
-					rule.Debug("Found dangerous trigger '%s' at %s", triggerName, triggerPos)
-				}
-			}
+			rule.workflowTriggerInfos = append(rule.workflowTriggerInfos, TriggerInfo{
+				Name: triggerName,
+				Pos:  triggerPos,
+			})
+			rule.Debug("Collected trigger '%s' at %s", triggerName, triggerPos)
 		}
 	}
 
@@ -297,7 +289,7 @@ func (rule *UntrustedCheckoutRule) isUntrustedPRExpression(_ expressions.ExprNod
 // VisitWorkflowPost resets state after workflow processing
 func (rule *UntrustedCheckoutRule) VisitWorkflowPost(n *ast.Workflow) error {
 	// Reset state for next workflow
-	rule.workflowTriggers = nil
+	rule.workflowTriggerInfos = nil
 	rule.dangerousTriggerPos = nil
 	rule.dangerousTriggerName = ""
 	rule.jobHasDangerousTrigger = false
@@ -310,17 +302,25 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPost(n *ast.Workflow) error {
 func (rule *UntrustedCheckoutRule) VisitJobPre(node *ast.Job) error {
 	// Reset job-level state
 	rule.jobHasDangerousTrigger = false
+	rule.dangerousTriggerName = ""
+	rule.dangerousTriggerPos = nil
 
-	// If no dangerous trigger in workflow, skip
-	if rule.dangerousTriggerName == "" {
+	// If no triggers in workflow, skip
+	if len(rule.workflowTriggerInfos) == 0 {
 		return nil
 	}
 
-	// Use JobTriggerAnalyzer to check if this job can execute on dangerous triggers
-	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
-	if analyzer.HasPrivilegedTrigger(node) {
+	// Use JobTriggerAnalyzer with positions to check if this job can execute on dangerous triggers
+	// and get the specific matched trigger info for accurate diagnostics
+	analyzer := NewJobTriggerAnalyzerWithPositions(rule.workflowTriggerInfos)
+	matchedTrigger := analyzer.GetMatchedPrivilegedTrigger(node)
+
+	if matchedTrigger != nil {
 		rule.jobHasDangerousTrigger = true
-		rule.Debug("Job '%s' can execute on privileged trigger", node.ID)
+		rule.dangerousTriggerName = matchedTrigger.Name
+		rule.dangerousTriggerPos = matchedTrigger.Pos
+		rule.Debug("Job '%s' can execute on privileged trigger '%s' at line %d",
+			node.ID, matchedTrigger.Name, matchedTrigger.Pos.Line)
 	} else {
 		rule.Debug("Job '%s' filtered out privileged triggers via if condition", node.ID)
 	}

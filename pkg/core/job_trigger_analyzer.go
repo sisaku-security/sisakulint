@@ -7,18 +7,42 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
+// TriggerInfo holds information about a workflow trigger including its name and position.
+type TriggerInfo struct {
+	Name string
+	Pos  *ast.Position
+}
+
 // JobTriggerAnalyzer analyzes job-level if conditions to determine
 // which workflow triggers can actually execute the job.
 // This helps avoid false positives when workflows use job-level conditionals
 // to restrict which triggers actually execute specific jobs.
 type JobTriggerAnalyzer struct {
 	workflowTriggers []string
+	// triggerInfoMap stores position information for each trigger name
+	triggerInfoMap map[string]*ast.Position
 }
 
 // NewJobTriggerAnalyzer creates a new JobTriggerAnalyzer with the given workflow triggers.
 func NewJobTriggerAnalyzer(workflowTriggers []string) *JobTriggerAnalyzer {
 	return &JobTriggerAnalyzer{
 		workflowTriggers: workflowTriggers,
+		triggerInfoMap:   make(map[string]*ast.Position),
+	}
+}
+
+// NewJobTriggerAnalyzerWithPositions creates a new JobTriggerAnalyzer with trigger positions.
+// This allows the analyzer to return position information for matched triggers.
+func NewJobTriggerAnalyzerWithPositions(triggerInfos []TriggerInfo) *JobTriggerAnalyzer {
+	triggers := make([]string, 0, len(triggerInfos))
+	posMap := make(map[string]*ast.Position, len(triggerInfos))
+	for _, info := range triggerInfos {
+		triggers = append(triggers, info.Name)
+		posMap[info.Name] = info.Pos
+	}
+	return &JobTriggerAnalyzer{
+		workflowTriggers: triggers,
+		triggerInfoMap:   posMap,
 	}
 }
 
@@ -86,6 +110,39 @@ func (a *JobTriggerAnalyzer) HasUnsafeTrigger(job *ast.Job) bool {
 		}
 	}
 	return false
+}
+
+// GetMatchedPrivilegedTrigger returns the first privileged trigger that can execute the job,
+// along with its position information. Returns nil if no privileged trigger matches.
+// This is useful for diagnostics to point to the correct trigger that caused the issue.
+func (a *JobTriggerAnalyzer) GetMatchedPrivilegedTrigger(job *ast.Job) *TriggerInfo {
+	effectiveTriggers := a.AnalyzeJobTriggers(job)
+	for _, trigger := range effectiveTriggers {
+		if isDangerousTriggerForAnalysis(trigger) {
+			pos := a.triggerInfoMap[trigger]
+			return &TriggerInfo{
+				Name: trigger,
+				Pos:  pos,
+			}
+		}
+	}
+	return nil
+}
+
+// GetMatchedUnsafeTrigger returns the first unsafe trigger that can execute the job,
+// along with its position information. Returns nil if no unsafe trigger matches.
+func (a *JobTriggerAnalyzer) GetMatchedUnsafeTrigger(job *ast.Job) *TriggerInfo {
+	effectiveTriggers := a.AnalyzeJobTriggers(job)
+	for _, trigger := range effectiveTriggers {
+		if IsUnsafeTrigger(trigger) {
+			pos := a.triggerInfoMap[trigger]
+			return &TriggerInfo{
+				Name: trigger,
+				Pos:  pos,
+			}
+		}
+	}
+	return nil
 }
 
 // eventNameConstraint represents a constraint on github.event_name
