@@ -319,8 +319,13 @@ func (rule *UntrustedCheckoutRule) VisitJobPre(node *ast.Job) error {
 		rule.jobHasDangerousTrigger = true
 		rule.dangerousTriggerName = matchedTrigger.Name
 		rule.dangerousTriggerPos = matchedTrigger.Pos
-		rule.Debug("Job '%s' can execute on privileged trigger '%s' at line %d",
-			node.ID, matchedTrigger.Name, matchedTrigger.Pos.Line)
+		if matchedTrigger.Pos != nil {
+			rule.Debug("Job '%s' can execute on privileged trigger '%s' at line %d",
+				node.ID, matchedTrigger.Name, matchedTrigger.Pos.Line)
+		} else {
+			rule.Debug("Job '%s' can execute on privileged trigger '%s'",
+				node.ID, matchedTrigger.Name)
+		}
 	} else {
 		rule.Debug("Job '%s' filtered out privileged triggers via if condition", node.ID)
 	}
