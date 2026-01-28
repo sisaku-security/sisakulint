@@ -515,4 +515,3 @@ func (rule *SecretExfiltrationRule) reportExfiltration(pattern exfiltrationPatte
 
 	rule.Error(pattern.position, msg)
 }
-

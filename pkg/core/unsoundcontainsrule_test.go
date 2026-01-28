@@ -201,9 +201,9 @@ func TestUnsoundContainsRule_isUserControllableContext(t *testing.T) {
 
 func TestUnsoundContainsRule_convertToJSONArray(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		want   string
+		name  string
+		input string
+		want  string
 	}{
 		{
 			name:  "space separated values",
@@ -581,4 +581,3 @@ func TestUnsoundContainsRule_EdgeCase_CaseInsensitiveAutoFix(t *testing.T) {
 		})
 	}
 }
-

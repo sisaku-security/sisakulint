@@ -80,14 +80,14 @@ func TestParseDockerImageRef(t *testing.T) {
 			wantDigest:     "abc123",
 		},
 		{
-			name:           "expression",
-			input:          "${{ matrix.image }}",
-			wantIsExpr:     true,
+			name:       "expression",
+			input:      "${{ matrix.image }}",
+			wantIsExpr: true,
 		},
 		{
-			name:           "expression with text",
-			input:          "node:${{ matrix.version }}",
-			wantIsExpr:     true,
+			name:       "expression with text",
+			input:      "node:${{ matrix.version }}",
+			wantIsExpr: true,
 		},
 		{
 			name:           "docker.io registry explicit",
@@ -462,4 +462,3 @@ func TestUnpinnedImagesRule_ErrorMessages(t *testing.T) {
 		})
 	}
 }
-
