@@ -126,7 +126,7 @@ func (rule *SelfHostedRunnersRule) reportSelfHostedUsageWithPos(job *ast.Job, po
 		"job %q uses self-hosted runner (%s). Self-hosted runners are dangerous in public repositories "+
 			"because they can persist state between workflow runs and allow arbitrary code execution from pull requests. "+
 			"Consider using GitHub-hosted runners or ephemeral self-hosted runners. "+
-			"See https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security",
+			"See https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/",
 		job.ID.Value,
 		context,
 	)
@@ -139,7 +139,7 @@ func (rule *SelfHostedRunnersRule) reportRunnerGroupUsage(job *ast.Job, groupNam
 			"which are dangerous in public repositories because they can persist state between workflow runs "+
 			"and allow arbitrary code execution from pull requests. "+
 			"Verify this group contains only ephemeral runners or consider using GitHub-hosted runners. "+
-			"See https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security",
+			"See https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/",
 		job.ID.Value,
 		groupName,
 	)
@@ -161,7 +161,7 @@ func (rule *SelfHostedRunnersRule) reportMatrixSelfHosted(job *ast.Job, rowName 
 		"job %q matrix.%s contains self-hosted runner. Self-hosted runners are dangerous in public repositories "+
 			"because they can persist state between workflow runs and allow arbitrary code execution from pull requests. "+
 			"Consider using GitHub-hosted runners or ephemeral self-hosted runners. "+
-			"See https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security",
+			"See https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/",
 		job.ID.Value,
 		rowName,
 	)

@@ -69,7 +69,7 @@ func NewSecretExposureRule() *SecretExposureRule {
 	return &SecretExposureRule{
 		BaseRule: BaseRule{
 			RuleName: "secret-exposure",
-			RuleDesc: "Detects excessive secret exposure patterns like toJSON(secrets) or secrets[dynamic-access]. See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+			RuleDesc: "Detects excessive secret exposure patterns like toJSON(secrets) or secrets[dynamic-access]. See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 		},
 	}
 }
@@ -264,7 +264,7 @@ func (rule *SecretExposureRule) checkToJSONSecretsCall(funcCall *expressions.Fun
 		expr.pos,
 		"excessive secrets exposure: toJSON(secrets) exposes all repository and organization secrets at once. "+
 			"Use specific secret references like secrets.MY_SECRET instead. "+
-			"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+			"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 	)
 }
 
@@ -291,7 +291,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 			expr.pos,
 			"excessive secrets exposure: secrets['%s'] uses bracket notation for secret access. "+
 				"Use dot notation like secrets.%s for better security analysis. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			secretName, normalizeSecretName(secretName),
 		)
 
@@ -314,7 +314,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 			"excessive secrets exposure: secrets[%s(...)] dynamically constructs the secret name. "+
 				"This pattern exposes more secrets than necessary and makes security auditing difficult. "+
 				"Use conditional logic with explicit secret references instead. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			indexExpr.Callee,
 		)
 	case *expressions.VariableNode:
@@ -324,7 +324,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 			"excessive secrets exposure: secrets[%s] uses a variable to access secrets dynamically. "+
 				"This pattern exposes more secrets than necessary. "+
 				"Use conditional logic with explicit secret references instead. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			indexExpr.Name,
 		)
 	case *expressions.ObjectDerefNode:
@@ -334,7 +334,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 			"excessive secrets exposure: secrets[%s] uses dynamic property access to select secrets. "+
 				"This pattern exposes more secrets than necessary. "+
 				"Use conditional logic with explicit secret references instead. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			expr.raw[strings.Index(expr.raw, "[")+1:strings.LastIndex(expr.raw, "]")],
 		)
 	default:
@@ -344,7 +344,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 			"excessive secrets exposure: secrets[...] uses dynamic access to select secrets. "+
 				"This pattern exposes more secrets than necessary. "+
 				"Use explicit secret references like secrets.MY_SECRET instead. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-excessive-secrets-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 		)
 	}
 }

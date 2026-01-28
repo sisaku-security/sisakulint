@@ -88,7 +88,7 @@ func (rule *PermissionRule) VisitWorkflowPre(n *ast.Workflow) error {
 				"workflow does not have explicit 'permissions' block. "+
 					"Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. "+
 					"Add a 'permissions:' block to follow the principle of least privilege. "+
-					"See: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token")
+					"See https://sisaku-security.github.io/lint/docs/rules/permissions/")
 			rule.AddAutoFixer(NewFuncFixer(rule.RuleNames(), func() error {
 				return rule.fixMissingPermissions(n)
 			}))

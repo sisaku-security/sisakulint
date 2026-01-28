@@ -21,7 +21,7 @@ func TimeoutMinuteRule() *TimeoutMinutesRule {
 func (rule *TimeoutMinutesRule) VisitJobPre(node *ast.Job) error {
 	if node.TimeoutMinutes == nil {
 		rule.Errorf(node.Pos,
-			"timeout-minutes is not set for job %s; see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes for more details.",
+			"timeout-minutes is not set for job %s; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details.",
 			node.ID.Value)
 		rule.AddAutoFixer(NewJobFixer(node, rule))
 	}
@@ -31,7 +31,7 @@ func (rule *TimeoutMinutesRule) VisitJobPre(node *ast.Job) error {
 func (rule *TimeoutMinutesRule) VisitStep(node *ast.Step) error {
 	if node.TimeoutMinutes == nil {
 		rule.Errorf(node.Pos,
-			"timeout-minutes is not set for step %s; see https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstepstimeout-minutes for more details.",
+			"timeout-minutes is not set for step %s; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details.",
 			node.String())
 		rule.AddAutoFixer(NewStepFixer(node, rule))
 	}

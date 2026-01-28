@@ -160,7 +160,7 @@ func (rule *UntrustedCheckoutTOCTOUHighRule) VisitStep(step *ast.Step) error {
 		"TOCTOU vulnerability: checkout uses mutable reference in job with deployment environment '%s' on '%s' trigger. "+
 			"An attacker can modify code after environment approval is granted. The checked-out code may differ from what was approved. "+
 			"Use immutable '${{ github.event.pull_request.head.sha }}' instead of mutable branch references. "+
-			"See https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-toctou-high/",
+			"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctouhigh/",
 		envInfo,
 		rule.triggerEventName,
 	)

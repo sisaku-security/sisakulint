@@ -37,7 +37,7 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 				if rule.checkPrivileged {
 					rule.Errorf(
 						run.Run.Pos,
-						"code injection via shell metacharacters (critical): environment variable $%s contains untrusted input (\"%s\") and is %s. This can lead to command injection even when using environment variables. Use proper quoting: \"$%s\" or validate input before use. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+						"code injection via shell metacharacters (critical): environment variable $%s contains untrusted input (\"%s\") and is %s. This can lead to command injection even when using environment variables. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
 						envVar.envVarName,
 						paths,
 						reason,
@@ -46,7 +46,7 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 				} else {
 					rule.Errorf(
 						run.Run.Pos,
-						"code injection via shell metacharacters (medium): environment variable $%s contains untrusted input (\"%s\") and is %s. Use proper quoting: \"$%s\" or validate input before use. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+						"code injection via shell metacharacters (medium): environment variable $%s contains untrusted input (\"%s\") and is %s. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
 						envVar.envVarName,
 						paths,
 						reason,
@@ -145,7 +145,7 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 			if rule.checkPrivileged {
 				rule.Errorf(
 					expr.pos,
-					"code injection via %s (critical): \"%s\" is potentially untrusted and used with %s. Using %s with untrusted input is dangerous even inside quotes because the shell parses the content again. Consider using a safer approach or thorough input validation. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+					"code injection via %s (critical): \"%s\" is potentially untrusted and used with %s. Using %s with untrusted input is dangerous even inside quotes because the shell parses the content again. Consider using a safer approach or thorough input validation. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
 					patternType,
 					paths,
 					patternType,
@@ -154,7 +154,7 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 			} else {
 				rule.Errorf(
 					expr.pos,
-					"code injection via %s (medium): \"%s\" is potentially untrusted and used with %s. Consider using a safer approach or thorough input validation. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+					"code injection via %s (medium): \"%s\" is potentially untrusted and used with %s. Consider using a safer approach or thorough input validation. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
 					patternType,
 					paths,
 					patternType,
@@ -173,7 +173,7 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 				if rule.checkPrivileged {
 					rule.Errorf(
 						run.Run.Pos,
-						"code injection via %s (critical): environment variable $%s contains untrusted input (\"%s\") and is used with %s. Even quoted variables are dangerous inside %s because the shell parses the content again. Use thorough input validation or a safer approach. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+						"code injection via %s (critical): environment variable $%s contains untrusted input (\"%s\") and is used with %s. Even quoted variables are dangerous inside %s because the shell parses the content again. Use thorough input validation or a safer approach. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
 						patternType,
 						envVar.envVarName,
 						paths,
@@ -183,7 +183,7 @@ func (rule *CodeInjectionRule) checkDangerousShellPatterns(step *ast.Step) {
 				} else {
 					rule.Errorf(
 						run.Run.Pos,
-						"code injection via %s (medium): environment variable $%s contains untrusted input (\"%s\") and is used with %s. Use thorough input validation or a safer approach. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+						"code injection via %s (medium): environment variable $%s contains untrusted input (\"%s\") and is used with %s. Use thorough input validation or a safer approach. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
 						patternType,
 						envVar.envVarName,
 						paths,

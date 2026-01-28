@@ -138,7 +138,7 @@ func (rule *ArtifactPoisoningMedium) VisitStep(node *ast.Step) error {
 		// Path is configured safely, but still warn about untrusted content
 		rule.Errorf(
 			node.Pos,
-			"artifact poisoning risk: third-party action %q downloads artifacts in workflow with untrusted triggers (%s). Even with safe extraction paths, validate artifact content before use (checksums, signatures) and avoid executing scripts directly. See https://codeql.github.com/codeql-query-help/actions/actions-artifact-poisoning-medium/",
+			"artifact poisoning risk: third-party action %q downloads artifacts in workflow with untrusted triggers (%s). Even with safe extraction paths, validate artifact content before use (checksums, signatures) and avoid executing scripts directly. See https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/",
 			uses,
 			triggers,
 		)
@@ -147,7 +147,7 @@ func (rule *ArtifactPoisoningMedium) VisitStep(node *ast.Step) error {
 		// Path not configured or unsafe
 		rule.Errorf(
 			node.Pos,
-			"artifact poisoning risk: third-party action %q downloads artifacts in workflow with untrusted triggers (%s) without safe extraction path. This may allow malicious artifacts to overwrite existing files. Extract to '${{ runner.temp }}/artifacts' and validate content before use. See https://codeql.github.com/codeql-query-help/actions/actions-artifact-poisoning-medium/",
+			"artifact poisoning risk: third-party action %q downloads artifacts in workflow with untrusted triggers (%s) without safe extraction path. This may allow malicious artifacts to overwrite existing files. Extract to '${{ runner.temp }}/artifacts' and validate content before use. See https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/",
 			uses,
 			triggers,
 		)

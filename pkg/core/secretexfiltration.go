@@ -202,7 +202,7 @@ func NewSecretExfiltrationRule() *SecretExfiltrationRule {
 		BaseRule: BaseRule{
 			RuleName: "secret-exfiltration",
 			RuleDesc: "Detects patterns where secrets may be exfiltrated to external services via network commands (curl, wget, nc, etc.). " +
-				"See https://owasp.org/www-project-top-10-ci-cd-security-risks/",
+				"See https://sisaku-security.github.io/lint/docs/rules/secretexfiltration/",
 		},
 	}
 }

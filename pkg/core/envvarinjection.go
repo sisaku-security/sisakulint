@@ -52,9 +52,9 @@ func newEnvVarInjectionRule(severityLevel string, checkPrivileged bool) *EnvVarI
 	var desc string
 
 	if checkPrivileged {
-		desc = "Checks for environment variable injection vulnerabilities when untrusted input is written to $GITHUB_ENV in privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://codeql.github.com/codeql-query-help/actions/actions-envvar-injection-critical/"
+		desc = "Checks for environment variable injection vulnerabilities when untrusted input is written to $GITHUB_ENV in privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/"
 	} else {
-		desc = "Checks for environment variable injection vulnerabilities when untrusted input is written to $GITHUB_ENV in normal workflow triggers (pull_request, push, etc.). See https://codeql.github.com/codeql-query-help/actions/actions-envvar-injection-medium/"
+		desc = "Checks for environment variable injection vulnerabilities when untrusted input is written to $GITHUB_ENV in normal workflow triggers (pull_request, push, etc.). See https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/"
 	}
 
 	return &EnvVarInjectionRule{
@@ -147,13 +147,13 @@ func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
 					if rule.checkPrivileged {
 						rule.Errorf(
 							linePos,
-							"environment variable injection (critical): \"%s\" is potentially untrusted and written to $GITHUB_ENV in a workflow with privileged triggers. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://codeql.github.com/codeql-query-help/actions/actions-envvar-injection-critical/",
+							"environment variable injection (critical): \"%s\" is potentially untrusted and written to $GITHUB_ENV in a workflow with privileged triggers. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					} else {
 						rule.Errorf(
 							linePos,
-							"environment variable injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_ENV. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://codeql.github.com/codeql-query-help/actions/actions-envvar-injection-medium/",
+							"environment variable injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_ENV. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					}

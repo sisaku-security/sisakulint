@@ -24,7 +24,7 @@ func NewDangerousTriggersMediumRule() *DangerousTriggersMediumRule {
 	return &DangerousTriggersMediumRule{
 		BaseRule: BaseRule{
 			RuleName: "dangerous-triggers-medium",
-			RuleDesc: "Detects workflows using privileged triggers with only partial security mitigations. Consider adding more mitigations for defense in depth. See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+			RuleDesc: "Detects workflows using privileged triggers with only partial security mitigations. Consider adding more mitigations for defense in depth. See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulemedium/",
 		},
 	}
 }
@@ -60,7 +60,7 @@ func (rule *DangerousTriggersMediumRule) VisitWorkflowPre(node *ast.Workflow) er
 		"dangerous trigger (medium): workflow uses privileged trigger(s) [%s] with partial mitigations (%s). "+
 			"Consider adding more mitigations for defense in depth: restrict permissions (permissions: read-all), "+
 			"use environment protection, add label conditions, or check github.actor. "+
-			"See https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+			"See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulemedium/",
 		triggerList,
 		mitigationList,
 	)

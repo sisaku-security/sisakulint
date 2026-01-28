@@ -143,7 +143,7 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 			refValue.Pos,
 			"checking out untrusted code from pull request in workflow with privileged trigger '%s' (line %d). This allows potentially malicious code from external contributors to execute with access to repository secrets. "+
 				"Use 'pull_request' trigger instead, or avoid checking out PR code when using '%s'. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-untrusted-checkout-critical/ for more details",
+				"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details",
 			rule.dangerousTriggerName,
 			rule.dangerousTriggerPos.Line,
 			rule.dangerousTriggerName,

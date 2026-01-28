@@ -121,7 +121,7 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 			// Missing or empty path - safe to auto-fix
 			rule.Errorf(
 				step.Pos,
-				"artifact is downloaded without specifying a safe extraction path at step %q. This may allow artifact poisoning where malicious files overwrite existing files. Consider extracting to a temporary folder like '${{ runner.temp }}/artifacts' to prevent overwriting existing files. See https://codeql.github.com/codeql-query-help/actions/actions-artifact-poisoning-critical/",
+				"artifact is downloaded without specifying a safe extraction path at step %q. This may allow artifact poisoning where malicious files overwrite existing files. Consider extracting to a temporary folder like '${{ runner.temp }}/artifacts' to prevent overwriting existing files. See https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/",
 				step.String(),
 			)
 			rule.AddAutoFixer(NewStepFixer(step, rule))
@@ -129,7 +129,7 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 			// Unsafe path exists - report error but don't auto-fix (user might have reasons)
 			rule.Errorf(
 				step.Pos,
-				"artifact is downloaded to an unsafe path %q at step %q. Workspace-relative paths allow malicious artifacts to overwrite source code, scripts, or dependencies, creating a critical supply chain vulnerability. Extract to '${{ runner.temp }}/artifacts' instead. See https://codeql.github.com/codeql-query-help/actions/actions-artifact-poisoning-critical/",
+				"artifact is downloaded to an unsafe path %q at step %q. Workspace-relative paths allow malicious artifacts to overwrite source code, scripts, or dependencies, creating a critical supply chain vulnerability. Extract to '${{ runner.temp }}/artifacts' instead. See https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/",
 				pathValue,
 				step.String(),
 			)

@@ -28,7 +28,7 @@ func NewUnmaskedSecretExposureRule() *UnmaskedSecretExposureRule {
 			RuleName: "unmasked-secret-exposure",
 			RuleDesc: "Detects unmasked secret exposure when secrets are derived using fromJson(). " +
 				"Derived secret values are not automatically masked and may be exposed in logs. " +
-				"See https://codeql.github.com/codeql-query-help/actions/actions-unmasked-secret-exposure/",
+				"See https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/",
 		},
 	}
 }
@@ -298,7 +298,7 @@ func (rule *UnmaskedSecretExposureRule) reportUnmaskedSecretExposure(expr parsed
 		"unmasked secret exposure: values derived from secrets using fromJson() are not automatically masked by GitHub Actions. "+
 			"The expression '%s' may expose sensitive data in logs. "+
 			"Consider using a separate secret for each value, or use '::add-mask::' to manually mask the derived value. "+
-			"See https://codeql.github.com/codeql-query-help/actions/actions-unmasked-secret-exposure/",
+			"See https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/",
 		expr.raw,
 	)
 }

@@ -69,7 +69,7 @@ func (rule *RuleWorkflowCall) VisitJobPre(n *ast.Job) error {
 
 	rule.Errorf(
 		u.Pos,
-		"reusable workflow call %q at uses is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". please visit to https://docs.github.com/en/actions/learn-github-actions/reusing-workflows for more details",
+		"reusable workflow call %q at uses is not following the format \"owner/repo/path/to/workflow.yml@ref\" nor \"./path/to/workflow.yml\". please visit to https://sisaku-security.github.io/lint/docs/rules/workflowcall/ for more details",
 		u.Value,
 	)
 	return nil

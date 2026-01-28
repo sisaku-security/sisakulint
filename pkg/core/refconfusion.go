@@ -167,7 +167,7 @@ func (rule *RefConfusion) VisitStep(step *ast.Step) error {
 		rule.Errorf(step.Pos,
 			"action '%s' uses ref '%s' which exists as both a branch and a tag in %s/%s. "+
 				"This can lead to supply chain attacks if an attacker creates a branch with the same name as a tag. "+
-				"Consider pinning to a full commit SHA for security. See: https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-third-party-actions",
+				"Consider pinning to a full commit SHA for security. See https://sisaku-security.github.io/lint/docs/rules/refconfusion/",
 			usesValue, ref, owner, repo)
 		rule.AddAutoFixer(NewStepFixer(step, rule))
 	}

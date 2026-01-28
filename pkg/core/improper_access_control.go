@@ -144,7 +144,7 @@ func (rule *ImproperAccessControlRule) VisitStep(step *ast.Step) error {
 				"An attacker can modify code after label approval. "+
 				"Fix: 1) Change trigger types from 'synchronize' to 'labeled', "+
 				"2) Use immutable 'github.event.pull_request.head.sha' instead of mutable 'head.ref'. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-improper-access-control/",
+				"See https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/",
 		)
 		// Add auto-fixer with captured webhook event reference
 		rule.AddAutoFixer(newImproperAccessControlFixer(rule.RuleName, step, rule.webhookEvent))
@@ -155,7 +155,7 @@ func (rule *ImproperAccessControlRule) VisitStep(step *ast.Step) error {
 			"improper access control: checkout uses mutable ref '${{ github.event.pull_request.head.ref }}' with 'synchronize' event type. "+
 				"This allows code to change after initial review. "+
 				"Use immutable '${{ github.event.pull_request.head.sha }}' instead. "+
-				"See https://codeql.github.com/codeql-query-help/actions/actions-improper-access-control/",
+				"See https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/",
 		)
 		// Add auto-fixer with captured webhook event reference
 		rule.AddAutoFixer(newImproperAccessControlFixer(rule.RuleName, step, rule.webhookEvent))

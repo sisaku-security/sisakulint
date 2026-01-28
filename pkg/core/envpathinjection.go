@@ -52,9 +52,9 @@ func newEnvPathInjectionRule(severityLevel string, checkPrivileged bool) *EnvPat
 	var desc string
 
 	if checkPrivileged {
-		desc = "Checks for PATH injection vulnerabilities when untrusted input is written to $GITHUB_PATH in privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://codeql.github.com/codeql-query-help/actions/actions-envpath-injection-critical/"
+		desc = "Checks for PATH injection vulnerabilities when untrusted input is written to $GITHUB_PATH in privileged workflow triggers (pull_request_target, workflow_run, issue_comment). See https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/"
 	} else {
-		desc = "Checks for PATH injection vulnerabilities when untrusted input is written to $GITHUB_PATH in normal workflow triggers (pull_request, push, etc.). See https://codeql.github.com/codeql-query-help/actions/actions-envpath-injection-medium/"
+		desc = "Checks for PATH injection vulnerabilities when untrusted input is written to $GITHUB_PATH in normal workflow triggers (pull_request, push, etc.). See https://sisaku-security.github.io/lint/docs/rules/envpathinjectionmedium/"
 	}
 
 	return &EnvPathInjectionRule{
@@ -147,13 +147,13 @@ func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
 					if rule.checkPrivileged {
 						rule.Errorf(
 							linePos,
-							"PATH injection (critical): \"%s\" is potentially untrusted and written to $GITHUB_PATH in a workflow with privileged triggers. This can allow attackers to hijack command execution by prepending a malicious directory to PATH. Validate the path or use absolute paths instead. See https://codeql.github.com/codeql-query-help/actions/actions-envpath-injection-critical/",
+							"PATH injection (critical): \"%s\" is potentially untrusted and written to $GITHUB_PATH in a workflow with privileged triggers. This can allow attackers to hijack command execution by prepending a malicious directory to PATH. Validate the path or use absolute paths instead. See https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					} else {
 						rule.Errorf(
 							linePos,
-							"PATH injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_PATH. This can allow attackers to hijack command execution by prepending a malicious directory to PATH. Validate the path or use absolute paths instead. See https://codeql.github.com/codeql-query-help/actions/actions-envpath-injection-medium/",
+							"PATH injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_PATH. This can allow attackers to hijack command execution by prepending a malicious directory to PATH. Validate the path or use absolute paths instead. See https://sisaku-security.github.io/lint/docs/rules/envpathinjectionmedium/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
 					}
