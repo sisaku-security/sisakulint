@@ -264,6 +264,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 41. **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
 42. **SecretExfiltrationRule** - Detects secret exfiltration via network commands (curl, wget, nc, etc.)
 43. **ReusableWorkflowTaintRule** - Detects untrusted inputs passed to reusable workflows and used unsafely (auto-fix supported)
+44. **SecretsInheritRule** - Detects excessive secret inheritance using 'secrets: inherit' in reusable workflow calls (auto-fix supported)
 
 ## Key Files
 
