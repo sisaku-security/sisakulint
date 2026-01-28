@@ -1,0 +1,56 @@
+# Test case for issue #308: Job-level trigger conditionals should prevent false positives
+# This workflow has pull_request_target and pull_request triggers, but each job
+# is protected by a job-level if condition that filters the triggers.
+# The security rules should NOT report errors for these jobs.
+
+name: Job Trigger Filtering Safe Example
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  # This job should NOT trigger untrusted-checkout or code-injection-critical
+  # because it can only run on pull_request (not pull_request_target)
+  safe-pr-only-job:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "${{ github.event.pull_request.title }}"
+
+  # This job should NOT trigger cache-poisoning-poisonable-step
+  # because it filters to pull_request only via contains()
+  safe-contains-filter-job:
+    if: contains(fromJson('["pull_request"]'), github.event_name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - run: npm install
+      - run: npm test
+
+  # This job should NOT trigger errors because it excludes pull_request_target
+  safe-exclude-privileged-job:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: ./run-tests.sh
+
+  # This job SHOULD trigger errors because it has no if condition
+  # and can run on pull_request_target
+  vulnerable-no-filter-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "${{ github.event.pull_request.title }}"

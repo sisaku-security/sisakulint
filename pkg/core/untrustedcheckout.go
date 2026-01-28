@@ -37,12 +37,17 @@ import (
 // - https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
 type UntrustedCheckoutRule struct {
 	BaseRule
-	// hasDangerousTrigger indicates if the workflow uses a dangerous trigger
-	hasDangerousTrigger bool
+	// workflowTriggerInfos stores all trigger info (name + position) from the workflow
+	workflowTriggerInfos []TriggerInfo
 	// dangerousTriggerPos stores the position of the dangerous trigger for error reporting
+	// This is updated per-job to reflect the actual trigger that matches the job's if condition
 	dangerousTriggerPos *ast.Position
 	// dangerousTriggerName stores the name of the dangerous trigger (e.g., "pull_request_target")
+	// This is updated per-job to reflect the actual trigger that matches the job's if condition
 	dangerousTriggerName string
+	// jobHasDangerousTrigger indicates if the current job can execute on a dangerous trigger
+	// This is set in VisitJobPre after analyzing job-level if conditions
+	jobHasDangerousTrigger bool
 }
 
 // NewUntrustedCheckoutRule creates a new instance of the untrusted checkout rule
@@ -55,16 +60,17 @@ func NewUntrustedCheckoutRule() *UntrustedCheckoutRule {
 	}
 }
 
-// VisitWorkflowPre checks if the workflow uses dangerous triggers
+// VisitWorkflowPre collects all workflow triggers and identifies dangerous ones
 // Dangerous triggers: pull_request_target, issue_comment, workflow_run, workflow_call
 // These triggers run in the context of the base repository with access to secrets
 func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 	// Reset state for each workflow
-	rule.hasDangerousTrigger = false
+	rule.workflowTriggerInfos = nil
 	rule.dangerousTriggerPos = nil
 	rule.dangerousTriggerName = ""
+	rule.jobHasDangerousTrigger = false
 
-	// Check all workflow triggers
+	// Collect all workflow triggers with their positions
 	for _, event := range n.On {
 		var triggerName string
 		var triggerPos *ast.Position
@@ -80,19 +86,11 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 		}
 
 		if triggerName != "" {
-			// Check if this is a dangerous trigger
-			// pull_request_target: Runs in base repo context with write permissions and secrets
-			// issue_comment: Runs in base repo context, can be triggered by external contributors
-			// workflow_run: Runs in base repo context with access to secrets
-			// workflow_call: Inherits security context from caller, can be privileged if called from privileged workflow
-			switch triggerName {
-			case EventPullRequestTarget, "issue_comment", "workflow_run", "workflow_call":
-				rule.hasDangerousTrigger = true
-				rule.dangerousTriggerPos = triggerPos
-				rule.dangerousTriggerName = triggerName
-				rule.Debug("Found dangerous trigger '%s' at %s", triggerName, triggerPos)
-				// Don't break - keep checking remaining triggers (though we only need to find one)
-			}
+			rule.workflowTriggerInfos = append(rule.workflowTriggerInfos, TriggerInfo{
+				Name: triggerName,
+				Pos:  triggerPos,
+			})
+			rule.Debug("Collected trigger '%s' at %s", triggerName, triggerPos)
 		}
 	}
 
@@ -101,8 +99,9 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 
 // VisitStep checks if a step performs an untrusted checkout
 func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
-	// Skip if no dangerous trigger found
-	if !rule.hasDangerousTrigger {
+	// Skip if this job cannot execute on dangerous triggers
+	// This considers job-level if conditions that may filter out dangerous triggers
+	if !rule.jobHasDangerousTrigger {
 		return nil
 	}
 
@@ -290,14 +289,47 @@ func (rule *UntrustedCheckoutRule) isUntrustedPRExpression(_ expressions.ExprNod
 // VisitWorkflowPost resets state after workflow processing
 func (rule *UntrustedCheckoutRule) VisitWorkflowPost(n *ast.Workflow) error {
 	// Reset state for next workflow
-	rule.hasDangerousTrigger = false
+	rule.workflowTriggerInfos = nil
 	rule.dangerousTriggerPos = nil
 	rule.dangerousTriggerName = ""
+	rule.jobHasDangerousTrigger = false
 	return nil
 }
 
-// VisitJobPre is required by the TreeVisitor interface but not used
+// VisitJobPre analyzes job-level if conditions to determine if the job
+// can actually execute on dangerous triggers. This prevents false positives
+// when workflows use job-level conditionals to restrict which triggers run specific jobs.
 func (rule *UntrustedCheckoutRule) VisitJobPre(node *ast.Job) error {
+	// Reset job-level state
+	rule.jobHasDangerousTrigger = false
+	rule.dangerousTriggerName = ""
+	rule.dangerousTriggerPos = nil
+
+	// If no triggers in workflow, skip
+	if len(rule.workflowTriggerInfos) == 0 {
+		return nil
+	}
+
+	// Use JobTriggerAnalyzer with positions to check if this job can execute on dangerous triggers
+	// and get the specific matched trigger info for accurate diagnostics
+	analyzer := NewJobTriggerAnalyzerWithPositions(rule.workflowTriggerInfos)
+	matchedTrigger := analyzer.GetMatchedPrivilegedTrigger(node)
+
+	if matchedTrigger != nil {
+		rule.jobHasDangerousTrigger = true
+		rule.dangerousTriggerName = matchedTrigger.Name
+		rule.dangerousTriggerPos = matchedTrigger.Pos
+		if matchedTrigger.Pos != nil {
+			rule.Debug("Job '%s' can execute on privileged trigger '%s' at line %d",
+				node.ID, matchedTrigger.Name, matchedTrigger.Pos.Line)
+		} else {
+			rule.Debug("Job '%s' can execute on privileged trigger '%s'",
+				node.ID, matchedTrigger.Name)
+		}
+	} else {
+		rule.Debug("Job '%s' filtered out privileged triggers via if condition", node.ID)
+	}
+
 	return nil
 }
 

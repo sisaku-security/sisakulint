@@ -198,10 +198,12 @@ func (t *Tokenizer) eat() rune {
 func (t *Tokenizer) skipWhite() {
 	for {
 		if r := t.scanner.Peek(); !isWhitespace(r) {
+			// Always update t.start to current position after skipping whitespace
+			// This ensures each token starts at the correct position
+			t.start = t.scanner.Pos()
 			return
 		}
 		t.scanner.Next()
-		t.start = t.scanner.Pos()
 	}
 }
 

@@ -581,6 +581,10 @@ func (rule *ReusableWorkflowTaintRule) generateEnvVarName(inputName string) stri
 }
 
 // isPrivilegedTrigger checks if an event name is a privileged trigger
+// Note: workflow_call is NOT included here because it's not a runtime event name.
+// When a reusable workflow is called, github.event_name reflects the CALLER's event,
+// not "workflow_call". For detecting potential danger in reusable workflows,
+// use isDangerousTriggerForAnalysis which includes workflow_call.
 func isPrivilegedTrigger(eventName string) bool {
 	privilegedTriggers := map[string]bool{
 		"pull_request_target": true,
@@ -590,4 +594,14 @@ func isPrivilegedTrigger(eventName string) bool {
 		"discussion_comment":  true,
 	}
 	return privilegedTriggers[eventName]
+}
+
+// isDangerousTriggerForAnalysis checks if an event name should be considered
+// dangerous for security analysis purposes. This includes workflow_call because
+// reusable workflows may be called from privileged contexts.
+func isDangerousTriggerForAnalysis(eventName string) bool {
+	if isPrivilegedTrigger(eventName) {
+		return true
+	}
+	return eventName == "workflow_call"
 }
