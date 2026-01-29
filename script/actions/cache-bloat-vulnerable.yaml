@@ -1,0 +1,68 @@
+name: Cache Bloat Vulnerable
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+        id: go
+      # Vulnerable: cache/restore without if condition
+      - name: go cache restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-cache-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-cache-${{ runner.os }}-
+      - name: Build
+        run: go build ./...
+      # Vulnerable: cache/save without if condition
+      - name: go cache save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-cache-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: false
+        id: go
+      # Vulnerable: restore has condition but save doesn't
+      - name: go cache restore
+        if: github.event_name != 'push'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-cache-test-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+      - name: Test
+        run: go test ./...
+      # Vulnerable: save without proper condition
+      - name: go cache save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-cache-test-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
