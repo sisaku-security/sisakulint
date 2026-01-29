@@ -1,0 +1,67 @@
+# Taint Propagation Test - Safe Pattern (should not detect)
+# These patterns use trusted inputs or proper sanitization
+name: Taint Propagation Safe Test
+on: push
+
+jobs:
+  test-safe-sha-output:
+    runs-on: ubuntu-latest
+    steps:
+      # github.sha is not untrusted
+      - id: get-sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - env:
+          COMMIT_SHA: ${{ steps.get-sha.outputs.sha }}
+        run: |
+          git checkout $COMMIT_SHA
+
+  test-safe-static-output:
+    runs-on: ubuntu-latest
+    steps:
+      # Static value is safe
+      - id: get-version
+        run: echo "version=1.2.3" >> $GITHUB_OUTPUT
+
+      - env:
+          VERSION: ${{ steps.get-version.outputs.version }}
+        run: |
+          echo "Building version $VERSION"
+
+  test-safe-trusted-context:
+    runs-on: ubuntu-latest
+    steps:
+      # github.repository is trusted
+      - id: get-repo
+        run: echo "repo=${{ github.repository }}" >> $GITHUB_OUTPUT
+
+      - env:
+          REPO_NAME: ${{ steps.get-repo.outputs.repo }}
+        run: |
+          git clone https://github.com/$REPO_NAME
+
+  test-safe-quoted-usage:
+    runs-on: ubuntu-latest
+    steps:
+      # Even with tainted output, properly quoted usage in push trigger is safer
+      - id: get-ref
+        run: echo "ref=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - env:
+          REF: ${{ steps.get-ref.outputs.ref }}
+        run: |
+          echo "Building ref: \"$REF\""
+
+  test-no-taint-chain:
+    runs-on: ubuntu-latest
+    steps:
+      # No taint in the chain
+      - id: compute
+        run: |
+          RESULT=$(date +%Y%m%d)
+          echo "date=$RESULT" >> $GITHUB_OUTPUT
+
+      - env:
+          BUILD_DATE: ${{ steps.compute.outputs.date }}
+        run: |
+          echo "Build date: $BUILD_DATE"

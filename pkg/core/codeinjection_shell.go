@@ -100,7 +100,8 @@ func (rule *CodeInjectionRule) extractEnvVarsWithUntrustedInput(step *ast.Step) 
 		var untrustedPaths []string
 
 		for _, expr := range exprs {
-			paths := rule.checkUntrustedInput(expr)
+			// Use checkUntrustedInputWithTaint to also detect tainted step outputs
+			paths := rule.checkUntrustedInputWithTaint(expr)
 			untrustedPaths = append(untrustedPaths, paths...)
 		}
 
