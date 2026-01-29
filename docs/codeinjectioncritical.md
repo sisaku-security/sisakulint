@@ -411,6 +411,41 @@ The code-injection-critical rule detects:
    - Variable propagation: `VAR="${{ untrusted }}"; echo "name=$VAR" >> $GITHUB_OUTPUT`
    - Heredoc patterns: `cat <<EOF >> $GITHUB_OUTPUT`
 
+9. **Multi-hop taint propagation (step output to step output)**:
+   ```yaml
+   # Step A: Write untrusted input to output
+   - id: step-a
+     run: echo "val=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+   # Step B: Read from Step A, write to own output - taint propagates
+   - id: step-b
+     env:
+       INPUT: ${{ steps.step-a.outputs.val }}
+     run: echo "derived=$INPUT" >> $GITHUB_OUTPUT  # Also tainted!
+
+   # Step C: Use Step B's output - still tainted
+   - env:
+       FINAL: ${{ steps.step-b.outputs.derived }}  # Tainted via step-b -> step-a
+     run: echo $FINAL  # Detected as code injection
+   ```
+
+10. **Known tainted action outputs**:
+    ```yaml
+    # gotson/pull-request-comment-branch exposes untrusted PR data
+    - uses: gotson/pull-request-comment-branch@v1
+      id: comment-branch
+
+    - env:
+        BRANCH_NAME: ${{ steps.comment-branch.outputs.head_ref }}  # Tainted!
+      run: |
+        git push origin HEAD:${BRANCH_NAME}  # Detected as code injection
+    ```
+
+    Known tainted actions include:
+    - `gotson/pull-request-comment-branch` - exposes `head_ref`, `head_sha`, `base_ref`, `base_sha`
+    - `xt0rted/pull-request-comment-branch` - same outputs as above
+    - `peter-evans/find-comment` - exposes `comment-body`, `comment-author`
+
 ### Safe Patterns
 
 The rule recognizes these patterns as safe:

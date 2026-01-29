@@ -10,6 +10,7 @@ import (
 
 // TaintTracker tracks taint propagation through step outputs.
 // Phase 1 focuses on tracking $GITHUB_OUTPUT writes with untrusted inputs.
+// Phase 2 extends this to track step output to step output propagation.
 //
 // Example of tracked vulnerability (GHSL-2024-325):
 //
@@ -18,6 +19,18 @@ import (
 //   - env:
 //     BRANCH: ${{ steps.get-ref.outputs.ref }}  # This is now tainted
 //     run: git push origin HEAD:${BRANCH}         # Code injection!
+//
+// Phase 2 example (step output to step output):
+//
+//   - id: step-a
+//     run: echo "val=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+//   - id: step-b
+//     env:
+//       INPUT: ${{ steps.step-a.outputs.val }}  # Tainted via step-a
+//     run: echo "derived=$INPUT" >> $GITHUB_OUTPUT  # Output is also tainted
+//   - env:
+//       FINAL: ${{ steps.step-b.outputs.derived }}  # Tainted via step-b -> step-a
+//     run: echo $FINAL  # Code injection!
 type TaintTracker struct {
 	// taintedOutputs maps stepID -> outputName -> taint sources
 	// Example: {"get-ref": {"ref": ["github.head_ref"]}}
@@ -26,24 +39,92 @@ type TaintTracker struct {
 	// taintedVars tracks variables in the current script that hold tainted values
 	// Used for intra-step variable propagation
 	taintedVars map[string][]string
+
+	// knownTaintedActions maps action patterns to their tainted outputs
+	// Phase 3: Used to infer taint from known action behaviors
+	knownTaintedActions map[string][]KnownTaintedOutput
+}
+
+// KnownTaintedOutput represents a known tainted output from an action.
+type KnownTaintedOutput struct {
+	OutputName  string // Name of the output that is tainted
+	TaintSource string // Description of where the taint comes from
 }
 
 // NewTaintTracker creates a new TaintTracker instance.
 func NewTaintTracker() *TaintTracker {
-	return &TaintTracker{
-		taintedOutputs: make(map[string]map[string][]string),
-		taintedVars:    make(map[string][]string),
+	tracker := &TaintTracker{
+		taintedOutputs:      make(map[string]map[string][]string),
+		taintedVars:         make(map[string][]string),
+		knownTaintedActions: make(map[string][]KnownTaintedOutput),
 	}
+
+	// Phase 3: Initialize known tainted actions database
+	// These actions are known to expose untrusted PR/issue data as outputs
+	tracker.initKnownTaintedActions()
+
+	return tracker
+}
+
+// initKnownTaintedActions initializes the database of known actions with tainted outputs.
+// Phase 3: This allows detection of taint from action outputs without analyzing action code.
+func (t *TaintTracker) initKnownTaintedActions() {
+	// gotson/pull-request-comment-branch - exposes PR branch info from comments
+	// Used in GHSL-2024-325 vulnerability
+	t.knownTaintedActions["gotson/pull-request-comment-branch"] = []KnownTaintedOutput{
+		{OutputName: "head_ref", TaintSource: "github.event.pull_request.head.ref (via action)"},
+		{OutputName: "head_sha", TaintSource: "github.event.pull_request.head.sha (via action)"},
+		{OutputName: "base_ref", TaintSource: "github.event.pull_request.base.ref (via action)"},
+		{OutputName: "base_sha", TaintSource: "github.event.pull_request.base.sha (via action)"},
+	}
+
+	// xt0rted/pull-request-comment-branch - similar to gotson
+	t.knownTaintedActions["xt0rted/pull-request-comment-branch"] = []KnownTaintedOutput{
+		{OutputName: "head_ref", TaintSource: "github.event.pull_request.head.ref (via action)"},
+		{OutputName: "head_sha", TaintSource: "github.event.pull_request.head.sha (via action)"},
+		{OutputName: "base_ref", TaintSource: "github.event.pull_request.base.ref (via action)"},
+		{OutputName: "base_sha", TaintSource: "github.event.pull_request.base.sha (via action)"},
+	}
+
+	// actions/github-script - if inputs contain untrusted data, outputs may be tainted
+	// Note: This is handled dynamically based on script content, not here
+
+	// peter-evans/find-comment - extracts comment body which is untrusted
+	t.knownTaintedActions["peter-evans/find-comment"] = []KnownTaintedOutput{
+		{OutputName: "comment-body", TaintSource: "github.event.comment.body (via action)"},
+		{OutputName: "comment-author", TaintSource: "github.event.comment.user.login (via action)"},
+	}
+
+	// actions/create-github-app-token - outputs are safe (tokens are not user-controlled)
+	// Not adding to tainted list
+
+	// EndBug/add-and-commit - if inputs contain untrusted data, may propagate
+	// Outputs are generally safe (commit sha)
 }
 
 // AnalyzeStep analyzes a step for $GITHUB_OUTPUT writes with tainted values.
 // It tracks which outputs become tainted based on the script content.
+// Phase 2: Also considers env vars that reference tainted step outputs.
+// Phase 3: Also handles action steps with known tainted outputs.
 func (t *TaintTracker) AnalyzeStep(step *ast.Step) {
 	if step == nil || step.ID == nil || step.ID.Value == "" {
 		return
 	}
 
-	if step.Exec == nil || step.Exec.Kind() != ast.ExecKindRun {
+	if step.Exec == nil {
+		return
+	}
+
+	stepID := step.ID.Value
+
+	// Phase 3: Handle action steps
+	if step.Exec.Kind() == ast.ExecKindAction {
+		t.analyzeActionStep(step)
+		return
+	}
+
+	// Handle run: steps
+	if step.Exec.Kind() != ast.ExecKindRun {
 		return
 	}
 
@@ -52,14 +133,101 @@ func (t *TaintTracker) AnalyzeStep(step *ast.Step) {
 		return
 	}
 
-	stepID := step.ID.Value
 	script := run.Run.Value
 
 	// Reset tainted vars for this step
 	t.taintedVars = make(map[string][]string)
 
+	// Phase 2: Pre-populate tainted vars from env section
+	// If env vars reference tainted step outputs, those vars are also tainted
+	t.populateTaintedVarsFromEnv(step.Env)
+
 	// Analyze script for tainted variable assignments and GITHUB_OUTPUT writes
 	t.analyzeScript(stepID, script)
+}
+
+// analyzeActionStep checks if an action step uses a known tainted action.
+// Phase 3: If the action is known to expose untrusted data, mark its outputs as tainted.
+func (t *TaintTracker) analyzeActionStep(step *ast.Step) {
+	action, ok := step.Exec.(*ast.ExecAction)
+	if !ok || action.Uses == nil {
+		return
+	}
+
+	stepID := step.ID.Value
+	uses := action.Uses.Value
+
+	// Extract action name (without version)
+	actionName := t.extractActionName(uses)
+
+	// Check if this action is known to have tainted outputs
+	taintedOutputs, exists := t.knownTaintedActions[actionName]
+	if !exists {
+		return
+	}
+
+	// Mark all known tainted outputs for this step
+	if t.taintedOutputs[stepID] == nil {
+		t.taintedOutputs[stepID] = make(map[string][]string)
+	}
+
+	for _, output := range taintedOutputs {
+		t.taintedOutputs[stepID][output.OutputName] = []string{output.TaintSource}
+	}
+}
+
+// extractActionName extracts the action name from a uses string.
+// Example: "gotson/pull-request-comment-branch@v1" -> "gotson/pull-request-comment-branch"
+func (t *TaintTracker) extractActionName(uses string) string {
+	// Remove version suffix (@v1, @main, @sha, etc.)
+	if idx := strings.Index(uses, "@"); idx != -1 {
+		return uses[:idx]
+	}
+	return uses
+}
+
+// populateTaintedVarsFromEnv checks env vars for tainted step output references.
+// Phase 2: If an env var references a tainted step output, that var becomes tainted.
+//
+// Example:
+//
+//	env:
+//	  INPUT: ${{ steps.step-a.outputs.val }}  # If step-a.outputs.val is tainted, INPUT is tainted
+func (t *TaintTracker) populateTaintedVarsFromEnv(env *ast.Env) {
+	if env == nil || env.Vars == nil {
+		return
+	}
+
+	for _, envVar := range env.Vars {
+		if envVar.Value == nil || !envVar.Value.ContainsExpression() {
+			continue
+		}
+
+		varName := envVar.Name.Value
+		value := envVar.Value.Value
+
+		// Find all ${{ }} expressions in the env var value
+		exprPattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
+		matches := exprPattern.FindAllStringSubmatch(value, -1)
+
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			exprContent := strings.TrimSpace(match[1])
+
+			// Check if this expression references a tainted step output
+			if tainted, sources := t.IsTaintedExpr(exprContent); tainted {
+				// Propagate taint: the env var is now tainted via the step output
+				t.taintedVars[varName] = append(t.taintedVars[varName], sources...)
+			}
+
+			// Also check for direct untrusted expressions
+			if t.isUntrustedExpression(exprContent) {
+				t.taintedVars[varName] = append(t.taintedVars[varName], exprContent)
+			}
+		}
+	}
 }
 
 // analyzeScript parses the script and tracks taint propagation.
