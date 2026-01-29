@@ -540,33 +540,33 @@ func TestTaintTracker_KnownTaintedActionWithVersion(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		uses       string
+		name        string
+		uses        string
 		expectTaint bool
 	}{
 		{
-			name:       "action with v1 tag",
-			uses:       "gotson/pull-request-comment-branch@v1",
+			name:        "action with v1 tag",
+			uses:        "gotson/pull-request-comment-branch@v1",
 			expectTaint: true,
 		},
 		{
-			name:       "action with v2 tag",
-			uses:       "gotson/pull-request-comment-branch@v2",
+			name:        "action with v2 tag",
+			uses:        "gotson/pull-request-comment-branch@v2",
 			expectTaint: true,
 		},
 		{
-			name:       "action with main branch",
-			uses:       "gotson/pull-request-comment-branch@main",
+			name:        "action with main branch",
+			uses:        "gotson/pull-request-comment-branch@main",
 			expectTaint: true,
 		},
 		{
-			name:       "action with commit SHA",
-			uses:       "gotson/pull-request-comment-branch@abc1234567890",
+			name:        "action with commit SHA",
+			uses:        "gotson/pull-request-comment-branch@abc1234567890",
 			expectTaint: true,
 		},
 		{
-			name:       "unknown action",
-			uses:       "unknown/action@v1",
+			name:        "unknown action",
+			uses:        "unknown/action@v1",
 			expectTaint: false,
 		},
 	}
@@ -631,4 +631,92 @@ func TestTaintTracker_KnownTaintedActionIntegration(t *testing.T) {
 		t.Error("steps.comment-branch.outputs.head_ref should be tainted")
 	}
 	t.Logf("Taint sources for head_ref: %v", sources)
+}
+
+func TestTaintTracker_VariableAssignmentWithKeywordPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		stepID         string
+		script         string
+		expectedOutput string
+		expectTainted  bool
+	}{
+		{
+			name:           "export with untrusted input",
+			stepID:         "export-test",
+			script:         "export VAR=\"${{ github.event.issue.title }}\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  true,
+		},
+		{
+			name:           "local with untrusted input",
+			stepID:         "local-test",
+			script:         "local VAR=\"${{ github.event.comment.body }}\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  true,
+		},
+		{
+			name:           "readonly with untrusted input",
+			stepID:         "readonly-test",
+			script:         "readonly VAR=\"${{ github.head_ref }}\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  true,
+		},
+		{
+			name:           "export with safe input",
+			stepID:         "export-safe",
+			script:         "export VAR=\"${{ github.sha }}\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  false,
+		},
+		{
+			name:           "local with safe input",
+			stepID:         "local-safe",
+			script:         "local VAR=\"safe-value\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  false,
+		},
+		{
+			name:           "plain assignment still works",
+			stepID:         "plain-test",
+			script:         "VAR=\"${{ github.event.issue.body }}\"\necho \"output=$VAR\" >> $GITHUB_OUTPUT",
+			expectedOutput: "output",
+			expectTainted:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tracker := NewTaintTracker()
+
+			step := &ast.Step{
+				ID: &ast.String{Value: tt.stepID},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tt.script},
+				},
+			}
+
+			tracker.AnalyzeStep(step)
+
+			outputs, exists := tracker.taintedOutputs[tt.stepID]
+			if tt.expectTainted {
+				if !exists {
+					t.Fatalf("step %s should have tainted outputs", tt.stepID)
+				}
+				if _, outputExists := outputs[tt.expectedOutput]; !outputExists {
+					t.Errorf("output %s should be tainted", tt.expectedOutput)
+				}
+			} else {
+				if exists {
+					if _, outputExists := outputs[tt.expectedOutput]; outputExists {
+						t.Errorf("output %s should NOT be tainted for safe input", tt.expectedOutput)
+					}
+				}
+			}
+		})
+	}
 }

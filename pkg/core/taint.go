@@ -26,10 +26,10 @@ import (
 //     run: echo "val=${{ github.head_ref }}" >> $GITHUB_OUTPUT
 //   - id: step-b
 //     env:
-//       INPUT: ${{ steps.step-a.outputs.val }}  # Tainted via step-a
+//     INPUT: ${{ steps.step-a.outputs.val }}  # Tainted via step-a
 //     run: echo "derived=$INPUT" >> $GITHUB_OUTPUT  # Output is also tainted
 //   - env:
-//       FINAL: ${{ steps.step-b.outputs.derived }}  # Tainted via step-b -> step-a
+//     FINAL: ${{ steps.step-b.outputs.derived }}  # Tainted via step-b -> step-a
 //     run: echo $FINAL  # Code injection!
 type TaintTracker struct {
 	// taintedOutputs maps stepID -> outputName -> taint sources
@@ -241,10 +241,12 @@ func (t *TaintTracker) analyzeScript(stepID, script string) {
 
 // findTaintedVariableAssignments finds shell variable assignments that contain untrusted input.
 // Example: VAR="${{ github.event.issue.title }}"
+// Also handles: export VAR=..., local VAR=..., readonly VAR=...
 func (t *TaintTracker) findTaintedVariableAssignments(script string) {
 	// Pattern: VAR=value or VAR="value" or VAR='value'
+	// Also handles optional keyword prefixes: export, local, readonly
 	// We look for assignments that contain ${{ }} expressions
-	varAssignPattern := regexp.MustCompile(`(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
+	varAssignPattern := regexp.MustCompile(`(?m)^\s*(?:(?:export|local|readonly)\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
 
 	matches := varAssignPattern.FindAllStringSubmatch(script, -1)
 	for _, match := range matches {
