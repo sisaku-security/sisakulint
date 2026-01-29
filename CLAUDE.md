@@ -265,6 +265,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 42. **SecretExfiltrationRule** - Detects secret exfiltration via network commands (curl, wget, nc, etc.)
 43. **ReusableWorkflowTaintRule** - Detects untrusted inputs passed to reusable workflows and used unsafely (auto-fix supported)
 44. **SecretsInheritRule** - Detects excessive secret inheritance using 'secrets: inherit' in reusable workflow calls (auto-fix supported)
+45. **CacheBloatRule** - Detects cache bloat risk with actions/cache/restore and actions/cache/save without proper conditions (auto-fix supported)
 
 ## Key Files
 
