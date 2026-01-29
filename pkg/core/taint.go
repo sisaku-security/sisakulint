@@ -265,10 +265,10 @@ func (t *TaintTracker) findTaintedVariableAssignments(script string) {
 // findGitHubOutputWrites finds writes to $GITHUB_OUTPUT and tracks which outputs become tainted.
 func (t *TaintTracker) findGitHubOutputWrites(stepID, script string) {
 	// Pattern 1: echo "name=value" >> $GITHUB_OUTPUT
-	echoPattern := regexp.MustCompile(`echo\s+["']?([^=\s]+)=([^"'\n]+)["']?\s*>>\s*\$GITHUB_OUTPUT`)
+	echoPattern := regexp.MustCompile(`echo\s+["']?([^=\s]+)=([^"'\n]+)["']?\s*>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
 
 	// Pattern 2: printf pattern - printf "name=%s" "$VAR" >> $GITHUB_OUTPUT
-	printfPattern := regexp.MustCompile(`printf\s+["']([^=]+)=.*?["'].*?>>\s*\$GITHUB_OUTPUT`)
+	printfPattern := regexp.MustCompile(`printf\s+["']([^=]+)=.*?["'].*?>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
 
 	// Process echo patterns
 	echoMatches := echoPattern.FindAllStringSubmatch(script, -1)
@@ -303,7 +303,7 @@ func (t *TaintTracker) findGitHubOutputWrites(stepID, script string) {
 // EOF
 func (t *TaintTracker) processHeredocPatterns(stepID, script string) {
 	// Find heredoc start pattern
-	heredocStartPattern := regexp.MustCompile(`cat\s+<<['"]?(\w+)['"]?\s*>>\s*\$GITHUB_OUTPUT`)
+	heredocStartPattern := regexp.MustCompile(`cat\s+<<['"]?(\w+)['"]?\s*>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
 	matches := heredocStartPattern.FindAllStringSubmatchIndex(script, -1)
 
 	for _, match := range matches {
