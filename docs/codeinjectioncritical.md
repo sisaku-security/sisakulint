@@ -394,6 +394,23 @@ The code-injection-critical rule detects:
    run: result=$(echo $TITLE)  # Untrusted input in subshell
    ```
 
+8. **Taint propagation via step outputs (GHSL-2024-325 pattern)**:
+   ```yaml
+   # Step 1: Untrusted input written to $GITHUB_OUTPUT
+   - id: get-ref
+     run: echo "ref=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+
+   # Step 2: Tainted output used in env variable
+   - env:
+       BRANCH: ${{ steps.get-ref.outputs.ref }}  # Tainted!
+     run: git push origin HEAD:${BRANCH}  # Detected as code injection
+   ```
+
+   This pattern tracks taint propagation through:
+   - Direct writes: `echo "name=${{ untrusted }}" >> $GITHUB_OUTPUT`
+   - Variable propagation: `VAR="${{ untrusted }}"; echo "name=$VAR" >> $GITHUB_OUTPUT`
+   - Heredoc patterns: `cat <<EOF >> $GITHUB_OUTPUT`
+
 ### Safe Patterns
 
 The rule recognizes these patterns as safe:
@@ -425,6 +442,17 @@ The rule recognizes these patterns as safe:
    env:
      PR_TITLE: ${{ github.event.pull_request.title }}
    run: printf '%s\n' "$PR_TITLE"  # printf with %s is safer than echo
+   ```
+
+5. **Step outputs from trusted inputs** (not flagged for taint propagation):
+   ```yaml
+   # github.sha is trusted, so the output is not tainted
+   - id: get-sha
+     run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+   - env:
+       COMMIT: ${{ steps.get-sha.outputs.sha }}  # Safe - not tainted
+     run: git checkout "$COMMIT"
    ```
 
 ### Shell Metacharacter Injection

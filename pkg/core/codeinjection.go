@@ -16,6 +16,7 @@ type CodeInjectionRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithUntrustedInput
 	workflow           *ast.Workflow
+	taintTracker       *TaintTracker // Tracks taint propagation through step outputs
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -63,6 +64,7 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 // VisitWorkflowPre is called before visiting a workflow
 func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+	rule.taintTracker = NewTaintTracker()
 	return nil
 }
 
@@ -80,6 +82,13 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 		return nil
 	}
 
+	// First pass: collect taint information from all steps
+	// This allows us to detect tainted step outputs before checking for code injection
+	for _, s := range node.Steps {
+		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Second pass: check for code injection vulnerabilities
 	for _, s := range node.Steps {
 		if s.Exec == nil {
 			continue
@@ -431,6 +440,31 @@ func (rule *CodeInjectionRule) checkUntrustedInput(expr parsedExpression) []stri
 					path := msg[idx+1 : idx+1+endIdx]
 					paths = append(paths, path)
 				}
+			}
+		}
+	}
+
+	return paths
+}
+
+// checkUntrustedInputWithTaint checks if the expression contains untrusted input,
+// including tainted step outputs tracked by TaintTracker.
+// This extends checkUntrustedInput to detect indirect taint propagation.
+//
+// Example: If step "get-ref" writes untrusted input to $GITHUB_OUTPUT,
+// then steps.get-ref.outputs.ref will be detected as tainted.
+func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) []string {
+	// First check built-in untrusted inputs
+	paths := rule.checkUntrustedInput(expr)
+
+	// Then check tainted step outputs
+	if rule.taintTracker != nil {
+		if tainted, sources := rule.taintTracker.IsTainted(expr.node); tainted {
+			// Format the taint path to include the propagation chain
+			// e.g., "steps.get-ref.outputs.ref (tainted via github.head_ref)"
+			for _, source := range sources {
+				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
+				paths = append(paths, taintPath)
 			}
 		}
 	}
