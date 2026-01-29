@@ -158,7 +158,7 @@ func (t *TaintTracker) analyzeActionStep(step *ast.Step) {
 	uses := action.Uses.Value
 
 	// Extract action name (without version)
-	actionName := t.extractActionName(uses)
+	actionName := strings.ToLower(t.extractActionName(uses))
 
 	// Check if this action is known to have tainted outputs
 	taintedOutputs, exists := t.knownTaintedActions[actionName]
@@ -179,7 +179,7 @@ func (t *TaintTracker) analyzeActionStep(step *ast.Step) {
 // extractActionName extracts the action name from a uses string.
 // Example: "gotson/pull-request-comment-branch@v1" -> "gotson/pull-request-comment-branch"
 func (t *TaintTracker) extractActionName(uses string) string {
-	// Remove version suffix (@v1, @main, @sha, etc.)
+	// Remove version suffix (`@v1`, `@main`, `@sha`, etc.)
 	if idx := strings.Index(uses, "@"); idx != -1 {
 		return uses[:idx]
 	}
