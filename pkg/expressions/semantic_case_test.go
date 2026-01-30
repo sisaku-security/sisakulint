@@ -114,7 +114,7 @@ func TestCaseFunctionInBuiltinSignatures(t *testing.T) {
 	}
 
 	// case needs at least 3 arguments: condition, valueIfTrue, defaultValue
-	if len(caseSig.Params) < 2 {
-		t.Errorf("case function should have at least 2 base params, got %d", len(caseSig.Params))
+	if len(caseSig.Params) < 3 {
+		t.Errorf("case function should have at least 3 base params, got %d", len(caseSig.Params))
 	}
 }
