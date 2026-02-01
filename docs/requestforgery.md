@@ -1,3 +1,8 @@
+---
+title: "Request Forgery Rule"
+weight: 1
+---
+
 # Request Forgery Rule (SSRF Detection)
 
 ## Overview

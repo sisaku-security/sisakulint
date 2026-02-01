@@ -7,7 +7,6 @@ import (
 )
 
 func TestRequestForgeryCriticalRule(t *testing.T) {
-	t.Parallel()
 	rule := RequestForgeryCriticalRule()
 	if rule.RuleName != "request-forgery-critical" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "request-forgery-critical")
@@ -15,7 +14,6 @@ func TestRequestForgeryCriticalRule(t *testing.T) {
 }
 
 func TestRequestForgeryMediumRule(t *testing.T) {
-	t.Parallel()
 	rule := RequestForgeryMediumRule()
 	if rule.RuleName != "request-forgery-medium" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "request-forgery-medium")
@@ -23,7 +21,6 @@ func TestRequestForgeryMediumRule(t *testing.T) {
 }
 
 func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name         string
 		trigger      string
@@ -70,10 +67,8 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryCriticalRule()
 
-			// Create workflow with specified trigger
 			workflow := &ast.Workflow{
 				On: []ast.Event{
 					&ast.WebhookEvent{
@@ -82,7 +77,6 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 				},
 			}
 
-			// Create job with curl using untrusted input
 			job := &ast.Job{
 				Steps: []*ast.Step{
 					{
@@ -96,13 +90,11 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 				},
 			}
 
-			// Visit workflow first
 			err := rule.VisitWorkflowPre(workflow)
 			if err != nil {
 				t.Fatalf("VisitWorkflowPre() returned error: %v", err)
 			}
 
-			// Then visit job
 			err = rule.VisitJobPre(job)
 			if err != nil {
 				t.Fatalf("VisitJobPre() returned error: %v", err)
@@ -121,7 +113,6 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 }
 
 func TestRequestForgery_NetworkCommands(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name        string
 		trigger     string
@@ -175,7 +166,6 @@ func TestRequestForgery_NetworkCommands(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -210,7 +200,6 @@ func TestRequestForgery_NetworkCommands(t *testing.T) {
 }
 
 func TestRequestForgery_CloudMetadataDetection(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name        string
 		runScript   string
@@ -245,7 +234,6 @@ func TestRequestForgery_CloudMetadataDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -280,7 +268,6 @@ func TestRequestForgery_CloudMetadataDetection(t *testing.T) {
 }
 
 func TestRequestForgery_GitHubScript(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name        string
 		trigger     string
@@ -313,7 +300,6 @@ func TestRequestForgery_GitHubScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -354,7 +340,6 @@ func TestRequestForgery_GitHubScript(t *testing.T) {
 }
 
 func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name         string
 		trigger      string
@@ -395,7 +380,6 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryMediumRule()
 
 			workflow := &ast.Workflow{
@@ -435,7 +419,6 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 }
 
 func TestRequestForgery_SeverityDetermination(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name             string
 		runScript        string
@@ -464,7 +447,6 @@ func TestRequestForgery_SeverityDetermination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			rule := RequestForgeryCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -507,7 +489,6 @@ func TestRequestForgery_SeverityDetermination(t *testing.T) {
 }
 
 func TestRequestForgery_EnvVarName(t *testing.T) {
-	t.Parallel()
 	rule := RequestForgeryCriticalRule()
 
 	tests := []struct {
@@ -523,7 +504,6 @@ func TestRequestForgery_EnvVarName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			t.Parallel()
 			result := rule.generateEnvVarName(tt.path)
 			if result != tt.expected {
 				t.Errorf("generateEnvVarName(%q) = %q, want %q", tt.path, result, tt.expected)
@@ -533,7 +513,6 @@ func TestRequestForgery_EnvVarName(t *testing.T) {
 }
 
 func TestRequestForgery_DetectNetworkCommand(t *testing.T) {
-	t.Parallel()
 	rule := RequestForgeryCriticalRule()
 
 	tests := []struct {
@@ -555,7 +534,6 @@ func TestRequestForgery_DetectNetworkCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
-			t.Parallel()
 			result := rule.detectNetworkCommand(tt.line)
 			if result != tt.expected {
 				t.Errorf("detectNetworkCommand(%q) = %q, want %q", tt.line, result, tt.expected)
@@ -566,7 +544,6 @@ func TestRequestForgery_DetectNetworkCommand(t *testing.T) {
 
 // TestRequestForgery_MultipleUntrustedInputs tests detection of multiple untrusted inputs
 func TestRequestForgery_MultipleUntrustedInputs(t *testing.T) {
-	t.Parallel()
 	rule := RequestForgeryCriticalRule()
 
 	workflow := &ast.Workflow{
