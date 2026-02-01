@@ -242,10 +242,11 @@ func (t *TaintTracker) analyzeScript(stepID, script string) {
 // findTaintedVariableAssignments finds shell variable assignments that contain untrusted input.
 // Example: VAR="${{ github.event.issue.title }}"
 // Also handles: export VAR=..., local VAR=..., readonly VAR=...
+// Also propagates taint from referenced variables: VAR=$INPUT (where INPUT is tainted)
 func (t *TaintTracker) findTaintedVariableAssignments(script string) {
 	// Pattern: VAR=value or VAR="value" or VAR='value'
 	// Also handles optional keyword prefixes: export, local, readonly
-	// We look for assignments that contain ${{ }} expressions
+	// We look for assignments that contain ${{ }} expressions or references to tainted variables
 	varAssignPattern := regexp.MustCompile(`(?m)^\s*(?:(?:export|local|readonly)\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
 
 	matches := varAssignPattern.FindAllStringSubmatch(script, -1)
@@ -256,12 +257,44 @@ func (t *TaintTracker) findTaintedVariableAssignments(script string) {
 		varName := match[1]
 		value := match[2]
 
-		// Check if value contains untrusted expressions
+		var taintSources []string
+
+		// Check if value contains direct untrusted expressions
 		untrustedSources := t.extractUntrustedSources(value)
-		if len(untrustedSources) > 0 {
-			t.taintedVars[varName] = untrustedSources
+		taintSources = append(taintSources, untrustedSources...)
+
+		// Check if value references other tainted variables
+		// Handle both $VAR and ${VAR} forms
+		varRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+		varMatches := varRefPattern.FindAllStringSubmatch(value, -1)
+		for _, varMatch := range varMatches {
+			if len(varMatch) >= 2 {
+				referencedVar := varMatch[1]
+				if sources, exists := t.taintedVars[referencedVar]; exists {
+					// Propagate taint from referenced variable
+					taintSources = append(taintSources, sources...)
+				}
+			}
+		}
+
+		// Deduplicate taint sources
+		if len(taintSources) > 0 {
+			t.taintedVars[varName] = deduplicateStrings(taintSources)
 		}
 	}
+}
+
+// deduplicateStrings removes duplicate strings from a slice while preserving order.
+func deduplicateStrings(input []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(input))
+	for _, s := range input {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // findGitHubOutputWrites finds writes to $GITHUB_OUTPUT and tracks which outputs become tainted.

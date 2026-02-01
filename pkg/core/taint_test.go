@@ -283,6 +283,87 @@ echo "processed=$INPUT" >> $GITHUB_OUTPUT`},
 	}
 }
 
+func TestTaintTracker_VariableToVariablePropagation(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+
+	// Test case: VAR=$INPUT where INPUT is tainted
+	// This tests the fix for variable-to-variable taint propagation
+	step := &ast.Step{
+		ID: &ast.String{Value: "chain-test"},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `INPUT="${{ github.event.issue.title }}"
+VAR=$INPUT
+echo "output=$VAR" >> $GITHUB_OUTPUT`},
+		},
+	}
+
+	tracker.AnalyzeStep(step)
+
+	outputs, exists := tracker.taintedOutputs["chain-test"]
+	if !exists {
+		t.Fatal("step chain-test should have tainted outputs")
+	}
+
+	sources, outputExists := outputs["output"]
+	if !outputExists {
+		t.Fatal("output 'output' should be tainted (VAR=$INPUT propagation)")
+	}
+
+	// Verify the taint traces back to the original source
+	found := false
+	for _, source := range sources {
+		if source == "github.event.issue.title" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("taint should trace back to github.event.issue.title, got: %v", sources)
+	}
+}
+
+func TestTaintTracker_VariablePropagationWithBraces(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+
+	// Test case: VAR=${INPUT} where INPUT is tainted (using braces)
+	step := &ast.Step{
+		ID: &ast.String{Value: "braces-test"},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `INPUT="${{ github.event.comment.body }}"
+VAR=${INPUT}
+echo "result=$VAR" >> $GITHUB_OUTPUT`},
+		},
+	}
+
+	tracker.AnalyzeStep(step)
+
+	outputs, exists := tracker.taintedOutputs["braces-test"]
+	if !exists {
+		t.Fatal("step braces-test should have tainted outputs")
+	}
+
+	sources, outputExists := outputs["result"]
+	if !outputExists {
+		t.Fatal("output 'result' should be tainted (VAR=${INPUT} propagation)")
+	}
+
+	// Verify the taint traces back to the original source
+	found := false
+	for _, source := range sources {
+		if source == "github.event.comment.body" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("taint should trace back to github.event.comment.body, got: %v", sources)
+	}
+}
+
 func TestTaintTracker_NoStepID(t *testing.T) {
 	t.Parallel()
 
