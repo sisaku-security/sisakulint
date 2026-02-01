@@ -548,8 +548,8 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
-		ArgumentInjectionCriticalRule(),                               // Detects argument injection in privileged workflow triggers
-		ArgumentInjectionMediumRule(),                                 // Detects argument injection in normal workflow triggers
+		ArgumentInjectionCriticalRule(),
+		ArgumentInjectionMediumRule(),
 	}
 }
 
