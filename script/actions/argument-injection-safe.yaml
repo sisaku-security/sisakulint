@@ -9,7 +9,9 @@ on:
     types: [created]
 
 jobs:
-  # SAFE: Using environment variable with end-of-options marker
+  # SAFE: Using environment variable with validation for branch refs
+  # Note: git diff -- "$REF" treats the ref as a pathspec, not a branch reference
+  # For branch comparison, use git diff without -- and validate the input
   safe-git-diff:
     runs-on: ubuntu-latest
     steps:
@@ -17,7 +19,14 @@ jobs:
       - name: Git diff with safe pattern
         env:
           PR_REF: ${{ github.event.pull_request.head.ref }}
-        run: git diff -- "$PR_REF"
+        run: |
+          # Validate branch name format before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git diff "$PR_REF"
+          else
+            echo "Invalid branch name format"
+            exit 1
+          fi
 
   # SAFE: Using environment variable with quoted argument
   safe-git-fetch:
@@ -42,18 +51,19 @@ jobs:
           curl "https://api.example.com/${ENCODED_TITLE}"
 
   # SAFE: Using environment variable with validation
+  # Note: head.label contains owner:branch format, so we use head.ref for just the branch
   safe-wget:
     runs-on: ubuntu-latest
     steps:
       - name: Wget with safe pattern
         env:
-          PR_LABEL: ${{ github.event.pull_request.head.label }}
+          PR_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          # Validate input before using
-          if [[ "$PR_LABEL" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-            wget -O file.txt "https://example.com/${PR_LABEL}"
+          # Validate branch ref format before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            wget -O file.txt "https://example.com/${PR_REF}"
           else
-            echo "Invalid label format"
+            echo "Invalid ref format"
             exit 1
           fi
 
@@ -80,7 +90,9 @@ jobs:
             exit 1
           fi
 
-  # SAFE: Using environment variable with end-of-options
+  # SAFE: Using environment variable with validation
+  # Note: Docker doesn't support -- as POSIX-style option/image separator
+  # We rely on input validation to ensure safe usage
   safe-docker:
     runs-on: ubuntu-latest
     steps:
@@ -88,9 +100,9 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.event.pull_request.head.ref }}
         run: |
-          # Validate tag format
+          # Validate tag format (Docker tag naming rules)
           if [[ "$IMAGE_TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
-            docker run -- "myimage:${IMAGE_TAG}"
+            docker run "myimage:${IMAGE_TAG}"
           else
             echo "Invalid image tag format"
             exit 1
@@ -113,6 +125,7 @@ jobs:
           fi
 
   # SAFE: Using environment variable with path validation
+  # Note: Python passes -- to the script, so we rely on validation
   safe-python:
     runs-on: ubuntu-latest
     steps:
@@ -122,13 +135,13 @@ jobs:
         run: |
           # Validate script path (only allow alphanumeric and specific chars)
           if [[ "$SCRIPT_NAME" =~ ^[a-zA-Z0-9_]+\.py$ ]]; then
-            python -- "$SCRIPT_NAME"
+            python "$SCRIPT_NAME"
           else
             echo "Invalid script name format"
             exit 1
           fi
 
-  # SAFE: Multiple commands with proper environment variable usage
+  # SAFE: Multiple commands with proper environment variable usage and validation
   safe-multiline:
     runs-on: ubuntu-latest
     steps:
@@ -139,13 +152,19 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          git checkout -- "$PR_REF"
-          git log -- "$HEAD_REF"
+          # Validate branch refs before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git checkout "$PR_REF"
+          fi
+          if [[ "$HEAD_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git log "$HEAD_REF"
+          fi
           # For curl, encode the input
           ENCODED_TITLE=$(echo "$PR_TITLE" | jq -sRr @uri)
           curl -s "https://example.com/${ENCODED_TITLE}"
 
-  # SAFE: Using end-of-options marker with git
+  # SAFE: Using validated branch ref for git diff
+  # Note: For branch comparison, -- is not needed and would cause issues
   safe-git-endofoptions:
     runs-on: ubuntu-latest
     steps:
@@ -153,7 +172,13 @@ jobs:
       - name: Git with end-of-options marker
         env:
           PR_REF: ${{ github.event.pull_request.head.ref }}
-        run: git diff --stat -- "$PR_REF" main
+        run: |
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git diff --stat "$PR_REF" main
+          else
+            echo "Invalid ref format"
+            exit 1
+          fi
 
   # SAFE: AWS CLI with validated bucket name
   safe-aws:
