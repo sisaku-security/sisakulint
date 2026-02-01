@@ -10,9 +10,7 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
-// RequestForgeryRule is a shared implementation for detecting Server-Side Request Forgery (SSRF) vulnerabilities
-// It detects when untrusted input is used in network request URLs, hosts, or parameters
-// It can be configured to check either privileged triggers (critical) or normal triggers (medium)
+// RequestForgeryRule detects SSRF vulnerabilities in network requests
 type RequestForgeryRule struct {
 	BaseRule
 	severityLevel      string // "critical" or "medium"
@@ -21,75 +19,56 @@ type RequestForgeryRule struct {
 	workflow           *ast.Workflow
 }
 
-// stepWithRequestForgery tracks steps that need auto-fixing for request forgery
 type stepWithRequestForgery struct {
 	step           *ast.Step
 	untrustedExprs []requestForgeryExprInfo
 }
 
-// requestForgeryExprInfo contains information about an untrusted expression in network requests
 type requestForgeryExprInfo struct {
 	expr     parsedExpression
 	paths    []string
-	line     string                 // The line containing the network request
-	severity RequestForgerySeverity // Severity level based on where untrusted input is used
-	command  string                 // The network command detected (curl, wget, fetch, etc.)
+	line     string
+	severity RequestForgerySeverity
+	command  string
 }
 
-// RequestForgerySeverity represents the severity level of the SSRF vulnerability
 type RequestForgerySeverity int
 
 const (
-	// RequestForgerySeverityURL - Untrusted input used as full URL (most dangerous)
 	RequestForgerySeverityURL RequestForgerySeverity = iota
-	// RequestForgerySeverityHost - Untrusted input used as host/domain
 	RequestForgerySeverityHost
-	// RequestForgerySeverityPath - Untrusted input used as path/query parameters
 	RequestForgerySeverityPath
 )
 
-// Cloud metadata URLs that are commonly targeted in SSRF attacks
 var cloudMetadataURLs = []string{
-	"169.254.169.254", // AWS/GCP/Azure metadata service
-	"metadata.google", // GCP metadata
-	"169.254.170.2",   // AWS ECS metadata
-	"fd00:ec2::254",   // AWS metadata IPv6
-	"[fd00:ec2::254]", // AWS metadata IPv6 bracketed
-	"100.100.100.200", // Alibaba Cloud metadata
-	"192.0.0.192",     // Oracle Cloud metadata
+	"169.254.169.254",
+	"metadata.google",
+	"169.254.170.2",
+	"fd00:ec2::254",
+	"[fd00:ec2::254]",
+	"100.100.100.200",
+	"192.0.0.192",
 }
 
-// Network request commands to detect
-// Pattern matches command with potential flags/options before URL argument
 var networkCommandPatterns = []*regexp.Regexp{
-	// curl patterns - must be at start of line or after whitespace/operators
 	regexp.MustCompile(`(?:^|[\s|&;])(curl)\b`),
-	// wget patterns
 	regexp.MustCompile(`(?:^|[\s|&;])(wget)\b`),
-	// PowerShell Invoke-WebRequest and Invoke-RestMethod
 	regexp.MustCompile(`(?:^|[\s|&;])(Invoke-WebRequest)\b`),
 	regexp.MustCompile(`(?:^|[\s|&;])(Invoke-RestMethod)\b`),
 	regexp.MustCompile(`(?:^|[\s|&;])(iwr)\b`),
 	regexp.MustCompile(`(?:^|[\s|&;])(irm)\b`),
-	// fetch in Node.js/Deno (actions/github-script)
 	regexp.MustCompile(`\b(fetch)\s*\(`),
-	// axios
 	regexp.MustCompile(`\b(axios)\.(get|post|put|delete|patch|head|options|request)\s*\(`),
 	regexp.MustCompile(`\b(axios)\s*\(`),
-	// node-fetch, got, request
 	regexp.MustCompile(`\brequire\s*\(\s*['"]node-fetch['"]\s*\)`),
 	regexp.MustCompile(`\b(got)\s*\(`),
 	regexp.MustCompile(`\b(request)\s*\(`),
-	// Python requests
 	regexp.MustCompile(`\brequests\.(get|post|put|delete|patch|head|options)\s*\(`),
-	// Python urllib
 	regexp.MustCompile(`\burllib\.(request\.)?urlopen\s*\(`),
-	// nc/netcat - must include capture group for detectNetworkCommand
 	regexp.MustCompile(`(?:^|[\s|&;])(nc)\b`),
 	regexp.MustCompile(`(?:^|[\s|&;])(netcat)\b`),
 }
 
-// newRequestForgeryRule creates a new request forgery rule with the specified severity level
 func newRequestForgeryRule(severityLevel string, checkPrivileged bool) *RequestForgeryRule {
 	var desc string
 
@@ -110,17 +89,13 @@ func newRequestForgeryRule(severityLevel string, checkPrivileged bool) *RequestF
 	}
 }
 
-// VisitWorkflowPre is called before visiting a workflow
 func (rule *RequestForgeryRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
 	return nil
 }
 
 func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
-	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
-
-	// Skip if trigger type doesn't match our severity level
 	if rule.checkPrivileged != isPrivileged {
 		return nil
 	}
@@ -132,7 +107,6 @@ func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
 
 		var stepUntrusted *stepWithRequestForgery
 
-		// Check run: scripts
 		if s.Exec.Kind() == ast.ExecKindRun {
 			run := s.Exec.(*ast.ExecRun)
 			if run.Run == nil {
@@ -143,7 +117,6 @@ func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
 			stepUntrusted = rule.checkScript(script, run.Run, s)
 		}
 
-		// Check actions/github-script script: parameter
 		if s.Exec.Kind() == ast.ExecKindAction {
 			action := s.Exec.(*ast.ExecAction)
 			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/github-script@") {
@@ -161,12 +134,8 @@ func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
 	return nil
 }
 
-// checkScript analyzes a script for SSRF vulnerabilities
 func (rule *RequestForgeryRule) checkScript(script string, pos *ast.String, step *ast.Step) *stepWithRequestForgery {
-	// First check for cloud metadata URL references
 	rule.checkCloudMetadataReferences(script, pos)
-
-	// Parse expressions from the script
 	exprs := rule.extractAndParseExpressions(pos)
 	if len(exprs) == 0 {
 		return nil
@@ -174,17 +143,13 @@ func (rule *RequestForgeryRule) checkScript(script string, pos *ast.String, step
 
 	var stepUntrusted *stepWithRequestForgery
 
-	// Use ShellParser for AST-based network command detection
 	parser := shell.NewShellParser(script)
 	cmdCalls := parser.FindNetworkCommands()
 
-	// If AST parsing found network commands, use them
 	if len(cmdCalls) > 0 {
 		stepUntrusted = rule.checkScriptWithAST(cmdCalls, exprs, pos, step)
 	}
 
-	// Fallback to line-based detection for cases AST doesn't handle
-	// (e.g., scripts with ${{ }} that fail to parse)
 	if stepUntrusted == nil {
 		stepUntrusted = rule.checkScriptWithLines(script, exprs, pos, step)
 	}
@@ -192,16 +157,12 @@ func (rule *RequestForgeryRule) checkScript(script string, pos *ast.String, step
 	return stepUntrusted
 }
 
-// checkScriptWithAST uses AST-based detection for network commands
 func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkCommandCall, exprs []parsedExpression, pos *ast.String, step *ast.Step) *stepWithRequestForgery {
 	var stepUntrusted *stepWithRequestForgery
 
 	for _, cmdCall := range cmdCalls {
-		// Check each argument of the network command
 		for _, arg := range cmdCall.Args {
-			// Check if argument contains GHA expressions
 			for _, ghaExpr := range arg.GHAExprs {
-				// Find matching parsed expression
 				for _, expr := range exprs {
 					if strings.TrimSpace(expr.raw) != strings.TrimSpace(ghaExpr) {
 						continue
@@ -213,7 +174,6 @@ func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkComma
 							stepUntrusted = &stepWithRequestForgery{step: step}
 						}
 
-						// Determine severity based on argument position
 						severity := rule.determineSeverityFromArg(arg)
 
 						stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
@@ -234,27 +194,22 @@ func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkComma
 	return stepUntrusted
 }
 
-// checkScriptWithLines uses line-based detection as fallback
 func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []parsedExpression, pos *ast.String, step *ast.Step) *stepWithRequestForgery {
 	var stepUntrusted *stepWithRequestForgery
 
 	lines := strings.Split(script, "\n")
 	for lineIdx, line := range lines {
-		// Skip comments
 		trimmedLine := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmedLine, "#") {
 			continue
 		}
 
-		// Check if this line contains a network request command
 		networkCmd := rule.detectNetworkCommand(line)
 		if networkCmd == "" {
 			continue
 		}
 
-		// Check if this line contains any untrusted expressions
 		for _, expr := range exprs {
-			// Check if the expression is in this line
 			if !strings.Contains(line, fmt.Sprintf("${{ %s }}", expr.raw)) &&
 				!strings.Contains(line, fmt.Sprintf("${{%s}}", expr.raw)) {
 				continue
@@ -266,7 +221,6 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 					stepUntrusted = &stepWithRequestForgery{step: step}
 				}
 
-				// Determine severity based on where untrusted input is used
 				severity := rule.determineSeverity(line, expr)
 
 				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
@@ -277,7 +231,6 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 					command:  networkCmd,
 				})
 
-				// Calculate the actual line position
 				linePos := &ast.Position{
 					Line: pos.Pos.Line + lineIdx,
 					Col:  pos.Pos.Col,
@@ -294,22 +247,17 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 	return stepUntrusted
 }
 
-// determineSeverityFromArg determines severity based on command argument
 func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg) RequestForgerySeverity {
-	// Flags like -d, --data, -H are typically path/data severity
 	if arg.IsFlag {
 		return RequestForgerySeverityPath
 	}
 
-	// Use LiteralValue (unquoted) for semantic analysis
 	value := arg.LiteralValue
 	if value == "" {
-		value = arg.Value // Fallback to raw value
+		value = arg.Value
 	}
 
-	// Check if argument looks like a URL
 	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-		// If expression is in host position: https://${{ expr }}/...
 		if strings.Contains(value, "${{") {
 			idx := strings.Index(value, "${{")
 			prefix := value[:idx]
@@ -320,7 +268,6 @@ func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg) R
 		return RequestForgerySeverityPath
 	}
 
-	// If the argument is just a ${{ expr }}, it's likely a full URL
 	if strings.HasPrefix(strings.TrimSpace(value), "${{") {
 		return RequestForgerySeverityURL
 	}
@@ -328,7 +275,6 @@ func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg) R
 	return RequestForgerySeverityPath
 }
 
-// checkCloudMetadataReferences checks for direct references to cloud metadata URLs
 func (rule *RequestForgeryRule) checkCloudMetadataReferences(script string, pos *ast.String) {
 	lines := strings.Split(script, "\n")
 	for lineIdx, line := range lines {
@@ -353,23 +299,17 @@ func (rule *RequestForgeryRule) checkCloudMetadataReferences(script string, pos 
 	}
 }
 
-// detectNetworkCommand checks if a line contains a network request command
 func (rule *RequestForgeryRule) detectNetworkCommand(line string) string {
 	for _, pattern := range networkCommandPatterns {
-		// Use FindStringSubmatch to get captured groups
 		if matches := pattern.FindStringSubmatch(line); len(matches) > 1 {
-			// Return the first captured group (the command name)
 			cmd := matches[1]
-			// Handle cases like "fetch(" -> "fetch"
 			cmd = strings.TrimSuffix(cmd, "(")
 			return cmd
 		} else if match := pattern.FindString(line); match != "" {
-			// Fallback for patterns without capture groups
 			words := strings.Fields(match)
 			if len(words) > 0 {
 				cmd := words[0]
 				cmd = strings.TrimSuffix(cmd, "(")
-				// Handle axios.get -> axios
 				if idx := strings.Index(cmd, "."); idx != -1 {
 					cmd = cmd[:idx]
 				}
@@ -380,32 +320,25 @@ func (rule *RequestForgeryRule) detectNetworkCommand(line string) string {
 	return ""
 }
 
-// determineSeverity determines the severity based on where untrusted input is used
 func (rule *RequestForgeryRule) determineSeverity(line string, expr parsedExpression) RequestForgerySeverity {
 	exprPattern := fmt.Sprintf("${{ %s }}", expr.raw)
 	exprPatternNoSpace := fmt.Sprintf("${{%s}}", expr.raw)
 
-	// Check if expression is used as full URL (most dangerous)
-	// Pattern: curl ${{ input }} or wget ${{ input }}
 	fullURLPattern := regexp.MustCompile(`\b(curl|wget|http|https|fetch|axios)\s+["']?` + regexp.QuoteMeta(exprPattern))
 	fullURLPatternNoSpace := regexp.MustCompile(`\b(curl|wget|http|https|fetch|axios)\s+["']?` + regexp.QuoteMeta(exprPatternNoSpace))
 	if fullURLPattern.MatchString(line) || fullURLPatternNoSpace.MatchString(line) {
 		return RequestForgerySeverityURL
 	}
 
-	// Check if expression is used as host
-	// Pattern: curl https://${{ input }}/path or curl http://${{ input }}
 	hostPattern := regexp.MustCompile(`https?://` + regexp.QuoteMeta(exprPattern))
 	hostPatternNoSpace := regexp.MustCompile(`https?://` + regexp.QuoteMeta(exprPatternNoSpace))
 	if hostPattern.MatchString(line) || hostPatternNoSpace.MatchString(line) {
 		return RequestForgerySeverityHost
 	}
 
-	// Default to path/query severity
 	return RequestForgerySeverityPath
 }
 
-// reportError reports an SSRF error with appropriate severity
 func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []string, command string, severity RequestForgerySeverity) {
 	var severityStr string
 	var riskDesc string
@@ -443,13 +376,11 @@ func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []
 	}
 }
 
-// hasPrivilegedTriggers checks if the workflow has privileged triggers
 func (rule *RequestForgeryRule) hasPrivilegedTriggers() bool {
 	if rule.workflow == nil || rule.workflow.On == nil {
 		return false
 	}
 
-	// Check for privileged triggers
 	privilegedTriggers := map[string]bool{
 		"pull_request_target": true,
 		"workflow_run":        true,
@@ -468,14 +399,11 @@ func (rule *RequestForgeryRule) hasPrivilegedTriggers() bool {
 	return false
 }
 
-// RuleNames implements StepFixer interface
 func (rule *RequestForgeryRule) RuleNames() string {
 	return rule.RuleName
 }
 
-// FixStep implements StepFixer interface
 func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
-	// Find the stepWithRequestForgery for this step
 	var stepInfo *stepWithRequestForgery
 	for _, s := range rule.stepsWithUntrusted {
 		if s.step == step {
@@ -488,7 +416,6 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 		return nil
 	}
 
-	// Ensure env exists in AST
 	if step.Env == nil {
 		step.Env = &ast.Env{
 			Vars: make(map[string]*ast.EnvVar),
@@ -498,21 +425,16 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 		step.Env.Vars = make(map[string]*ast.EnvVar)
 	}
 
-	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)      // expr.raw -> env var name
-	envVarsForYAML := make(map[string]string) // env var name -> env var value
+	envVarMap := make(map[string]string)
+	envVarsForYAML := make(map[string]string)
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
-
-		// Generate environment variable name from the untrusted path
 		envVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
 
-		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			envVarMap[expr.raw] = envVarName
 
-			// Add to env if not already present
 			if _, exists := step.Env.Vars[strings.ToLower(envVarName)]; !exists {
 				step.Env.Vars[strings.ToLower(envVarName)] = &ast.EnvVar{
 					Name: &ast.String{
@@ -524,20 +446,17 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 						Pos:   expr.pos,
 					},
 				}
-				// Also track for BaseNode update
 				envVarsForYAML[envVarName] = fmt.Sprintf("${{ %s }}", expr.raw)
 			}
 		}
 	}
 
-	// Update BaseNode with env vars
 	if step.BaseNode != nil && len(envVarsForYAML) > 0 {
 		if err := AddEnvVarsToStepNode(step.BaseNode, envVarsForYAML); err != nil {
 			return fmt.Errorf("failed to add env vars to step node: %w", err)
 		}
 	}
 
-	// Build replacement maps
 	runReplacements := make(map[string]string)
 	scriptReplacements := make(map[string]string)
 
@@ -545,11 +464,9 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 		envVarName := envVarMap[untrustedInfo.expr.raw]
 
 		if step.Exec.Kind() == ast.ExecKindRun {
-			// For run: scripts, use $ENV_VAR
 			runReplacements[fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)] = fmt.Sprintf("$%s", envVarName)
 			runReplacements[fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)] = fmt.Sprintf("$%s", envVarName)
 
-			// Update AST
 			run := step.Exec.(*ast.ExecRun)
 			if run.Run != nil {
 				run.Run.Value = strings.ReplaceAll(
@@ -564,11 +481,9 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 				)
 			}
 		} else if step.Exec.Kind() == ast.ExecKindAction {
-			// For github-script, use process.env.ENV_VAR
 			scriptReplacements[fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
 			scriptReplacements[fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
 
-			// Update AST
 			action := step.Exec.(*ast.ExecAction)
 			if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
 				scriptInput.Value.Value = strings.ReplaceAll(
@@ -585,7 +500,6 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 		}
 	}
 
-	// Update BaseNode with replacements
 	if step.BaseNode != nil {
 		if len(runReplacements) > 0 {
 			if err := ReplaceInRunScript(step.BaseNode, runReplacements); err != nil {
@@ -606,7 +520,6 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 	return nil
 }
 
-// generateEnvVarName generates an environment variable name from an untrusted path
 func (rule *RequestForgeryRule) generateEnvVarName(path string) string {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
@@ -615,10 +528,9 @@ func (rule *RequestForgeryRule) generateEnvVarName(path string) string {
 
 	var name string
 
-	// Common patterns
 	if len(parts) >= 4 && parts[0] == ContextGithub && parts[1] == EventCategory {
-		category := parts[2]         // pull_request, issue, comment, etc.
-		field := parts[len(parts)-1] // title, body, etc.
+		category := parts[2]
+		field := parts[len(parts)-1]
 
 		categoryUpper := strings.ToUpper(strings.ReplaceAll(category, "_", ""))
 		fieldUpper := strings.ToUpper(field)
@@ -629,34 +541,26 @@ func (rule *RequestForgeryRule) generateEnvVarName(path string) string {
 
 		name = fmt.Sprintf("%s_%s", categoryUpper, fieldUpper)
 	} else {
-		// Fallback: use last part
 		lastPart := parts[len(parts)-1]
 		name = strings.ToUpper(lastPart)
 	}
 
-	// Sanitize: replace invalid characters with underscore
-	// Shell env var names must match [A-Z0-9_] and not start with digit
 	name = sanitizeEnvVarName(name)
 
 	return name
 }
 
-// sanitizeEnvVarName ensures the name is a valid shell environment variable name
 func sanitizeEnvVarName(name string) string {
 	var result strings.Builder
 	for i, r := range name {
 		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
-			// Valid character
 			if i == 0 && r >= '0' && r <= '9' {
-				// Can't start with digit, prepend underscore
 				result.WriteRune('_')
 			}
 			result.WriteRune(r)
 		} else if r >= 'a' && r <= 'z' {
-			// Lowercase to uppercase
 			result.WriteRune(r - 'a' + 'A')
 		} else {
-			// Invalid character, replace with underscore
 			result.WriteRune('_')
 		}
 	}
@@ -668,7 +572,6 @@ func sanitizeEnvVarName(name string) string {
 	return result.String()
 }
 
-// extractAndParseExpressions extracts all expressions from string and parses them
 func (rule *RequestForgeryRule) extractAndParseExpressions(str *ast.String) []parsedExpression {
 	if str == nil {
 		return nil
@@ -722,7 +625,6 @@ func (rule *RequestForgeryRule) extractAndParseExpressions(str *ast.String) []pa
 	return result
 }
 
-// parseExpression parses a single expression string into an AST node
 func (rule *RequestForgeryRule) parseExpression(exprStr string) (expressions.ExprNode, *expressions.ExprError) {
 	if !strings.HasSuffix(exprStr, "}}") {
 		exprStr = exprStr + "}}"
@@ -732,7 +634,6 @@ func (rule *RequestForgeryRule) parseExpression(exprStr string) (expressions.Exp
 	return p.Parse(l)
 }
 
-// checkUntrustedInput checks if the expression contains untrusted input
 func (rule *RequestForgeryRule) checkUntrustedInput(expr parsedExpression) []string {
 	checker := expressions.NewExprSemanticsChecker(true, nil)
 	_, errs := checker.Check(expr.node)
@@ -754,7 +655,6 @@ func (rule *RequestForgeryRule) checkUntrustedInput(expr parsedExpression) []str
 	return paths
 }
 
-// isDefinedInEnv checks if the expression is defined in the step's env section
 func (rule *RequestForgeryRule) isDefinedInEnv(expr parsedExpression, env *ast.Env) bool {
 	if env == nil {
 		return false

@@ -469,7 +469,6 @@ func (p *ShellParser) GetDangerousPatternType() string {
 	return patternType
 }
 
-// NetworkCommandCall represents a network command call found in the script
 type NetworkCommandCall struct {
 	CommandName string
 	Args        []CommandArg
@@ -478,17 +477,15 @@ type NetworkCommandCall struct {
 	InPipe      bool
 }
 
-// CommandArg represents a command argument
 type CommandArg struct {
-	Value        string     // Raw value with quotes (for display/debugging)
-	LiteralValue string     // Unquoted literal value (for semantic analysis)
+	Value        string
+	LiteralValue string
 	Position     syntax.Pos
 	IsFlag       bool
-	VarNames     []string // Shell variables ($VAR)
-	GHAExprs     []string // GitHub Actions expressions (${{ }})
+	VarNames     []string
+	GHAExprs     []string
 }
 
-// FindNetworkCommands finds all network command calls in the script
 func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
 	if p.file == nil {
 		return nil
@@ -500,19 +497,16 @@ func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
 	return calls
 }
 
-// networkWalkContext tracks context during network command search
 type networkWalkContext struct {
 	inCmdSubst bool
 	inPipe     bool
 }
 
-// walkForNetworkCommandsWithFallback tries AST parsing first, falls back to regex on error
 func (p *ShellParser) walkForNetworkCommandsWithFallback(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
 	if p.file != nil {
 		p.walkForNetworkCommands(node, ctx, calls)
 	}
 
-	// If AST parsing failed or file is nil, try fallback regex-based detection on the original script
 	if len(*calls) == 0 && p.script != "" {
 		p.findNetworkCommandsByRegex(p.script, calls)
 	}
@@ -542,13 +536,11 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 			*calls = append(*calls, call)
 		}
 
-		// Still traverse nested structures
 		for _, arg := range x.Args {
 			p.walkForNetworkCommands(arg, ctx, calls)
 		}
 
 	case *syntax.BinaryCmd:
-		// Handle pipes - both sides are in pipe context
 		newCtx := *ctx
 		if x.Op == syntax.Pipe {
 			newCtx.inPipe = true
@@ -569,11 +561,9 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		}
 
 	case *syntax.DblQuoted, *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect:
-		// Leaf nodes or handled separately
 	}
 }
 
-// isNetworkCommand checks if the command is a network-related command
 func (p *ShellParser) isNetworkCommand(cmdName string) bool {
 	networkCmds := map[string]bool{
 		"curl":   true,
@@ -586,7 +576,6 @@ func (p *ShellParser) isNetworkCommand(cmdName string) bool {
 	return networkCmds[cmdName]
 }
 
-// parseNetworkCommand extracts arguments from a network command call
 func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext) NetworkCommandCall {
 	cmd := NetworkCommandCall{
 		CommandName: p.getCommandName(call),
@@ -595,7 +584,6 @@ func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWal
 		InPipe:      ctx.inPipe,
 	}
 
-	// Parse arguments (skip command name at index 0)
 	for i := 1; i < len(call.Args); i++ {
 		arg := p.parseCommandArg(call.Args[i])
 		cmd.Args = append(cmd.Args, arg)
@@ -604,7 +592,6 @@ func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWal
 	return cmd
 }
 
-// parseCommandArg extracts information from a command argument
 func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
 	rawValue := p.wordToString(word)
 	literalValue := p.extractLiteralValue(word)
@@ -615,18 +602,15 @@ func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
 		Position:     word.Pos(),
 	}
 
-	// Check if it's a flag (use literal value without quotes)
 	if strings.HasPrefix(literalValue, "-") {
 		arg.IsFlag = true
 	}
 
-	// Extract variables and GitHub Actions expressions
 	p.analyzeWordParts(word, &arg)
 
 	return arg
 }
 
-// extractLiteralValue extracts the unquoted literal value from a Word AST node
 func (p *ShellParser) extractLiteralValue(word *syntax.Word) string {
 	var result strings.Builder
 
@@ -637,21 +621,17 @@ func (p *ShellParser) extractLiteralValue(word *syntax.Word) string {
 	return result.String()
 }
 
-// extractLiteralFromPart recursively extracts literal values from word parts
 func (p *ShellParser) extractLiteralFromPart(part syntax.WordPart, result *strings.Builder) {
 	switch x := part.(type) {
 	case *syntax.Lit:
 		result.WriteString(x.Value)
 	case *syntax.DblQuoted:
-		// Extract content inside double quotes
 		for _, inner := range x.Parts {
 			p.extractLiteralFromPart(inner, result)
 		}
 	case *syntax.SglQuoted:
-		// Single quoted content is literal
 		result.WriteString(x.Value)
 	case *syntax.ParamExp:
-		// Keep parameter expansion as-is (e.g., $VAR, ${VAR})
 		if x.Param != nil {
 			if x.Short {
 				result.WriteString("$")
@@ -663,7 +643,6 @@ func (p *ShellParser) extractLiteralFromPart(part syntax.WordPart, result *strin
 			}
 		}
 	case *syntax.CmdSubst:
-		// Command substitution - use printer for complex cases
 		var buf bytes.Buffer
 		printer := syntax.NewPrinter()
 		if err := printer.Print(&buf, x); err == nil {
@@ -672,7 +651,6 @@ func (p *ShellParser) extractLiteralFromPart(part syntax.WordPart, result *strin
 	}
 }
 
-// wordToString converts a Word node to its string representation
 func (p *ShellParser) wordToString(word *syntax.Word) string {
 	var buf bytes.Buffer
 	printer := syntax.NewPrinter()
@@ -682,16 +660,11 @@ func (p *ShellParser) wordToString(word *syntax.Word) string {
 	return strings.TrimSpace(buf.String())
 }
 
-// analyzeWordParts extracts variables and GHA expressions from word parts
 func (p *ShellParser) analyzeWordParts(word *syntax.Word, arg *CommandArg) {
-	// Get the raw string value to search for ${{ }}
 	rawValue := arg.Value
-
-	// Extract GHA expressions (not parsed by shell parser)
 	ghaExprs := extractGHAExpressionsFromString(rawValue)
 	arg.GHAExprs = ghaExprs
 
-	// Extract shell variables from AST
 	syntax.Walk(word, func(node syntax.Node) bool {
 		if paramExp, ok := node.(*syntax.ParamExp); ok {
 			if paramExp.Param != nil && paramExp.Param.Value != "" {
@@ -702,7 +675,6 @@ func (p *ShellParser) analyzeWordParts(word *syntax.Word, arg *CommandArg) {
 	})
 }
 
-// extractGHAExpressionsFromString extracts GitHub Actions expressions from a string
 func extractGHAExpressionsFromString(s string) []string {
 	var exprs []string
 	offset := 0
@@ -728,24 +700,21 @@ func extractGHAExpressionsFromString(s string) []string {
 	return exprs
 }
 
-// findNetworkCommandsByRegex finds network commands using regex as fallback
 func (p *ShellParser) findNetworkCommandsByRegex(script string, calls *[]NetworkCommandCall) {
 	lines := strings.Split(script, "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			continue // Skip comments
+			continue
 		}
 
 		networkCmds := []string{"curl", "wget", "nc", "netcat"}
 		for _, cmd := range networkCmds {
 			if strings.Contains(line, cmd) {
-				// Extract arguments after the command
 				call := NetworkCommandCall{
 					CommandName: cmd,
 					Position:    syntax.Pos{},
 				}
 
-				// Find arguments containing ${{ }}
 				ghaExprs := extractGHAExpressionsFromString(line)
 				for _, expr := range ghaExprs {
 					arg := CommandArg{
