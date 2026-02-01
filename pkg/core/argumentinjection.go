@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -83,10 +82,6 @@ var dangerousCommands = map[string]bool{
 	"ant":      true,
 }
 
-// Pattern to detect command execution with untrusted input as argument
-// Matches patterns like: git diff ${{ ... }}, curl -o ${{ ... }}, etc.
-var commandArgumentPattern = regexp.MustCompile(`(?m)^\s*(?:(?:sudo|nohup|time|nice|strace|timeout)\s+)*([a-zA-Z0-9_-]+)`)
-
 // newArgumentInjectionRule creates a new argument injection rule with the specified severity level
 func newArgumentInjectionRule(severityLevel string, checkPrivileged bool) *ArgumentInjectionRule {
 	var desc string
@@ -135,116 +130,71 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 
 		script := run.Run.Value
 
-		// Parse expressions from the script
+		// 1. Extract all expressions from the script
 		exprs := rule.extractAndParseExpressions(run.Run)
 		if len(exprs) == 0 {
 			continue
 		}
 
-		var stepUntrusted *stepWithArgumentInjection
+		// 2. Identify untrusted expressions (but we'll replace ALL expressions for parsing)
+		untrustedSet := make(map[string][]string) // expr.raw -> untrusted paths
+		for _, expr := range exprs {
+			untrustedPaths := rule.checkUntrustedInput(expr)
+			if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
+				untrustedSet[expr.raw] = untrustedPaths
+			}
+		}
 
-		// Parse the script with ShellParser for accurate command boundary detection
-		parser := shell.NewShellParser(script)
+		if len(untrustedSet) == 0 {
+			continue
+		}
 
-		// Get all dangerous command names
+		// 3. Replace ALL expressions with placeholder variables to make script parseable
+		// This is necessary because ${{ }} is not valid shell syntax
+		modifiedScript := script
+		exprToPlaceholder := make(map[string]string) // expr.raw -> placeholder name
+
+		for i, expr := range exprs {
+			exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
+			exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
+			placeholderName := fmt.Sprintf("__SISAKULINT_ARGEXPR_%d__", i)
+
+			// Replace with placeholder in the script
+			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern1, "$"+placeholderName)
+			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern2, "$"+placeholderName)
+
+			exprToPlaceholder[expr.raw] = placeholderName
+		}
+
+		// 4. Parse the modified script with shell parser
+		parser := shell.NewShellParser(modifiedScript)
+
+		// 5. Get all dangerous command names
 		dangerousCmdNames := make([]string, 0)
 		for cmd := range dangerousCommands {
 			dangerousCmdNames = append(dangerousCmdNames, cmd)
 		}
 
-		// Check each expression
-		for _, expr := range exprs {
-			untrustedPaths := rule.checkUntrustedInput(expr)
-			if len(untrustedPaths) == 0 {
+		// 6. Check each placeholder in command arguments (only for untrusted expressions)
+		var stepUntrusted *stepWithArgumentInjection
+
+		for i := range exprs {
+			expr := &exprs[i]
+
+			// Skip trusted expressions
+			untrustedPaths, isUntrusted := untrustedSet[expr.raw]
+			if !isUntrusted {
 				continue
 			}
 
-			// Skip if expression is already passed via environment variable
-			if rule.isDefinedInEnv(expr, s.Env) {
-				continue
-			}
+			placeholderName := exprToPlaceholder[expr.raw]
 
-			// Use ShellParser to find variable usages as command arguments
-			// First, we need to replace expressions with environment variables to use them with ShellParser
-			envVarName := rule.generateEnvVarName(untrustedPaths[0])
+			// Find variable usages as command arguments
+			varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
 
-			// Find usages of this variable as command arguments
-			varUsages := parser.FindVarUsageAsCommandArg(envVarName, dangerousCmdNames)
-
-			// Also handle direct ${{ expr }} usage by checking if it appears after a command
-			exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
-			exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
-
-			lines := strings.Split(script, "\n")
-			for lineIdx, line := range lines {
-				// Check if expression is in this line
-				if !strings.Contains(line, exprPattern1) && !strings.Contains(line, exprPattern2) {
-					continue
-				}
-
-				// Skip empty lines and comments
-				trimmedLine := strings.TrimSpace(line)
-				if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
-					continue
-				}
-
-				// Extract command name
-				commandName := rule.extractCommandName(trimmedLine)
-				if commandName == "" {
-					continue
-				}
-
-				// Check if expression is used as command argument
-				if !rule.isUsedAsArgument(line, expr.raw) {
-					continue
-				}
-
-				// Check if `--` is used before the untrusted input (safe pattern)
-				if rule.hasEndOfOptionsMarker(line, expr.raw) {
-					continue
-				}
-
-				if stepUntrusted == nil {
-					stepUntrusted = &stepWithArgumentInjection{step: s}
-				}
-
-				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
-					expr:        expr,
-					paths:       untrustedPaths,
-					commandName: commandName,
-					fullLine:    trimmedLine,
-				})
-
-				// Calculate the actual line position
-				linePos := &ast.Position{
-					Line: run.Run.Pos.Line + lineIdx,
-					Col:  run.Run.Pos.Col,
-				}
-				if run.Run.Literal {
-					linePos.Line += 1
-				}
-
-				if rule.checkPrivileged {
-					rule.Errorf(
-						linePos,
-						"argument injection (critical): \"%s\" is potentially untrusted and used as command-line argument to '%s' in a workflow with privileged triggers. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
-						strings.Join(untrustedPaths, "\", \""),
-						commandName,
-					)
-				} else {
-					rule.Errorf(
-						linePos,
-						"argument injection (medium): \"%s\" is potentially untrusted and used as command-line argument to '%s'. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
-						strings.Join(untrustedPaths, "\", \""),
-						commandName,
-					)
-				}
-			}
-
-			// Also process variable usages found by ShellParser (if the variable was already in env)
 			for _, varUsage := range varUsages {
+				// Skip if the variable is after --, which is safe
 				if varUsage.IsAfterDoubleDash {
-					// Variable is after --, which is safe
 					continue
 				}
 
@@ -252,18 +202,14 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 					stepUntrusted = &stepWithArgumentInjection{step: s}
 				}
 
-				// Find the line containing this usage
-				lineIdx := strings.Count(script[:varUsage.StartPos], "\n")
-				linePos := &ast.Position{
-					Line: run.Run.Pos.Line + lineIdx,
-					Col:  run.Run.Pos.Col,
-				}
-				if run.Run.Literal {
-					linePos.Line += 1
+				// Calculate line position based on expression position
+				linePos := expr.pos
+				if linePos == nil {
+					linePos = run.Run.Pos
 				}
 
 				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
-					expr:        expr,
+					expr:        *expr,
 					paths:       untrustedPaths,
 					commandName: varUsage.CommandName,
 					fullLine:    varUsage.Context,
@@ -295,78 +241,6 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 	return nil
 }
 
-// extractCommandName extracts the command name from a command line
-func (rule *ArgumentInjectionRule) extractCommandName(line string) string {
-	matches := commandArgumentPattern.FindStringSubmatch(line)
-	if len(matches) < 2 {
-		return ""
-	}
-
-	commandName := matches[1]
-
-	// Only flag dangerous commands
-	if dangerousCommands[commandName] {
-		return commandName
-	}
-
-	return ""
-}
-
-// isUsedAsArgument checks if the expression is used as a command-line argument
-func (rule *ArgumentInjectionRule) isUsedAsArgument(line, exprRaw string) bool {
-	// Find the position of the expression in the line
-	exprPattern1 := fmt.Sprintf("${{ %s }}", exprRaw)
-	exprPattern2 := fmt.Sprintf("${{%s}}", exprRaw)
-
-	exprPos := strings.Index(line, exprPattern1)
-	if exprPos == -1 {
-		exprPos = strings.Index(line, exprPattern2)
-	}
-	if exprPos == -1 {
-		return false
-	}
-
-	// Find the command name position
-	matches := commandArgumentPattern.FindStringSubmatch(line)
-	if len(matches) < 2 {
-		return false
-	}
-
-	commandName := matches[1]
-	commandPos := strings.Index(line, commandName)
-	if commandPos == -1 {
-		return false
-	}
-
-	// The expression should appear after the command name
-	if exprPos <= commandPos+len(commandName) {
-		return false
-	}
-
-	return true
-}
-
-// hasEndOfOptionsMarker checks if `--` is used before the untrusted input
-func (rule *ArgumentInjectionRule) hasEndOfOptionsMarker(line, exprRaw string) bool {
-	exprPattern1 := fmt.Sprintf("${{ %s }}", exprRaw)
-	exprPattern2 := fmt.Sprintf("${{%s}}", exprRaw)
-
-	exprPos := strings.Index(line, exprPattern1)
-	if exprPos == -1 {
-		exprPos = strings.Index(line, exprPattern2)
-	}
-	if exprPos == -1 {
-		return false
-	}
-
-	// Look for `--` followed by space before the expression
-	beforeExpr := line[:exprPos]
-
-	// Check if there's a standalone `--` (end of options marker)
-	// This should not match things like `--option` or `---`
-	endOfOptionsMatch := regexp.MustCompile(`\s--\s`)
-	return endOfOptionsMatch.MatchString(beforeExpr + " ") // Add space to match `-- ${{ expr }}`
-}
 
 // hasPrivilegedTriggers checks if the workflow has privileged triggers
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
@@ -400,6 +274,7 @@ func (rule *ArgumentInjectionRule) RuleNames() string {
 }
 
 // FixStep implements StepFixer interface
+// TODO: Implement auto-fix using shell parser in a follow-up PR
 func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	// Find the stepWithArgumentInjection for this step
 	var stepInfo *stepWithArgumentInjection
@@ -468,160 +343,30 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 		}
 	}
 
-	// Build replacement map for the run script
-	// Replace ${{ expr }} or bare $ENV_VAR with -- "$ENV_VAR" (with end-of-options marker)
+	// Replace ${{ expr }} with $ENV_VAR in the script
 	script := run.Run.Value
-	lines := strings.Split(script, "\n")
+	for _, untrustedInfo := range stepInfo.untrustedExprs {
+		envVarName := envVarMap[untrustedInfo.expr.raw]
+		exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
+		exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
 
-	for i, line := range lines {
-		// Process each untrusted expression in this line
-		for _, untrustedInfo := range stepInfo.untrustedExprs {
-			envVarName := envVarMap[untrustedInfo.expr.raw]
-			exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
-			exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
-
-			// Pattern for bare environment variable (already replaced by code-injection rule)
-			bareEnvPattern := fmt.Sprintf("$%s", envVarName)
-
-			if strings.Contains(line, exprPattern1) || strings.Contains(line, exprPattern2) {
-				// Replace the expression with the safe pattern
-				// Use -- before the argument if the command supports it
-				newValue := fmt.Sprintf("\"$%s\"", envVarName)
-
-				// Insert -- before the untrusted input if not already present
-				if !rule.hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2) {
-					newValue = "-- " + newValue
-				}
-
-				line = strings.ReplaceAll(line, exprPattern1, newValue)
-				line = strings.ReplaceAll(line, exprPattern2, newValue)
-			} else if strings.Contains(line, bareEnvPattern) {
-				// The expression was already replaced by code-injection rule
-				// We need to add -- marker and quotes
-				// Check if it's already properly quoted and has -- marker
-				quotedPattern := fmt.Sprintf("\"$%s\"", envVarName)
-				safePattern := fmt.Sprintf("-- \"$%s\"", envVarName)
-
-				if strings.Contains(line, safePattern) {
-					// Already safe, skip
-					continue
-				}
-
-				if strings.Contains(line, quotedPattern) {
-					// Has quotes but no -- marker
-					if !rule.hasEndOfOptionsMarkerForEnvVar(line, envVarName) {
-						line = strings.ReplaceAll(line, quotedPattern, safePattern)
-					}
-				} else {
-					// Bare $ENV_VAR without quotes
-					// Need to add both -- and quotes
-					// But be careful not to match $ENV_VAR inside other strings
-					// Use word boundary matching
-					newValue := fmt.Sprintf("-- \"$%s\"", envVarName)
-
-					if rule.hasEndOfOptionsMarkerForEnvVar(line, envVarName) {
-						// Has -- marker, just add quotes
-						newValue = fmt.Sprintf("\"$%s\"", envVarName)
-					}
-
-					// Replace bare $ENV_VAR with -- "$ENV_VAR"
-					// Be careful with word boundaries
-					line = rule.replaceBareEnvVar(line, envVarName, newValue)
-				}
-			}
-		}
-		lines[i] = line
+		// Replace with -- "$ENV_VAR" pattern for safety
+		newValue := fmt.Sprintf("-- \"$%s\"", envVarName)
+		script = strings.ReplaceAll(script, exprPattern1, newValue)
+		script = strings.ReplaceAll(script, exprPattern2, newValue)
 	}
 
-	newScript := strings.Join(lines, "\n")
-
 	// Update AST
-	run.Run.Value = newScript
+	run.Run.Value = script
 
 	// Update BaseNode
 	if step.BaseNode != nil {
-		if err := setRunScriptValue(step.BaseNode, newScript); err != nil {
+		if err := setRunScriptValue(step.BaseNode, script); err != nil {
 			return fmt.Errorf("failed to update run script: %w", err)
 		}
 	}
 
 	return nil
-}
-
-// hasEndOfOptionsMarkerForExpr checks if `--` is used before the expression pattern
-func (rule *ArgumentInjectionRule) hasEndOfOptionsMarkerForExpr(line, exprPattern1, exprPattern2 string) bool {
-	exprPos := strings.Index(line, exprPattern1)
-	if exprPos == -1 {
-		exprPos = strings.Index(line, exprPattern2)
-	}
-	if exprPos == -1 {
-		return false
-	}
-
-	beforeExpr := line[:exprPos]
-	endOfOptionsMatch := regexp.MustCompile(`\s--\s`)
-	return endOfOptionsMatch.MatchString(beforeExpr + " ")
-}
-
-// hasEndOfOptionsMarkerForEnvVar checks if `--` is used before the environment variable
-func (rule *ArgumentInjectionRule) hasEndOfOptionsMarkerForEnvVar(line, envVarName string) bool {
-	// Look for $ENV_VAR or "$ENV_VAR"
-	patterns := []string{
-		fmt.Sprintf("$%s", envVarName),
-		fmt.Sprintf("\"$%s\"", envVarName),
-	}
-
-	minPos := -1
-	for _, pattern := range patterns {
-		pos := strings.Index(line, pattern)
-		if pos != -1 && (minPos == -1 || pos < minPos) {
-			minPos = pos
-		}
-	}
-
-	if minPos == -1 {
-		return false
-	}
-
-	beforeExpr := line[:minPos]
-	endOfOptionsMatch := regexp.MustCompile(`\s--\s`)
-	return endOfOptionsMatch.MatchString(beforeExpr + " ")
-}
-
-// replaceBareEnvVar replaces bare $ENV_VAR with newValue, being careful about word boundaries
-func (rule *ArgumentInjectionRule) replaceBareEnvVar(line, envVarName, newValue string) string {
-	barePattern := fmt.Sprintf("$%s", envVarName)
-	pos := 0
-
-	for {
-		idx := strings.Index(line[pos:], barePattern)
-		if idx == -1 {
-			break
-		}
-
-		actualPos := pos + idx
-		endPos := actualPos + len(barePattern)
-
-		// Check if this is a word boundary (not part of a longer variable name)
-		// Valid end characters: space, newline, quote, end of string, or non-alphanumeric
-		isWordBoundary := endPos >= len(line) ||
-			!isAlphanumericOrUnderscore(line[endPos])
-
-		if isWordBoundary {
-			// Replace this occurrence
-			line = line[:actualPos] + newValue + line[endPos:]
-			pos = actualPos + len(newValue)
-		} else {
-			pos = endPos
-		}
-	}
-
-	return line
-}
-
-// isAlphanumericOrUnderscore checks if a byte is alphanumeric or underscore
-func isAlphanumericOrUnderscore(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
 }
 
 // generateEnvVarName generates an environment variable name from an untrusted path
