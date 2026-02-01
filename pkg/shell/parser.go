@@ -480,11 +480,12 @@ type NetworkCommandCall struct {
 
 // CommandArg represents a command argument
 type CommandArg struct {
-	Value    string
-	Position syntax.Pos
-	IsFlag   bool
-	VarNames []string // Shell variables ($VAR)
-	GHAExprs []string // GitHub Actions expressions (${{ }})
+	Value        string     // Raw value with quotes (for display/debugging)
+	LiteralValue string     // Unquoted literal value (for semantic analysis)
+	Position     syntax.Pos
+	IsFlag       bool
+	VarNames     []string // Shell variables ($VAR)
+	GHAExprs     []string // GitHub Actions expressions (${{ }})
 }
 
 // FindNetworkCommands finds all network command calls in the script
@@ -547,12 +548,12 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		}
 
 	case *syntax.BinaryCmd:
-		// Handle pipes
+		// Handle pipes - both sides are in pipe context
 		newCtx := *ctx
 		if x.Op == syntax.Pipe {
 			newCtx.inPipe = true
 		}
-		p.walkForNetworkCommands(x.X, ctx, calls)
+		p.walkForNetworkCommands(x.X, &newCtx, calls)
 		p.walkForNetworkCommands(x.Y, &newCtx, calls)
 
 	case *syntax.CmdSubst:
@@ -605,13 +606,17 @@ func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWal
 
 // parseCommandArg extracts information from a command argument
 func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
+	rawValue := p.wordToString(word)
+	literalValue := p.extractLiteralValue(word)
+
 	arg := CommandArg{
-		Value:    p.wordToString(word),
-		Position: word.Pos(),
+		Value:        rawValue,
+		LiteralValue: literalValue,
+		Position:     word.Pos(),
 	}
 
-	// Check if it's a flag
-	if strings.HasPrefix(arg.Value, "-") {
+	// Check if it's a flag (use literal value without quotes)
+	if strings.HasPrefix(literalValue, "-") {
 		arg.IsFlag = true
 	}
 
@@ -619,6 +624,52 @@ func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
 	p.analyzeWordParts(word, &arg)
 
 	return arg
+}
+
+// extractLiteralValue extracts the unquoted literal value from a Word AST node
+func (p *ShellParser) extractLiteralValue(word *syntax.Word) string {
+	var result strings.Builder
+
+	for _, part := range word.Parts {
+		p.extractLiteralFromPart(part, &result)
+	}
+
+	return result.String()
+}
+
+// extractLiteralFromPart recursively extracts literal values from word parts
+func (p *ShellParser) extractLiteralFromPart(part syntax.WordPart, result *strings.Builder) {
+	switch x := part.(type) {
+	case *syntax.Lit:
+		result.WriteString(x.Value)
+	case *syntax.DblQuoted:
+		// Extract content inside double quotes
+		for _, inner := range x.Parts {
+			p.extractLiteralFromPart(inner, result)
+		}
+	case *syntax.SglQuoted:
+		// Single quoted content is literal
+		result.WriteString(x.Value)
+	case *syntax.ParamExp:
+		// Keep parameter expansion as-is (e.g., $VAR, ${VAR})
+		if x.Param != nil {
+			if x.Short {
+				result.WriteString("$")
+				result.WriteString(x.Param.Value)
+			} else {
+				result.WriteString("${")
+				result.WriteString(x.Param.Value)
+				result.WriteString("}")
+			}
+		}
+	case *syntax.CmdSubst:
+		// Command substitution - use printer for complex cases
+		var buf bytes.Buffer
+		printer := syntax.NewPrinter()
+		if err := printer.Print(&buf, x); err == nil {
+			result.WriteString(buf.String())
+		}
+	}
 }
 
 // wordToString converts a Word node to its string representation

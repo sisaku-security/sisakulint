@@ -301,14 +301,19 @@ func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg) R
 		return RequestForgerySeverityPath
 	}
 
+	// Use LiteralValue (unquoted) for semantic analysis
+	value := arg.LiteralValue
+	if value == "" {
+		value = arg.Value // Fallback to raw value
+	}
+
 	// Check if argument looks like a URL
-	value := arg.Value
 	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
 		// If expression is in host position: https://${{ expr }}/...
 		if strings.Contains(value, "${{") {
 			idx := strings.Index(value, "${{")
 			prefix := value[:idx]
-			if strings.HasSuffix(prefix, "://") || strings.HasSuffix(prefix, "://\"") || strings.HasSuffix(prefix, "://'") {
+			if strings.HasSuffix(prefix, "://") {
 				return RequestForgerySeverityHost
 			}
 		}
@@ -608,6 +613,8 @@ func (rule *RequestForgeryRule) generateEnvVarName(path string) string {
 		return "UNTRUSTED_URL"
 	}
 
+	var name string
+
 	// Common patterns
 	if len(parts) >= 4 && parts[0] == ContextGithub && parts[1] == EventCategory {
 		category := parts[2]         // pull_request, issue, comment, etc.
@@ -620,12 +627,45 @@ func (rule *RequestForgeryRule) generateEnvVarName(path string) string {
 			categoryUpper = "PR"
 		}
 
-		return fmt.Sprintf("%s_%s", categoryUpper, fieldUpper)
+		name = fmt.Sprintf("%s_%s", categoryUpper, fieldUpper)
+	} else {
+		// Fallback: use last part
+		lastPart := parts[len(parts)-1]
+		name = strings.ToUpper(lastPart)
 	}
 
-	// Fallback: use last part
-	lastPart := parts[len(parts)-1]
-	return strings.ToUpper(lastPart)
+	// Sanitize: replace invalid characters with underscore
+	// Shell env var names must match [A-Z0-9_] and not start with digit
+	name = sanitizeEnvVarName(name)
+
+	return name
+}
+
+// sanitizeEnvVarName ensures the name is a valid shell environment variable name
+func sanitizeEnvVarName(name string) string {
+	var result strings.Builder
+	for i, r := range name {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			// Valid character
+			if i == 0 && r >= '0' && r <= '9' {
+				// Can't start with digit, prepend underscore
+				result.WriteRune('_')
+			}
+			result.WriteRune(r)
+		} else if r >= 'a' && r <= 'z' {
+			// Lowercase to uppercase
+			result.WriteRune(r - 'a' + 'A')
+		} else {
+			// Invalid character, replace with underscore
+			result.WriteRune('_')
+		}
+	}
+
+	if result.Len() == 0 {
+		return "VAR"
+	}
+
+	return result.String()
 }
 
 // extractAndParseExpressions extracts all expressions from string and parses them
