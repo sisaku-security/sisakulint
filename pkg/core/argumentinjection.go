@@ -426,6 +426,7 @@ func (rule *ArgumentInjectionRule) generateEnvVarName(path string) string {
 }
 
 // extractAndParseExpressions extracts all expressions from string and parses them
+// Uses the expressions tokenizer to correctly handle }} inside string literals
 func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) []parsedExpression {
 	if str == nil {
 		return nil
@@ -442,13 +443,19 @@ func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) [
 		}
 
 		start := offset + idx
-		endIdx := strings.Index(value[start:], "}}")
-		if endIdx == -1 {
-			break
+		// Use tokenizer to find the correct end of expression
+		// This handles }} inside string literals correctly
+		remaining := value[start+3:]
+		_, endOffset, err := expressions.AnalyzeExpressionSyntax(remaining)
+		if err != nil {
+			// Parse error - skip this expression and continue searching
+			offset = start + 3
+			continue
 		}
 
-		exprContent := value[start+3 : start+endIdx]
-		exprContent = strings.TrimSpace(exprContent)
+		// endOffset is the position after }} in remaining
+		// Expression content is everything before }} (endOffset - 2)
+		exprContent := strings.TrimSpace(remaining[:endOffset-2])
 
 		expr, parseErr := rule.parseExpression(exprContent)
 		if parseErr == nil && expr != nil {
@@ -473,7 +480,8 @@ func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) [
 			})
 		}
 
-		offset = start + endIdx + 2
+		// Move past this expression
+		offset = start + 3 + endOffset
 	}
 
 	return result
