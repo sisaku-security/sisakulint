@@ -1,0 +1,77 @@
+# Taint Propagation Test - Vulnerable Pattern (should detect)
+# This demonstrates GHSL-2024-325 style vulnerability where untrusted input
+# flows through step outputs to environment variables
+name: Taint Propagation Critical Test
+on: issue_comment
+
+jobs:
+  test-basic-taint-propagation:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Write untrusted input to $GITHUB_OUTPUT
+      - id: get-ref
+        run: echo "ref=${{ github.event.comment.body }}" >> $GITHUB_OUTPUT
+
+      # Step 2: Use tainted output in env, then use in script
+      # This should be detected as code injection
+      - env:
+          BRANCH: ${{ steps.get-ref.outputs.ref }}
+        run: |
+          git push origin HEAD:${BRANCH}
+
+  test-head-ref-propagation:
+    runs-on: ubuntu-latest
+    steps:
+      # Simulate gotson/pull-request-comment-branch action pattern
+      - id: comment-branch
+        run: |
+          echo "head_ref=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+      # This pattern is from GHSL-2024-325
+      - env:
+          BRANCH_NAME: ${{ steps.comment-branch.outputs.head_ref }}
+        run: |
+          git push origin HEAD:${BRANCH_NAME}
+
+  test-multiple-outputs:
+    runs-on: ubuntu-latest
+    steps:
+      - id: extract-data
+        run: |
+          echo "title=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+          echo "body=${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+
+      - env:
+          ISSUE_TITLE: ${{ steps.extract-data.outputs.title }}
+          ISSUE_BODY: ${{ steps.extract-data.outputs.body }}
+        run: |
+          echo "Processing: $ISSUE_TITLE"
+          eval "process_issue '$ISSUE_BODY'"
+
+  test-heredoc-pattern:
+    runs-on: ubuntu-latest
+    steps:
+      - id: get-data
+        run: |
+          cat <<EOF >> $GITHUB_OUTPUT
+          user_input=${{ github.event.comment.body }}
+          EOF
+
+      - env:
+          DATA: ${{ steps.get-data.outputs.user_input }}
+        run: |
+          sh -c "echo $DATA"
+
+  test-variable-propagation:
+    runs-on: ubuntu-latest
+    steps:
+      # Untrusted input assigned to variable, then written to output
+      - id: process
+        run: |
+          INPUT="${{ github.event.issue.title }}"
+          echo "processed=$INPUT" >> $GITHUB_OUTPUT
+
+      - env:
+          RESULT: ${{ steps.process.outputs.processed }}
+        run: |
+          $RESULT
