@@ -180,7 +180,14 @@ An attacker uses DNS rebinding to bypass IP-based allowlists and access internal
 
 ## Configuration
 
-This rule cannot be disabled. If you have a legitimate use case for network requests with dynamic URLs, ensure proper validation:
+Errors from this rule can be suppressed with the `-ignore` flag:
+
+```bash
+sisakulint -ignore request-forgery-critical
+sisakulint -ignore request-forgery-medium
+```
+
+If you have a legitimate use case for network requests with dynamic URLs, ensure proper validation:
 
 1. Implement URL allowlist validation
 2. Block internal IP ranges and metadata URLs

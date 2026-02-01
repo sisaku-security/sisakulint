@@ -84,9 +84,9 @@ var networkCommandPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\brequests\.(get|post|put|delete|patch|head|options)\s*\(`),
 	// Python urllib
 	regexp.MustCompile(`\burllib\.(request\.)?urlopen\s*\(`),
-	// nc/netcat
-	regexp.MustCompile(`\bnc\b[^|&;]*`),
-	regexp.MustCompile(`\bnetcat\b[^|&;]*`),
+	// nc/netcat - must include capture group for detectNetworkCommand
+	regexp.MustCompile(`(?:^|[\s|&;])(nc)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;])(netcat)\b`),
 }
 
 // newRequestForgeryRule creates a new request forgery rule with the specified severity level

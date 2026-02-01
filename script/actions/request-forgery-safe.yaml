@@ -54,7 +54,7 @@ jobs:
           # github.repository and github.sha are trusted
           curl "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}"
 
-  # Safe: URL allowlist validation
+  # Safe: URL allowlist validation with robust parsing
   safe-allowlist:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -63,17 +63,44 @@ jobs:
         env:
           INPUT_URL: ${{ github.event.issue.body }}
         run: |
-          # Validate URL against allowlist
-          ALLOWED_DOMAINS="api.github.com api.example.com"
+          # Robust URL validation against allowlist
+          # Uses Python for proper URL parsing to prevent bypass attacks
 
-          # Extract domain from URL
-          DOMAIN=$(echo "$INPUT_URL" | sed -E 's|^https?://([^/]+).*|\1|')
+          ALLOWED_HOST=$(python3 << 'EOF'
+          import sys
+          from urllib.parse import urlparse
 
-          # Check if domain is in allowlist
-          if echo "$ALLOWED_DOMAINS" | grep -qw "$DOMAIN"; then
+          allowed_hosts = ["api.github.com", "api.example.com"]
+          input_url = """$INPUT_URL"""
+
+          try:
+              parsed = urlparse(input_url)
+              # Validate scheme
+              if parsed.scheme not in ("http", "https"):
+                  print("INVALID_SCHEME", file=sys.stderr)
+                  sys.exit(1)
+              # Extract hostname only (strips port and userinfo)
+              host = parsed.hostname
+              if host is None:
+                  print("INVALID_URL", file=sys.stderr)
+                  sys.exit(1)
+              # Exact match against allowlist (prevents suffix attacks like evil.api.github.com)
+              if host in allowed_hosts:
+                  print(host)
+              else:
+                  print("NOT_ALLOWED", file=sys.stderr)
+                  sys.exit(1)
+          except Exception as e:
+              print(f"PARSE_ERROR: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+          )
+
+          if [ $? -eq 0 ]; then
+            echo "Host validated: $ALLOWED_HOST"
             curl "$INPUT_URL"
           else
-            echo "Domain not in allowlist: $DOMAIN"
+            echo "URL validation failed"
             exit 1
           fi
 
@@ -170,24 +197,99 @@ jobs:
           echo "Processing: $ISSUE_BODY"
           # Do local processing only
 
-  # Safe: Block internal IPs before request
+  # Safe: Block internal IPs before request with proper CIDR validation
   safe-block-internal:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Block internal IPs
+      - name: Block internal IPs with CIDR validation
         env:
           INPUT_URL: ${{ github.event.comment.body }}
         run: |
-          # Block requests to internal/metadata IPs
-          BLOCKED_PATTERNS="169.254. 127. 10. 192.168. 172.16. 172.17. 172.18. 172.19. 172.20. 172.21. 172.22. 172.23. 172.24. 172.25. 172.26. 172.27. 172.28. 172.29. 172.30. 172.31. localhost metadata.google"
+          # Robust internal IP blocking using Python for proper CIDR checks
+          # This prevents DNS rebinding and IP address obfuscation attacks
 
-          for pattern in $BLOCKED_PATTERNS; do
-            if echo "$INPUT_URL" | grep -q "$pattern"; then
-              echo "Blocked: URL contains internal/metadata address pattern: $pattern"
-              exit 1
-            fi
-          done
+          python3 << 'EOF'
+          import sys
+          import socket
+          import ipaddress
+          from urllib.parse import urlparse
 
-          echo "URL passed validation"
-          # Additional domain allowlist check recommended before actual request
+          # Blocked CIDR ranges (RFC 1918, link-local, loopback, metadata)
+          BLOCKED_CIDRS = [
+              ipaddress.ip_network("127.0.0.0/8"),      # Loopback
+              ipaddress.ip_network("10.0.0.0/8"),       # Private Class A
+              ipaddress.ip_network("172.16.0.0/12"),    # Private Class B
+              ipaddress.ip_network("192.168.0.0/16"),   # Private Class C
+              ipaddress.ip_network("169.254.0.0/16"),   # Link-local / AWS metadata
+              ipaddress.ip_network("100.64.0.0/10"),    # CGN
+              ipaddress.ip_network("192.0.0.0/24"),     # IETF Protocol
+              ipaddress.ip_network("::1/128"),          # IPv6 loopback
+              ipaddress.ip_network("fe80::/10"),        # IPv6 link-local
+              ipaddress.ip_network("fc00::/7"),         # IPv6 ULA
+              ipaddress.ip_network("fd00::/8"),         # AWS IPv6 metadata
+          ]
+
+          # Known metadata hostnames
+          BLOCKED_HOSTNAMES = [
+              "metadata.google.internal",
+              "metadata.google",
+              "metadata",
+              "kubernetes.default.svc",
+          ]
+
+          input_url = """$INPUT_URL"""
+
+          try:
+              parsed = urlparse(input_url)
+              if parsed.scheme not in ("http", "https"):
+                  print("ERROR: Invalid scheme", file=sys.stderr)
+                  sys.exit(1)
+
+              host = parsed.hostname
+              if host is None:
+                  print("ERROR: Could not extract hostname", file=sys.stderr)
+                  sys.exit(1)
+
+              # Check against blocked hostnames
+              if host.lower() in BLOCKED_HOSTNAMES or any(
+                  host.lower().endswith("." + bh) for bh in BLOCKED_HOSTNAMES
+              ):
+                  print(f"BLOCKED: Hostname {host} is a known metadata endpoint", file=sys.stderr)
+                  sys.exit(1)
+
+              # Resolve hostname to IP addresses
+              try:
+                  addr_info = socket.getaddrinfo(host, None, socket.AF_UNSPEC)
+                  ips = set(info[4][0] for info in addr_info)
+              except socket.gaierror as e:
+                  print(f"ERROR: Could not resolve hostname: {e}", file=sys.stderr)
+                  sys.exit(1)
+
+              # Check each resolved IP against blocked CIDRs
+              for ip_str in ips:
+                  try:
+                      ip = ipaddress.ip_address(ip_str)
+                      for cidr in BLOCKED_CIDRS:
+                          if ip in cidr:
+                              print(f"BLOCKED: {host} resolves to {ip} which is in blocked range {cidr}", file=sys.stderr)
+                              sys.exit(1)
+                  except ValueError:
+                      continue
+
+              print(f"ALLOWED: {host} passed validation")
+              sys.exit(0)
+
+          except Exception as e:
+              print(f"ERROR: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+          if [ $? -eq 0 ]; then
+            echo "URL passed internal IP validation"
+            # Additional domain allowlist check recommended before actual request
+            curl "$INPUT_URL"
+          else
+            echo "URL blocked due to internal/metadata address"
+            exit 1
+          fi
