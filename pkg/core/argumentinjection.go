@@ -28,10 +28,8 @@ type stepWithArgumentInjection struct {
 
 // argumentInjectionInfo contains information about an untrusted expression used as command argument
 type argumentInjectionInfo struct {
-	expr        parsedExpression
-	paths       []string
-	commandName string // The command that has the vulnerability (git, curl, etc.)
-	fullLine    string // The full command line containing the vulnerability
+	expr  parsedExpression
+	paths []string
 }
 
 // Dangerous commands that are susceptible to argument injection attacks
@@ -209,10 +207,8 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 				}
 
 				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
-					expr:        *expr,
-					paths:       untrustedPaths,
-					commandName: varUsage.CommandName,
-					fullLine:    varUsage.Context,
+					expr:  *expr,
+					paths: untrustedPaths,
 				})
 
 				if rule.checkPrivileged {
@@ -274,7 +270,6 @@ func (rule *ArgumentInjectionRule) RuleNames() string {
 }
 
 // FixStep implements StepFixer interface
-// TODO: Implement auto-fix using shell parser in a follow-up PR
 func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	// Find the stepWithArgumentInjection for this step
 	var stepInfo *stepWithArgumentInjection

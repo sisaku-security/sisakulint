@@ -2,7 +2,6 @@ package shell
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -567,62 +566,4 @@ func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName str
 	}
 }
 
-// ExprPlaceholder represents a placeholder for a GitHub Actions expression
-type ExprPlaceholder struct {
-	Placeholder string // e.g., __SISAKULINT_EXPR_0__
-	Original    string // e.g., github.head_ref
-	FullExpr    string // e.g., ${{ github.head_ref }}
-	StartPos    int    // Start position in original script
-	EndPos      int    // End position in original script
-}
-
-// PrepareScriptForParsing replaces ${{ expr }} patterns with placeholder variables
-// to make the script parseable by the shell parser. Returns the modified script
-// and a list of placeholders for later reference.
-func PrepareScriptForParsing(script string) (string, []ExprPlaceholder) {
-	var placeholders []ExprPlaceholder
-	result := script
-	offset := 0
-	placeholderIndex := 0
-
-	for {
-		idx := strings.Index(result[offset:], "${{")
-		if idx == -1 {
-			break
-		}
-
-		start := offset + idx
-		endIdx := strings.Index(result[start:], "}}")
-		if endIdx == -1 {
-			break
-		}
-
-		end := start + endIdx + 2
-		fullExpr := result[start:end]
-		exprContent := strings.TrimSpace(result[start+3 : start+endIdx])
-
-		// Create placeholder name
-		placeholderName := fmt.Sprintf("__SISAKULINT_EXPR_%d__", placeholderIndex)
-
-		placeholders = append(placeholders, ExprPlaceholder{
-			Placeholder: placeholderName,
-			Original:    exprContent,
-			FullExpr:    fullExpr,
-			StartPos:    start,
-			EndPos:      end,
-		})
-
-		// Replace the expression with the placeholder variable
-		before := result[:start]
-		after := result[end:]
-		result = before + "$" + placeholderName + after
-
-		// Adjust offset for the next iteration
-		offset = len(before) + len("$"+placeholderName)
-
-		placeholderIndex++
-	}
-
-	return result, placeholders
-}
 
