@@ -18,7 +18,13 @@ import (
 // 3. Executing untrusted code (local scripts, local actions, build commands)
 type CachePoisoningPoisonableStepRule struct {
 	BaseRule
-	unsafeTriggers      []string
+	// workflowTriggers stores all trigger names from the workflow
+	workflowTriggers []string
+	// unsafeTriggers stores unsafe triggers from the workflow (for error messages)
+	unsafeTriggers []string
+	// jobUnsafeTriggers stores the effective unsafe triggers for the current job
+	// considering job-level if conditions
+	jobUnsafeTriggers   []string
 	checkoutUnsafeRef   bool
 	unsafeCheckoutStep  *ast.Step
 	autoFixerRegistered bool
@@ -156,13 +162,18 @@ func getStepDescription(node *ast.Step) string {
 }
 
 func (rule *CachePoisoningPoisonableStepRule) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.workflowTriggers = nil
 	rule.unsafeTriggers = nil
+	rule.jobUnsafeTriggers = nil
 
 	for _, event := range node.On {
 		switch e := event.(type) {
 		case *ast.WebhookEvent:
-			if e.Hook != nil && IsUnsafeTrigger(e.Hook.Value) {
-				rule.unsafeTriggers = append(rule.unsafeTriggers, e.Hook.Value)
+			if e.Hook != nil {
+				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
+				if IsUnsafeTrigger(e.Hook.Value) {
+					rule.unsafeTriggers = append(rule.unsafeTriggers, e.Hook.Value)
+				}
 			}
 		}
 	}
@@ -178,6 +189,28 @@ func (rule *CachePoisoningPoisonableStepRule) VisitJobPre(node *ast.Job) error {
 	rule.checkoutUnsafeRef = false
 	rule.unsafeCheckoutStep = nil
 	rule.autoFixerRegistered = false
+	rule.jobUnsafeTriggers = nil
+
+	// If no unsafe triggers in workflow, skip
+	if len(rule.unsafeTriggers) == 0 {
+		return nil
+	}
+
+	// Use JobTriggerAnalyzer to determine effective triggers for this job
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	effectiveTriggers := analyzer.AnalyzeJobTriggers(node)
+
+	// Filter to only unsafe triggers that can actually execute this job
+	for _, trigger := range effectiveTriggers {
+		if IsUnsafeTrigger(trigger) {
+			rule.jobUnsafeTriggers = append(rule.jobUnsafeTriggers, trigger)
+		}
+	}
+
+	if len(rule.jobUnsafeTriggers) == 0 {
+		rule.Debug("Job '%s' filtered out unsafe triggers via if condition", node.ID)
+	}
+
 	return nil
 }
 
@@ -186,7 +219,9 @@ func (rule *CachePoisoningPoisonableStepRule) VisitJobPost(node *ast.Job) error 
 }
 
 func (rule *CachePoisoningPoisonableStepRule) VisitStep(node *ast.Step) error {
-	if len(rule.unsafeTriggers) == 0 {
+	// Skip if this job cannot execute on unsafe triggers
+	// This considers job-level if conditions that may filter out unsafe triggers
+	if len(rule.jobUnsafeTriggers) == 0 {
 		return nil
 	}
 
@@ -221,7 +256,7 @@ func (rule *CachePoisoningPoisonableStepRule) VisitStep(node *ast.Step) error {
 			}
 
 			if isPoisonable {
-				triggers := strings.Join(rule.unsafeTriggers, ", ")
+				triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 				rule.Errorf(
 					node.Pos,
 					"cache poisoning risk via %s: '%s' runs untrusted code after checking out PR head (triggers: %s). Attacker can steal cache tokens",
@@ -253,7 +288,7 @@ func (rule *CachePoisoningPoisonableStepRule) VisitStep(node *ast.Step) error {
 		}
 
 		if isPoisonable {
-			triggers := strings.Join(rule.unsafeTriggers, ", ")
+			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
 				"cache poisoning risk via %s: '%s' runs untrusted code after checking out PR head (triggers: %s). Attacker can steal cache tokens",
