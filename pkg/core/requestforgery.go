@@ -214,7 +214,7 @@ func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkComma
 						}
 
 						// Determine severity based on argument position
-						severity := rule.determineSeverityFromArg(arg, cmdCall)
+						severity := rule.determineSeverityFromArg(arg)
 
 						stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
 							expr:     expr,
@@ -295,7 +295,7 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 }
 
 // determineSeverityFromArg determines severity based on command argument
-func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg, _ shell.NetworkCommandCall) RequestForgerySeverity {
+func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg) RequestForgerySeverity {
 	// Flags like -d, --data, -H are typically path/data severity
 	if arg.IsFlag {
 		return RequestForgerySeverityPath
