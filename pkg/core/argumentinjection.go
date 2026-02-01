@@ -9,8 +9,7 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
-// ArgumentInjectionRule is a shared implementation for detecting argument injection vulnerabilities
-// It detects when untrusted input is used as command-line arguments without proper sanitization
+// ArgumentInjectionRule detects argument injection vulnerabilities
 // It can be configured to check either privileged triggers (critical) or normal triggers (medium)
 type ArgumentInjectionRule struct {
 	BaseRule
@@ -20,21 +19,17 @@ type ArgumentInjectionRule struct {
 	workflow           *ast.Workflow
 }
 
-// stepWithArgumentInjection tracks steps that need auto-fixing for argument injection
 type stepWithArgumentInjection struct {
 	step           *ast.Step
 	untrustedExprs []argumentInjectionInfo
 }
 
-// argumentInjectionInfo contains information about an untrusted expression used as command argument
 type argumentInjectionInfo struct {
 	expr        parsedExpression
 	paths       []string
 	commandName string // The command where this expression is used
 }
 
-// Dangerous commands that are susceptible to argument injection attacks
-// These commands have options that can be exploited (e.g., --output, --config, etc.)
 var dangerousCommands = map[string]bool{
 	"git":      true,
 	"curl":     true,
@@ -81,18 +76,16 @@ var dangerousCommands = map[string]bool{
 	"ant":      true,
 }
 
-// dangerousCmdNames is cached slice of dangerous command names for shell parser
 var dangerousCmdNames []string
 
-// commandsNotSupportingDoubleDash lists commands that don't treat -- as end-of-options marker
 var commandsNotSupportingDoubleDash = map[string]bool{
-	"docker":  true, // Docker treats -- as part of image name or command
-	"python":  true, // Python passes -- to the script
+	"docker":  true,
+	"python":  true,
 	"python3": true,
-	"node":    true, // Node passes -- to the script
-	"ruby":    true, // Ruby passes -- to the script
-	"perl":    true, // Perl passes -- to the script
-	"php":     true, // PHP passes -- to the script
+	"node":    true,
+	"ruby":    true,
+	"perl":    true,
+	"php":     true,
 }
 
 func init() {
@@ -253,7 +246,6 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 	}
 	return nil
 }
-
 
 // hasPrivilegedTriggers checks if the workflow has privileged triggers
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {

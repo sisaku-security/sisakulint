@@ -565,5 +565,3 @@ func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName str
 		}
 	}
 }
-
-
