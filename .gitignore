@@ -11,5 +11,4 @@ sisakulint
 .DS_Store
 dist/
 .claude
-.beads/*
-!.beads/issues.jsonl
+.beads/
