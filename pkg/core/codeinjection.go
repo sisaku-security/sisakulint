@@ -69,7 +69,6 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 // VisitWorkflowPre is called before visiting a workflow
 func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
-	rule.taintTracker = NewTaintTracker()
 	rule.workflowTriggers = nil
 	rule.jobHasMatchingTriggers = false
 
@@ -123,6 +122,10 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 		return nil
 	}
 
+	// Initialize taint tracker per job to avoid cross-job contamination
+	// This ensures step IDs don't collide across different jobs
+	rule.taintTracker = NewTaintTracker()
+
 	// First pass: collect taint information from all steps
 	// This allows us to detect tainted step outputs before checking for code injection
 	for _, s := range node.Steps {
@@ -143,7 +146,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 			exprs := rule.extractAndParseExpressions(run.Run)
 
 			for _, expr := range exprs {
-				untrustedPaths := rule.checkUntrustedInput(expr)
+				// Use checkUntrustedInputWithTaint to also detect tainted step outputs
+				untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
 						stepUntrusted = &stepWithUntrustedInput{step: s}
@@ -179,7 +183,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 					exprs := rule.extractAndParseExpressions(scriptInput.Value)
 
 					for _, expr := range exprs {
-						untrustedPaths := rule.checkUntrustedInput(expr)
+						// Use checkUntrustedInputWithTaint to also detect tainted step outputs
+						untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
 						if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 							if stepUntrusted == nil {
 								stepUntrusted = &stepWithUntrustedInput{step: s}
