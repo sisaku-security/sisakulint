@@ -80,10 +80,6 @@ var commandsNotSupportingDoubleDash = map[string]bool{
 	"docker":  true,
 	"python":  true,
 	"python3": true,
-	"node":    true,
-	"ruby":    true,
-	"perl":    true,
-	"php":     true,
 }
 
 func init() {
