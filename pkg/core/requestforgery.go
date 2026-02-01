@@ -7,6 +7,7 @@ import (
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 // RequestForgeryRule is a shared implementation for detecting Server-Side Request Forgery (SSRF) vulnerabilities
@@ -173,9 +174,78 @@ func (rule *RequestForgeryRule) checkScript(script string, pos *ast.String, step
 
 	var stepUntrusted *stepWithRequestForgery
 
-	// Split script into lines
+	// Use ShellParser for AST-based network command detection
+	parser := shell.NewShellParser(script)
+	cmdCalls := parser.FindNetworkCommands()
+
+	// If AST parsing found network commands, use them
+	if len(cmdCalls) > 0 {
+		stepUntrusted = rule.checkScriptWithAST(cmdCalls, exprs, pos, step)
+	}
+
+	// Fallback to line-based detection for cases AST doesn't handle
+	// (e.g., scripts with ${{ }} that fail to parse)
+	if stepUntrusted == nil {
+		stepUntrusted = rule.checkScriptWithLines(script, exprs, pos, step)
+	}
+
+	return stepUntrusted
+}
+
+// checkScriptWithAST uses AST-based detection for network commands
+func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkCommandCall, exprs []parsedExpression, pos *ast.String, step *ast.Step) *stepWithRequestForgery {
+	var stepUntrusted *stepWithRequestForgery
+
+	for _, cmdCall := range cmdCalls {
+		// Check each argument of the network command
+		for _, arg := range cmdCall.Args {
+			// Check if argument contains GHA expressions
+			for _, ghaExpr := range arg.GHAExprs {
+				// Find matching parsed expression
+				for _, expr := range exprs {
+					if strings.TrimSpace(expr.raw) != strings.TrimSpace(ghaExpr) {
+						continue
+					}
+
+					untrustedPaths := rule.checkUntrustedInput(expr)
+					if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, step.Env) {
+						if stepUntrusted == nil {
+							stepUntrusted = &stepWithRequestForgery{step: step}
+						}
+
+						// Determine severity based on argument position
+						severity := rule.determineSeverityFromArg(arg, cmdCall)
+
+						stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
+							expr:     expr,
+							paths:    untrustedPaths,
+							line:     arg.Value,
+							severity: severity,
+							command:  cmdCall.CommandName,
+						})
+
+						rule.reportError(pos.Pos, untrustedPaths, cmdCall.CommandName, severity)
+					}
+				}
+			}
+		}
+	}
+
+	return stepUntrusted
+}
+
+// checkScriptWithLines uses line-based detection as fallback
+func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []parsedExpression, pos *ast.String, step *ast.Step) *stepWithRequestForgery {
+	var stepUntrusted *stepWithRequestForgery
+
 	lines := strings.Split(script, "\n")
 	for lineIdx, line := range lines {
+		// Skip comments
+		trimmedLine := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
+
 		// Check if this line contains a network request command
 		networkCmd := rule.detectNetworkCommand(line)
 		if networkCmd == "" {
@@ -222,6 +292,35 @@ func (rule *RequestForgeryRule) checkScript(script string, pos *ast.String, step
 	}
 
 	return stepUntrusted
+}
+
+// determineSeverityFromArg determines severity based on command argument
+func (rule *RequestForgeryRule) determineSeverityFromArg(arg shell.CommandArg, _ shell.NetworkCommandCall) RequestForgerySeverity {
+	// Flags like -d, --data, -H are typically path/data severity
+	if arg.IsFlag {
+		return RequestForgerySeverityPath
+	}
+
+	// Check if argument looks like a URL
+	value := arg.Value
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		// If expression is in host position: https://${{ expr }}/...
+		if strings.Contains(value, "${{") {
+			idx := strings.Index(value, "${{")
+			prefix := value[:idx]
+			if strings.HasSuffix(prefix, "://") || strings.HasSuffix(prefix, "://\"") || strings.HasSuffix(prefix, "://'") {
+				return RequestForgerySeverityHost
+			}
+		}
+		return RequestForgerySeverityPath
+	}
+
+	// If the argument is just a ${{ expr }}, it's likely a full URL
+	if strings.HasPrefix(strings.TrimSpace(value), "${{") {
+		return RequestForgerySeverityURL
+	}
+
+	return RequestForgerySeverityPath
 }
 
 // checkCloudMetadataReferences checks for direct references to cloud metadata URLs
