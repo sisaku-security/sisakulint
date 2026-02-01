@@ -232,7 +232,7 @@ func (rule *CacheBloatRule) addOrUpdateIfCondition(node *ast.Step, newCondition 
 			// Append to existing condition
 			existingCondition := val.Value
 			if existingCondition != "" {
-				val.Value = existingCondition + " && " + newCondition
+				val.Value = "(" + existingCondition + ") && " + newCondition
 			} else {
 				val.Value = newCondition
 			}
