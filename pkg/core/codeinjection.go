@@ -17,6 +17,11 @@ type CodeInjectionRule struct {
 	stepsWithUntrusted []*stepWithUntrustedInput
 	workflow           *ast.Workflow
 	taintTracker       *TaintTracker // Tracks taint propagation through step outputs
+	// workflowTriggers stores all trigger names from the workflow
+	workflowTriggers []string
+	// jobHasMatchingTriggers indicates if the current job can execute on matching triggers
+	// (privileged for critical, normal for medium)
+	jobHasMatchingTriggers bool
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -65,20 +70,56 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
 	rule.taintTracker = NewTaintTracker()
+	rule.workflowTriggers = nil
+	rule.jobHasMatchingTriggers = false
+
+	// Collect all workflow triggers
+	for _, event := range node.On {
+		switch e := event.(type) {
+		case *ast.WebhookEvent:
+			if e.Hook != nil {
+				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
+			}
+		case *ast.WorkflowCallEvent:
+			rule.workflowTriggers = append(rule.workflowTriggers, "workflow_call")
+		}
+	}
+
 	return nil
 }
 
 func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
-	// Check if workflow trigger matches what we're looking for
-	isPrivileged := rule.hasPrivilegedTriggers()
+	// Reset job-level state
+	rule.jobHasMatchingTriggers = false
 
-	// Skip if trigger type doesn't match our severity level
-	// Note on mixed triggers: If a workflow has BOTH privileged and normal triggers
-	// (e.g., both pull_request_target and pull_request), the critical rule will fire
-	// because ANY privileged trigger makes the entire workflow privileged.
-	// This is conservative but safe - if any trigger grants write access, we treat
-	// the whole workflow as privileged to avoid false negatives.
-	if rule.checkPrivileged != isPrivileged {
+	// Use JobTriggerAnalyzer to determine effective triggers for this job
+	// This considers job-level if conditions that may filter out certain triggers
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	effectiveTriggers := analyzer.AnalyzeJobTriggers(node)
+
+	// Check if this job can run on privileged triggers
+	hasPrivileged := false
+	hasNormal := false
+	for _, trigger := range effectiveTriggers {
+		if isPrivilegedTrigger(trigger) {
+			hasPrivileged = true
+		} else {
+			hasNormal = true
+		}
+	}
+
+	// Determine if this job matches what we're looking for
+	if rule.checkPrivileged {
+		// Critical rule: only check jobs that can run on privileged triggers
+		rule.jobHasMatchingTriggers = hasPrivileged
+	} else {
+		// Medium rule: only check jobs that can run on normal triggers
+		// but NOT on privileged triggers (to avoid duplicate warnings)
+		rule.jobHasMatchingTriggers = hasNormal && !hasPrivileged
+	}
+
+	// Skip if this job doesn't match our trigger criteria
+	if !rule.jobHasMatchingTriggers {
 		return nil
 	}
 
@@ -181,11 +222,6 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 		rule.checkDangerousShellPatterns(s)
 	}
 	return nil
-}
-
-// hasPrivilegedTriggers checks if the workflow has privileged triggers
-func (rule *CodeInjectionRule) hasPrivilegedTriggers() bool {
-	return HasPrivilegedTriggers(rule.workflow)
 }
 
 // RuleNames implements StepFixer interface
