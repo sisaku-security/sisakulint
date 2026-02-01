@@ -28,8 +28,9 @@ type stepWithArgumentInjection struct {
 
 // argumentInjectionInfo contains information about an untrusted expression used as command argument
 type argumentInjectionInfo struct {
-	expr  parsedExpression
-	paths []string
+	expr        parsedExpression
+	paths       []string
+	commandName string // The command where this expression is used
 }
 
 // Dangerous commands that are susceptible to argument injection attacks
@@ -78,6 +79,27 @@ var dangerousCommands = map[string]bool{
 	"mvn":      true,
 	"gradle":   true,
 	"ant":      true,
+}
+
+// dangerousCmdNames is cached slice of dangerous command names for shell parser
+var dangerousCmdNames []string
+
+// commandsNotSupportingDoubleDash lists commands that don't treat -- as end-of-options marker
+var commandsNotSupportingDoubleDash = map[string]bool{
+	"docker":  true, // Docker treats -- as part of image name or command
+	"python":  true, // Python passes -- to the script
+	"python3": true,
+	"node":    true, // Node passes -- to the script
+	"ruby":    true, // Ruby passes -- to the script
+	"perl":    true, // Perl passes -- to the script
+	"php":     true, // PHP passes -- to the script
+}
+
+func init() {
+	dangerousCmdNames = make([]string, 0, len(dangerousCommands))
+	for cmd := range dangerousCommands {
+		dangerousCmdNames = append(dangerousCmdNames, cmd)
+	}
 }
 
 // newArgumentInjectionRule creates a new argument injection rule with the specified severity level
@@ -167,13 +189,7 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 		// 4. Parse the modified script with shell parser
 		parser := shell.NewShellParser(modifiedScript)
 
-		// 5. Get all dangerous command names
-		dangerousCmdNames := make([]string, 0)
-		for cmd := range dangerousCommands {
-			dangerousCmdNames = append(dangerousCmdNames, cmd)
-		}
-
-		// 6. Check each placeholder in command arguments (only for untrusted expressions)
+		// 5. Check each placeholder in command arguments (only for untrusted expressions)
 		var stepUntrusted *stepWithArgumentInjection
 
 		for i := range exprs {
@@ -207,8 +223,9 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 				}
 
 				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
-					expr:  *expr,
-					paths: untrustedPaths,
+					expr:        *expr,
+					paths:       untrustedPaths,
+					commandName: varUsage.CommandName,
 				})
 
 				if rule.checkPrivileged {
@@ -339,14 +356,23 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Replace ${{ expr }} with $ENV_VAR in the script
+	// For commands that support --, use -- "$ENV_VAR" pattern
+	// For commands that don't support --, just use "$ENV_VAR"
 	script := run.Run.Value
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		envVarName := envVarMap[untrustedInfo.expr.raw]
 		exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
 		exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
 
-		// Replace with -- "$ENV_VAR" pattern for safety
-		newValue := fmt.Sprintf("-- \"$%s\"", envVarName)
+		var newValue string
+		if commandsNotSupportingDoubleDash[untrustedInfo.commandName] {
+			// Commands like docker, python don't support -- as end-of-options marker
+			// Just use quoted environment variable (better than raw expression)
+			newValue = fmt.Sprintf("\"$%s\"", envVarName)
+		} else {
+			// Use -- "$ENV_VAR" pattern for safety
+			newValue = fmt.Sprintf("-- \"$%s\"", envVarName)
+		}
 		script = strings.ReplaceAll(script, exprPattern1, newValue)
 		script = strings.ReplaceAll(script, exprPattern2, newValue)
 	}
