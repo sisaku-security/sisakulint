@@ -506,17 +506,56 @@ func (rule *ArgumentInjectionRule) checkUntrustedInput(expr parsedExpression) []
 	for _, err := range errs {
 		msg := err.Message
 		if strings.Contains(msg, "potentially untrusted") {
-			if idx := strings.Index(msg, "\""); idx != -1 {
-				endIdx := strings.Index(msg[idx+1:], "\"")
-				if endIdx != -1 {
-					path := msg[idx+1 : idx+1+endIdx]
-					paths = append(paths, path)
-				}
-			}
+			// Extract all quoted paths from the error message
+			// Handles both single path: "path" is potentially untrusted
+			// And multiple paths: Object filter extracts potentially untrusted properties "path1", "path2"
+			paths = append(paths, extractQuotedStrings(msg)...)
 		}
 	}
 
 	return paths
+}
+
+// extractQuotedStrings extracts all double-quoted strings from a message
+func extractQuotedStrings(msg string) []string {
+	var result []string
+	remaining := msg
+
+	for {
+		startIdx := strings.Index(remaining, "\"")
+		if startIdx == -1 {
+			break
+		}
+
+		endIdx := strings.Index(remaining[startIdx+1:], "\"")
+		if endIdx == -1 {
+			break
+		}
+
+		quoted := remaining[startIdx+1 : startIdx+1+endIdx]
+		// Filter out non-path strings (e.g., URLs, descriptive text)
+		if isLikelyUntrustedPath(quoted) {
+			result = append(result, quoted)
+		}
+
+		remaining = remaining[startIdx+1+endIdx+1:]
+	}
+
+	return result
+}
+
+// isLikelyUntrustedPath checks if the string looks like an untrusted input path
+func isLikelyUntrustedPath(s string) bool {
+	// Untrusted paths typically start with "github." and contain dots
+	// Examples: github.event.pull_request.title, github.head_ref
+	if strings.HasPrefix(s, "github.") {
+		return true
+	}
+	// Also check for paths that might be formatted differently
+	if strings.Contains(s, ".") && !strings.Contains(s, " ") && !strings.HasPrefix(s, "http") {
+		return true
+	}
+	return false
 }
 
 // isDefinedInEnv checks if the expression is defined in the step's env section
