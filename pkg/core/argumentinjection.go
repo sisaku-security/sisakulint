@@ -392,10 +392,11 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 
 // generateEnvVarName generates an environment variable name from an untrusted path
 func (rule *ArgumentInjectionRule) generateEnvVarName(path string) string {
-	parts := strings.Split(path, ".")
-	if len(parts) == 0 {
+	if path == "" {
 		return "UNTRUSTED_INPUT"
 	}
+
+	parts := strings.Split(path, ".")
 
 	// Common patterns
 	if len(parts) >= 4 && parts[0] == "github" && parts[1] == "event" {
