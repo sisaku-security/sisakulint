@@ -468,3 +468,247 @@ func (p *ShellParser) GetDangerousPatternType() string {
 
 	return patternType
 }
+
+// NetworkCommandCall represents a network command call found in the script
+type NetworkCommandCall struct {
+	CommandName string
+	Args        []CommandArg
+	Position    syntax.Pos
+	InCmdSubst  bool
+	InPipe      bool
+}
+
+// CommandArg represents a command argument
+type CommandArg struct {
+	Value    string
+	Position syntax.Pos
+	IsFlag   bool
+	VarNames []string // Shell variables ($VAR)
+	GHAExprs []string // GitHub Actions expressions (${{ }})
+}
+
+// FindNetworkCommands finds all network command calls in the script
+func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
+	if p.file == nil {
+		return nil
+	}
+
+	var calls []NetworkCommandCall
+	ctx := &networkWalkContext{}
+	p.walkForNetworkCommandsWithFallback(p.file, ctx, &calls)
+	return calls
+}
+
+// walkForNetworkCommandsWithFallback tries AST parsing first, falls back to regex on error
+func (p *ShellParser) walkForNetworkCommandsWithFallback(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if p.file != nil {
+		p.walkForNetworkCommands(node, ctx, calls)
+	}
+
+	// If AST parsing failed or file is nil, try fallback regex-based detection on the original script
+	if len(*calls) == 0 && p.script != "" {
+		p.findNetworkCommandsByRegex(p.script, calls)
+	}
+}
+
+// findNetworkCommandsByRegex finds network commands using regex as fallback
+func (p *ShellParser) findNetworkCommandsByRegex(script string, calls *[]NetworkCommandCall) {
+	lines := strings.Split(script, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue // Skip comments
+		}
+
+		networkCmds := []string{"curl", "wget", "nc", "netcat"}
+		for _, cmd := range networkCmds {
+			if strings.Contains(line, cmd) {
+				// Extract arguments after the command
+				call := NetworkCommandCall{
+					CommandName: cmd,
+					Position:    syntax.Pos{},
+				}
+
+				// Find arguments containing ${{ }}
+				ghaExprs := extractGHAExpressionsFromString(line)
+				for _, expr := range ghaExprs {
+					arg := CommandArg{
+						Value:    expr,
+						GHAExprs: []string{expr},
+					}
+					call.Args = append(call.Args, arg)
+				}
+
+				if len(call.Args) > 0 {
+					*calls = append(*calls, call)
+					break // Found this line's command
+				}
+			}
+		}
+	}
+}
+
+// networkWalkContext tracks context during network command search
+type networkWalkContext struct {
+	inCmdSubst bool
+	inPipe     bool
+}
+
+func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.File:
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.Stmt:
+		p.walkForNetworkCommands(x.Cmd, ctx, calls)
+		for _, redirect := range x.Redirs {
+			p.walkForNetworkCommands(redirect, ctx, calls)
+		}
+
+	case *syntax.CallExpr:
+		cmdName := p.getCommandName(x)
+		if p.isNetworkCommand(cmdName) {
+			call := p.parseNetworkCommand(x, ctx)
+			*calls = append(*calls, call)
+		}
+
+		// Still traverse nested structures
+		for _, arg := range x.Args {
+			p.walkForNetworkCommands(arg, ctx, calls)
+		}
+
+	case *syntax.BinaryCmd:
+		// Handle pipes
+		newCtx := *ctx
+		if x.Op == syntax.Pipe {
+			newCtx.inPipe = true
+		}
+		p.walkForNetworkCommands(x.X, ctx, calls)
+		p.walkForNetworkCommands(x.Y, &newCtx, calls)
+
+	case *syntax.CmdSubst:
+		newCtx := *ctx
+		newCtx.inCmdSubst = true
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, &newCtx, calls)
+		}
+
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.walkForNetworkCommands(part, ctx, calls)
+		}
+
+	case *syntax.DblQuoted, *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect:
+		// Leaf nodes or handled separately
+	}
+}
+
+// isNetworkCommand checks if the command is a network-related command
+func (p *ShellParser) isNetworkCommand(cmdName string) bool {
+	networkCmds := map[string]bool{
+		"curl":    true,
+		"wget":    true,
+		"nc":      true,
+		"netcat":  true,
+		"http":    true,
+		"https":   true,
+	}
+	return networkCmds[cmdName]
+}
+
+// parseNetworkCommand extracts arguments from a network command call
+func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext) NetworkCommandCall {
+	cmd := NetworkCommandCall{
+		CommandName: p.getCommandName(call),
+		Position:    call.Pos(),
+		InCmdSubst:  ctx.inCmdSubst,
+		InPipe:      ctx.inPipe,
+	}
+
+	// Parse arguments (skip command name at index 0)
+	for i := 1; i < len(call.Args); i++ {
+		arg := p.parseCommandArg(call.Args[i])
+		cmd.Args = append(cmd.Args, arg)
+	}
+
+	return cmd
+}
+
+// parseCommandArg extracts information from a command argument
+func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
+	arg := CommandArg{
+		Value:    p.wordToString(word),
+		Position: word.Pos(),
+	}
+
+	// Check if it's a flag
+	if strings.HasPrefix(arg.Value, "-") {
+		arg.IsFlag = true
+	}
+
+	// Extract variables and GitHub Actions expressions
+	p.analyzeWordParts(word, &arg)
+
+	return arg
+}
+
+// wordToString converts a Word node to its string representation
+func (p *ShellParser) wordToString(word *syntax.Word) string {
+	var buf bytes.Buffer
+	printer := syntax.NewPrinter()
+	if err := printer.Print(&buf, word); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(buf.String())
+}
+
+// analyzeWordParts extracts variables and GHA expressions from word parts
+func (p *ShellParser) analyzeWordParts(word *syntax.Word, arg *CommandArg) {
+	// Get the raw string value to search for ${{ }}
+	rawValue := arg.Value
+
+	// Extract GHA expressions (not parsed by shell parser)
+	ghaExprs := extractGHAExpressionsFromString(rawValue)
+	arg.GHAExprs = ghaExprs
+
+	// Extract shell variables from AST
+	syntax.Walk(word, func(node syntax.Node) bool {
+		if paramExp, ok := node.(*syntax.ParamExp); ok {
+			if paramExp.Param != nil && paramExp.Param.Value != "" {
+				arg.VarNames = append(arg.VarNames, paramExp.Param.Value)
+			}
+		}
+		return true
+	})
+}
+
+// extractGHAExpressionsFromString extracts GitHub Actions expressions from a string
+func extractGHAExpressionsFromString(s string) []string {
+	var exprs []string
+	offset := 0
+
+	for {
+		idx := strings.Index(s[offset:], "${{")
+		if idx == -1 {
+			break
+		}
+
+		start := offset + idx
+		endIdx := strings.Index(s[start:], "}}")
+		if endIdx == -1 {
+			break
+		}
+
+		expr := strings.TrimSpace(s[start+3 : start+endIdx])
+		exprs = append(exprs, expr)
+
+		offset = start + endIdx + 2
+	}
+
+	return exprs
+}

@@ -513,3 +513,124 @@ func TestShellParser_DangerousPatterns(t *testing.T) {
 		})
 	}
 }
+
+func TestShellParser_FindNetworkCommands(t *testing.T) {
+	tests := []struct {
+		name          string
+		script        string
+		wantCount     int
+		wantCommands  []string
+		wantArgsCount []int
+	}{
+		{
+			name:         "simple curl",
+			script:       `curl https://example.com`,
+			wantCount:    1,
+			wantCommands: []string{"curl"},
+			wantArgsCount: []int{1},
+		},
+		{
+			name:         "curl with multiple args",
+			script:       `curl -d "$DATA" https://example.com`,
+			wantCount:    1,
+			wantCommands: []string{"curl"},
+			wantArgsCount: []int{3}, // -d, $DATA, https://example.com
+		},
+		{
+			name:         "wget",
+			script:       `wget https://example.com`,
+			wantCount:    1,
+			wantCommands: []string{"wget"},
+			wantArgsCount: []int{1},
+		},
+		{
+			name:         "multiple network commands",
+			script:       `curl https://example.com && wget https://other.com`,
+			wantCount:    2,
+			wantCommands: []string{"curl", "wget"},
+			wantArgsCount: []int{1, 1},
+		},
+		{
+			name:         "curl in pipe",
+			script:       `echo data | curl -d @- https://example.com`,
+			wantCount:    1,
+			wantCommands: []string{"curl"},
+			wantArgsCount: []int{3}, // -d, @-, https://example.com
+		},
+		{
+			name:         "no network commands",
+			script:       `echo "hello" && grep pattern file.txt`,
+			wantCount:    0,
+			wantCommands: []string{},
+			wantArgsCount: []int{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewShellParser(tt.script)
+			calls := parser.FindNetworkCommands()
+
+			if len(calls) != tt.wantCount {
+				t.Errorf("FindNetworkCommands() returned %d calls, want %d", len(calls), tt.wantCount)
+			}
+
+			for i, call := range calls {
+				if i < len(tt.wantCommands) && call.CommandName != tt.wantCommands[i] {
+					t.Errorf("call[%d].CommandName = %q, want %q", i, call.CommandName, tt.wantCommands[i])
+				}
+
+				if i < len(tt.wantArgsCount) && len(call.Args) != tt.wantArgsCount[i] {
+					t.Errorf("call[%d] has %d args, want %d", i, len(call.Args), tt.wantArgsCount[i])
+				}
+			}
+		})
+	}
+}
+
+func TestShellParser_CommandArg_GHAExpressions(t *testing.T) {
+	tests := []struct {
+		name     string
+		script   string
+		wantExpr []string
+	}{
+		{
+			name:     "no GHA expressions",
+			script:   `curl https://example.com`,
+			wantExpr: []string{},
+		},
+		{
+			name:     "curl with pipe",
+			script:   `echo data | curl -d @- https://example.com`,
+			wantExpr: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewShellParser(tt.script)
+			calls := parser.FindNetworkCommands()
+
+			if len(calls) == 0 {
+				t.Fatalf("expected at least 1 call, got 0")
+			}
+
+			var foundExprs []string
+			for _, call := range calls {
+				for _, arg := range call.Args {
+					foundExprs = append(foundExprs, arg.GHAExprs...)
+				}
+			}
+
+			if len(foundExprs) != len(tt.wantExpr) {
+				t.Errorf("found %d expressions, want %d. Found: %v, Want: %v", len(foundExprs), len(tt.wantExpr), foundExprs, tt.wantExpr)
+			}
+
+			for i, expr := range foundExprs {
+				if i < len(tt.wantExpr) && expr != tt.wantExpr[i] {
+					t.Errorf("expr[%d] = %q, want %q", i, expr, tt.wantExpr[i])
+				}
+			}
+		})
+	}
+}
