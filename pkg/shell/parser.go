@@ -18,13 +18,12 @@ type ShellVarUsage struct {
 	Context    string
 }
 
-// VarArgUsage represents a variable used as a command argument
 type VarArgUsage struct {
-	ShellVarUsage                // embed existing struct
-	CommandName       string     // the command this arg is passed to
-	ArgPosition       int        // position in command args
-	HasDoubleDash     bool       // true if -- exists in command
-	IsAfterDoubleDash bool       // true if this arg comes after --
+	ShellVarUsage
+	CommandName       string
+	ArgPosition       int
+	HasDoubleDash     bool
+	IsAfterDoubleDash bool
 }
 
 type ShellParser struct {
@@ -478,7 +477,6 @@ func (p *ShellParser) GetDangerousPatternType() string {
 	return patternType
 }
 
-// FindVarUsageAsCommandArg finds variable usages as arguments to specific commands
 func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string) []VarArgUsage {
 	if p.file == nil {
 		return nil
@@ -497,9 +495,8 @@ func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string
 				return true
 			}
 
-			// Find variables used as arguments in this command
 			doubleDashPos := p.findDoubleDashPosition(call)
-			for argIdx, arg := range call.Args[1:] { // Skip command name at Args[0]
+			for argIdx, arg := range call.Args[1:] {
 				actualIdx := argIdx + 1
 				p.findVarInArg(arg, varName, cmdName, actualIdx, doubleDashPos, &usages)
 			}
@@ -510,9 +507,8 @@ func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string
 	return usages
 }
 
-// findDoubleDashPosition finds the position of -- in a CallExpr's arguments
 func (p *ShellParser) findDoubleDashPosition(call *syntax.CallExpr) int {
-	for i, arg := range call.Args[1:] { // Skip command name
+	for i, arg := range call.Args[1:] {
 		var buf bytes.Buffer
 		printer := syntax.NewPrinter()
 		if err := printer.Print(&buf, arg); err != nil {
@@ -525,7 +521,6 @@ func (p *ShellParser) findDoubleDashPosition(call *syntax.CallExpr) int {
 	return -1
 }
 
-// findVarInArg recursively finds variable in an argument
 func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName string, argPos int, doubleDashPos int, usages *[]VarArgUsage) {
 	if node == nil {
 		return

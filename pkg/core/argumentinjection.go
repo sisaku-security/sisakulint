@@ -9,12 +9,10 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
-// ArgumentInjectionRule detects argument injection vulnerabilities
-// It can be configured to check either privileged triggers (critical) or normal triggers (medium)
 type ArgumentInjectionRule struct {
 	BaseRule
-	severityLevel      string // "critical" or "medium"
-	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
+	severityLevel   string
+	checkPrivileged bool
 	stepsWithUntrusted []*stepWithArgumentInjection
 	workflow           *ast.Workflow
 }
@@ -27,7 +25,7 @@ type stepWithArgumentInjection struct {
 type argumentInjectionInfo struct {
 	expr        parsedExpression
 	paths       []string
-	commandName string // The command where this expression is used
+	commandName string
 }
 
 var dangerousCommands = map[string]bool{
@@ -95,7 +93,6 @@ func init() {
 	}
 }
 
-// newArgumentInjectionRule creates a new argument injection rule with the specified severity level
 func newArgumentInjectionRule(severityLevel string, checkPrivileged bool) *ArgumentInjectionRule {
 	var desc string
 
@@ -116,17 +113,13 @@ func newArgumentInjectionRule(severityLevel string, checkPrivileged bool) *Argum
 	}
 }
 
-// VisitWorkflowPre is called before visiting a workflow
 func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
 	return nil
 }
 
 func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
-	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
-
-	// Skip if trigger type doesn't match our severity level
 	if rule.checkPrivileged != isPrivileged {
 		return nil
 	}
@@ -142,15 +135,12 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 		}
 
 		script := run.Run.Value
-
-		// 1. Extract all expressions from the script
 		exprs := rule.extractAndParseExpressions(run.Run)
 		if len(exprs) == 0 {
 			continue
 		}
 
-		// 2. Identify untrusted expressions (but we'll replace ALL expressions for parsing)
-		untrustedSet := make(map[string][]string) // expr.raw -> untrusted paths
+		untrustedSet := make(map[string][]string)
 		for _, expr := range exprs {
 			untrustedPaths := rule.checkUntrustedInput(expr)
 			if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
@@ -162,45 +152,36 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 			continue
 		}
 
-		// 3. Replace ALL expressions with placeholder variables to make script parseable
-		// This is necessary because ${{ }} is not valid shell syntax
+		// Replace expressions with placeholders to make script parseable
 		modifiedScript := script
-		exprToPlaceholder := make(map[string]string) // expr.raw -> placeholder name
+		exprToPlaceholder := make(map[string]string)
 
 		for i, expr := range exprs {
 			exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
 			exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
 			placeholderName := fmt.Sprintf("__SISAKULINT_ARGEXPR_%d__", i)
 
-			// Replace with placeholder in the script
 			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern1, "$"+placeholderName)
 			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern2, "$"+placeholderName)
 
 			exprToPlaceholder[expr.raw] = placeholderName
 		}
 
-		// 4. Parse the modified script with shell parser
 		parser := shell.NewShellParser(modifiedScript)
-
-		// 5. Check each placeholder in command arguments (only for untrusted expressions)
 		var stepUntrusted *stepWithArgumentInjection
 
 		for i := range exprs {
 			expr := &exprs[i]
 
-			// Skip trusted expressions
 			untrustedPaths, isUntrusted := untrustedSet[expr.raw]
 			if !isUntrusted {
 				continue
 			}
 
 			placeholderName := exprToPlaceholder[expr.raw]
-
-			// Find variable usages as command arguments
 			varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
 
 			for _, varUsage := range varUsages {
-				// Skip if the variable is after --, which is safe
 				if varUsage.IsAfterDoubleDash {
 					continue
 				}
@@ -209,7 +190,6 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 					stepUntrusted = &stepWithArgumentInjection{step: s}
 				}
 
-				// Calculate line position based on expression position
 				linePos := expr.pos
 				if linePos == nil {
 					linePos = run.Run.Pos
@@ -247,14 +227,11 @@ func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
 	return nil
 }
 
-// hasPrivilegedTriggers checks if the workflow has privileged triggers
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
 	if rule.workflow == nil || rule.workflow.On == nil {
 		return false
 	}
 
-	// Check for privileged triggers
-	// These triggers have write access or run with secrets
 	privilegedTriggers := map[string]bool{
 		"pull_request_target": true,
 		"workflow_run":        true,
@@ -273,14 +250,11 @@ func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
 	return false
 }
 
-// RuleNames implements StepFixer interface
 func (rule *ArgumentInjectionRule) RuleNames() string {
 	return rule.RuleName
 }
 
-// FixStep implements StepFixer interface
 func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
-	// Find the stepWithArgumentInjection for this step
 	var stepInfo *stepWithArgumentInjection
 	for _, s := range rule.stepsWithUntrusted {
 		if s.step == step {
@@ -293,7 +267,6 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 		return nil
 	}
 
-	// Ensure env exists in AST
 	if step.Env == nil {
 		step.Env = &ast.Env{
 			Vars: make(map[string]*ast.EnvVar),
@@ -308,21 +281,16 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 		return nil
 	}
 
-	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)      // expr.raw -> env var name
-	envVarsForYAML := make(map[string]string) // env var name -> env var value
+	envVarMap := make(map[string]string)
+	envVarsForYAML := make(map[string]string)
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
-
-		// Generate environment variable name from the untrusted path
 		envVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
 
-		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			envVarMap[expr.raw] = envVarName
 
-			// Add to env if not already present
 			if _, exists := step.Env.Vars[strings.ToLower(envVarName)]; !exists {
 				step.Env.Vars[strings.ToLower(envVarName)] = &ast.EnvVar{
 					Name: &ast.String{
@@ -334,22 +302,17 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 						Pos:   expr.pos,
 					},
 				}
-				// Also track for BaseNode update
 				envVarsForYAML[envVarName] = fmt.Sprintf("${{ %s }}", expr.raw)
 			}
 		}
 	}
 
-	// Update BaseNode with env vars
 	if step.BaseNode != nil && len(envVarsForYAML) > 0 {
 		if err := AddEnvVarsToStepNode(step.BaseNode, envVarsForYAML); err != nil {
 			return fmt.Errorf("failed to add env vars to step node: %w", err)
 		}
 	}
 
-	// Replace ${{ expr }} with $ENV_VAR in the script
-	// For commands that support --, use -- "$ENV_VAR" pattern
-	// For commands that don't support --, just use "$ENV_VAR"
 	script := run.Run.Value
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		envVarName := envVarMap[untrustedInfo.expr.raw]
@@ -358,21 +321,16 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 
 		var newValue string
 		if commandsNotSupportingDoubleDash[untrustedInfo.commandName] {
-			// Commands like docker, python don't support -- as end-of-options marker
-			// Just use quoted environment variable (better than raw expression)
 			newValue = fmt.Sprintf("\"$%s\"", envVarName)
 		} else {
-			// Use -- "$ENV_VAR" pattern for safety
 			newValue = fmt.Sprintf("-- \"$%s\"", envVarName)
 		}
 		script = strings.ReplaceAll(script, exprPattern1, newValue)
 		script = strings.ReplaceAll(script, exprPattern2, newValue)
 	}
 
-	// Update AST
 	run.Run.Value = script
 
-	// Update BaseNode
 	if step.BaseNode != nil {
 		if err := setRunScriptValue(step.BaseNode, script); err != nil {
 			return fmt.Errorf("failed to update run script: %w", err)
@@ -382,7 +340,6 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	return nil
 }
 
-// generateEnvVarName generates an environment variable name from an untrusted path
 func (rule *ArgumentInjectionRule) generateEnvVarName(path string) string {
 	if path == "" {
 		return "UNTRUSTED_INPUT"
@@ -390,16 +347,13 @@ func (rule *ArgumentInjectionRule) generateEnvVarName(path string) string {
 
 	parts := strings.Split(path, ".")
 
-	// Common patterns
 	if len(parts) >= 4 && parts[0] == "github" && parts[1] == "event" {
-		category := parts[2]         // pull_request, issue, comment, etc.
-		field := parts[len(parts)-1] // title, body, ref, etc.
+		category := parts[2]
+		field := parts[len(parts)-1]
 
-		// Convert to uppercase and join
 		categoryUpper := strings.ToUpper(strings.ReplaceAll(category, "_", ""))
 		fieldUpper := strings.ToUpper(field)
 
-		// Create readable name
 		if categoryUpper == "PULLREQUEST" {
 			categoryUpper = "PR"
 		}
@@ -407,18 +361,14 @@ func (rule *ArgumentInjectionRule) generateEnvVarName(path string) string {
 		return fmt.Sprintf("%s_%s", categoryUpper, fieldUpper)
 	}
 
-	// Handle github.head_ref pattern
 	if len(parts) >= 2 && parts[0] == "github" && parts[1] == "head_ref" {
 		return "HEAD_REF"
 	}
 
-	// Fallback: use last part
 	lastPart := parts[len(parts)-1]
 	return strings.ToUpper(lastPart)
 }
 
-// extractAndParseExpressions extracts all expressions from string and parses them
-// Uses the expressions tokenizer to correctly handle }} inside string literals
 func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) []parsedExpression {
 	if str == nil {
 		return nil
@@ -435,18 +385,13 @@ func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) [
 		}
 
 		start := offset + idx
-		// Use tokenizer to find the correct end of expression
-		// This handles }} inside string literals correctly
 		remaining := value[start+3:]
 		_, endOffset, err := expressions.AnalyzeExpressionSyntax(remaining)
 		if err != nil {
-			// Parse error - skip this expression and continue searching
 			offset = start + 3
 			continue
 		}
 
-		// endOffset is the position after }} in remaining
-		// Expression content is everything before }} (endOffset - 2)
 		exprContent := strings.TrimSpace(remaining[:endOffset-2])
 
 		expr, parseErr := rule.parseExpression(exprContent)
@@ -479,7 +424,6 @@ func (rule *ArgumentInjectionRule) extractAndParseExpressions(str *ast.String) [
 	return result
 }
 
-// parseExpression parses a single expression string into an AST node
 func (rule *ArgumentInjectionRule) parseExpression(exprStr string) (expressions.ExprNode, *expressions.ExprError) {
 	if !strings.HasSuffix(exprStr, "}}") {
 		exprStr = exprStr + "}}"
@@ -489,7 +433,6 @@ func (rule *ArgumentInjectionRule) parseExpression(exprStr string) (expressions.
 	return p.Parse(l)
 }
 
-// checkUntrustedInput checks if the expression contains untrusted input
 func (rule *ArgumentInjectionRule) checkUntrustedInput(expr parsedExpression) []string {
 	checker := expressions.NewExprSemanticsChecker(true, nil)
 	_, errs := checker.Check(expr.node)
@@ -508,7 +451,6 @@ func (rule *ArgumentInjectionRule) checkUntrustedInput(expr parsedExpression) []
 	return paths
 }
 
-// extractQuotedStrings extracts all double-quoted strings from a message
 func extractQuotedStrings(msg string) []string {
 	var result []string
 	remaining := msg
@@ -536,10 +478,7 @@ func extractQuotedStrings(msg string) []string {
 	return result
 }
 
-// isLikelyUntrustedPath checks if the string looks like an untrusted input path
 func isLikelyUntrustedPath(s string) bool {
-	// Untrusted paths typically start with "github." and contain dots
-	// Examples: github.event.pull_request.title, github.head_ref
 	if strings.HasPrefix(s, "github.") {
 		return true
 	}
@@ -550,7 +489,6 @@ func isLikelyUntrustedPath(s string) bool {
 	return false
 }
 
-// isDefinedInEnv checks if the expression is defined in the step's env section
 func (rule *ArgumentInjectionRule) isDefinedInEnv(expr parsedExpression, env *ast.Env) bool {
 	if env == nil {
 		return false
