@@ -547,6 +547,27 @@ func TestShellParser_FindNetworkCommands(t *testing.T) {
 			wantCount:    2,
 			wantCmdNames: []string{"curl", "curl"},
 		},
+		{
+			name:         "curl in test clause command substitution",
+			script:       `[[ "$(curl https://example.com)" = "ok" ]]`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+			wantInCmdSubst: []bool{true},
+		},
+		{
+			name:         "wget in test clause unary test",
+			script:       `[[ -n "$(wget -qO- https://example.com)" ]]`,
+			wantCount:    1,
+			wantCmdNames: []string{"wget"},
+			wantInCmdSubst: []bool{true},
+		},
+		{
+			name:         "multiple network commands in test clause",
+			script:       `[[ "$(curl https://a.com)" = "$(wget -qO- https://b.com)" ]]`,
+			wantCount:    2,
+			wantCmdNames: []string{"curl", "wget"},
+			wantInCmdSubst: []bool{true, true},
+		},
 	}
 
 	for _, tt := range tests {

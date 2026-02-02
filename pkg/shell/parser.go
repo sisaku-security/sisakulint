@@ -623,7 +623,7 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		// Arithmetic commands don't contain network calls
 
 	case *syntax.TestClause:
-		// Test clauses don't contain network calls
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
 
 	case *syntax.DeclClause:
 		for _, assign := range x.Args {
@@ -684,6 +684,25 @@ func (p *ShellParser) walkForNetworkCommandsLoop(node syntax.Loop, ctx *networkW
 		}
 	case *syntax.CStyleLoop:
 		// C-style loop expressions don't contain network commands
+	}
+}
+
+// walkForNetworkCommandsTest handles test expressions for network command detection.
+func (p *ShellParser) walkForNetworkCommandsTest(node syntax.TestExpr, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.BinaryTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+		p.walkForNetworkCommandsTest(x.Y, ctx, calls)
+	case *syntax.UnaryTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+	case *syntax.ParenTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+	case *syntax.Word:
+		p.walkForNetworkCommands(x, ctx, calls)
 	}
 }
 
