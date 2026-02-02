@@ -20,6 +20,14 @@ type ShellVarUsage struct {
 	Context    string
 }
 
+type VarArgUsage struct {
+	ShellVarUsage
+	CommandName       string
+	ArgPosition       int
+	HasDoubleDash     bool
+	IsAfterDoubleDash bool
+}
+
 type ShellParser struct {
 	script string
 	file   *syntax.File
@@ -813,4 +821,88 @@ func extractGHAExpressionsFromString(s string) []string {
 	}
 
 	return exprs
+}
+
+func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string) []VarArgUsage {
+	if p.file == nil {
+		return nil
+	}
+
+	var usages []VarArgUsage
+	cmdNameMap := make(map[string]bool)
+	for _, cmd := range cmdNames {
+		cmdNameMap[cmd] = true
+	}
+
+	syntax.Walk(p.file, func(node syntax.Node) bool {
+		if call, ok := node.(*syntax.CallExpr); ok {
+			cmdName := p.getCommandName(call)
+			if !cmdNameMap[cmdName] {
+				return true
+			}
+
+			doubleDashPos := p.findDoubleDashPosition(call)
+			for argIdx, arg := range call.Args[1:] {
+				actualIdx := argIdx + 1
+				p.findVarInArg(arg, varName, cmdName, actualIdx, doubleDashPos, &usages)
+			}
+		}
+		return true
+	})
+
+	return usages
+}
+
+func (p *ShellParser) findDoubleDashPosition(call *syntax.CallExpr) int {
+	for i, arg := range call.Args[1:] {
+		var buf bytes.Buffer
+		printer := syntax.NewPrinter()
+		if err := printer.Print(&buf, arg); err != nil {
+			continue
+		}
+		if strings.TrimSpace(buf.String()) == "--" {
+			return i + 1
+		}
+	}
+	return -1
+}
+
+func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName string, argPos int, doubleDashPos int, usages *[]VarArgUsage) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, usages)
+		}
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, usages)
+		}
+	case *syntax.ParamExp:
+		if x.Param != nil && x.Param.Value == varName {
+			usage := VarArgUsage{
+				ShellVarUsage: ShellVarUsage{
+					VarName:    varName,
+					StartPos:   int(x.Pos().Offset()),
+					EndPos:     int(x.End().Offset()),
+					IsQuoted:   p.isParamExpQuoted(x),
+					InEval:     false,
+					InShellCmd: false,
+					InCmdSubst: false,
+					Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
+				},
+				CommandName:       cmdName,
+				ArgPosition:       argPos,
+				HasDoubleDash:     doubleDashPos != -1,
+				IsAfterDoubleDash: doubleDashPos != -1 && argPos > doubleDashPos,
+			}
+			*usages = append(*usages, usage)
+		}
+		if x.Exp != nil && x.Exp.Word != nil {
+			p.findVarInArg(x.Exp.Word, varName, cmdName, argPos, doubleDashPos, usages)
+		}
+	}
 }

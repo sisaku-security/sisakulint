@@ -647,3 +647,104 @@ func TestShellParser_DangerousPatterns(t *testing.T) {
 		})
 	}
 }
+
+func TestShellParser_FindVarUsageAsCommandArg(t *testing.T) {
+	tests := []struct {
+		name       string
+		script     string
+		varName    string
+		cmdNames   []string
+		wantCount  int
+		wantCmds   []string
+		wantAfterDD []bool
+	}{
+		{
+			name:       "simple git argument",
+			script:     "git diff $MY_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  1,
+			wantCmds:   []string{"git"},
+			wantAfterDD: []bool{false},
+		},
+		{
+			name:       "variable after end-of-options marker",
+			script:     "git diff -- $MY_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  1,
+			wantCmds:   []string{"git"},
+			wantAfterDD: []bool{true},
+		},
+		{
+			name:       "pipeline with command",
+			script:     "echo test | git checkout $MY_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  1,
+			wantCmds:   []string{"git"},
+			wantAfterDD: []bool{false},
+		},
+		{
+			name:       "command substitution",
+			script:     "result=$(git log $MY_VAR)",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  1,
+			wantCmds:   []string{"git"},
+			wantAfterDD: []bool{false},
+		},
+		{
+			name:       "subshell",
+			script:     "( git diff $MY_VAR )",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  1,
+			wantCmds:   []string{"git"},
+			wantAfterDD: []bool{false},
+		},
+		{
+			name:       "multiple commands",
+			script:     "git diff $MY_VAR && curl -o output $MY_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git", "curl"},
+			wantCount:  2,
+			wantCmds:   []string{"git", "curl"},
+			wantAfterDD: []bool{false, false},
+		},
+		{
+			name:       "no match for different variable",
+			script:     "git diff $OTHER_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"git"},
+			wantCount:  0,
+		},
+		{
+			name:       "no match for different command",
+			script:     "git diff $MY_VAR",
+			varName:    "MY_VAR",
+			cmdNames:   []string{"curl"},
+			wantCount:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewShellParser(tt.script)
+			usages := parser.FindVarUsageAsCommandArg(tt.varName, tt.cmdNames)
+
+			if len(usages) != tt.wantCount {
+				t.Errorf("FindVarUsageAsCommandArg() got %d usages, want %d", len(usages), tt.wantCount)
+			}
+
+			for i, usage := range usages {
+				if i < len(tt.wantCmds) && usage.CommandName != tt.wantCmds[i] {
+					t.Errorf("usage[%d].CommandName = %s, want %s", i, usage.CommandName, tt.wantCmds[i])
+				}
+				if i < len(tt.wantAfterDD) && usage.IsAfterDoubleDash != tt.wantAfterDD[i] {
+					t.Errorf("usage[%d].IsAfterDoubleDash = %v, want %v", i, usage.IsAfterDoubleDash, tt.wantAfterDD[i])
+				}
+			}
+		})
+	}
+}
