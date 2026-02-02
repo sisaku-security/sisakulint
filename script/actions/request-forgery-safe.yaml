@@ -67,11 +67,16 @@ jobs:
           # Uses Python for proper URL parsing to prevent bypass attacks
 
           ALLOWED_HOST=$(python3 << 'EOF'
+          import os
           import sys
           from urllib.parse import urlparse
 
           allowed_hosts = ["api.github.com", "api.example.com"]
-          input_url = """$INPUT_URL"""
+          input_url = os.environ.get("INPUT_URL")
+
+          if not input_url:
+              print("INVALID_URL", file=sys.stderr)
+              sys.exit(1)
 
           try:
               parsed = urlparse(input_url)
