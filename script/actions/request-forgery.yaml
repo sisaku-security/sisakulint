@@ -145,3 +145,52 @@ jobs:
           response = requests.get('${{ github.event.issue.body }}')
           print(response.text)
           EOF
+
+  # Vulnerable: curl inside control structures
+  vulnerable-control-structures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable curl in if clause
+        run: |
+          # SSRF: curl inside if statement - should be detected
+          if [ -n "$VAR" ]; then
+            curl "${{ github.event.issue.body }}"
+          fi
+
+      - name: Vulnerable wget in while loop
+        run: |
+          # SSRF: wget inside while loop - should be detected
+          while true; do
+            wget "${{ github.event.comment.body }}"
+            break
+          done
+
+      - name: Vulnerable curl in for loop
+        run: |
+          # SSRF: curl inside for loop - should be detected
+          for url in "${{ github.event.pull_request.title }}"; do
+            curl "$url"
+          done
+
+      - name: Vulnerable curl in case statement
+        run: |
+          # SSRF: curl inside case statement - should be detected
+          case "$ACTION" in
+            fetch)
+              curl "${{ github.event.issue.body }}"
+              ;;
+          esac
+
+      - name: Vulnerable curl in subshell
+        run: |
+          # SSRF: curl inside subshell - should be detected
+          (curl "${{ github.event.comment.body }}")
+
+      - name: Vulnerable curl in function
+        run: |
+          # SSRF: curl inside function declaration - should be detected
+          fetch_data() {
+            curl "${{ github.event.pull_request.body }}"
+          }
+          fetch_data

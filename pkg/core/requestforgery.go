@@ -51,12 +51,12 @@ var cloudMetadataURLs = []string{
 }
 
 var networkCommandPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?:^|[\s|&;])(curl)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(wget)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(Invoke-WebRequest)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(Invoke-RestMethod)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(iwr)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(irm)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(curl)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(wget)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(Invoke-WebRequest)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(Invoke-RestMethod)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(iwr)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(irm)\b`),
 	regexp.MustCompile(`\b(fetch)\s*\(`),
 	regexp.MustCompile(`\b(axios)\.(get|post|put|delete|patch|head|options|request)\s*\(`),
 	regexp.MustCompile(`\b(axios)\s*\(`),
@@ -65,8 +65,8 @@ var networkCommandPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\b(request)\s*\(`),
 	regexp.MustCompile(`\brequests\.(get|post|put|delete|patch|head|options)\s*\(`),
 	regexp.MustCompile(`\burllib\.(request\.)?urlopen\s*\(`),
-	regexp.MustCompile(`(?:^|[\s|&;])(nc)\b`),
-	regexp.MustCompile(`(?:^|[\s|&;])(netcat)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(nc)\b`),
+	regexp.MustCompile(`(?:^|[\s|&;(])(netcat)\b`),
 }
 
 func newRequestForgeryRule(severityLevel string, checkPrivileged bool) *RequestForgeryRule {
