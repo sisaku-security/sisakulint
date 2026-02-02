@@ -7,6 +7,8 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
+const evalCommand = "eval"
+
 type ShellVarUsage struct {
 	VarName    string
 	StartPos   int
@@ -73,7 +75,7 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 	case *syntax.CallExpr:
 		cmdName := p.getCommandName(x)
 		newCtx := *ctx
-		if cmdName == "eval" {
+		if cmdName == evalCommand {
 			newCtx.inEval = true
 		} else if p.isShellCommand(x) {
 			newCtx.inShellCmd = true
@@ -434,7 +436,7 @@ func (p *ShellParser) HasDangerousPattern() bool {
 	syntax.Walk(p.file, func(node syntax.Node) bool {
 		if call, ok := node.(*syntax.CallExpr); ok {
 			cmdName := p.getCommandName(call)
-			if cmdName == "eval" || p.isShellCommand(call) {
+			if cmdName == evalCommand || p.isShellCommand(call) {
 				found = true
 				return false
 			}
@@ -454,8 +456,8 @@ func (p *ShellParser) GetDangerousPatternType() string {
 	syntax.Walk(p.file, func(node syntax.Node) bool {
 		if call, ok := node.(*syntax.CallExpr); ok {
 			cmdName := p.getCommandName(call)
-			if cmdName == "eval" {
-				patternType = "eval"
+			if cmdName == evalCommand {
+				patternType = evalCommand
 				return false
 			}
 			if p.isShellCommand(call) {
