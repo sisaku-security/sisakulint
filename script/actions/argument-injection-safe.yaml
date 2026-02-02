@@ -1,0 +1,257 @@
+name: Argument Injection - Safe Patterns
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # SAFE: Using environment variable with validation for branch refs
+  # Note: git diff -- "$REF" treats the ref as a pathspec, not a branch reference
+  # For branch comparison, use git diff without -- and validate the input
+  safe-git-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Git diff with safe pattern
+        env:
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Validate branch name format before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git diff "$PR_REF"
+          else
+            echo "Invalid branch name format"
+            exit 1
+          fi
+
+  # SAFE: Using environment variable with quoted argument
+  safe-git-fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Git fetch with safe pattern
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: git fetch origin "$HEAD_REF"
+
+  # SAFE: Using environment variable for URL construction
+  safe-curl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl with safe pattern
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # URL encode the title to prevent injection
+          ENCODED_TITLE=$(echo "$PR_TITLE" | jq -sRr @uri)
+          curl "https://api.example.com/${ENCODED_TITLE}"
+
+  # SAFE: Using environment variable with validation
+  # Note: head.label contains owner:branch format, so we use head.ref for just the branch
+  safe-wget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wget with safe pattern
+        env:
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Validate branch ref format before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            wget -O file.txt "https://example.com/${PR_REF}"
+          else
+            echo "Invalid ref format"
+            exit 1
+          fi
+
+  # SAFE: Using hardcoded extraction path
+  safe-tar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tar with safe pattern
+        run: tar -xf archive.tar -C ./extracted
+
+  # SAFE: Using environment variable with strict package validation
+  safe-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: NPM install with safe pattern
+        env:
+          PACKAGE_NAME: ${{ github.event.issue.title }}
+        run: |
+          # Validate package name format (npm package naming rules)
+          if [[ "$PACKAGE_NAME" =~ ^@?[a-zA-Z0-9][-a-zA-Z0-9._]*$ ]]; then
+            npm install "$PACKAGE_NAME"
+          else
+            echo "Invalid package name format"
+            exit 1
+          fi
+
+  # SAFE: Using environment variable with validation
+  # Note: Docker doesn't support -- as POSIX-style option/image separator
+  # We rely on input validation to ensure safe usage
+  safe-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker run with safe pattern
+        env:
+          IMAGE_TAG: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Validate tag format (Docker tag naming rules)
+          if [[ "$IMAGE_TAG" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]]; then
+            docker run "myimage:${IMAGE_TAG}"
+          else
+            echo "Invalid image tag format"
+            exit 1
+          fi
+
+  # SAFE: Using environment variable with validation
+  safe-kubectl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kubectl with safe pattern
+        env:
+          NAMESPACE: ${{ github.event.pull_request.title }}
+        run: |
+          # Validate namespace format (Kubernetes naming rules)
+          if [[ "$NAMESPACE" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
+            kubectl get pods -n "$NAMESPACE"
+          else
+            echo "Invalid namespace format"
+            exit 1
+          fi
+
+  # SAFE: Using environment variable with path validation
+  # Note: Python passes -- to the script, so we rely on validation
+  safe-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Python with safe pattern
+        env:
+          SCRIPT_NAME: ${{ github.event.issue.body }}
+        run: |
+          # Validate script path (only allow alphanumeric and specific chars)
+          if [[ "$SCRIPT_NAME" =~ ^[a-zA-Z0-9_]+\.py$ ]]; then
+            python "$SCRIPT_NAME"
+          else
+            echo "Invalid script name format"
+            exit 1
+          fi
+
+  # SAFE: Multiple commands with proper environment variable usage and validation
+  safe-multiline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Multiple safe commands
+        env:
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Validate branch refs before using
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git checkout "$PR_REF"
+          fi
+          if [[ "$HEAD_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git log "$HEAD_REF"
+          fi
+          # For curl, encode the input
+          ENCODED_TITLE=$(echo "$PR_TITLE" | jq -sRr @uri)
+          curl -s "https://example.com/${ENCODED_TITLE}"
+
+  # SAFE: Using validated branch ref for git diff
+  # Note: For branch comparison, -- is not needed and would cause issues
+  safe-git-endofoptions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Git with end-of-options marker
+        env:
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [[ "$PR_REF" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            git diff --stat "$PR_REF" main
+          else
+            echo "Invalid ref format"
+            exit 1
+          fi
+
+  # SAFE: AWS CLI with validated bucket name
+  safe-aws:
+    runs-on: ubuntu-latest
+    steps:
+      - name: AWS S3 with safe pattern
+        env:
+          BUCKET_PART: ${{ github.event.pull_request.title }}
+        run: |
+          # Validate bucket name format (S3 naming rules)
+          if [[ "$BUCKET_PART" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]]; then
+            aws s3 ls "s3://${BUCKET_PART}"
+          else
+            echo "Invalid bucket name format"
+            exit 1
+          fi
+
+  # SAFE: gh CLI with validated input
+  safe-gh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: gh CLI with safe pattern
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.title }}
+        run: |
+          # Validate that input is a number
+          if [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            gh pr view "$ISSUE_NUMBER"
+          else
+            echo "Invalid PR number"
+            exit 1
+          fi
+
+  # SAFE: rsync with validated destination
+  safe-rsync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: rsync with safe pattern
+        env:
+          DEST_DIR: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Validate directory name
+          if [[ "$DEST_DIR" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            rsync -av ./src/ "./${DEST_DIR}/"
+          else
+            echo "Invalid destination directory"
+            exit 1
+          fi
+
+  # SAFE: make with validated target
+  safe-make:
+    runs-on: ubuntu-latest
+    steps:
+      - name: make with safe pattern
+        env:
+          MAKE_TARGET: ${{ github.event.issue.title }}
+        run: |
+          # Validate make target (only allow alphanumeric and underscore)
+          if [[ "$MAKE_TARGET" =~ ^[a-zA-Z0-9_]+$ ]]; then
+            make -- "$MAKE_TARGET"
+          else
+            echo "Invalid make target"
+            exit 1
+          fi
+
+  # SAFE: Using trusted event data (non-untrusted inputs)
+  safe-trusted-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Using trusted event data
+        run: |
+          # These are not untrusted inputs
+          git checkout ${{ github.sha }}
+          echo "Repository: ${{ github.repository }}"
+          echo "Run ID: ${{ github.run_id }}"

@@ -103,6 +103,7 @@ func (rule *MyRule) VisitJobPre(node *ast.Job) error {
     return nil
 }
 ```
+
 - Register rule in `pkg/core/linter.go`
 - Add tests in `pkg/core/myrule_test.go`
 - Optional: Implement `StepFixer` or `JobFixer` for auto-fix
@@ -235,11 +236,15 @@ sisakulint -boilerplate
 ### Testing a New Rule
 
 - Create example workflows in `script/actions/`
-  - `myrule.yaml` - Demonstrates the vulnerability
-  - `myrule-safe.yaml` - Shows the correct pattern
+   - `myrule.yaml` - Demonstrates the vulnerability
+   - `myrule-safe.yaml` - Shows the correct pattern
+
 - Implement the rule in `pkg/core/myrule.go`
+
 - Add tests in `pkg/core/myrule_test.go`
+
 - Register the rule in `pkg/core/linter.go` (around line 500)
+
 - Test with: `sisakulint script/actions/myrule.yaml`
 
 ### Debugging Tips
@@ -304,14 +309,14 @@ Detects when `actions/checkout` in privileged contexts doesn't specify an explic
 Two rules detect supply chain attacks:
 
 - **Artifact Poisoning** - Detects unsafe artifact download patterns and path traversal risks
-  - Checks for validation of downloaded artifacts
-  - Detects use of artifacts in privileged operations
-  - Auto-fix adds validation steps
+   - Checks for validation of downloaded artifacts
+   - Detects use of artifacts in privileged operations
+   - Auto-fix adds validation steps
 
 - **Cache Poisoning** - Detects unsafe cache patterns with untrusted inputs
-  - Validates cache key construction
-  - Identifies untrusted inputs in cache keys (e.g., `github.event.pull_request.head.ref`)
-  - Prevents attackers from poisoning build caches
+   - Validates cache key construction
+   - Identifies untrusted inputs in cache keys (e.g., `github.event.pull_request.head.ref`)
+   - Prevents attackers from poisoning build caches
 
 ## Additional Documentation
 
