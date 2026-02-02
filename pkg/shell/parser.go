@@ -562,7 +562,12 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 			p.walkForNetworkCommands(part, ctx, calls)
 		}
 
-	case *syntax.DblQuoted, *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect:
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.walkForNetworkCommands(part, ctx, calls)
+		}
+
+	case *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect:
 	}
 }
 
