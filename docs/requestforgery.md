@@ -28,7 +28,7 @@ The rule detects when untrusted user input is used in network request commands:
 ### 2. Severity Levels Based on Input Position
 
 | Severity | Position | Example | Risk |
-|----------|----------|---------|------|
+| -------- | -------- | ------- | ---- |
 | High | Full URL | `curl ${{ input }}` | Attacker controls entire destination |
 | High | Host/Domain | `curl https://${{ input }}/api` | Attacker controls target server |
 | Medium | Path/Query | `curl https://api.example.com/${{ input }}` | Limited to specific server |
