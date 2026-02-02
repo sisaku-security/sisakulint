@@ -11,8 +11,8 @@ import (
 
 type ArgumentInjectionRule struct {
 	BaseRule
-	severityLevel   string
-	checkPrivileged bool
+	severityLevel      string
+	checkPrivileged    bool
 	stepsWithUntrusted []*stepWithArgumentInjection
 	workflow           *ast.Workflow
 }
@@ -29,58 +29,70 @@ type argumentInjectionInfo struct {
 }
 
 var dangerousCommands = map[string]bool{
-	"git":      true,
-	"curl":     true,
-	"wget":     true,
-	"tar":      true,
-	"zip":      true,
-	"unzip":    true,
-	"rsync":    true,
-	"scp":      true,
-	"ssh":      true,
-	"npm":      true,
-	"yarn":     true,
-	"pip":      true,
-	"python":   true,
-	"python3":  true,
-	"node":     true,
-	"ruby":     true,
-	"perl":     true,
-	"php":      true,
-	"go":       true,
-	"cargo":    true,
-	"docker":   true,
-	"kubectl":  true,
-	"helm":     true,
-	"aws":      true,
-	"az":       true,
-	"gcloud":   true,
-	"gh":       true,
-	"jq":       true,
-	"sed":      true,
-	"awk":      true,
-	"grep":     true,
-	"find":     true,
-	"xargs":    true,
-	"env":      true,
-	"bash":     true,
-	"sh":       true,
-	"zsh":      true,
-	"pwsh":     true,
-	"make":     true,
-	"cmake":    true,
-	"mvn":      true,
-	"gradle":   true,
-	"ant":      true,
+	"git":     true,
+	"curl":    true,
+	"wget":    true,
+	"tar":     true,
+	"zip":     true,
+	"unzip":   true,
+	"rsync":   true,
+	"scp":     true,
+	"ssh":     true,
+	"npm":     true,
+	"yarn":    true,
+	"pip":     true,
+	"python":  true,
+	"python3": true,
+	"node":    true,
+	"ruby":    true,
+	"perl":    true,
+	"php":     true,
+	"go":      true,
+	"cargo":   true,
+	"docker":  true,
+	"kubectl": true,
+	"helm":    true,
+	"aws":     true,
+	"az":      true,
+	"gcloud":  true,
+	"gh":      true,
+	"jq":      true,
+	"sed":     true,
+	"awk":     true,
+	"grep":    true,
+	"find":    true,
+	"xargs":   true,
+	"env":     true,
+	"bash":    true,
+	"sh":      true,
+	"zsh":     true,
+	"pwsh":    true,
+	"make":    true,
+	"cmake":   true,
+	"mvn":     true,
+	"gradle":  true,
+	"ant":     true,
 }
 
 var dangerousCmdNames []string
 
+// commandsNotSupportingDoubleDash lists commands that don't support "--" as
+// an end-of-options marker, or where "--" has different semantics.
+// For these commands, we only use environment variable quoting without "--".
 var commandsNotSupportingDoubleDash = map[string]bool{
-	"docker":  true,
-	"python":  true,
-	"python3": true,
+	"docker":  true, // docker uses subcommands; -- applies to subcommand args
+	"python":  true, // python -c ignores --
+	"python3": true, // python3 -c ignores --
+	"node":    true, // node does not support -- for ending options
+	"ruby":    true, // ruby -e ignores --
+	"php":     true, // php does not support --
 }
+
+// Expression syntax constants
+const (
+	exprPrefix = "${{ "
+	exprSuffix = " }}"
+)
 
 func init() {
 	dangerousCmdNames = make([]string, 0, len(dangerousCommands))
@@ -115,112 +127,159 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
-	isPrivileged := rule.hasPrivilegedTriggers()
-	if rule.checkPrivileged != isPrivileged {
+	if !rule.shouldProcessJob() {
 		return nil
 	}
 
 	for _, s := range node.Steps {
-		if s.Exec == nil || s.Exec.Kind() != ast.ExecKindRun {
+		rule.processStep(s)
+	}
+	return nil
+}
+
+// shouldProcessJob checks if this job should be processed based on trigger type.
+func (rule *ArgumentInjectionRule) shouldProcessJob() bool {
+	isPrivileged := rule.hasPrivilegedTriggers()
+	return rule.checkPrivileged == isPrivileged
+}
+
+// processStep analyzes a single step for argument injection vulnerabilities.
+func (rule *ArgumentInjectionRule) processStep(s *ast.Step) {
+	run := rule.extractRunExec(s)
+	if run == nil {
+		return
+	}
+
+	exprs := rule.extractAndParseExpressions(run.Run)
+	if len(exprs) == 0 {
+		return
+	}
+
+	untrustedSet := rule.buildUntrustedSet(exprs, s.Env)
+	if len(untrustedSet) == 0 {
+		return
+	}
+
+	modifiedScript, exprToPlaceholder := rule.prepareScriptForParsing(run.Run.Value, exprs)
+	parser := shell.NewShellParser(modifiedScript)
+
+	stepUntrusted := rule.analyzeExpressions(exprs, untrustedSet, exprToPlaceholder, parser, run, s)
+
+	if stepUntrusted != nil {
+		rule.stepsWithUntrusted = append(rule.stepsWithUntrusted, stepUntrusted)
+		rule.AddAutoFixer(NewStepFixer(s, rule))
+	}
+}
+
+// extractRunExec extracts the ExecRun from a step if it's a run step.
+func (rule *ArgumentInjectionRule) extractRunExec(s *ast.Step) *ast.ExecRun {
+	if s.Exec == nil || s.Exec.Kind() != ast.ExecKindRun {
+		return nil
+	}
+	run := s.Exec.(*ast.ExecRun)
+	if run.Run == nil {
+		return nil
+	}
+	return run
+}
+
+// buildUntrustedSet builds a map of untrusted expressions and their paths.
+func (rule *ArgumentInjectionRule) buildUntrustedSet(exprs []parsedExpression, env *ast.Env) map[string][]string {
+	untrustedSet := make(map[string][]string)
+	for _, expr := range exprs {
+		untrustedPaths := rule.checkUntrustedInput(expr)
+		if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, env) {
+			untrustedSet[expr.raw] = untrustedPaths
+		}
+	}
+	return untrustedSet
+}
+
+// prepareScriptForParsing replaces expressions with placeholders for shell parsing.
+func (rule *ArgumentInjectionRule) prepareScriptForParsing(script string, exprs []parsedExpression) (string, map[string]string) {
+	modifiedScript := script
+	exprToPlaceholder := make(map[string]string)
+
+	for i, expr := range exprs {
+		exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
+		exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
+		placeholderName := fmt.Sprintf("__SISAKULINT_ARGEXPR_%d__", i)
+
+		modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern1, "$"+placeholderName)
+		modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern2, "$"+placeholderName)
+
+		exprToPlaceholder[expr.raw] = placeholderName
+	}
+
+	return modifiedScript, exprToPlaceholder
+}
+
+// analyzeExpressions checks each expression for argument injection vulnerabilities.
+func (rule *ArgumentInjectionRule) analyzeExpressions(
+	exprs []parsedExpression,
+	untrustedSet map[string][]string,
+	exprToPlaceholder map[string]string,
+	parser *shell.ShellParser,
+	run *ast.ExecRun,
+	s *ast.Step,
+) *stepWithArgumentInjection {
+	var stepUntrusted *stepWithArgumentInjection
+
+	for i := range exprs {
+		expr := &exprs[i]
+
+		untrustedPaths, isUntrusted := untrustedSet[expr.raw]
+		if !isUntrusted {
 			continue
 		}
 
-		run := s.Exec.(*ast.ExecRun)
-		if run.Run == nil {
-			continue
-		}
+		placeholderName := exprToPlaceholder[expr.raw]
+		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
 
-		script := run.Run.Value
-		exprs := rule.extractAndParseExpressions(run.Run)
-		if len(exprs) == 0 {
-			continue
-		}
-
-		untrustedSet := make(map[string][]string)
-		for _, expr := range exprs {
-			untrustedPaths := rule.checkUntrustedInput(expr)
-			if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
-				untrustedSet[expr.raw] = untrustedPaths
-			}
-		}
-
-		if len(untrustedSet) == 0 {
-			continue
-		}
-
-		// Replace expressions with placeholders to make script parseable
-		modifiedScript := script
-		exprToPlaceholder := make(map[string]string)
-
-		for i, expr := range exprs {
-			exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
-			exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
-			placeholderName := fmt.Sprintf("__SISAKULINT_ARGEXPR_%d__", i)
-
-			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern1, "$"+placeholderName)
-			modifiedScript = strings.ReplaceAll(modifiedScript, exprPattern2, "$"+placeholderName)
-
-			exprToPlaceholder[expr.raw] = placeholderName
-		}
-
-		parser := shell.NewShellParser(modifiedScript)
-		var stepUntrusted *stepWithArgumentInjection
-
-		for i := range exprs {
-			expr := &exprs[i]
-
-			untrustedPaths, isUntrusted := untrustedSet[expr.raw]
-			if !isUntrusted {
+		for _, varUsage := range varUsages {
+			if varUsage.IsAfterDoubleDash {
 				continue
 			}
 
-			placeholderName := exprToPlaceholder[expr.raw]
-			varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
-
-			for _, varUsage := range varUsages {
-				if varUsage.IsAfterDoubleDash {
-					continue
-				}
-
-				if stepUntrusted == nil {
-					stepUntrusted = &stepWithArgumentInjection{step: s}
-				}
-
-				linePos := expr.pos
-				if linePos == nil {
-					linePos = run.Run.Pos
-				}
-
-				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
-					expr:        *expr,
-					paths:       untrustedPaths,
-					commandName: varUsage.CommandName,
-				})
-
-				if rule.checkPrivileged {
-					rule.Errorf(
-						linePos,
-						"argument injection (critical): \"%s\" is potentially untrusted and used as command-line argument to '%s' in a workflow with privileged triggers. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
-						strings.Join(untrustedPaths, "\", \""),
-						varUsage.CommandName,
-					)
-				} else {
-					rule.Errorf(
-						linePos,
-						"argument injection (medium): \"%s\" is potentially untrusted and used as command-line argument to '%s'. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
-						strings.Join(untrustedPaths, "\", \""),
-						varUsage.CommandName,
-					)
-				}
+			if stepUntrusted == nil {
+				stepUntrusted = &stepWithArgumentInjection{step: s}
 			}
-		}
 
-		if stepUntrusted != nil {
-			rule.stepsWithUntrusted = append(rule.stepsWithUntrusted, stepUntrusted)
-			rule.AddAutoFixer(NewStepFixer(s, rule))
+			linePos := expr.pos
+			if linePos == nil {
+				linePos = run.Run.Pos
+			}
+
+			stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, argumentInjectionInfo{
+				expr:        *expr,
+				paths:       untrustedPaths,
+				commandName: varUsage.CommandName,
+			})
+
+			rule.reportArgumentInjection(linePos, untrustedPaths, varUsage.CommandName)
 		}
 	}
-	return nil
+
+	return stepUntrusted
+}
+
+// reportArgumentInjection reports an argument injection vulnerability.
+func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, paths []string, cmdName string) {
+	severity := "medium"
+	suffix := ""
+	if rule.checkPrivileged {
+		severity = "critical"
+		suffix = " in a workflow with privileged triggers"
+	}
+
+	rule.Errorf(
+		pos,
+		"argument injection (%s): \"%s\" is potentially untrusted and used as command-line argument to '%s'%s. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+		severity,
+		strings.Join(paths, "\", \""),
+		cmdName,
+		suffix,
+	)
 }
 
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
@@ -251,18 +310,42 @@ func (rule *ArgumentInjectionRule) RuleNames() string {
 }
 
 func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
-	var stepInfo *stepWithArgumentInjection
-	for _, s := range rule.stepsWithUntrusted {
-		if s.step == step {
-			stepInfo = s
-			break
-		}
-	}
-
+	stepInfo := rule.findStepInfo(step)
 	if stepInfo == nil {
 		return nil
 	}
 
+	rule.initStepEnv(step)
+
+	run := step.Exec.(*ast.ExecRun)
+	if run.Run == nil {
+		return nil
+	}
+
+	envVarMap, envVarsForYAML := rule.buildEnvVarMaps(stepInfo, step)
+
+	if err := rule.addEnvVarsToStep(step, envVarsForYAML); err != nil {
+		return err
+	}
+
+	script := rule.replaceExpressionsWithEnvVars(run.Run.Value, stepInfo, envVarMap)
+	run.Run.Value = script
+
+	return rule.updateStepRunScript(step, script)
+}
+
+// findStepInfo finds the stepWithArgumentInjection for a given step.
+func (rule *ArgumentInjectionRule) findStepInfo(step *ast.Step) *stepWithArgumentInjection {
+	for _, s := range rule.stepsWithUntrusted {
+		if s.step == step {
+			return s
+		}
+	}
+	return nil
+}
+
+// initStepEnv initializes the step's environment if needed.
+func (rule *ArgumentInjectionRule) initStepEnv(step *ast.Step) {
 	if step.Env == nil {
 		step.Env = &ast.Env{
 			Vars: make(map[string]*ast.EnvVar),
@@ -271,12 +354,13 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	if step.Env.Vars == nil {
 		step.Env.Vars = make(map[string]*ast.EnvVar)
 	}
+}
 
-	run := step.Exec.(*ast.ExecRun)
-	if run.Run == nil {
-		return nil
-	}
-
+// buildEnvVarMaps builds the environment variable maps for auto-fix.
+func (rule *ArgumentInjectionRule) buildEnvVarMaps(
+	stepInfo *stepWithArgumentInjection,
+	step *ast.Step,
+) (map[string]string, map[string]string) {
 	envVarMap := make(map[string]string)
 	envVarsForYAML := make(map[string]string)
 
@@ -284,55 +368,72 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 		expr := untrustedInfo.expr
 		envVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
 
-		if _, exists := envVarMap[expr.raw]; !exists {
-			envVarMap[expr.raw] = envVarName
-
-			if _, exists := step.Env.Vars[strings.ToLower(envVarName)]; !exists {
-				step.Env.Vars[strings.ToLower(envVarName)] = &ast.EnvVar{
-					Name: &ast.String{
-						Value: envVarName,
-						Pos:   expr.pos,
-					},
-					Value: &ast.String{
-						Value: fmt.Sprintf("${{ %s }}", expr.raw),
-						Pos:   expr.pos,
-					},
-				}
-				envVarsForYAML[envVarName] = fmt.Sprintf("${{ %s }}", expr.raw)
-			}
+		if _, exists := envVarMap[expr.raw]; exists {
+			continue
 		}
+
+		envVarMap[expr.raw] = envVarName
+
+		if _, exists := step.Env.Vars[strings.ToLower(envVarName)]; exists {
+			continue
+		}
+
+		exprValue := exprPrefix + expr.raw + exprSuffix
+		step.Env.Vars[strings.ToLower(envVarName)] = &ast.EnvVar{
+			Name:  &ast.String{Value: envVarName, Pos: expr.pos},
+			Value: &ast.String{Value: exprValue, Pos: expr.pos},
+		}
+		envVarsForYAML[envVarName] = exprValue
 	}
 
-	if step.BaseNode != nil && len(envVarsForYAML) > 0 {
-		if err := AddEnvVarsToStepNode(step.BaseNode, envVarsForYAML); err != nil {
-			return fmt.Errorf("failed to add env vars to step node: %w", err)
-		}
-	}
+	return envVarMap, envVarsForYAML
+}
 
-	script := run.Run.Value
+// addEnvVarsToStep adds environment variables to the step's YAML node.
+func (rule *ArgumentInjectionRule) addEnvVarsToStep(step *ast.Step, envVarsForYAML map[string]string) error {
+	if step.BaseNode == nil || len(envVarsForYAML) == 0 {
+		return nil
+	}
+	if err := AddEnvVarsToStepNode(step.BaseNode, envVarsForYAML); err != nil {
+		return fmt.Errorf("failed to add env vars to step node: %w", err)
+	}
+	return nil
+}
+
+// replaceExpressionsWithEnvVars replaces untrusted expressions with environment variables.
+func (rule *ArgumentInjectionRule) replaceExpressionsWithEnvVars(
+	script string,
+	stepInfo *stepWithArgumentInjection,
+	envVarMap map[string]string,
+) string {
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		envVarName := envVarMap[untrustedInfo.expr.raw]
-		exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
+		exprPattern1 := exprPrefix + untrustedInfo.expr.raw + exprSuffix
 		exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
 
-		var newValue string
-		if commandsNotSupportingDoubleDash[untrustedInfo.commandName] {
-			newValue = fmt.Sprintf("\"$%s\"", envVarName)
-		} else {
-			newValue = fmt.Sprintf("-- \"$%s\"", envVarName)
-		}
+		newValue := rule.buildReplacementValue(envVarName, untrustedInfo.commandName)
 		script = strings.ReplaceAll(script, exprPattern1, newValue)
 		script = strings.ReplaceAll(script, exprPattern2, newValue)
 	}
+	return script
+}
 
-	run.Run.Value = script
-
-	if step.BaseNode != nil {
-		if err := setRunScriptValue(step.BaseNode, script); err != nil {
-			return fmt.Errorf("failed to update run script: %w", err)
-		}
+// buildReplacementValue builds the replacement value for an expression.
+func (rule *ArgumentInjectionRule) buildReplacementValue(envVarName, commandName string) string {
+	if commandsNotSupportingDoubleDash[commandName] {
+		return fmt.Sprintf("\"$%s\"", envVarName)
 	}
+	return fmt.Sprintf("-- \"$%s\"", envVarName)
+}
 
+// updateStepRunScript updates the step's run script in the YAML node.
+func (rule *ArgumentInjectionRule) updateStepRunScript(step *ast.Step, script string) error {
+	if step.BaseNode == nil {
+		return nil
+	}
+	if err := setRunScriptValue(step.BaseNode, script); err != nil {
+		return fmt.Errorf("failed to update run script: %w", err)
+	}
 	return nil
 }
 

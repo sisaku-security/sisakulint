@@ -8,6 +8,7 @@ import (
 )
 
 func TestArgumentInjectionCriticalRule(t *testing.T) {
+	t.Parallel()
 	rule := ArgumentInjectionCriticalRule()
 	if rule.RuleName != "argument-injection-critical" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "argument-injection-critical")
@@ -15,6 +16,7 @@ func TestArgumentInjectionCriticalRule(t *testing.T) {
 }
 
 func TestArgumentInjectionMediumRule(t *testing.T) {
+	t.Parallel()
 	rule := ArgumentInjectionMediumRule()
 	if rule.RuleName != "argument-injection-medium" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "argument-injection-medium")
@@ -22,6 +24,7 @@ func TestArgumentInjectionMediumRule(t *testing.T) {
 }
 
 func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		trigger      string
@@ -61,7 +64,9 @@ func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionCriticalRule()
 
 			// Create workflow with specified trigger
@@ -112,6 +117,7 @@ func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
 }
 
 func TestArgumentInjection_DangerousCommands(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		runScript   string
@@ -199,7 +205,9 @@ func TestArgumentInjection_DangerousCommands(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -234,6 +242,7 @@ func TestArgumentInjection_DangerousCommands(t *testing.T) {
 }
 
 func TestArgumentInjection_SafePatterns(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		runScript   string
@@ -286,7 +295,9 @@ func TestArgumentInjection_SafePatterns(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -322,6 +333,7 @@ func TestArgumentInjection_SafePatterns(t *testing.T) {
 }
 
 func TestArgumentInjection_MultilineScript(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		runScript   string
@@ -354,7 +366,9 @@ echo "safe"`,
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -390,6 +404,7 @@ echo "safe"`,
 }
 
 func TestArgumentInjection_MediumRule(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		trigger     string
@@ -421,7 +436,9 @@ func TestArgumentInjection_MediumRule(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionMediumRule()
 
 			workflow := &ast.Workflow{
@@ -456,6 +473,7 @@ func TestArgumentInjection_MediumRule(t *testing.T) {
 }
 
 func TestArgumentInjection_ErrorMessages(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name               string
 		trigger            string
@@ -478,7 +496,9 @@ func TestArgumentInjection_ErrorMessages(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			rule := ArgumentInjectionCriticalRule()
 
 			workflow := &ast.Workflow{
@@ -520,6 +540,7 @@ func TestArgumentInjection_ErrorMessages(t *testing.T) {
 }
 
 func TestArgumentInjection_GenerateEnvVarName(t *testing.T) {
+	t.Parallel()
 	rule := ArgumentInjectionCriticalRule()
 
 	tests := []struct {
@@ -555,7 +576,9 @@ func TestArgumentInjection_GenerateEnvVarName(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		// capture range variable
 		t.Run(tt.desc, func(t *testing.T) {
+			t.Parallel()
 			result := rule.generateEnvVarName(tt.path)
 			if result != tt.expected {
 				t.Errorf("generateEnvVarName(%q) = %q, want %q",
