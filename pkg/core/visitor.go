@@ -126,7 +126,11 @@ func (s *SyntaxTreeVisitor) visitJob(node *ast.Job) error {
 	}
 
 	if s.debugW != nil {
-		msg := fmt.Sprintf("VisitJobPost was taking %d steps, at job %q", len(node.Steps), node.ID.Value)
+		jobID := "<nil>"
+		if node.ID != nil {
+			jobID = node.ID.Value
+		}
+		msg := fmt.Sprintf("VisitJobPost was taking %d steps, at job %q", len(node.Steps), jobID)
 		defer s.logreportElapsedTime(msg, startTime)
 	}
 
