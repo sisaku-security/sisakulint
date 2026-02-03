@@ -71,7 +71,7 @@ func (s *SyntaxTreeVisitor) VisitTree(node *ast.Workflow) error {
 	}
 
 	if s.debugW != nil {
-		msg := fmt.Sprintf("VisitJob was tooking %d jobs", len(node.Jobs))
+		msg := fmt.Sprintf("VisitJob was taking %d jobs", len(node.Jobs))
 		defer s.logreportElapsedTime(msg, startTime)
 		startTime = time.Now()
 	}
@@ -114,7 +114,7 @@ func (s *SyntaxTreeVisitor) visitJob(node *ast.Job) error {
 	}
 
 	if s.debugW != nil {
-		msg := fmt.Sprintf("VisitStep was tooking %d steps", len(node.Steps))
+		msg := fmt.Sprintf("VisitStep was taking %d steps", len(node.Steps))
 		defer s.logreportElapsedTime(msg, startTime)
 		startTime = time.Now()
 	}
@@ -126,7 +126,7 @@ func (s *SyntaxTreeVisitor) visitJob(node *ast.Job) error {
 	}
 
 	if s.debugW != nil {
-		msg := fmt.Sprintf("VisitJobPost was tooking %d jobs, at job %q", len(node.Steps), node.ID.Value)
+		msg := fmt.Sprintf("VisitJobPost was taking %d steps, at job %q", len(node.Steps), node.ID.Value)
 		defer s.logreportElapsedTime(msg, startTime)
 	}
 
@@ -147,7 +147,13 @@ func (s *SyntaxTreeVisitor) visitStep(node *ast.Step) error {
 	}
 
 	if s.debugW != nil {
-		msg := fmt.Sprintf("VisitStep was tooking %s steps, at step %q", node.Pos, startTime)
+		stepName := node.Pos.String()
+		if node.Name != nil && node.Name.Value != "" {
+			stepName = node.Name.Value
+		} else if node.ID != nil && node.ID.Value != "" {
+			stepName = node.ID.Value
+		}
+		msg := fmt.Sprintf("VisitStep at %s, step %q", node.Pos, stepName)
 		defer s.logreportElapsedTime(msg, startTime)
 	}
 

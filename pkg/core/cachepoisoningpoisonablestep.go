@@ -208,7 +208,7 @@ func (rule *CachePoisoningPoisonableStepRule) VisitJobPre(node *ast.Job) error {
 	}
 
 	if len(rule.jobUnsafeTriggers) == 0 {
-		rule.Debug("Job '%s' filtered out unsafe triggers via if condition", node.ID)
+		rule.Debug("Job '%s' filtered out unsafe triggers via if condition", node.ID.Value)
 	}
 
 	return nil
