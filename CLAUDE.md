@@ -9,7 +9,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files. It analy
 **Key Features:**
 - Detects injection vulnerabilities, credential exposure, and supply chain attacks
 - Validates permissions, timeouts, and workflow configurations
-- Supports auto-fixing for many security issues (25 rules with auto-fix as of Jan 2026)
+- Supports auto-fixing for many security issues (26 rules with auto-fix as of Jan 2026)
 - SARIF output format for CI/CD integration (e.g., reviewdog)
 - Fast parallel analysis with Go concurrency
 - Specialized detection for privileged workflow contexts (pull_request_target, issue_comment, workflow_run)
@@ -389,6 +389,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 22. **ObfuscationRule** (`obfuscation.go`) - Normalizes obfuscated paths and shell commands
 23. **KnownVulnerableActionsRule** (`known_vulnerable_actions.go`) - Updates vulnerable actions to patched versions
 24. **SecretsInArtifactsRule** (`secretsinartifacts.go`) - Fixes unsafe artifact uploads by adding include-hidden-files: false for v3, or updating unsafe paths
+25. **CacheBloatRule** (`cachebloatrule.go`) - Adds `if: github.event_name != 'push'` to restore and `if: github.event_name == 'push'` to save steps
 
 ## Recent Security Enhancements
 

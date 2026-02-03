@@ -16,8 +16,10 @@ Goのビルドキャッシュなどが肥大化する問題は多くのプロジ
 
 ## 解決策
 
-- master/main branchへのpush時: キャッシュをリストアせず、クリーンビルドで新規キャッシュを作成
-- PRのCI実行時: masterブランチで作られたキャッシュを読み取り専用で使用
+- pushイベント時: キャッシュをリストアせず、クリーンビルドで新規キャッシュを作成
+- pull_requestイベント時: pushイベントで作られたキャッシュを読み取り専用で使用
+
+注: 本ルールは `github.event_name` のみをチェックし、ブランチ名はチェックしない。多くのワークフローではpushイベントがmain/masterブランチのみに設定されているため、実質的にmain/masterへのpush時のみキャッシュが書き込まれる。
 
 ## 検出条件
 
@@ -81,7 +83,9 @@ save:
 
 既存条件がある場合:
 - Before: `if: steps.cache.outputs.cache-hit != 'true'`
-- After: `if: steps.cache.outputs.cache-hit != 'true' && github.event_name == 'push'`
+- After: `if: (steps.cache.outputs.cache-hit != 'true') && github.event_name == 'push'`
+
+注: 既存条件は括弧で囲み、演算子優先順位による評価順の変化を防止する。
 
 ## テストケース
 

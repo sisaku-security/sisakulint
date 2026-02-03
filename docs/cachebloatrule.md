@@ -21,12 +21,14 @@ This cycle causes the cache to grow with each CI run, leading to:
 
 The recommended pattern is:
 
-- **cache/restore**: Skip on push events to main/master branch
-- **cache/save**: Only run on push events to main/master branch
+- **cache/restore**: Skip on push events (`github.event_name != 'push'`)
+- **cache/save**: Only run on push events (`github.event_name == 'push'`)
 
 This ensures:
-- On push to main/master: A clean build creates fresh cache (no accumulation)
-- On PR: Cache is read-only, benefiting from main branch cache without contributing to bloat
+- On push events: A clean build creates fresh cache (no accumulation from previous cache)
+- On pull_request events: Cache is read-only, benefiting from push-created cache without contributing to bloat
+
+Note: This rule checks only the event type (`github.event_name`), not the branch name. For most workflows where push events are configured only for main/master branches, this effectively limits cache writes to those branches. If your workflow triggers push events on feature branches, consider adding additional branch conditions.
 
 ## Detected Patterns
 
