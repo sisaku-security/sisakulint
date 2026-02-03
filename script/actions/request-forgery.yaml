@@ -1,0 +1,196 @@
+# Vulnerable workflow demonstrating Server-Side Request Forgery (SSRF) vulnerabilities
+# This workflow contains patterns that should be detected by the request-forgery rule
+
+name: SSRF Vulnerable Workflow
+
+on:
+  # Critical: Privileged triggers with write access
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # Vulnerable: curl with untrusted URL (full URL from user input)
+  vulnerable-curl-full-url:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable curl with full URL
+        run: |
+          # SSRF: Full URL from untrusted input
+          curl "${{ github.event.issue.body }}"
+
+  # Vulnerable: wget with untrusted URL
+  vulnerable-wget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable wget
+        run: |
+          # SSRF: Downloading from attacker-controlled URL
+          wget -O /tmp/data.json "${{ github.event.comment.body }}"
+
+  # Vulnerable: curl with untrusted host
+  vulnerable-curl-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable curl with untrusted host
+        run: |
+          # SSRF: Host/domain from untrusted input
+          curl "https://${{ github.event.pull_request.title }}/api/data"
+
+  # Vulnerable: curl with untrusted path
+  vulnerable-curl-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable curl with untrusted path
+        run: |
+          # SSRF: Path from untrusted input (less severe but still dangerous)
+          curl "https://api.example.com/${{ github.event.issue.body }}"
+
+  # Vulnerable: PowerShell Invoke-WebRequest
+  vulnerable-powershell:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable Invoke-WebRequest
+        shell: pwsh
+        run: |
+          # SSRF: PowerShell web request with untrusted URL
+          Invoke-WebRequest -Uri "${{ github.event.comment.body }}" -OutFile data.txt
+
+  # Vulnerable: GitHub Script with fetch
+  vulnerable-github-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable fetch in github-script
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // SSRF: Fetching from attacker-controlled URL
+            const response = await fetch('${{ github.event.issue.body }}');
+            const data = await response.json();
+            console.log(data);
+
+  # Vulnerable: GitHub Script with axios
+  vulnerable-axios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable axios in github-script
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const axios = require('axios');
+            // SSRF: axios request to attacker-controlled URL
+            const response = axios.get('${{ github.event.comment.body }}');
+
+  # Vulnerable: Multiple network commands
+  vulnerable-multiple:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Multiple vulnerable network commands
+        run: |
+          # Multiple SSRF vulnerabilities in one script
+          curl "${{ github.event.issue.title }}"
+          wget "${{ github.event.pull_request.body }}"
+
+  # Dangerous: Direct access to cloud metadata (even without expression)
+  dangerous-metadata-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Direct metadata access
+        run: |
+          # Warning: Direct access to cloud metadata service
+          # This could be intentional but should be reviewed
+          curl http://169.254.169.254/latest/meta-data/
+
+  # Vulnerable: Combining untrusted input with metadata URL
+  vulnerable-metadata-bypass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Metadata bypass attempt
+        run: |
+          # Attacker could use this to access internal services
+          # by providing URLs like "169.254.169.254" or "localhost"
+          curl "http://${{ github.event.issue.body }}/latest/meta-data/"
+
+  # Vulnerable: netcat with untrusted host
+  vulnerable-netcat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable netcat
+        run: |
+          # SSRF via netcat - can probe internal networks
+          echo "test" | nc ${{ github.event.comment.body }} 80
+
+  # Vulnerable: Python requests
+  vulnerable-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable Python requests
+        run: |
+          python3 << 'EOF'
+          import requests
+          # SSRF: Python requests with untrusted URL
+          response = requests.get('${{ github.event.issue.body }}')
+          print(response.text)
+          EOF
+
+  # Vulnerable: curl inside control structures
+  vulnerable-control-structures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Vulnerable curl in if clause
+        run: |
+          # SSRF: curl inside if statement - should be detected
+          if [ -n "$VAR" ]; then
+            curl "${{ github.event.issue.body }}"
+          fi
+
+      - name: Vulnerable wget in while loop
+        run: |
+          # SSRF: wget inside while loop - should be detected
+          while true; do
+            wget "${{ github.event.comment.body }}"
+            break
+          done
+
+      - name: Vulnerable curl in for loop
+        run: |
+          # SSRF: curl inside for loop - should be detected
+          for url in "${{ github.event.pull_request.title }}"; do
+            curl "$url"
+          done
+
+      - name: Vulnerable curl in case statement
+        run: |
+          # SSRF: curl inside case statement - should be detected
+          case "$ACTION" in
+            fetch)
+              curl "${{ github.event.issue.body }}"
+              ;;
+          esac
+
+      - name: Vulnerable curl in subshell
+        run: |
+          # SSRF: curl inside subshell - should be detected
+          (curl "${{ github.event.comment.body }}")
+
+      - name: Vulnerable curl in function
+        run: |
+          # SSRF: curl inside function declaration - should be detected
+          fetch_data() {
+            curl "${{ github.event.pull_request.body }}"
+          }
+          fetch_data

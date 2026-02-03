@@ -16,6 +16,12 @@ type CodeInjectionRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithUntrustedInput
 	workflow           *ast.Workflow
+	taintTracker       *TaintTracker // Tracks taint propagation through step outputs
+	// workflowTriggers stores all trigger names from the workflow
+	workflowTriggers []string
+	// jobHasMatchingTriggers indicates if the current job can execute on matching triggers
+	// (privileged for critical, normal for medium)
+	jobHasMatchingTriggers bool
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -63,23 +69,70 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 // VisitWorkflowPre is called before visiting a workflow
 func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+	rule.workflowTriggers = nil
+	rule.jobHasMatchingTriggers = false
+
+	// Collect all workflow triggers
+	for _, event := range node.On {
+		switch e := event.(type) {
+		case *ast.WebhookEvent:
+			if e.Hook != nil {
+				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
+			}
+		case *ast.WorkflowCallEvent:
+			rule.workflowTriggers = append(rule.workflowTriggers, "workflow_call")
+		}
+	}
+
 	return nil
 }
 
 func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
-	// Check if workflow trigger matches what we're looking for
-	isPrivileged := rule.hasPrivilegedTriggers()
+	// Reset job-level state
+	rule.jobHasMatchingTriggers = false
 
-	// Skip if trigger type doesn't match our severity level
-	// Note on mixed triggers: If a workflow has BOTH privileged and normal triggers
-	// (e.g., both pull_request_target and pull_request), the critical rule will fire
-	// because ANY privileged trigger makes the entire workflow privileged.
-	// This is conservative but safe - if any trigger grants write access, we treat
-	// the whole workflow as privileged to avoid false negatives.
-	if rule.checkPrivileged != isPrivileged {
+	// Use JobTriggerAnalyzer to determine effective triggers for this job
+	// This considers job-level if conditions that may filter out certain triggers
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	effectiveTriggers := analyzer.AnalyzeJobTriggers(node)
+
+	// Check if this job can run on privileged triggers
+	hasPrivileged := false
+	hasNormal := false
+	for _, trigger := range effectiveTriggers {
+		if isPrivilegedTrigger(trigger) {
+			hasPrivileged = true
+		} else {
+			hasNormal = true
+		}
+	}
+
+	// Determine if this job matches what we're looking for
+	if rule.checkPrivileged {
+		// Critical rule: only check jobs that can run on privileged triggers
+		rule.jobHasMatchingTriggers = hasPrivileged
+	} else {
+		// Medium rule: only check jobs that can run on normal triggers
+		// but NOT on privileged triggers (to avoid duplicate warnings)
+		rule.jobHasMatchingTriggers = hasNormal && !hasPrivileged
+	}
+
+	// Skip if this job doesn't match our trigger criteria
+	if !rule.jobHasMatchingTriggers {
 		return nil
 	}
 
+	// Initialize taint tracker per job to avoid cross-job contamination
+	// This ensures step IDs don't collide across different jobs
+	rule.taintTracker = NewTaintTracker()
+
+	// First pass: collect taint information from all steps
+	// This allows us to detect tainted step outputs before checking for code injection
+	for _, s := range node.Steps {
+		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Second pass: check for code injection vulnerabilities
 	for _, s := range node.Steps {
 		if s.Exec == nil {
 			continue
@@ -93,7 +146,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 			exprs := rule.extractAndParseExpressions(run.Run)
 
 			for _, expr := range exprs {
-				untrustedPaths := rule.checkUntrustedInput(expr)
+				// Use checkUntrustedInputWithTaint to also detect tainted step outputs
+				untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
 						stepUntrusted = &stepWithUntrustedInput{step: s}
@@ -129,7 +183,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 					exprs := rule.extractAndParseExpressions(scriptInput.Value)
 
 					for _, expr := range exprs {
-						untrustedPaths := rule.checkUntrustedInput(expr)
+						// Use checkUntrustedInputWithTaint to also detect tainted step outputs
+						untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
 						if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 							if stepUntrusted == nil {
 								stepUntrusted = &stepWithUntrustedInput{step: s}
@@ -172,11 +227,6 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 		rule.checkDangerousShellPatterns(s)
 	}
 	return nil
-}
-
-// hasPrivilegedTriggers checks if the workflow has privileged triggers
-func (rule *CodeInjectionRule) hasPrivilegedTriggers() bool {
-	return HasPrivilegedTriggers(rule.workflow)
 }
 
 // RuleNames implements StepFixer interface
@@ -431,6 +481,31 @@ func (rule *CodeInjectionRule) checkUntrustedInput(expr parsedExpression) []stri
 					path := msg[idx+1 : idx+1+endIdx]
 					paths = append(paths, path)
 				}
+			}
+		}
+	}
+
+	return paths
+}
+
+// checkUntrustedInputWithTaint checks if the expression contains untrusted input,
+// including tainted step outputs tracked by TaintTracker.
+// This extends checkUntrustedInput to detect indirect taint propagation.
+//
+// Example: If step "get-ref" writes untrusted input to $GITHUB_OUTPUT,
+// then steps.get-ref.outputs.ref will be detected as tainted.
+func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) []string {
+	// First check built-in untrusted inputs
+	paths := rule.checkUntrustedInput(expr)
+
+	// Then check tainted step outputs
+	if rule.taintTracker != nil {
+		if tainted, sources := rule.taintTracker.IsTainted(expr.node); tainted {
+			// Format the taint path to include the propagation chain
+			// e.g., "steps.get-ref.outputs.ref (tainted via github.head_ref)"
+			for _, source := range sources {
+				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
+				paths = append(paths, taintPath)
 			}
 		}
 	}

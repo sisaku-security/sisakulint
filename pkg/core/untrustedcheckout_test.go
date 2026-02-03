@@ -735,3 +735,139 @@ jobs:
 		})
 	}
 }
+
+// TestUntrustedCheckoutJobIfConditionFiltering tests that when a job has an if condition
+// that filters out some triggers, the diagnostic points to the correct trigger.
+func TestUntrustedCheckoutJobIfConditionFiltering(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		yaml                string
+		expectedTriggerName string
+		wantErr             bool
+	}{
+		{
+			name: "Multiple triggers - job if filters to issue_comment only",
+			yaml: `
+name: Test
+on:
+  pull_request_target:
+  issue_comment:
+jobs:
+  test:
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`,
+			expectedTriggerName: "issue_comment",
+			wantErr:             true,
+		},
+		{
+			name: "Multiple triggers - job if filters to pull_request_target only",
+			yaml: `
+name: Test
+on:
+  pull_request_target:
+  issue_comment:
+  workflow_run:
+jobs:
+  test:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`,
+			expectedTriggerName: "pull_request_target",
+			wantErr:             true,
+		},
+		{
+			name: "Multiple triggers - job if filters out all dangerous triggers",
+			yaml: `
+name: Test
+on:
+  pull_request_target:
+  pull_request:
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`,
+			expectedTriggerName: "",
+			wantErr:             false,
+		},
+		{
+			name: "Multiple triggers - job if with contains filters to workflow_run",
+			yaml: `
+name: Test
+on:
+  pull_request_target:
+  issue_comment:
+  workflow_run:
+jobs:
+  test:
+    if: contains(fromJson('["workflow_run"]'), github.event_name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`,
+			expectedTriggerName: "workflow_run",
+			wantErr:             true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Parse the workflow
+			workflow, errs := Parse([]byte(tt.yaml))
+			if len(errs) > 0 {
+				t.Fatalf("Failed to parse workflow: %v", errs)
+			}
+
+			// Create rule instance
+			rule := NewUntrustedCheckoutRule()
+
+			// Create visitor and add rule
+			visitor := NewSyntaxTreeVisitor()
+			visitor.AddVisitor(rule)
+
+			// Visit the workflow
+			if err := visitor.VisitTree(workflow); err != nil {
+				t.Fatalf("Failed to visit tree: %v", err)
+			}
+
+			// Check errors
+			ruleErrs := rule.Errors()
+			if tt.wantErr {
+				if len(ruleErrs) == 0 {
+					t.Errorf("Expected error but got none")
+					return
+				}
+
+				// Verify the error message contains the expected trigger name
+				errMsg := ruleErrs[0].Description
+				if tt.expectedTriggerName != "" && !containsString(errMsg, tt.expectedTriggerName) {
+					t.Errorf("Expected error message to mention trigger %q, but got: %s",
+						tt.expectedTriggerName, errMsg)
+				}
+			} else {
+				if len(ruleErrs) > 0 {
+					t.Errorf("Unexpected error: %v", ruleErrs[0].Description)
+				}
+			}
+		})
+	}
+}

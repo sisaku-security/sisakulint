@@ -1,0 +1,300 @@
+# Safe workflow demonstrating proper patterns for network requests
+# This workflow shows how to safely make network requests without SSRF vulnerabilities
+
+name: Safe Network Requests Workflow
+
+on:
+  # Even with privileged triggers, these patterns are safe
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # Safe: Using environment variables instead of direct expression interpolation
+  safe-curl-with-env:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe curl using environment variable
+        env:
+          # Pass untrusted input through environment variable
+          # This prevents shell injection but SSRF risk still exists
+          # Additional validation is recommended
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          # Use environment variable instead of direct interpolation
+          # Still need validation for SSRF, but prevents shell injection
+          echo "Input received: $ISSUE_BODY"
+          # Validate URL before use (example validation)
+          if [[ "$ISSUE_BODY" =~ ^https://api\.example\.com/ ]]; then
+            curl "$ISSUE_BODY"
+          else
+            echo "Invalid URL"
+            exit 1
+          fi
+
+  # Safe: Hardcoded trusted URLs
+  safe-hardcoded-url:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe curl with hardcoded URL
+        run: |
+          # Hardcoded trusted URL - no SSRF risk
+          curl "https://api.github.com/repos/${{ github.repository }}"
+
+  # Safe: Using trusted context values
+  safe-trusted-context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe curl with trusted context
+        run: |
+          # github.repository and github.sha are trusted
+          curl "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}"
+
+  # Safe: URL allowlist validation with robust parsing
+  safe-allowlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe curl with URL allowlist
+        env:
+          INPUT_URL: ${{ github.event.issue.body }}
+        run: |
+          # Robust URL validation against allowlist
+          # Uses Python for proper URL parsing to prevent bypass attacks
+
+          ALLOWED_HOST=$(python3 << 'EOF'
+          import os
+          import sys
+          from urllib.parse import urlparse
+
+          allowed_hosts = ["api.github.com", "api.example.com"]
+          input_url = os.environ.get("INPUT_URL")
+
+          if not input_url:
+              print("INVALID_URL", file=sys.stderr)
+              sys.exit(1)
+
+          try:
+              parsed = urlparse(input_url)
+              # Validate scheme
+              if parsed.scheme not in ("http", "https"):
+                  print("INVALID_SCHEME", file=sys.stderr)
+                  sys.exit(1)
+              # Extract hostname only (strips port and userinfo)
+              host = parsed.hostname
+              if host is None:
+                  print("INVALID_URL", file=sys.stderr)
+                  sys.exit(1)
+              # Exact match against allowlist (prevents suffix attacks like evil.api.github.com)
+              if host in allowed_hosts:
+                  print(host)
+              else:
+                  print("NOT_ALLOWED", file=sys.stderr)
+                  sys.exit(1)
+          except Exception as e:
+              print(f"PARSE_ERROR: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+          )
+
+          if [ $? -eq 0 ]; then
+            echo "Host validated: $ALLOWED_HOST"
+            curl "$INPUT_URL"
+          else
+            echo "URL validation failed"
+            exit 1
+          fi
+
+  # Safe: GitHub Script with environment variable
+  safe-github-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe fetch in github-script
+        uses: actions/github-script@v6
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        with:
+          script: |
+            // Use process.env instead of direct interpolation
+            const inputUrl = process.env.ISSUE_BODY;
+
+            // Validate URL before use
+            const allowedHosts = ['api.github.com', 'api.example.com'];
+            try {
+              const url = new URL(inputUrl);
+              if (!allowedHosts.includes(url.host)) {
+                throw new Error(`Host not allowed: ${url.host}`);
+              }
+
+              const response = await fetch(inputUrl);
+              const data = await response.json();
+              console.log(data);
+            } catch (error) {
+              console.error('Invalid or disallowed URL:', error.message);
+            }
+
+  # Safe: Using GitHub API through octokit
+  safe-octokit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe API call using octokit
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Using octokit for GitHub API - no SSRF risk
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            console.log(`Found ${issues.length} open issues`);
+
+  # Safe: Fixed API endpoints
+  safe-api-endpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe curl to fixed endpoint
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Only the numeric ID is variable, endpoint is fixed
+          # This is safe as PR_NUMBER should be numeric
+          if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            curl "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER"
+          else
+            echo "Invalid PR number"
+            exit 1
+          fi
+
+  # Safe: Internal service with validated path
+  safe-internal-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Safe internal service call
+        env:
+          USER_INPUT: ${{ github.event.issue.title }}
+        run: |
+          # Sanitize input to prevent path traversal and SSRF
+          # Remove any characters that could be used for URL manipulation
+          SAFE_INPUT=$(echo "$USER_INPUT" | tr -cd 'a-zA-Z0-9_-')
+
+          # Use fixed internal endpoint with sanitized parameter
+          curl "https://internal-api.example.com/search?q=${SAFE_INPUT}"
+
+  # Safe: No network commands at all
+  safe-no-network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Process without network requests
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          # Process input locally without making network requests
+          echo "Processing: $ISSUE_BODY"
+          # Do local processing only
+
+  # Safe: Block internal IPs before request with proper CIDR validation
+  safe-block-internal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Block internal IPs with CIDR validation
+        env:
+          INPUT_URL: ${{ github.event.comment.body }}
+        run: |
+          # Robust internal IP blocking using Python for proper CIDR checks
+          # This prevents DNS rebinding and IP address obfuscation attacks
+
+          python3 << 'EOF'
+          import sys
+          import socket
+          import ipaddress
+          from urllib.parse import urlparse
+
+          # Blocked CIDR ranges (RFC 1918, link-local, loopback, metadata)
+          BLOCKED_CIDRS = [
+              ipaddress.ip_network("127.0.0.0/8"),      # Loopback
+              ipaddress.ip_network("10.0.0.0/8"),       # Private Class A
+              ipaddress.ip_network("172.16.0.0/12"),    # Private Class B
+              ipaddress.ip_network("192.168.0.0/16"),   # Private Class C
+              ipaddress.ip_network("169.254.0.0/16"),   # Link-local / AWS metadata
+              ipaddress.ip_network("100.64.0.0/10"),    # CGN
+              ipaddress.ip_network("192.0.0.0/24"),     # IETF Protocol
+              ipaddress.ip_network("::1/128"),          # IPv6 loopback
+              ipaddress.ip_network("fe80::/10"),        # IPv6 link-local
+              ipaddress.ip_network("fc00::/7"),         # IPv6 ULA
+              ipaddress.ip_network("fd00::/8"),         # AWS IPv6 metadata
+          ]
+
+          # Known metadata hostnames
+          BLOCKED_HOSTNAMES = [
+              "metadata.google.internal",
+              "metadata.google",
+              "metadata",
+              "kubernetes.default.svc",
+          ]
+
+          input_url = """$INPUT_URL"""
+
+          try:
+              parsed = urlparse(input_url)
+              if parsed.scheme not in ("http", "https"):
+                  print("ERROR: Invalid scheme", file=sys.stderr)
+                  sys.exit(1)
+
+              host = parsed.hostname
+              if host is None:
+                  print("ERROR: Could not extract hostname", file=sys.stderr)
+                  sys.exit(1)
+
+              # Check against blocked hostnames
+              if host.lower() in BLOCKED_HOSTNAMES or any(
+                  host.lower().endswith("." + bh) for bh in BLOCKED_HOSTNAMES
+              ):
+                  print(f"BLOCKED: Hostname {host} is a known metadata endpoint", file=sys.stderr)
+                  sys.exit(1)
+
+              # Resolve hostname to IP addresses
+              try:
+                  addr_info = socket.getaddrinfo(host, None, socket.AF_UNSPEC)
+                  ips = set(info[4][0] for info in addr_info)
+              except socket.gaierror as e:
+                  print(f"ERROR: Could not resolve hostname: {e}", file=sys.stderr)
+                  sys.exit(1)
+
+              # Check each resolved IP against blocked CIDRs
+              for ip_str in ips:
+                  try:
+                      ip = ipaddress.ip_address(ip_str)
+                      for cidr in BLOCKED_CIDRS:
+                          if ip in cidr:
+                              print(f"BLOCKED: {host} resolves to {ip} which is in blocked range {cidr}", file=sys.stderr)
+                              sys.exit(1)
+                  except ValueError:
+                      continue
+
+              print(f"ALLOWED: {host} passed validation")
+              sys.exit(0)
+
+          except Exception as e:
+              print(f"ERROR: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+          if [ $? -eq 0 ]; then
+            echo "URL passed internal IP validation"
+            # Additional domain allowlist check recommended before actual request
+            curl "$INPUT_URL"
+          else
+            echo "URL blocked due to internal/metadata address"
+            exit 1
+          fi

