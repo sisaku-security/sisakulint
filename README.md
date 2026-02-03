@@ -65,43 +65,51 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 
 | OWASP Risk | Description | sisakulint Rules |
 |:-----------|:------------|:-----------------|
-| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc] |
-| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm], [secret-exposure][r-se], [unmasked-secret-exposure][r-use] |
-| [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc] |
-| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [untrusted-checkout-*][r-uco] |
+| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc], [dangerous-triggers-*][r-dt-c] |
+| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si] |
+| [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc], [reusable-workflow-taint][r-rwt] |
+| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [output-clobbering-*][r-oc], [argument-injection-*][r-ai], [untrusted-checkout-*][r-uco] |
 | [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr] |
-| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap] |
-| [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc] |
+| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef] |
+| [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc], [cache-bloat][r-cb] |
 | [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui] |
 | [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
-| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob] |
+| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob], [request-forgery-*][r-rf] |
 
 ### Complete Rule Reference
 
 | Category | Rule | Description | Fix | Docs | GitHub Ref |
 |:---------|:-----|:------------|:---:|:----:|:----------:|
 | **Syntax** | id | ID collision detection for jobs/env vars | | [docs][r-id] | [ref][gh-shell] |
-| | env-var | Environment variable name validation | | | |
+| | env-var | Environment variable name validation | | [docs][r-env] | |
 | | permissions | Permission scopes and values validation | | [docs][r-perm] | [ref][gh-perm] |
 | | workflow-call | Reusable workflow call validation | | [docs][r-wc] | [ref][gh-reuse] |
 | | job-needs | Job dependency validation | | [docs][r-jn] | |
-| | expression | Expression syntax validation | | | |
-| | cond | Conditional expression validation | | | |
-| | deprecated-commands | Deprecated workflow commands detection | | | [ref][gh-cmd] |
+| | expression | Expression syntax validation | | [docs][r-expr] | |
+| | cond | Conditional expression validation | | [docs][r-cond] | |
+| | deprecated-commands | Deprecated workflow commands detection | | [docs][r-dc] | [ref][gh-cmd] |
 | **Config** | timeout-minutes | Ensures timeout-minutes is set | Yes | [docs][r-tm] | [ref][gh-timeout] |
+| | cache-bloat | Cache bloat with restore/save pair | Yes | [docs][r-cb] | |
 | **Credentials** | credentials | Hardcoded credentials detection | Yes | [docs][r-cred] | |
 | | secret-exposure | Excessive secrets exposure detection | Yes | [docs][r-se] | |
 | | unmasked-secret-exposure | Unmasked derived secrets detection | Yes | [docs][r-use] | |
 | | artipacked | Credential leakage via persisted checkout | Yes | [docs][r-ap] | |
+| | secrets-in-artifacts | Sensitive data in artifact uploads | Yes | [docs][r-sia] | |
+| | secrets-inherit | Excessive secrets inheritance | Yes | [docs][r-si] | |
+| | secret-exfiltration | Secret exfiltration via network commands | | [docs][r-sef] | |
 | **Injection** | code-injection-critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] | [ref][gh-inject] |
 | | code-injection-medium | Untrusted input in normal triggers | Yes | [docs][r-cim] | |
 | | envvar-injection-critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] | |
-| | envvar-injection-medium | Untrusted input to $GITHUB_ENV (normal) | Yes | | |
+| | envvar-injection-medium | Untrusted input to $GITHUB_ENV (normal) | Yes | [docs][r-evim] | |
 | | envpath-injection-critical | Untrusted input to $GITHUB_PATH (privileged) | Yes | [docs][r-epi] | |
-| | envpath-injection-medium | Untrusted input to $GITHUB_PATH (normal) | Yes | | |
+| | envpath-injection-medium | Untrusted input to $GITHUB_PATH (normal) | Yes | [docs][r-epim] | |
+| | output-clobbering-critical | Untrusted input to $GITHUB_OUTPUT (privileged) | Yes | [docs][r-oc] | |
+| | output-clobbering-medium | Untrusted input to $GITHUB_OUTPUT (normal) | Yes | [docs][r-oc] | |
+| | argument-injection-critical | Command-line argument injection (privileged) | Yes | [docs][r-ai] | |
+| | argument-injection-medium | Command-line argument injection (normal) | Yes | [docs][r-ai] | |
 | **Checkout** | untrusted-checkout | Untrusted PR code in privileged contexts | Yes | [docs][r-uco] | [ref][gh-pwn] |
-| | untrusted-checkout-toctou-critical | TOCTOU with labeled events | Yes | | |
-| | untrusted-checkout-toctou-high | TOCTOU with deployment environment | Yes | | |
+| | untrusted-checkout-toctou-critical | TOCTOU with labeled events | Yes | [docs][r-toctou-c] | |
+| | untrusted-checkout-toctou-high | TOCTOU with deployment environment | Yes | [docs][r-toctou-h] | |
 | **Supply Chain** | commit-sha | Action version pinning validation | Yes | [docs][r-sha] | [ref][gh-3p] |
 | | action-list | Organization allowlist/blocklist enforcement | | [docs][r-al] | |
 | | impostor-commit | Fork network impostor commit detection | Yes | [docs][r-ic] | |
@@ -109,15 +117,20 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 | | known-vulnerable-actions | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] | |
 | | archived-uses | Archived action/workflow detection | | [docs][r-au] | |
 | | unpinned-images | Container image digest pinning | | [docs][r-ui] | |
+| | reusable-workflow-taint | Untrusted inputs in reusable workflow calls | Yes | [docs][r-rwt] | |
 | **Poisoning** | artifact-poisoning-critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] | |
 | | artifact-poisoning-medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] | |
 | | cache-poisoning | Unsafe cache patterns with untrusted inputs | Yes | [docs][r-cp] | |
-| | cache-poisoning-poisonable-step | Untrusted code execution after unsafe checkout | Yes | | |
+| | cache-poisoning-poisonable-step | Untrusted code execution after unsafe checkout | Yes | [docs][r-cpp] | |
 | **Access Control** | improper-access-control | Label-based approval and synchronize events | Yes | [docs][r-iac] | |
 | | bot-conditions | Spoofable bot detection conditions | Yes | [docs][r-bot] | |
 | | unsound-contains | Bypassable contains() in conditions | Yes | [docs][r-uc] | |
+| | dangerous-triggers-critical | Privileged triggers without mitigations | Yes | [docs][r-dt-c] | |
+| | dangerous-triggers-medium | Privileged triggers with partial mitigations | Yes | [docs][r-dt-m] | |
 | **Other** | obfuscation | Obfuscated workflow pattern detection | Yes | [docs][r-ob] | |
 | | self-hosted-runners | Self-hosted runner security risks | | [docs][r-shr] | |
+| | request-forgery-critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] | |
+| | request-forgery-medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] | |
 
 <!-- OWASP Links -->
 [owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
@@ -133,19 +146,33 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 
 <!-- sisakulint Docs Links -->
 [r-id]: https://sisaku-security.github.io/lint/docs/rules/idrule/
+[r-env]: https://sisaku-security.github.io/lint/docs/rules/environmentvariablerule/
 [r-perm]: https://sisaku-security.github.io/lint/docs/rules/permissions/
 [r-wc]: https://sisaku-security.github.io/lint/docs/rules/workflowcall/
 [r-jn]: https://sisaku-security.github.io/lint/docs/rules/jobneeds/
+[r-expr]: https://sisaku-security.github.io/lint/docs/rules/expressionrule/
+[r-cond]: https://sisaku-security.github.io/lint/docs/rules/conditionalrule/
+[r-dc]: https://sisaku-security.github.io/lint/docs/rules/deprecatedcommandsrule/
 [r-tm]: https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/
+[r-cb]: https://sisaku-security.github.io/lint/docs/rules/cachebloatrule/
 [r-cred]: https://sisaku-security.github.io/lint/docs/rules/credentialrules/
 [r-se]: https://sisaku-security.github.io/lint/docs/rules/secretexposure/
 [r-use]: https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/
 [r-ap]: https://sisaku-security.github.io/lint/docs/rules/artipacked/
+[r-sia]: https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/
+[r-si]: https://sisaku-security.github.io/lint/docs/rules/secretsinherit/
+[r-sef]: https://sisaku-security.github.io/lint/docs/rules/secretexfiltration/
 [r-ci]: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
 [r-cim]: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
 [r-evi]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
+[r-evim]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/
 [r-epi]: https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/
+[r-epim]: https://sisaku-security.github.io/lint/docs/rules/envpathinjectionmedium/
+[r-oc]: https://sisaku-security.github.io/lint/docs/rules/outputclobbering/
+[r-ai]: https://sisaku-security.github.io/lint/docs/rules/argumentinjection/
 [r-uco]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/
+[r-toctou-c]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctoucritical/
+[r-toctou-h]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctouhigh/
 [r-sha]: https://sisaku-security.github.io/lint/docs/rules/commitsharule/
 [r-al]: https://sisaku-security.github.io/lint/docs/rules/actionlist/
 [r-ic]: https://sisaku-security.github.io/lint/docs/rules/impostorcommit/
@@ -153,15 +180,19 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 [r-kva]: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
 [r-au]: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
 [r-ui]: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
+[r-rwt]: https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/
 [r-apc]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
 [r-apm]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
 [r-cp]: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningrule/
+[r-cpp]: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningpoisonablesteprule/
 [r-iac]: https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/
 [r-bot]: https://sisaku-security.github.io/lint/docs/rules/botconditions/
 [r-uc]: https://sisaku-security.github.io/lint/docs/rules/unsoundcontains/
+[r-dt-c]: https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/
+[r-dt-m]: https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulemedium/
 [r-ob]: https://sisaku-security.github.io/lint/docs/rules/obfuscation/
 [r-shr]: https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/
-[r-dc]: https://sisaku-security.github.io/lint/docs/rules/deprecatedcommands/
+[r-rf]: https://sisaku-security.github.io/lint/docs/rules/requestforgery/
 
 <!-- GitHub Reference Links -->
 [gh-shell]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
