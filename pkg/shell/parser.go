@@ -7,6 +7,8 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
+const evalCommand = "eval"
+
 type ShellVarUsage struct {
 	VarName    string
 	StartPos   int
@@ -81,7 +83,7 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 	case *syntax.CallExpr:
 		cmdName := p.getCommandName(x)
 		newCtx := *ctx
-		if cmdName == "eval" {
+		if cmdName == evalCommand {
 			newCtx.inEval = true
 		} else if p.isShellCommand(x) {
 			newCtx.inShellCmd = true
@@ -442,7 +444,7 @@ func (p *ShellParser) HasDangerousPattern() bool {
 	syntax.Walk(p.file, func(node syntax.Node) bool {
 		if call, ok := node.(*syntax.CallExpr); ok {
 			cmdName := p.getCommandName(call)
-			if cmdName == "eval" || p.isShellCommand(call) {
+			if cmdName == evalCommand || p.isShellCommand(call) {
 				found = true
 				return false
 			}
@@ -462,8 +464,8 @@ func (p *ShellParser) GetDangerousPatternType() string {
 	syntax.Walk(p.file, func(node syntax.Node) bool {
 		if call, ok := node.(*syntax.CallExpr); ok {
 			cmdName := p.getCommandName(call)
-			if cmdName == "eval" {
-				patternType = "eval"
+			if cmdName == evalCommand {
+				patternType = evalCommand
 				return false
 			}
 			if p.isShellCommand(call) {
@@ -475,6 +477,369 @@ func (p *ShellParser) GetDangerousPatternType() string {
 	})
 
 	return patternType
+}
+
+type NetworkCommandCall struct {
+	CommandName string
+	Args        []CommandArg
+	Position    syntax.Pos
+	InCmdSubst  bool
+	InPipe      bool
+}
+
+type CommandArg struct {
+	Value        string
+	LiteralValue string
+	Position     syntax.Pos
+	IsFlag       bool
+	VarNames     []string
+	GHAExprs     []string
+}
+
+func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
+	if p.file == nil {
+		return nil
+	}
+
+	var calls []NetworkCommandCall
+	ctx := &networkWalkContext{}
+	p.walkForNetworkCommands(p.file, ctx, &calls)
+	return calls
+}
+
+type networkWalkContext struct {
+	inCmdSubst bool
+	inPipe     bool
+}
+
+func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.File:
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.Stmt:
+		p.walkForNetworkCommands(x.Cmd, ctx, calls)
+		for _, redirect := range x.Redirs {
+			p.walkForNetworkCommands(redirect, ctx, calls)
+		}
+
+	case *syntax.CallExpr:
+		cmdName := p.getCommandName(x)
+		if p.isNetworkCommand(cmdName) {
+			call := p.parseNetworkCommand(x, ctx)
+			*calls = append(*calls, call)
+		}
+
+		for _, assign := range x.Assigns {
+			p.walkForNetworkCommands(assign, ctx, calls)
+		}
+		for _, arg := range x.Args {
+			p.walkForNetworkCommands(arg, ctx, calls)
+		}
+
+	case *syntax.BinaryCmd:
+		newCtx := *ctx
+		if x.Op == syntax.Pipe {
+			newCtx.inPipe = true
+		}
+		p.walkForNetworkCommands(x.X, &newCtx, calls)
+		p.walkForNetworkCommands(x.Y, &newCtx, calls)
+
+	case *syntax.CmdSubst:
+		newCtx := *ctx
+		newCtx.inCmdSubst = true
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, &newCtx, calls)
+		}
+
+	case *syntax.IfClause:
+		for _, cond := range x.Cond {
+			p.walkForNetworkCommands(cond, ctx, calls)
+		}
+		for _, then := range x.Then {
+			p.walkForNetworkCommands(then, ctx, calls)
+		}
+		if x.Else != nil {
+			p.walkForNetworkCommands(x.Else, ctx, calls)
+		}
+
+	case *syntax.WhileClause:
+		for _, cond := range x.Cond {
+			p.walkForNetworkCommands(cond, ctx, calls)
+		}
+		for _, do := range x.Do {
+			p.walkForNetworkCommands(do, ctx, calls)
+		}
+
+	case *syntax.ForClause:
+		if x.Loop != nil {
+			p.walkForNetworkCommandsLoop(x.Loop, ctx, calls)
+		}
+		for _, do := range x.Do {
+			p.walkForNetworkCommands(do, ctx, calls)
+		}
+
+	case *syntax.CaseClause:
+		if x.Word != nil {
+			p.walkForNetworkCommands(x.Word, ctx, calls)
+		}
+		for _, item := range x.Items {
+			p.walkForNetworkCommands(item, ctx, calls)
+		}
+
+	case *syntax.CaseItem:
+		for _, pattern := range x.Patterns {
+			p.walkForNetworkCommands(pattern, ctx, calls)
+		}
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.Block:
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.Subshell:
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.FuncDecl:
+		p.walkForNetworkCommands(x.Body, ctx, calls)
+
+	case *syntax.ProcSubst:
+		for _, stmt := range x.Stmts {
+			p.walkForNetworkCommands(stmt, ctx, calls)
+		}
+
+	case *syntax.ArithmCmd:
+		// Arithmetic commands don't contain network calls
+
+	case *syntax.TestClause:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+
+	case *syntax.DeclClause:
+		for _, assign := range x.Args {
+			p.walkForNetworkCommands(assign, ctx, calls)
+		}
+
+	case *syntax.Assign:
+		if x.Value != nil {
+			p.walkForNetworkCommands(x.Value, ctx, calls)
+		}
+		if x.Array != nil {
+			p.walkForNetworkCommands(x.Array, ctx, calls)
+		}
+
+	case *syntax.ArrayExpr:
+		for _, elem := range x.Elems {
+			p.walkForNetworkCommands(elem, ctx, calls)
+		}
+
+	case *syntax.ArrayElem:
+		if x.Value != nil {
+			p.walkForNetworkCommands(x.Value, ctx, calls)
+		}
+
+	case *syntax.CoprocClause:
+		p.walkForNetworkCommands(x.Stmt, ctx, calls)
+
+	case *syntax.TimeClause:
+		if x.Stmt != nil {
+			p.walkForNetworkCommands(x.Stmt, ctx, calls)
+		}
+
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.walkForNetworkCommands(part, ctx, calls)
+		}
+
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.walkForNetworkCommands(part, ctx, calls)
+		}
+
+	case *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect, *syntax.Lit:
+		// These nodes don't contain network commands
+	}
+}
+
+// walkForNetworkCommandsLoop handles loop nodes for network command detection.
+func (p *ShellParser) walkForNetworkCommandsLoop(node syntax.Loop, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.WordIter:
+		for _, word := range x.Items {
+			p.walkForNetworkCommands(word, ctx, calls)
+		}
+	case *syntax.CStyleLoop:
+		// C-style loop expressions don't contain network commands
+	}
+}
+
+// walkForNetworkCommandsTest handles test expressions for network command detection.
+func (p *ShellParser) walkForNetworkCommandsTest(node syntax.TestExpr, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.BinaryTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+		p.walkForNetworkCommandsTest(x.Y, ctx, calls)
+	case *syntax.UnaryTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+	case *syntax.ParenTest:
+		p.walkForNetworkCommandsTest(x.X, ctx, calls)
+	case *syntax.Word:
+		p.walkForNetworkCommands(x, ctx, calls)
+	}
+}
+
+func (p *ShellParser) isNetworkCommand(cmdName string) bool {
+	networkCmds := map[string]bool{
+		"curl":   true,
+		"wget":   true,
+		"nc":     true,
+		"netcat": true,
+		"http":   true,
+		"https":  true,
+	}
+	return networkCmds[cmdName]
+}
+
+func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext) NetworkCommandCall {
+	cmd := NetworkCommandCall{
+		CommandName: p.getCommandName(call),
+		Position:    call.Pos(),
+		InCmdSubst:  ctx.inCmdSubst,
+		InPipe:      ctx.inPipe,
+	}
+
+	for i := 1; i < len(call.Args); i++ {
+		arg := p.parseCommandArg(call.Args[i])
+		cmd.Args = append(cmd.Args, arg)
+	}
+
+	return cmd
+}
+
+func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
+	rawValue := p.wordToString(word)
+	literalValue := p.extractLiteralValue(word)
+
+	arg := CommandArg{
+		Value:        rawValue,
+		LiteralValue: literalValue,
+		Position:     word.Pos(),
+	}
+
+	if strings.HasPrefix(literalValue, "-") {
+		arg.IsFlag = true
+	}
+
+	p.analyzeWordParts(word, &arg)
+
+	return arg
+}
+
+func (p *ShellParser) extractLiteralValue(word *syntax.Word) string {
+	var result strings.Builder
+
+	for _, part := range word.Parts {
+		p.extractLiteralFromPart(part, &result)
+	}
+
+	return result.String()
+}
+
+func (p *ShellParser) extractLiteralFromPart(part syntax.WordPart, result *strings.Builder) {
+	switch x := part.(type) {
+	case *syntax.Lit:
+		result.WriteString(x.Value)
+	case *syntax.DblQuoted:
+		for _, inner := range x.Parts {
+			p.extractLiteralFromPart(inner, result)
+		}
+	case *syntax.SglQuoted:
+		result.WriteString(x.Value)
+	case *syntax.ParamExp:
+		if x.Param != nil {
+			if x.Short {
+				result.WriteString("$")
+				result.WriteString(x.Param.Value)
+			} else {
+				result.WriteString("${")
+				result.WriteString(x.Param.Value)
+				result.WriteString("}")
+			}
+		}
+	case *syntax.CmdSubst:
+		var buf bytes.Buffer
+		printer := syntax.NewPrinter()
+		if err := printer.Print(&buf, x); err == nil {
+			result.WriteString(buf.String())
+		}
+	}
+}
+
+func (p *ShellParser) wordToString(word *syntax.Word) string {
+	var buf bytes.Buffer
+	printer := syntax.NewPrinter()
+	if err := printer.Print(&buf, word); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(buf.String())
+}
+
+func (p *ShellParser) analyzeWordParts(word *syntax.Word, arg *CommandArg) {
+	rawValue := arg.Value
+	ghaExprs := extractGHAExpressionsFromString(rawValue)
+	arg.GHAExprs = ghaExprs
+
+	syntax.Walk(word, func(node syntax.Node) bool {
+		if paramExp, ok := node.(*syntax.ParamExp); ok {
+			if paramExp.Param != nil && paramExp.Param.Value != "" {
+				arg.VarNames = append(arg.VarNames, paramExp.Param.Value)
+			}
+		}
+		return true
+	})
+}
+
+func extractGHAExpressionsFromString(s string) []string {
+	var exprs []string
+	offset := 0
+
+	for {
+		idx := strings.Index(s[offset:], "${{")
+		if idx == -1 {
+			break
+		}
+
+		start := offset + idx
+		endIdx := strings.Index(s[start:], "}}")
+		if endIdx == -1 {
+			break
+		}
+
+		expr := strings.TrimSpace(s[start+3 : start+endIdx])
+		exprs = append(exprs, expr)
+
+		offset = start + endIdx + 2
+	}
+
+	return exprs
 }
 
 func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string) []VarArgUsage {

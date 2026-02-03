@@ -167,6 +167,8 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **DependabotGitHubActionsRule** - Checks if dependabot.yaml has github-actions ecosystem configured when unpinned actions are detected (auto-fix supported)
 - **ArgumentInjectionCriticalRule** - Detects argument injection in command-line args with privileged triggers (auto-fix supported)
 - **ArgumentInjectionMediumRule** - Detects argument injection in command-line args with normal triggers (auto-fix supported)
+- **RequestForgeryCriticalRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with privileged triggers (auto-fix supported)
+- **RequestForgeryMediumRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with normal triggers (auto-fix supported)
 
 ## Key Files
 
@@ -291,6 +293,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 - **KnownVulnerableActionsRule** (`known_vulnerable_actions.go`) - Updates vulnerable actions to patched versions
 - **SecretsInArtifactsRule** (`secretsinartifacts.go`) - Fixes unsafe artifact uploads by adding include-hidden-files: false for v3, or updating unsafe paths
 - **ArgumentInjectionRule** (`argumentinjection.go`) - Moves untrusted input to environment variables and adds `--` end-of-options marker
+- **RequestForgeryRule** (`requestforgery.go`) - Moves untrusted input to environment variables for network commands
 
 ## Recent Security Enhancements
 

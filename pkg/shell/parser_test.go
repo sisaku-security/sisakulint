@@ -447,6 +447,161 @@ EOF`,
 	}
 }
 
+// TestShellParser_FindNetworkCommands tests detection of network commands in various shell constructs
+func TestShellParser_FindNetworkCommands(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		script         string
+		wantCount      int
+		wantCmdNames   []string
+		wantInCmdSubst []bool
+		wantInPipe     []bool
+	}{
+		{
+			name:         "simple curl command",
+			script:       `curl https://example.com`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in if clause body",
+			script:       `if [ -n "$VAR" ]; then curl https://example.com; fi`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in if clause else branch",
+			script:       `if [ -n "$VAR" ]; then echo ok; else curl https://example.com; fi`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in while loop",
+			script:       `while true; do curl https://example.com; done`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in for loop",
+			script:       `for i in 1 2 3; do curl https://example.com/$i; done`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in case clause",
+			script:       `case $VAR in foo) curl https://example.com;; esac`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in block",
+			script:       `{ curl https://example.com; }`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "curl in subshell",
+			script:       `(curl https://example.com)`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name: "curl in function declaration",
+			script: `download() {
+  curl https://example.com
+}`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:           "curl in command substitution",
+			script:         `result=$(curl https://example.com)`,
+			wantCount:      1,
+			wantCmdNames:   []string{"curl"},
+			wantInCmdSubst: []bool{true},
+		},
+		{
+			name:         "curl in pipe",
+			script:       `echo url | curl -K -`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+			wantInPipe:   []bool{true},
+		},
+		{
+			name:         "wget in nested if-for",
+			script:       `if [ "$RUN" = "true" ]; then for url in $URLS; do wget "$url"; done; fi`,
+			wantCount:    1,
+			wantCmdNames: []string{"wget"},
+		},
+		{
+			name:         "multiple network commands in different structures",
+			script:       `if true; then curl https://a.com; fi; while true; do wget https://b.com; done`,
+			wantCount:    2,
+			wantCmdNames: []string{"curl", "wget"},
+		},
+		{
+			name:         "curl in process substitution",
+			script:       `diff <(curl https://a.com) <(curl https://b.com)`,
+			wantCount:    2,
+			wantCmdNames: []string{"curl", "curl"},
+		},
+		{
+			name:         "curl in test clause command substitution",
+			script:       `[[ "$(curl https://example.com)" = "ok" ]]`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+			wantInCmdSubst: []bool{true},
+		},
+		{
+			name:         "wget in test clause unary test",
+			script:       `[[ -n "$(wget -qO- https://example.com)" ]]`,
+			wantCount:    1,
+			wantCmdNames: []string{"wget"},
+			wantInCmdSubst: []bool{true},
+		},
+		{
+			name:         "multiple network commands in test clause",
+			script:       `[[ "$(curl https://a.com)" = "$(wget -qO- https://b.com)" ]]`,
+			wantCount:    2,
+			wantCmdNames: []string{"curl", "wget"},
+			wantInCmdSubst: []bool{true, true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			parser := NewShellParser(tt.script)
+			calls := parser.FindNetworkCommands()
+
+			if len(calls) != tt.wantCount {
+				t.Errorf("got %d network commands, want %d", len(calls), tt.wantCount)
+				for i, call := range calls {
+					t.Logf("call[%d]: %s", i, call.CommandName)
+				}
+				return
+			}
+
+			for i, call := range calls {
+				if i < len(tt.wantCmdNames) && call.CommandName != tt.wantCmdNames[i] {
+					t.Errorf("call[%d].CommandName = %q, want %q", i, call.CommandName, tt.wantCmdNames[i])
+				}
+
+				if tt.wantInCmdSubst != nil && i < len(tt.wantInCmdSubst) && call.InCmdSubst != tt.wantInCmdSubst[i] {
+					t.Errorf("call[%d].InCmdSubst = %v, want %v", i, call.InCmdSubst, tt.wantInCmdSubst[i])
+				}
+
+				if tt.wantInPipe != nil && i < len(tt.wantInPipe) && call.InPipe != tt.wantInPipe[i] {
+					t.Errorf("call[%d].InPipe = %v, want %v", i, call.InPipe, tt.wantInPipe[i])
+				}
+			}
+		})
+	}
+}
+
 // TestShellParser_DangerousPatterns tests detection of dangerous shell patterns
 func TestShellParser_DangerousPatterns(t *testing.T) {
 	tests := []struct {
