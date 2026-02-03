@@ -9,7 +9,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files. It analy
 **Key Features:**
 - Detects injection vulnerabilities, credential exposure, and supply chain attacks
 - Validates permissions, timeouts, and workflow configurations
-- Supports auto-fixing for many security issues (25 rules with auto-fix as of Jan 2026)
+- Supports auto-fixing for many security issues (26 rules with auto-fix as of Jan 2026)
 - SARIF output format for CI/CD integration (e.g., reviewdog)
 - Fast parallel analysis with Go concurrency
 - Specialized detection for privileged workflow contexts (pull_request_target, issue_comment, workflow_run)
@@ -169,6 +169,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **ArgumentInjectionMediumRule** - Detects argument injection in command-line args with normal triggers (auto-fix supported)
 - **RequestForgeryCriticalRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with privileged triggers (auto-fix supported)
 - **RequestForgeryMediumRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with normal triggers (auto-fix supported)
+- **CacheBloatRule** - Detects cache bloat risk with actions/cache/restore and actions/cache/save without proper conditions (auto-fix supported)
 
 ## Key Files
 
@@ -294,6 +295,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 - **SecretsInArtifactsRule** (`secretsinartifacts.go`) - Fixes unsafe artifact uploads by adding include-hidden-files: false for v3, or updating unsafe paths
 - **ArgumentInjectionRule** (`argumentinjection.go`) - Moves untrusted input to environment variables and adds `--` end-of-options marker
 - **RequestForgeryRule** (`requestforgery.go`) - Moves untrusted input to environment variables for network commands
+- **CacheBloatRule** (`cachebloatrule.go`) - Adds `if: github.event_name != 'push'` to restore and `if: github.event_name == 'push'` to save steps
 
 ## Recent Security Enhancements
 
