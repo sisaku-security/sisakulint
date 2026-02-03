@@ -26,6 +26,29 @@ type Config struct {
 	actionListRegex []*regexp.Regexp
 }
 
+// Stringはfmt.Stringerインターフェースを実装し、Configを読みやすい形式で出力する
+func (c *Config) String() string {
+	var parts []string
+
+	if len(c.SelfHostedRunner.Labels) > 0 {
+		parts = append(parts, fmt.Sprintf("self-hosted-runner.labels: %v", c.SelfHostedRunner.Labels))
+	}
+
+	if len(c.ConfigVariables) > 0 {
+		parts = append(parts, fmt.Sprintf("config-variables: %v", c.ConfigVariables))
+	}
+
+	if len(c.ActionList) > 0 {
+		parts = append(parts, fmt.Sprintf("action-list: %v", c.ActionList))
+	}
+
+	if len(parts) == 0 {
+		return "Config{empty}"
+	}
+
+	return "Config{" + strings.Join(parts, ", ") + "}"
+}
+
 // parseConfigは与えられたbyte sliceをConfigにparseする
 func parseConfig(b []byte, path string) (*Config, error) {
 	var c Config

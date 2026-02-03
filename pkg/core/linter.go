@@ -550,9 +550,9 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
 		ArgumentInjectionCriticalRule(),
 		ArgumentInjectionMediumRule(),
-		RequestForgeryCriticalRule(),                                  // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(),                                    // Detects SSRF vulnerabilities in normal triggers
-		NewCacheBloatRule(),                                           // Detects cache bloat risk with cache/restore and cache/save
+		RequestForgeryCriticalRule(), // Detects SSRF vulnerabilities in privileged triggers
+		RequestForgeryMediumRule(),   // Detects SSRF vulnerabilities in normal triggers
+		NewCacheBloatRule(),          // Detects cache bloat risk with cache/restore and cache/save
 	}
 }
 
@@ -597,7 +597,7 @@ func (l *Linter) validate(
 		cfg = project.ProjectConfig()
 	}
 	if cfg != nil {
-		l.debug("setting configuration: %#v", cfg)
+		l.debug("setting configuration: %v", cfg)
 	} else {
 		l.debug("no configuration file")
 	}
