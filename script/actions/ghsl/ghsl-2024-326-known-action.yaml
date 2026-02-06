@@ -1,0 +1,22 @@
+# GHSL-2024-326 pattern using known tainted action
+# Tests taint propagation through step outputs
+name: Code Injection via Known Action
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  test:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      # Known tainted action - tracked in TaintTracker
+      - name: Get PR branch
+        id: comment-branch
+        uses: xt0rted/pull-request-comment-branch@v2
+
+      # GHSL-2024-326: Code injection via tainted step output
+      - name: Push changes
+        run: |
+          git push origin HEAD:${{ steps.comment-branch.outputs.head_ref }}

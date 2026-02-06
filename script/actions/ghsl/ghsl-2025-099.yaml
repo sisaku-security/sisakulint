@@ -1,0 +1,39 @@
+# GHSL-2025-099: Code injection via workflow_run head_branch
+# https://securitylab.github.com/advisories/GHSL-2025-099_cross-platform-actions_action/
+#
+# Vulnerability: The head_branch is user-controlled and can contain malicious code
+# when an attacker creates a PR with a specially crafted branch name.
+#
+# Attack vector:
+# 1. Attacker creates a PR with branch name: `$(malicious_command)`
+# 2. CI workflow runs on pull_request
+# 3. This workflow_run triggers and executes the malicious branch name
+
+name: Vulnerable Release Workflow
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: head_branch is directly interpolated in shell command
+      - name: Set tag from branch
+        run: |
+          tag='${{ github.event.workflow_run.head_branch }}'
+          echo "Using tag: $tag"
+
+      # VULNERABLE: Using head_repository.full_name
+      - name: Show repo info
+        run: |
+          echo "Repo: ${{ github.event.workflow_run.head_repository.full_name }}"
