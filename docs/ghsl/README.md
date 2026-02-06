@@ -8,6 +8,7 @@ sisakulint can detect vulnerability patterns reported by [GitHub Security Lab](h
 |-------------|----------|-------------|-----------------|
 | [GHSL-2024-325](./GHSL-2024-325.md) | Critical | Arbitrary code execution via untrusted fork checkout | `cache-poisoning-poisonable-step`, `dangerous-triggers-critical` |
 | [GHSL-2024-326](./GHSL-2024-326.md) | Critical | Code injection via branch name | `code-injection-critical`, `argument-injection-critical` |
+| [GHSL-2025-091](./GHSL-2025-091.md) | Critical | Code injection via issue_comment in github-script | `code-injection-critical` |
 | [GHSL-2025-099](./GHSL-2025-099.md) | Critical | Code injection via workflow_run head_branch | `code-injection-critical` |
 
 ## Detection Capabilities
@@ -44,6 +45,9 @@ Test files for each GHSL pattern are available in `script/actions/ghsl/`:
 
 # Test GHSL-2024-326 via known action
 ./sisakulint script/actions/ghsl/ghsl-2024-326-known-action.yaml
+
+# Test GHSL-2025-091
+./sisakulint script/actions/ghsl/ghsl-2025-091.yaml
 
 # Test GHSL-2025-099
 ./sisakulint script/actions/ghsl/ghsl-2025-099.yaml
