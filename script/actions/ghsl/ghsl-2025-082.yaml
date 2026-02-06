@@ -1,0 +1,108 @@
+# GHSL-2025-082: Cache Poisoning via Local Action Execution in ag-grid/ag-grid
+# https://securitylab.github.com/advisories/GHSL-2025-082_ag-grid_ag-grid/
+#
+# Vulnerability: issue_comment trigger + checkout PR head + local action execution
+# The workflow checks out untrusted PR code and then executes a local action from that code.
+#
+# Attack vector:
+# 1. Attacker creates a PR from their fork
+# 2. Attacker modifies .github/actions/setup-nx to contain malicious code
+# 3. Attacker posts a comment to trigger issue_comment event
+# 4. Workflow checks out attacker's PR branch and runs the malicious local action
+# 5. Attacker gains access to repository secrets (SLACK_BOT_OAUTH_TOKEN, JIRA_API_AUTH)
+
+name: GHSL-2025-082 Performance Workflow Vulnerability
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  # VULNERABLE: Checkout PR head + execute local action
+  vulnerable-performance:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout PR head code (untrusted)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Step 2: Execute local action from checked out code (VULNERABLE)
+      # This action is now controlled by the attacker!
+      - name: Setup
+        id: setup
+        uses: ./.github/actions/setup-nx
+
+      # Step 3: Post results to Slack with secrets (compromised if above step is malicious)
+      - name: Post to Slack
+        uses: slackapi/slack-github-action@v1
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_OAUTH_TOKEN }}
+        with:
+          channel-id: "perf-channel"
+          payload: |
+            {
+              "text": "Performance results ready"
+            }
+
+  # Also vulnerable: executing local scripts after unsafe checkout
+  vulnerable-local-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      # VULNERABLE: Running local script from untrusted checkout
+      - name: Run local script
+        run: ./scripts/setup.sh
+
+  # Also vulnerable: build commands after unsafe checkout
+  vulnerable-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # VULNERABLE: npm install reads package.json from untrusted checkout
+      - name: Install dependencies
+        run: npm install
+
+  # SAFE: No ref parameter (defaults to safe base branch)
+  safe-no-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup
+        uses: ./.github/actions/setup-nx
+
+  # SAFE: Using safe ref (base branch)
+  safe-base-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup
+        uses: ./.github/actions/setup-nx
+
+  # SAFE: Restricted to collaborators only
+  safe-restricted:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.comment.author_association == 'OWNER' ||
+      github.event.comment.author_association == 'MEMBER' ||
+      github.event.comment.author_association == 'COLLABORATOR'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup
+        uses: ./.github/actions/setup-nx
