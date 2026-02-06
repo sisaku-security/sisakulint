@@ -1,0 +1,52 @@
+# GHSL-2025-089: Code injection via PR body in pull_request_target
+# Vulnerable workflow pattern from ydb-platform/ydb
+# https://securitylab.github.com/advisories/GHSL-2025-089_ydb-platform_ydb/
+#
+# The vulnerability exists because github.event.pull_request.body
+# is directly interpolated in a run script within a pull_request_target trigger.
+# An attacker can craft a malicious PR body to execute arbitrary commands.
+#
+# Original vulnerable workflow: .github/workflows/validate_pr_description.yml
+# This workflow calls a local action (.github/actions/validate_pr_description/action.yaml)
+# which contains the vulnerable code.
+
+name: Validate PR Description
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+    branches:
+      - main
+      - 'stable-*'
+
+jobs:
+  validate-pr-description:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Validate PR description
+        # VULNERABLE: github.event.pull_request.body is user-controlled
+        # and directly used in shell command via echo
+        # Even though it's quoted, shell metacharacters can escape
+        run: |
+          echo "${{ github.event.pull_request.body }}" > pr_body.txt
+          # Check if PR body contains required sections
+          if ! grep -q "## Description" pr_body.txt; then
+            echo "ERROR: PR description must contain '## Description' section"
+            exit 1
+          fi
+          if ! grep -q "## Testing" pr_body.txt; then
+            echo "ERROR: PR description must contain '## Testing' section"
+            exit 1
+          fi
+          echo "PR description validation passed"
+
+      - name: Post validation result
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body "PR description validation failed. Please include required sections."
