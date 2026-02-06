@@ -100,6 +100,18 @@ func (t *TaintTracker) initKnownTaintedActions() {
 
 	// EndBug/add-and-commit - if inputs contain untrusted data, may propagate
 	// Outputs are generally safe (commit sha)
+
+	// juliangruber/read-file-action - reads file content and outputs it
+	// Used in GHSL-2025-087 vulnerability: artifact content read and used in shell
+	// The file content may come from artifacts or other untrusted sources
+	t.knownTaintedActions["juliangruber/read-file-action"] = []KnownTaintedOutput{
+		{OutputName: "content", TaintSource: "file content (potentially from artifact)"},
+	}
+
+	// andstor/file-reader-action - similar to juliangruber/read-file-action
+	t.knownTaintedActions["andstor/file-reader-action"] = []KnownTaintedOutput{
+		{OutputName: "contents", TaintSource: "file content (potentially from artifact)"},
+	}
 }
 
 // AnalyzeStep analyzes a step for $GITHUB_OUTPUT writes with tainted values.
