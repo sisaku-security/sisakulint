@@ -1,0 +1,38 @@
+# GHSL-2025-090: Code injection via PR title in pull_request_target
+# Vulnerable workflow pattern from harvester/harvester
+# https://securitylab.github.com/advisories/GHSL-2025-090_harvester_harvester/
+#
+# The vulnerability exists because github.event.pull_request.title
+# is directly interpolated in a run script within a pull_request_target trigger.
+# An attacker can craft a malicious PR title to execute arbitrary commands.
+
+name: Issue Management - Link Backport PR
+on:
+  pull_request_target:
+    types:
+      - opened
+    branches:
+      - master
+      - 'v*'
+
+jobs:
+  add-issue-link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract issue link from PR title
+        # VULNERABLE: github.event.pull_request.title is user-controlled
+        # and directly used in shell command via heredoc
+        run: |
+          title=$(cat <<EOF
+          "${{ github.event.pull_request.title }}"
+          EOF
+          )
+          echo "Processing PR: $title"
+          # Additional processing that could be exploited...
+
+      - name: Update issue with PR link
+        env:
+          GH_TOKEN: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+        run: |
+          # This step uses a custom token, making the attack more severe
+          echo "Updating linked issue..."
