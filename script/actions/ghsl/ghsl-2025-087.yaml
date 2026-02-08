@@ -1,0 +1,50 @@
+# GHSL-2025-087: PX4-Autopilot Code Injection via Artifact Content
+# https://securitylab.github.com/advisories/GHSL-2025-087_PX4_PX4-Autopilot/
+#
+# Vulnerability: Code injection through artifact content read via juliangruber/read-file-action
+# Trigger: workflow_run (privileged context)
+# Attack: Attacker creates PR with malicious filename -> filename written to artifact ->
+#         artifact downloaded in workflow_run -> read-file-action outputs content ->
+#         content injected into shell script via ${{ }}
+
+name: Docs PR Comment (Vulnerable)
+
+on:
+  workflow_run:
+    workflows: ["Docs Flaw Checker"]
+    types:
+      - completed
+
+jobs:
+  comment-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: docs_flaw_checker.yml
+          run_id: ${{ github.event.workflow_run.id }}
+          name: error-reports
+          path: ./reports
+
+      # Vulnerable: reads untrusted content from artifact
+      - name: Read Error By Page
+        id: read-error-by-page
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./reports/errorsFilteredByPrPages.md
+
+      # Code Injection: untrusted content used directly in shell script
+      # Attack payload in filename: `" && malicious_command && "`
+      - name: Echo content (VULNERABLE)
+        run: |
+          echo "${{ steps.read-error-by-page.outputs.content }}"
+
+      # Another vulnerable pattern: github-script
+      - name: Comment PR (VULNERABLE)
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const content = `${{ steps.read-error-by-page.outputs.content }}`;
+            console.log(content);
