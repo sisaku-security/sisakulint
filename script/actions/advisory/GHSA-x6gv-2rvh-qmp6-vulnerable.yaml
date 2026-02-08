@@ -1,0 +1,33 @@
+# GHSA-x6gv-2rvh-qmp6: BoldestDungeon/steam-workshop-deploy .git credential exposure
+# Advisory: https://github.com/advisories/GHSA-x6gv-2rvh-qmp6
+# Affected Action: BoldestDungeon/steam-workshop-deploy
+# Vulnerability Type: Credential Exposure via .git Directory in Deployment
+# Expected Detection Rule: ArtipackedRule
+
+name: GHSA-x6gv-2rvh-qmp6 Vulnerable Pattern
+on:
+  push:
+    branches: [main]
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      # Vulnerable: checkout with persisted credentials (default)
+      # .git directory contains credential helper with token
+      - uses: actions/checkout@v4
+
+      - name: Build mod
+        run: |
+          npm install
+          npm run build
+
+      # Vulnerable: Deploy entire workspace including .git directory
+      # The action uploads .git/config which contains credentials
+      - uses: BoldestDungeon/steam-workshop-deploy@v1
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          password: ${{ secrets.STEAM_PASSWORD }}
+          app_id: '123456'
+          workshop_id: '789012'
+          path: .

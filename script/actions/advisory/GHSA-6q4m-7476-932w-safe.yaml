@@ -1,0 +1,34 @@
+# GHSA-6q4m-7476-932w: Command injection via github.head_ref in rlespinasse/github-slug-action
+# Advisory: https://github.com/advisories/GHSA-6q4m-7476-932w
+# Safe Pattern: Use environment variables throughout
+
+name: Safe - Command Injection via github.head_ref
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  slug-generation-safe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Generate slug (safe pattern)
+        id: slug
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Safe: Use environment variable to prevent command injection
+          SLUG=$(echo "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      - name: Use slug in deployment (safe)
+        env:
+          SLUG: ${{ steps.slug.outputs.slug }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Safe: Use environment variables
+          DEPLOY_URL="https://preview-$SLUG.example.com"
+          echo "Deploying to: $DEPLOY_URL"
+          echo "Branch: $HEAD_REF"

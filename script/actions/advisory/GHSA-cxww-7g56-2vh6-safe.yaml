@@ -1,0 +1,27 @@
+# GHSA-cxww-7g56-2vh6: actions/download-artifact path traversal (zip-slip)
+# Advisory: https://github.com/advisories/GHSA-cxww-7g56-2vh6
+# Affected Action: actions/download-artifact
+# Vulnerability Type: Path Traversal / Zip-Slip
+# Safe Pattern: Use patched version v4.1.8+
+
+name: GHSA-cxww-7g56-2vh6 Safe Pattern
+on:
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: v4.1.8+ includes zip-slip protection
+      # Paths are validated and normalized before extraction
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: build-output
+          path: ./artifacts
+
+      - name: Process artifacts
+        run: |
+          ls -R ./artifacts
+          # Safe: Path traversal attempts are blocked

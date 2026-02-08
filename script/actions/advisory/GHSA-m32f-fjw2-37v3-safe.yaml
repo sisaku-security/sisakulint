@@ -1,0 +1,30 @@
+# GHSA-m32f-fjw2-37v3: DNS over TCP bypasses domain filtering (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-m32f-fjw2-37v3
+# Affected Action: bullfrogsec/bullfrog
+# Safe Pattern: Use updated version with TCP DNS filtering
+
+name: GHSA-m32f-fjw2-37v3 Safe Pattern
+on:
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Bullfrog with fixed version
+        uses: bullfrogsec/bullfrog@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: |
+            api.github.com:443
+            github.com:443
+          # Note: Fixed versions properly filter both UDP and TCP DNS
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Updated bullfrog versions filter TCP DNS queries
+      - name: Normal network operations
+        run: |
+          curl -s https://api.github.com/repos/owner/repo
+          npm install

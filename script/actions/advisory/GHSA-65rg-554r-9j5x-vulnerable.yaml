@@ -1,0 +1,33 @@
+# GHSA-65rg-554r-9j5x: Code injection in lycheeverse/lychee-action
+# Advisory URL: https://github.com/advisories/GHSA-65rg-554r-9j5x
+# Vulnerability Type: Code Injection (Moderate)
+# Expected Detection: CodeInjectionMediumRule or ArgumentInjectionMediumRule
+#
+# Vulnerable Pattern: Attacker can inject arbitrary code via lycheeVersion input
+# Example payload: $(printenv >> $GITHUB_STEP_SUMMARY && echo "v0.16.1")
+
+name: Vulnerable lychee-action Code Injection
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerable: User-controlled input can inject commands
+      - name: Link Checker with user-controlled version
+        uses: lycheeverse/lychee-action@v1.9.0
+        with:
+          # Attacker can set lycheeVersion to: $(printenv >> $GITHUB_STEP_SUMMARY && echo "v0.16.1")
+          lycheeVersion: ${{ github.event.inputs.lycheeVersion || 'v0.16.1' }}
+          args: '--verbose --no-progress .'
+
+      - name: Process results
+        run: |
+          echo "Link check completed"

@@ -1,0 +1,40 @@
+# GHSA-65rg-554r-9j5x: Safe pattern for lychee-action
+# Advisory URL: https://github.com/advisories/GHSA-65rg-554r-9j5x
+# Safe Pattern: Use fixed version string without dynamic input
+
+name: Safe lychee-action Usage
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Use fixed version string
+      - name: Link Checker with fixed version
+        uses: lycheeverse/lychee-action@v1.9.0
+        with:
+          lycheeVersion: 'v0.16.1'
+          args: '--verbose --no-progress .'
+
+      # Alternative safe pattern: Validate input in environment variable
+      - name: Validate lychee version
+        env:
+          LYCHEE_VERSION: ${{ github.event.inputs.lycheeVersion }}
+        run: |
+          # Validate version format
+          if [[ -n "$LYCHEE_VERSION" ]] && [[ "$LYCHEE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Valid version: $LYCHEE_VERSION"
+          else
+            echo "Using default version: v0.16.1"
+          fi
+
+      - name: Process results
+        run: |
+          echo "Link check completed"

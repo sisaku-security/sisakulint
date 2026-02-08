@@ -1,0 +1,30 @@
+# GHSA-h3qr-39j9-4r5v: gradle/gradle-build-action secrets in cache
+# Advisory: https://github.com/advisories/GHSA-h3qr-39j9-4r5v
+# Affected Action: gradle/gradle-build-action
+# Vulnerability Type: Secrets Cached and Accessible to Untrusted Contexts
+# Safe Pattern: Use cache-read-only or disable configuration cache with secrets
+
+name: GHSA-h3qr-39j9-4r5v Safe Pattern
+on:
+  # Use pull_request instead of pull_request_target for untrusted PR validation
+  # This prevents untrusted PR code from accessing secrets
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Use cache-read-only for untrusted contexts
+      # Prevents secrets from being written to cache
+      - uses: gradle/gradle-build-action@v2
+        with:
+          arguments: build
+          cache-read-only: true
+
+      # Note: Do NOT use secrets in pull_request jobs that run untrusted code
+      # If secrets are needed, use a separate trusted workflow triggered by
+      # workflow_run or require manual approval
+      - name: Run tests (no secrets in untrusted context)
+        run: ./gradlew test

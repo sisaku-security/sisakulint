@@ -1,0 +1,26 @@
+# GHSA-p756-rfxh-x63h: Privilege escalation via 777 file permissions (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-p756-rfxh-x63h
+# Affected Action: Azure/setup-kubectl
+# Safe Pattern: Use patched version or alternative action
+
+name: GHSA-p756-rfxh-x63h Safe Pattern
+on:
+  push:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup kubectl (Patched)
+        uses: Azure/setup-kubectl@v3.1
+        with:
+          version: 'v1.28.0'
+          # Note: Patched version sets proper file permissions (755)
+
+      - name: Use kubectl safely
+        run: |
+          kubectl version --client
+
+          # Alternative: Verify file permissions
+          ls -la $(which kubectl)
+          # Should show: -rwxr-xr-x (755), not -rwxrwxrwx (777)

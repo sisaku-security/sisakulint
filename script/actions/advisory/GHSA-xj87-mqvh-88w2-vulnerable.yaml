@@ -1,0 +1,23 @@
+# GHSA-xj87-mqvh-88w2: Delimiter Injection in fish-shop/syntax-check
+# Advisory: https://github.com/advisories/GHSA-xj87-mqvh-88w2
+# Affected Action: fish-shop/syntax-check
+# Vulnerability Type: Delimiter Injection (Argument Injection)
+# Expected Detection Rule: ArgumentInjectionCriticalRule
+
+name: GHSA-xj87-mqvh-88w2 Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: pattern input not sanitized, ; and () not escaped
+      # Allows injection of shell commands or additional patterns
+      - uses: fish-shop/syntax-check@v1
+        with:
+          pattern: ${{ github.event.pull_request.title }}

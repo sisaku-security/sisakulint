@@ -1,0 +1,34 @@
+# GHSA-8v8w-v8xg-79rf: Code injection via unsanitized branch names in tj-actions/branch-names
+# Advisory: https://github.com/advisories/GHSA-8v8w-v8xg-79rf
+# Safe Pattern: Use environment variables to sanitize input
+
+name: Safe - Code Injection via Unsanitized Branch Names
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  process-branch-safe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Process branch name (safe pattern)
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          # Safe: Use environment variable to prevent command injection
+          echo "Processing branch: $BRANCH_NAME"
+
+          if [ "$BRANCH_NAME" != "" ]; then
+            echo "Branch validation passed"
+          fi
+
+      - name: Create tag from branch (safe)
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Safe: Use environment variable
+          TAG_NAME="release-$HEAD_REF"
+          echo "Would create tag: $TAG_NAME"

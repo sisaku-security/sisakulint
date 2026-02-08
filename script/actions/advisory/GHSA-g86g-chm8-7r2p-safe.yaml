@@ -1,0 +1,44 @@
+# GHSA-g86g-chm8-7r2p: Safe pattern with patched action and proper trigger
+# Advisory: https://github.com/advisories/GHSA-g86g-chm8-7r2p
+# Mitigation: Use check-spelling v0.0.19+ OR change to pull_request trigger OR restrict permissions
+
+name: Safe Check Spelling
+
+on:
+  # Option 1: Use pull_request instead of pull_request_target
+  # This runs with read-only GITHUB_TOKEN and untrusted code
+  pull_request:
+  # Option 2: Use pull_request_target with patched version
+  pull_request_target:
+
+jobs:
+  spelling-safe-trigger:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    # Option 2: Restrict permissions to read-only
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      # Safe with pull_request trigger: no write permissions
+      - name: Check Spelling
+        uses: check-spelling/check-spelling@v0.0.19
+
+  # Alternative: Use pull_request_target with patched version and restricted permissions
+  spelling-patched-action:
+    if: ${{ github.event_name == 'pull_request_target' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write  # Only for posting comments
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: v0.0.19+ fixes symlink vulnerability
+      - name: Check Spelling
+        uses: check-spelling/check-spelling@v0.0.19

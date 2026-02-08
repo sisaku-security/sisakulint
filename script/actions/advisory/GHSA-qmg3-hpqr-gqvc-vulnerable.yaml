@@ -1,0 +1,24 @@
+# GHSA-qmg3-hpqr-gqvc: reviewdog/action-setup supply chain compromise
+# Advisory: https://github.com/advisories/GHSA-qmg3-hpqr-gqvc
+# Affected Action: reviewdog/action-setup
+# Vulnerability Type: Supply Chain Compromise
+# Expected Detection Rule: CommitShaRule, KnownVulnerableActionsRule
+
+name: GHSA-qmg3-hpqr-gqvc Vulnerable Pattern
+on:
+  pull_request:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Using mutable tag allows supply chain attack
+      # Malicious code was injected into v1 tag
+      - uses: reviewdog/action-setup@v1
+
+      - name: Run linter
+        run: |
+          reviewdog --version
+          reviewdog -reporter=github-pr-review -runners=golint

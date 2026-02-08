@@ -1,0 +1,29 @@
+# GHSA-vxmw-7h4f-hqxh: Expression Injection in pypa/gh-action-pypi-publish
+# Advisory: https://github.com/advisories/GHSA-vxmw-7h4f-hqxh
+# Affected Action: pypa/gh-action-pypi-publish
+# Vulnerability Type: Expression Injection
+# Expected Detection Rule: CodeInjectionCriticalRule
+
+name: GHSA-vxmw-7h4f-hqxh Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: github.ref_name fallback allows expression injection
+      # REF=${{ env.ACTION_REF || env.PR_REF || github.ref_name }}
+      # Attacker can control github.ref_name in pull_request_target
+      - name: Set version from ref
+        run: |
+          REF=${{ env.ACTION_REF || env.PR_REF || github.ref_name }}
+          echo "VERSION=${REF}" >> $GITHUB_ENV
+
+      - name: Build and publish
+        run: |
+          echo "Publishing version: $VERSION"

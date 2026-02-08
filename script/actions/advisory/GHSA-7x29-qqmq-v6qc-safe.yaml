@@ -1,0 +1,46 @@
+# GHSA-7x29-qqmq-v6qc: Safe pattern for branch name handling in ultralytics/actions
+# Advisory URL: https://github.com/advisories/GHSA-7x29-qqmq-v6qc
+# Safe Pattern: Use environment variables to isolate untrusted input
+
+name: Safe ultralytics Branch Handling
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  process-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: Use environment variable
+      - name: Process branch name
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          echo "Processing branch: $BRANCH_NAME"
+          echo "$BRANCH_NAME" > branch.txt
+
+      # Safe: Environment variable prevents command injection
+      - name: Create summary
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          echo "## PR from branch $BRANCH_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "Changes detected" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update PR status
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Processing branch $BRANCH_NAME"

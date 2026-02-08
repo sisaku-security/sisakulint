@@ -1,0 +1,33 @@
+# GHSA-p756-rfxh-x63h: Privilege escalation via 777 file permissions
+# Advisory: https://github.com/advisories/GHSA-p756-rfxh-x63h
+# Affected Action: Azure/setup-kubectl
+# Vulnerability Type: Privilege Escalation (Action Internal)
+# Expected Detection Rule: Not detectable by static analysis (action internal implementation)
+
+name: GHSA-p756-rfxh-x63h Vulnerable Pattern
+on:
+  push:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup kubectl
+        uses: Azure/setup-kubectl@v2
+        with:
+          version: 'v1.28.0'
+
+      # Vulnerability: The Azure/setup-kubectl action internally sets
+      # file permissions to 777 (world-writable) on the kubectl binary:
+      #
+      #   fs.chmodSync(kubectlPath, 0o777)
+      #
+      # This allows any user on the system (including compromised processes)
+      # to modify the kubectl binary, leading to privilege escalation.
+      #
+      # The vulnerability is in the action's implementation, not visible
+      # in the workflow file.
+      - name: Use kubectl
+        run: |
+          kubectl version --client
+          kubectl cluster-info

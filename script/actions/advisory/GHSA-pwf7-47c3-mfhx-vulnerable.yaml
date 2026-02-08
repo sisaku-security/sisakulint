@@ -1,0 +1,39 @@
+# GHSA-pwf7-47c3-mfhx: Code injection in j178/prek-action
+# Advisory URL: https://github.com/advisories/GHSA-pwf7-47c3-mfhx
+# Vulnerability Type: Code Injection (Critical)
+# Expected Detection: CodeInjectionCriticalRule or ArgumentInjectionCriticalRule
+#
+# Vulnerable Pattern: Attacker can inject arbitrary code via inputs.prek-version or inputs.extra_args
+# in pull_request_target context, allowing command execution with write permissions and access to secrets.
+
+name: Vulnerable prek-action Code Injection
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  setup-prek:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: User-controlled input from PR can inject commands
+      - name: Setup prek with user-controlled version
+        uses: j178/prek-action@v0.2.0
+        with:
+          # Attacker can set version to: $(printenv >> $GITHUB_STEP_SUMMARY && echo "0.2.2")
+          prek-version: ${{ github.event.inputs.prek-version || '0.2.2' }}
+          # Attacker can also inject via extra_args
+          extra_args: ${{ github.event.inputs.extra_args }}
+
+      - name: Run prek commands
+        run: |
+          prek run

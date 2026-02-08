@@ -1,0 +1,48 @@
+# GHSA-f9qj-7gh3-mhj4: RCE via terraform plan with PR input in kartverket/github-workflows
+# Advisory: https://github.com/advisories/GHSA-f9qj-7gh3-mhj4
+# Safe Pattern: Use environment variables and avoid using PR content in commands
+
+name: Safe - RCE via Terraform Plan
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  terraform-plan-safe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Plan (safe pattern)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Safe: Use environment variables to prevent command injection
+          # Avoid using PR content in terraform commands
+          terraform plan -out=tfplan
+
+          echo "Planning changes for PR"
+
+      - name: Comment on PR (safe)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Safe: Use environment variable
+          PLAN_OUTPUT=$(terraform show -no-color tfplan)
+          # Safely reference PR without direct substitution
+          echo "## Terraform Plan"
+          echo ""
+          echo "PR Title: $PR_TITLE"
+          echo ""
+          echo "$PLAN_OUTPUT"
