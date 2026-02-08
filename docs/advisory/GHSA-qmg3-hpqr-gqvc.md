@@ -15,7 +15,7 @@
 
 The `reviewdog/action-setup@v1` GitHub Action was compromised on March 11, 2025, between 18:42 and 20:31 UTC. Malicious code was added that dumps exposed secrets to GitHub Actions Workflow Logs.
 
-Actions affected regardless of version or pinning method:
+Actions affected when their tag/commit pointed to compromised commits during the window
 - reviewdog/action-shellcheck
 - reviewdog/action-composite-template
 - reviewdog/action-staticcheck
