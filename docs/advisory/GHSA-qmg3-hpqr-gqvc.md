@@ -28,8 +28,8 @@ The vulnerability is classified as CWE-506 (Embedded Malicious Code): "The produ
 
 **Note:** This vulnerability is listed in CISA's Known Exploited Vulnerabilities Catalog.
 
-**Affected versions:** = 1 (version 1)
-**Patched versions:** None listed (fix via commit 3f401fe retagging)
+**Affected versions:** v1 (all versions using the v1 tag during compromise window)
+**Patched versions:** v1 (retagged to safe commit 3f401fe1d58fe77e10d665ab713057375e39b887)
 
 ## Vulnerable Pattern
 
@@ -42,7 +42,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
 
       # Vulnerable: Using mutable tag v1
       # If tag is moved to malicious commit, workflow is compromised
@@ -69,11 +69,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4 - Pinned to specific commit SHA
 
       # Safe: Pinned to specific commit SHA
       # Immutable - cannot be changed by attacker
-      - uses: reviewdog/action-setup@3f401fe1b897d3dfd3a8fb7d8f404a7b0d7e6f5d # v1.0.0
+      - uses: reviewdog/action-setup@3f401fe1d58fe77e10d665ab713057375e39b887 # v1.0.0 - Pinned to specific commit SHA
 
       - name: Run linter
         run: reviewdog -reporter=github-pr-review -runners=golint

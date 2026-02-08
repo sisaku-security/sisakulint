@@ -8,8 +8,8 @@
 | **Package** | tj-actions/branch-names |
 | **Severity** | Critical (CVSS 9.3) |
 | **Vulnerability Type** | Code Injection (CWE-20) |
-| **Affected Versions** | < 7.0.7 |
-| **Fixed Version** | 7.0.7 |
+| **Affected Versions** | < 7.0.7 (CVE-2023-49291), <= 8.2.1 (CVE-2025-54416) |
+| **Fixed Version** | v9.0.0 (addresses both CVE-2023-49291 and CVE-2025-54416) |
 | **Published** | 2024-01-30 |
 | **Advisory URL** | https://github.com/advisories/GHSA-8v8w-v8xg-79rf |
 
@@ -172,7 +172,8 @@ sisakulint script/actions/advisory/GHSA-8v8w-v8xg-79rf-safe.yaml
    - Limits the impact of successful injection
 
 4. **Update Actions**
-   - Upgrade to `tj-actions/branch-names@v8.0.0` or later
+   - Upgrade to `tj-actions/branch-names@v9.0.0` or later
+   - Note: v8.2.1 and below are affected by CVE-2025-54416; only v9.0.0+ addresses both CVE-2023-49291 and CVE-2025-54416
    - Use official actions that handle sanitization
 
 ## References

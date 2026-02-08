@@ -150,12 +150,12 @@ Changed the `chmod` permission mode from `'777'` to `'775'`:
 
 **Before (Vulnerable):**
 ```javascript
-fs.chmodSync(kubectlPath, '777')  // World-writable
+fs.chmodSync(kubectlPath, 0o777)  // World-writable
 ```
 
 **After (Fixed):**
 ```javascript
-fs.chmodSync(kubectlPath, '775')  // Restricted write access
+fs.chmodSync(kubectlPath, 0o775)  // Restricted write access
 ```
 
 **Permission Explanation:**

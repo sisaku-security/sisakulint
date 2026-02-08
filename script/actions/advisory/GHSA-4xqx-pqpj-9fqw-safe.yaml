@@ -12,6 +12,7 @@ jobs:
   create-jira-issue:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: read
 
     steps:
