@@ -1,0 +1,35 @@
+# GHSA-4mgv-m5cm-f9h7: Safe pattern with patched action version
+# Advisory: https://github.com/advisories/GHSA-4mgv-m5cm-f9h7
+# Mitigation: Use action version 2.2.0 or later
+
+name: Safe Vault Secrets
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Version 2.2.0+ properly masks multi-line secrets
+      # Each line is registered separately with GitHub Actions masking
+      - name: Get Secrets from Vault
+        uses: hashicorp/vault-action@v2.2.0
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/data/prod/app private_key | PRIVATE_KEY ;
+            secret/data/prod/app certificate | CERTIFICATE
+
+      # All lines of multi-line secrets are properly masked
+      - name: Use Secrets
+        run: |
+          echo "Private key loaded"
+          # All lines are masked in logs
+          echo "$PRIVATE_KEY" | head -5
+
+      # Multi-line secrets (private keys, certificates, etc.) are fully protected

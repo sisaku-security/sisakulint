@@ -1,0 +1,37 @@
+# GHSA-6q4m-7476-932w: Command injection via github.head_ref in rlespinasse/github-slug-action
+# Advisory: https://github.com/advisories/GHSA-6q4m-7476-932w
+# Vulnerability Type: Command Injection (CWE-78)
+# Expected Rule: CodeInjectionCriticalRule
+# Severity: High
+
+name: Vulnerable - Command Injection via github.head_ref
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  slug-generation-vulnerable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Generate slug (vulnerable pattern from rlespinasse/github-slug-action@v4.4.1)
+        id: slug
+        run: |
+          # Vulnerable: Direct substitution without env variable
+          # An attacker can inject commands via branch name
+          HEAD_REF="${{ github.head_ref }}"
+
+          # This slug generation is vulnerable to command injection
+          SLUG=$(echo "$HEAD_REF" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      - name: Use slug in deployment (vulnerable)
+        run: |
+          # Vulnerable: Using slug derived from unsanitized input
+          DEPLOY_URL="https://preview-${{ steps.slug.outputs.slug }}.example.com"
+          echo "Deploying to: $DEPLOY_URL"
+
+          # Vulnerable: Direct substitution in command
+          echo "Branch: ${{ github.head_ref }}"

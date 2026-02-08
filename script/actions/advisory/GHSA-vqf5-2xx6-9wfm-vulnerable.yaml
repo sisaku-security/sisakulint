@@ -1,0 +1,54 @@
+# GHSA-vqf5-2xx6-9wfm: GitHub PAT written to debug artifacts
+# Advisory: https://github.com/advisories/GHSA-vqf5-2xx6-9wfm
+# Vulnerability: Environment variables logged in Kotlin extractor
+# Expected detection: Not directly detectable - runtime behavior (CodeQL internal implementation)
+# Severity: High (CVSS 7.1)
+# CVE: CVE-2025-24362
+# CWE: CWE-215 (Insertion of Sensitive Information Into Debugging Code), CWE-532
+# Package: github/codeql-action
+
+name: Vulnerable CodeQL Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Vulnerable: CodeQL Action 3.26.11 - 3.28.2 (or 2.26.11 - 2.x.x)
+      # with CodeQL CLI 2.9.2 - 2.20.2
+      # If analyzing Kotlin code and workflow fails before database finalization,
+      # debug artifacts may contain environment variables including GITHUB_TOKEN
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3.26.11
+        with:
+          languages: java  # Includes Kotlin
+          debug: true      # Debug artifacts enabled
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3.26.11
+
+      # If this step fails, environment variables may be exposed in debug artifacts
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3.26.11
+        env:
+          CUSTOM_SECRET: ${{ secrets.CUSTOM_SECRET }}
+
+      # Note: The vulnerability is NOT detectable by static analysis
+      # It occurs when:
+      # 1. Repository contains Kotlin code
+      # 2. Debug artifacts are enabled
+      # 3. Workflow fails before database finalization
+      # 4. CodeQL Kotlin extractor logs environment variables
+      # This is runtime behavior in CodeQL CLI internals

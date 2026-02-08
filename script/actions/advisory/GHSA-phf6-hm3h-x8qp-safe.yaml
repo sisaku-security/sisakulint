@@ -1,0 +1,39 @@
+# GHSA-phf6-hm3h-x8qp: Safe pattern for issue_comment handling
+# Advisory: https://github.com/advisories/GHSA-phf6-hm3h-x8qp
+# Mitigation: Use environment variables instead of direct interpolation
+# Apply least privilege principle for permissions
+
+name: Safe ScalaFmt Fix
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  scalafmt:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for ScalaFmt Comment
+        run: |
+          # Safe: Pass untrusted input through environment variable
+          if [[ "$COMMENT_BODY" == *"scalafmt"* ]]; then
+            echo "Running scalafmt"
+          fi
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+
+      - name: Apply ScalaFmt
+        if: contains(github.event.comment.body, 'scalafmt')
+        run: |
+          # Safe: Use environment variable for all untrusted input
+          echo "Processing comment"
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          # Only expose tokens to steps that need them
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

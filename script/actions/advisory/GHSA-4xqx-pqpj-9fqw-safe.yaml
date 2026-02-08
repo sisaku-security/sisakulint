@@ -1,0 +1,60 @@
+# GHSA-4xqx-pqpj-9fqw: Safe pattern for Jira issue creation
+# Advisory URL: https://github.com/advisories/GHSA-4xqx-pqpj-9fqw
+# Safe Pattern: Use environment variables and validate/sanitize inputs
+
+name: Safe Jira Issue Creation
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  create-jira-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Use environment variables to isolate untrusted input
+      - name: Create Jira issue with safe handling
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+        run: |
+          echo "Creating Jira issue"
+
+          # Create JSON file to avoid shell interpolation
+          cat > issue.json <<'EOF'
+{
+  "fields": {
+    "summary": "",
+    "description": ""
+  }
+}
+EOF
+
+          # Use jq to safely insert values
+          jq --arg title "$ISSUE_TITLE" --arg body "$ISSUE_BODY" \
+            '.fields.summary = $title | .fields.description = $body' \
+            issue.json > issue_final.json
+
+          curl -X POST https://jira.example.com/rest/api/2/issue \
+            -H "Authorization: Bearer $JIRA_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @issue_final.json
+
+      # Safe: Use patched version of gajira-create or avoid direct interpolation
+      - name: Create Jira ticket safely
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          JIRA_BASE_URL: https://jira.example.com
+          JIRA_USER_EMAIL: bot@example.com
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          # Validate and sanitize inputs before use
+          echo "Processing issue: $ISSUE_TITLE"

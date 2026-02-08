@@ -1,0 +1,25 @@
+# GHSA-g85v-wf27-67xc: Command injection via environment variables (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-g85v-wf27-67xc
+# Affected Action: step-security/harden-runner
+# Safe Pattern: Use patched version
+
+name: GHSA-g85v-wf27-67xc Safe Pattern
+on:
+  pull_request_target:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner (Patched)
+        uses: step-security/harden-runner@v2.7.0
+        with:
+          egress-policy: audit
+          # Note: Patched version properly sanitizes environment variables
+          # before using them in execSync calls
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Normal workflow step
+        run: echo "Using patched version"

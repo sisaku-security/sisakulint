@@ -1,0 +1,34 @@
+# GHSA-g85v-wf27-67xc: Command injection via environment variables
+# Advisory: https://github.com/advisories/GHSA-g85v-wf27-67xc
+# Affected Action: step-security/harden-runner
+# Vulnerability Type: Command Injection (Action Internal)
+# Expected Detection Rule: Not detectable by static analysis (action internal implementation)
+
+name: GHSA-g85v-wf27-67xc Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2.6.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerability: The harden-runner action internally uses execSync with
+      # environment variable interpolation (USER, RUNNER_TEMP) without proper
+      # sanitization. This is an internal implementation issue in the action,
+      # not visible in the workflow file.
+      #
+      # The vulnerable code in the action:
+      # execSync(`command ${process.env.USER} ${process.env.RUNNER_TEMP}`)
+      #
+      # If an attacker can control these environment variables (e.g., through
+      # runner compromise), they can inject commands.
+      - name: Normal workflow step
+        run: echo "This workflow looks safe but the action has internal vulnerability"

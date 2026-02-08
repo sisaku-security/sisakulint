@@ -1,0 +1,33 @@
+# GHSA-2c6m-6gqh-6qg3: Docker command escaping with untrusted env vars (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-2c6m-6gqh-6qg3
+# Affected Action: actions/runner (Container jobs)
+# Safe Pattern: Sanitize untrusted input before using in container env
+
+name: GHSA-2c6m-6gqh-6qg3 Safe Pattern
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Pass untrusted input via environment variable in step, not container
+      - name: Process user input safely
+        env:
+          USER_INPUT: ${{ github.event.pull_request.title }}
+        run: |
+          # Sanitize the input
+          SAFE_INPUT=$(echo "$USER_INPUT" | tr -d '\n' | sed 's/[^a-zA-Z0-9 ]//g')
+          echo "Processing: $SAFE_INPUT"
+
+      # Alternative: Use container but don't pass untrusted input in env
+      - name: Run in container without untrusted env
+        uses: docker://node:18
+        with:
+          args: |
+            echo "Running in container"
+            npm test

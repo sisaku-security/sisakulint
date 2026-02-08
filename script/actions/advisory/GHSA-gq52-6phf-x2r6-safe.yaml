@@ -1,0 +1,31 @@
+# GHSA-gq52-6phf-x2r6: Command injection via eval printf in tj-actions/branch-names
+# Advisory: https://github.com/advisories/GHSA-gq52-6phf-x2r6
+# Safe Pattern: Use environment variables to avoid command injection
+
+name: Safe - Command Injection via eval printf
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  branch-names-safe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Get branch names (safe pattern)
+        id: branch-names
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Safe: Use environment variables and printf without eval
+          # This prevents command injection even with malicious branch names
+          echo "base_ref_branch=$(printf "%s" "$BASE_REF")" >> "$GITHUB_OUTPUT"
+          echo "head_ref_branch=$(printf "%s" "$HEAD_REF")" >> "$GITHUB_OUTPUT"
+
+      - name: Use branch names
+        run: |
+          echo "Base branch: ${{ steps.branch-names.outputs.base_ref_branch }}"
+          echo "Head branch: ${{ steps.branch-names.outputs.head_ref_branch }}"

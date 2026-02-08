@@ -1,0 +1,40 @@
+# GHSA-vqf5-2xx6-9wfm: Safe pattern with patched action version
+# Advisory: https://github.com/advisories/GHSA-vqf5-2xx6-9wfm
+# Mitigation: Use CodeQL Action 3.28.3+ and CodeQL CLI 2.20.3+
+
+name: Safe CodeQL Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Safe: CodeQL Action 3.28.3+ does not upload database artifacts in debug mode
+      # CodeQL CLI 2.20.3+ does not log environment by default
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3.28.3
+        with:
+          languages: java  # Includes Kotlin
+          debug: true      # Safe in patched version
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3.28.3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3.28.3
+        env:
+          CUSTOM_SECRET: ${{ secrets.CUSTOM_SECRET }}
+
+      # Even if workflow fails, environment variables won't be exposed in artifacts

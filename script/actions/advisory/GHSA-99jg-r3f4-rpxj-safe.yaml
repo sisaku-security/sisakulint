@@ -1,0 +1,25 @@
+# GHSA-99jg-r3f4-rpxj: Memory overflow in OpenEXR parser (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-99jg-r3f4-rpxj
+# Affected Action: afichet/openexr-viewer
+# Note: This is not a workflow-related vulnerability
+
+name: GHSA-99jg-r3f4-rpxj Safe Pattern
+on:
+  push:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Since this is not a workflow vulnerability, there's no "safe workflow pattern"
+      # The mitigation is to update the openexr-viewer application to a patched version
+      # that fixes the buffer overflow in the OpenEXR parsing code.
+
+      - name: No workflow changes needed
+        run: |
+          echo "This advisory is about a buffer overflow in image parsing"
+          echo "It's not a GitHub Actions workflow security issue"
+          echo "Mitigation: Update openexr-viewer application to patched version"
