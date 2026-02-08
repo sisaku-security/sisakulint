@@ -193,6 +193,19 @@ var BuiltinFuncSignatures = map[string][]*FuncSignature{
 		Ret:    BoolType{},
 		Params: []ExprType{},
 	}},
+	// case function for conditional logic (switch-case style)
+	// https://github.blog/changelog/2026-01-29-github-actions-smarter-editing-clearer-debugging-and-a-new-case-function/
+	// Syntax: case(condition1, value1, condition2, value2, ..., defaultValue)
+	// Minimum 3 arguments: condition, valueIfTrue, defaultValue
+	"case": {{
+		Name: "case",
+		Ret:  UnknownType{},
+		Params: []ExprType{
+			BoolType{},    // first condition
+			UnknownType{}, // first value (also serves as variadic pattern)
+		},
+		VariableLengthParams: true,
+	}},
 }
 
 //todo:  Global variables
