@@ -140,7 +140,7 @@ sisakulint **successfully detects** this vulnerability through the `CodeInjectio
    - Prevents shell expansion and command injection
 
 2. **Update to Fixed Version**
-   - Upgrade to `tj-actions/branch-names@v8.0.0` or later
+   - Upgrade to `tj-actions/branch-names@v9.0.0` or later
    - The fixed version eliminates the use of `eval`
 
 3. **Avoid eval Entirely**

@@ -22,8 +22,8 @@ jobs:
         run: |
           # Safe: Use environment variables and printf without eval
           # This prevents command injection even with malicious branch names
-          echo "base_ref_branch=$(printf "%s" "$BASE_REF")" >> "$GITHUB_OUTPUT"
-          echo "head_ref_branch=$(printf "%s" "$HEAD_REF")" >> "$GITHUB_OUTPUT"
+          printf 'base_ref_branch=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
+          printf 'head_ref_branch=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
 
       - name: Use branch names
         run: |

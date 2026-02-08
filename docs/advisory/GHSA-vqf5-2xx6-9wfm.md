@@ -99,8 +99,8 @@ When the workflow fails during Kotlin code analysis, debug artifacts may contain
 ```
 # Intermediate file created by Kotlin extractor
 Environment Variables:
-GITHUB_TOKEN=ghs_16C7e42F292c6912E4b1c8F...
-CUSTOM_SECRET=super_secret_value
+GITHUB_TOKEN=***REDACTED***
+CUSTOM_SECRET=***REDACTED***
 CI=true
 RUNNER_OS=Linux
 ...

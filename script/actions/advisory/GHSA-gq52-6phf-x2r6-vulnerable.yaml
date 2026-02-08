@@ -25,8 +25,9 @@ jobs:
           HEAD_REF="${{ github.head_ref }}"
 
           # This eval printf pattern is vulnerable to command injection
-          echo "base_ref_branch=$(eval printf "%s" "$BASE_REF")" >> "$GITHUB_OUTPUT"
-          echo "head_ref_branch=$(eval printf "%s" "$HEAD_REF")" >> "$GITHUB_OUTPUT"
+          # Note: The vulnerable pattern uses eval which allows command injection
+          printf 'base_ref_branch=%s\n' "$(eval printf '%s' "$BASE_REF")" >> "$GITHUB_OUTPUT"
+          printf 'head_ref_branch=%s\n' "$(eval printf '%s' "$HEAD_REF")" >> "$GITHUB_OUTPUT"
 
       - name: Use branch names
         run: |

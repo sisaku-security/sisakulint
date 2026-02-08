@@ -60,7 +60,7 @@ An attacker could replace the kubectl binary with a malicious version, leading t
 
 ```yaml
 - name: Setup kubectl
-  uses: Azure/setup-kubectl@v3.0
+  uses: Azure/setup-kubectl@v2
   with:
     version: 'v1.28.0'
 

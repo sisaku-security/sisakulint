@@ -147,8 +147,8 @@ sisakulint successfully detected both instances of code injection vulnerability:
 The detection correctly identifies this as a **critical** vulnerability because it occurs in a workflow with `pull_request_target` trigger, which grants elevated privileges.
 
 Test files:
-- Vulnerable: `/Users/atsushi.sada/go/src/github.com/sisaku-security/sisakulint/script/actions/advisory/GHSA-8v8w-v8xg-79rf-vulnerable.yaml`
-- Safe: `/Users/atsushi.sada/go/src/github.com/sisaku-security/sisakulint/script/actions/advisory/GHSA-8v8w-v8xg-79rf-safe.yaml`
+- Vulnerable: `script/actions/advisory/GHSA-8v8w-v8xg-79rf-vulnerable.yaml`
+- Safe: `script/actions/advisory/GHSA-8v8w-v8xg-79rf-safe.yaml`
 
 ### Verification Command
 

@@ -6,15 +6,15 @@
 
 name: GHSA-h3qr-39j9-4r5v Safe Pattern
 on:
-  pull_request_target:
+  # Use pull_request instead of pull_request_target for untrusted PR validation
+  # This prevents untrusted PR code from accessing secrets
+  pull_request:
 
 jobs:
   safe:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       # Safe: Use cache-read-only for untrusted contexts
       # Prevents secrets from being written to cache
@@ -23,9 +23,8 @@ jobs:
           arguments: build
           cache-read-only: true
 
-      # Alternative: Disable configuration cache when secrets are needed
-      - name: Run tests with secrets (no cache)
-        env:
-          API_KEY: ${{ secrets.API_KEY }}
-          ORG_GRADLE_PROJECT_disableConfigurationCache: true
+      # Note: Do NOT use secrets in pull_request jobs that run untrusted code
+      # If secrets are needed, use a separate trusted workflow triggered by
+      # workflow_run or require manual approval
+      - name: Run tests (no secrets in untrusted context)
         run: ./gradlew test

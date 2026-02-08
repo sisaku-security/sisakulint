@@ -29,13 +29,13 @@ jobs:
 
           # Create JSON file to avoid shell interpolation
           cat > issue.json <<'EOF'
-{
-  "fields": {
-    "summary": "",
-    "description": ""
-  }
-}
-EOF
+          {
+            "fields": {
+              "summary": "",
+              "description": ""
+            }
+          }
+          EOF
 
           # Use jq to safely insert values
           jq --arg title "$ISSUE_TITLE" --arg body "$ISSUE_BODY" \

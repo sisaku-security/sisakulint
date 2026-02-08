@@ -8,9 +8,12 @@ on:
   # Option 1: Use pull_request instead of pull_request_target
   # This runs with read-only GITHUB_TOKEN and untrusted code
   pull_request:
+  # Option 2: Use pull_request_target with patched version
+  pull_request_target:
 
 jobs:
   spelling-safe-trigger:
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     # Option 2: Restrict permissions to read-only
     permissions:
@@ -25,6 +28,7 @@ jobs:
 
   # Alternative: Use pull_request_target with patched version and restricted permissions
   spelling-patched-action:
+    if: ${{ github.event_name == 'pull_request_target' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

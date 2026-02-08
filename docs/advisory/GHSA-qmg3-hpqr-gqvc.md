@@ -121,6 +121,6 @@ sisakulint successfully identifies the supply chain risk by detecting the use of
 - [Issue #2079](https://github.com/reviewdog/reviewdog/issues/2079)
 - [CVE-2025-30154](https://nvd.nist.gov/vuln/detail/CVE-2025-30154)
 - [CISA Known Exploited Vulnerabilities](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
-- [sisakulint: CommitShaRule](../commitsha.md)
-- [sisakulint: KnownVulnerableActionsRule](../known_vulnerable_actions.md)
+- [sisakulint: CommitShaRule](../commitsharule.md)
+- [sisakulint: KnownVulnerableActionsRule](../knownvulnerableactions.md)
 - [GitHub: Security hardening for Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
