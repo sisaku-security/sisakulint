@@ -48,6 +48,16 @@ func positionAt(node *yaml.Node) *ast.Position {
 	return &ast.Position{Line: node.Line, Col: node.Column}
 }
 
+// dereferenceAlias returns the target node if the given node is an alias, otherwise returns the node itself
+func dereferenceAlias(node *yaml.Node) *yaml.Node {
+	if node.Kind == yaml.AliasNode {
+		if node.Alias != nil {
+			return node.Alias
+		}
+	}
+	return node
+}
+
 func isNull(node *yaml.Node) bool {
 	return node.Kind == yaml.ScalarNode && node.Tag == SBOMNullTag
 }
@@ -707,6 +717,9 @@ func (project *parser) parseOutputs(node *yaml.Node) map[string]*ast.Output {
 
 // *https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobsjob_idsteps
 func (project *parser) parseStep(node *yaml.Node) *ast.Step {
+	// Dereference alias nodes (e.g., YAML anchors like *checkout)
+	node = dereferenceAlias(node)
+
 	ret := &ast.Step{Pos: positionAt(node), BaseNode: node}
 	var workDir *ast.String
 
