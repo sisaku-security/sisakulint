@@ -136,6 +136,11 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 
 // isPushToDefaultBranch checks if push event targets default branch (main/master)
 func (rule *CachePoisoningRule) isPushToDefaultBranch(event *ast.WebhookEvent) bool {
+	// If the push event only has tags filter (no branches), it doesn't target branches at all
+	if event.Branches == nil && event.Tags != nil {
+		return false
+	}
+
 	// If no branch filter, it includes default branch
 	if event.Branches == nil {
 		return true
