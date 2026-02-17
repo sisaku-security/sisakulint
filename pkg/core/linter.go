@@ -572,6 +572,13 @@ type ValidateResult struct {
 	Repository     string
 }
 
+// isDependabotConfigFile checks if the given filepath is a dependabot configuration file
+func isDependabotConfigFile(filePath string) bool {
+	normalized := filepath.ToSlash(filePath)
+	return strings.HasSuffix(normalized, ".github/dependabot.yml") ||
+		strings.HasSuffix(normalized, ".github/dependabot.yaml")
+}
+
 func (l *Linter) validate(
 	filePath string,
 	content []byte,
@@ -583,6 +590,20 @@ func (l *Linter) validate(
 	var validationStart time.Time
 	if l.loggingLevel >= LogLevelDetailedOutput {
 		validationStart = time.Now()
+	}
+
+	// Check if this is a dependabot configuration file
+	if isDependabotConfigFile(filePath) {
+		l.log("validating dependabot config...", filePath)
+		// For dependabot files, skip workflow schema validation
+		// These files are only used by DependabotGitHubActionsRule
+		return &ValidateResult{
+			FilePath:       filePath,
+			Source:         content,
+			ParsedWorkflow: nil,
+			Errors:         nil,
+			AutoFixers:     nil,
+		}, nil
 	}
 
 	l.log("validating workflow...", filePath)
