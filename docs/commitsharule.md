@@ -13,6 +13,19 @@ weight: 1
 
 This rule enforces the use of full-length commit SHAs (instead of tags or branches) when referencing GitHub Actions in workflows. This practice ensures immutability and protects against supply chain attacks where action versions could be modified maliciously.
 
+### Security Impact
+
+**Severity: High (7/10)**
+
+Using mutable references (tags or branches) instead of commit SHAs poses significant supply chain risks:
+
+1. **Tag Manipulation**: Attackers can move tags to point to compromised commits
+2. **Imposter Commits**: Malicious commits in forks can be referenced via the parent repository
+3. **Credential Theft**: Compromised actions may exfiltrate CI/CD secrets
+4. **Code Injection**: Attackers can inject arbitrary code into build pipelines
+
+This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-08: Ungoverned Usage of 3rd Party Services**.
+
 #### Key Features:
 
 - **SHA Enforcement**: Detects actions using tags (e.g., `@v4`) or branches (e.g., `@main`) instead of commit SHAs

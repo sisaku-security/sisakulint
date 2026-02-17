@@ -1,0 +1,30 @@
+# GHSL-2025-006: Untrusted code execution in homeassistant-powercalc
+# Vulnerability: PR branch checkout with composite action execution
+# Affected: validate-lut-files.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-006_homeassistant-powercalc/
+
+name: Validate LUT Files (Vulnerable)
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # VULNERABLE: Checks out PR branch code (attacker-controlled)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # VULNERABLE: Executes composite action from PR branch
+      # Attacker can modify .github/workflows/poetry-composite-action/action.yaml
+      - uses: ./.github/workflows/poetry-composite-action
+
+      - name: Validate files
+        run: |
+          python validate.py

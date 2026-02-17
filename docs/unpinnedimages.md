@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **container images that are not pinned by SHA256 digest**. Using mutable tags like `latest` or version tags without digests poses supply chain risks as the image content can change without warning.
 
+### Security Impact
+
+**Severity: Medium (6/10)**
+
+Using unpinned container images poses supply chain risks:
+
+1. **Tag Mutation**: Image content can change without version change
+2. **Supply Chain Attack**: Attackers can push malicious images to existing tags
+3. **Non-reproducible Builds**: Different workflow runs may use different images
+4. **Silent Compromise**: No indication when image content changes
+
+This vulnerability aligns with **CWE-494: Download of Code Without Integrity Check** and **OWASP CI/CD Security Risk CICD-SEC-3: Dependency Chain Abuse**.
+
 **Vulnerable Example:**
 
 ```yaml

