@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **usage of actions or reusable workflows from archived repositories** that are no longer maintained. Using archived actions poses security risks as they no longer receive security updates or bug fixes.
 
+### Security Impact
+
+**Severity: Medium (5/10)**
+
+Using archived actions poses maintenance and security risks:
+
+1. **No Security Patches**: Known vulnerabilities remain unfixed indefinitely
+2. **Dependency Rot**: Outdated dependencies accumulate CVEs over time
+3. **No Support**: Issues and security reports are ignored
+4. **Supply Chain Risk**: Unmaintained actions become targets for attackers
+
+This vulnerability aligns with **CWE-1104: Use of Unmaintained Third Party Components** and **OWASP CI/CD Security Risk CICD-SEC-3: Dependency Chain Abuse**.
+
 **Vulnerable Example:**
 
 ```yaml
