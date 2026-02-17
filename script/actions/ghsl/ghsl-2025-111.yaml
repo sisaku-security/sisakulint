@@ -1,0 +1,36 @@
+# GHSL-2025-111: Privilege escalation in nrwl/nx via pull_request_target
+# Vulnerability: pull_request_target without branch filter
+# Affected: pr-title-validation.yml on 21.4.x and website-21 branches
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-111_nrwl_nx/
+
+name: PR Title Validation (Vulnerable)
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize]
+    # VULNERABLE: No branch filter - all branches affected
+    # Fixed on main but vulnerable on 21.4.x and website-21 branches
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  validate-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Executing code from PR in privileged context
+      - name: Validate PR title
+        run: |
+          echo "Validating PR: ${{ github.event.pull_request.title }}"
+
+      # VULNERABLE: PR branch checkout in pull_request_target
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run validation script
+        run: |
+          node scripts/validate-pr-title.js
