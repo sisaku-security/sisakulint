@@ -842,6 +842,13 @@ func (sema *ExprSemanticsChecker) checkBuiltinFunctionCall(n *FuncCallNode, sig 
 			sema.errorf(n, "The format string %q contains the placeholder {%d}, but only %d argument(s) are provided for formatting. Please make sure the number of arguments matches the placeholders in the format string.",
 				lit.Value, i, l)
 		}
+	case "case":
+		// The runner enforces an odd argument count at parse time (EvenParameters error).
+		// Syntax: case(pred1, val1, pred2, val2, ..., default) — pairs plus one default.
+		// See: https://github.com/actions/runner/blob/main/src/Sdk/Expressions/ExpressionParser.cs
+		if len(n.Args)%2 == 0 {
+			sema.errorf(n, "case() requires an odd number of arguments (predicate-value pairs plus a default), but %d arguments were given", len(n.Args))
+		}
 	}
 }
 

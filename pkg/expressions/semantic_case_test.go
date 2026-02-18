@@ -72,6 +72,18 @@ func TestCaseFunctionSignature(t *testing.T) {
 			wantErrors:  true,
 			description: "case requires condition, value, and default",
 		},
+		{
+			name:        "case with even argument count (4 args)",
+			expression:  "case(true, 'a', true, 'b')}}",
+			wantErrors:  true,
+			description: "case requires odd number of arguments",
+		},
+		{
+			name:        "case with even argument count (6 args)",
+			expression:  "case(true, 'a', true, 'b', true, 'c')}}",
+			wantErrors:  true,
+			description: "case requires odd number of arguments",
+		},
 	}
 
 	for _, tt := range tests {
