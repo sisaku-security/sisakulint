@@ -84,6 +84,18 @@ func TestCaseFunctionSignature(t *testing.T) {
 			wantErrors:  true,
 			description: "case requires odd number of arguments",
 		},
+		{
+			name:        "non-bool second predicate",
+			expression:  "case(true, 'a', 'not-a-bool', 'b', 'default')}}",
+			wantErrors:  true,
+			description: "3rd argument (2nd predicate) must be boolean",
+		},
+		{
+			name:        "non-bool third predicate",
+			expression:  "case(true, 'a', true, 'b', 42, 'c', 'default')}}",
+			wantErrors:  true,
+			description: "5th argument (3rd predicate) must be boolean",
+		},
 	}
 
 	for _, tt := range tests {
