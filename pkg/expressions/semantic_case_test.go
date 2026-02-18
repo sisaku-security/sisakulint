@@ -96,6 +96,12 @@ func TestCaseFunctionSignature(t *testing.T) {
 			wantErrors:  true,
 			description: "5th argument (3rd predicate) must be boolean",
 		},
+		{
+			name:        "uppercase CASE with even args still errors",
+			expression:  "CASE(true, 'a', true, 'b')}}",
+			wantErrors:  true,
+			description: "case-insensitive: CASE with even args must error",
+		},
 	}
 
 	for _, tt := range tests {

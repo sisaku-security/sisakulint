@@ -814,7 +814,7 @@ func checkFuncSignature(n *FuncCallNode, sig *FuncSignature, args []ExprType) *E
 func (sema *ExprSemanticsChecker) checkBuiltinFunctionCall(n *FuncCallNode, sig *FuncSignature, tys []ExprType) {
 	sema.checkSpecialFunctionAvailability(n)
 	// Special checks for specific built-in functions
-	switch n.Callee {
+	switch sig.Name {
 	case "format":
 		lit, ok := n.Args[0].(*StringNode)
 		if !ok {
