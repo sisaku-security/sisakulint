@@ -425,3 +425,99 @@ updates:
 		t.Errorf("expected 0 errors when github-actions is configured in .yml file, got %d", len(errors))
 	}
 }
+
+func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
+	t.Parallel()
+
+	// Test remote scan mode with virtual path (owner/repo/.github/workflows/test.yml)
+	workflowPath := "SynkraAI/aios-core/.github/workflows/ci.yml"
+
+	rule := NewDependabotGitHubActionsRule(workflowPath)
+
+	workflow := &ast.Workflow{}
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate step with unpinned action
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+		},
+	}
+
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := rule.VisitWorkflowPost(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	// In remote scan mode, the rule should not report errors
+	// because it cannot access the filesystem to check for dependabot.yaml
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("expected 0 errors in remote scan mode, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("  error: %s", err.Description)
+		}
+	}
+}
+
+func TestDependabotGitHubActionsRule_isRemoteScanMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		workflowPath string
+		want         bool
+	}{
+		{
+			name:         "remote path",
+			workflowPath: "owner/repo/.github/workflows/ci.yml",
+			want:         true,
+		},
+		{
+			name:         "remote path with org",
+			workflowPath: "kubernetes/kubernetes/.github/workflows/test.yml",
+			want:         true,
+		},
+		{
+			name:         "absolute unix path",
+			workflowPath: "/home/user/project/.github/workflows/ci.yml",
+			want:         false,
+		},
+		{
+			name:         "relative path with dot",
+			workflowPath: "./.github/workflows/ci.yml",
+			want:         false,
+		},
+		{
+			name:         "relative path",
+			workflowPath: "../.github/workflows/ci.yml",
+			want:         false,
+		},
+		{
+			name:         "windows path",
+			workflowPath: "C:\\Users\\user\\.github\\workflows\\ci.yml",
+			want:         false,
+		},
+		{
+			name:         "short path without owner/repo",
+			workflowPath: ".github/workflows/ci.yml",
+			want:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := NewDependabotGitHubActionsRule(tt.workflowPath)
+			got := rule.isRemoteScanMode()
+			if got != tt.want {
+				t.Errorf("isRemoteScanMode() = %v, want %v (path: %s)", got, tt.want, tt.workflowPath)
+			}
+		})
+	}
+}
