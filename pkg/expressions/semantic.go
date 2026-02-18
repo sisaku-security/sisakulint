@@ -202,7 +202,8 @@ var BuiltinFuncSignatures = map[string][]*FuncSignature{
 		Ret:  UnknownType{},
 		Params: []ExprType{
 			BoolType{},    // first condition
-			UnknownType{}, // first value (also serves as variadic pattern)
+			UnknownType{}, // first value
+			UnknownType{}, // default value (also serves as variadic pattern)
 		},
 		VariableLengthParams: true,
 	}},

@@ -54,6 +54,24 @@ func TestCaseFunctionSignature(t *testing.T) {
 			wantErrors:  false,
 			description: "nested case expressions",
 		},
+		{
+			name:        "case with no arguments",
+			expression:  "case()}}",
+			wantErrors:  true,
+			description: "case requires at least 3 arguments",
+		},
+		{
+			name:        "case with only condition",
+			expression:  "case(true)}}",
+			wantErrors:  true,
+			description: "case requires at least 3 arguments",
+		},
+		{
+			name:        "case with missing default",
+			expression:  "case(true, 'value')}}",
+			wantErrors:  true,
+			description: "case requires condition, value, and default",
+		},
 	}
 
 	for _, tt := range tests {
