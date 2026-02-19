@@ -200,6 +200,74 @@ jobs:
 `,
 			wantErr: false,
 		},
+		{
+			name: "Safe: mixed triggers with job-level if restricting to pull_request only",
+			yaml: `
+name: CI
+on:
+  pull_request:
+    branches: ["main"]
+  pull_request_target:
+    types: [labeled]
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+`,
+			wantErr: false,
+		},
+		{
+			name: "Vulnerable: mixed triggers where job can run on pull_request_target",
+			yaml: `
+name: CI
+on:
+  pull_request:
+    branches: ["main"]
+  pull_request_target:
+    types: [labeled]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+`,
+			wantErr: true,
+			errMsg:  "TOCTOU vulnerability",
+		},
+		{
+			name: "Safe: mixed triggers with job-level if for pull_request_target job using safe sha",
+			yaml: `
+name: CI
+on:
+  pull_request:
+    branches: ["main"]
+  pull_request_target:
+    types: [labeled]
+jobs:
+  format-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+  test-fork-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request_target'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
