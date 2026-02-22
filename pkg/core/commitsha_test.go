@@ -237,18 +237,35 @@ func TestCommitSha_VisitStep(t *testing.T) {
 			errorCount: 1,
 		},
 		{
-			name: "local path action",
+			name: "local path action without SHA",
 			step: &ast.Step{
 				ID: &ast.String{Value: "local-action"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{
+						Value: "./local/action",
+					},
+				},
+				Pos: &ast.Position{Line: 45, Col: 5},
+			},
+			// Local actions are part of the same repository and checked out at the same commit,
+			// so they have no supply chain risk and do not need commit SHA pinning.
+			wantError:  false,
+			errorCount: 0,
+		},
+		{
+			name: "local path action with version tag",
+			step: &ast.Step{
+				ID: &ast.String{Value: "local-action-tagged"},
 				Exec: &ast.ExecAction{
 					Uses: &ast.String{
 						Value: "./local/action@v1",
 					},
 				},
-				Pos: &ast.Position{Line: 45, Col: 5},
+				Pos: &ast.Position{Line: 50, Col: 5},
 			},
-			wantError:  true,
-			errorCount: 1,
+			// Local actions (starting with ./) should not be flagged regardless of ref format.
+			wantError:  false,
+			errorCount: 0,
 		},
 	}
 
