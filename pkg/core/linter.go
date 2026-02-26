@@ -627,7 +627,7 @@ func (l *Linter) validate(
 
 	if l.loggingLevel >= LogLevelDetailedOutput {
 		elapsed := time.Since(validationStart)
-		l.log("parsed workflow in", len(allErrors), elapsed.Milliseconds(), "ms", filePath)
+		l.log(fmt.Sprintf("parsed workflow in %dms", elapsed.Milliseconds()), filePath)
 	}
 
 	var allAutoFixers []AutoFixer
@@ -723,7 +723,7 @@ func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError,
 
 	if l.loggingLevel >= LogLevelDetailedOutput {
 		elapsed := time.Since(validationStart)
-		l.log("Found total", len(*allErrors), "errors found in", elapsed.Milliseconds(), "found in ms", filePath)
+		l.log(fmt.Sprintf("found %d errors in %dms", len(*allErrors), elapsed.Milliseconds()), filePath)
 	}
 }
 
