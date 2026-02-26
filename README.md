@@ -295,27 +295,38 @@ jobs:
 Running `sisakulint` detects multiple security issues:
 
 ```
-.github/workflows/test.yaml:1:1: workflow does not have explicit 'permissions' block.
-  Add a 'permissions:' block to follow the principle of least privilege. [permissions]
+.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block. Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. Add a 'permissions:' block to follow the principle of least privilege. See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
+      1 👈|name: PR Comment Handler
 
-.github/workflows/test.yaml:10:3: timeout-minutes is not set for job process-pr [missing-timeout-minutes]
+.github/workflows/demo.yaml:4:3: dangerous trigger (critical): workflow uses privileged trigger(s) [pull_request_target, issue_comment] without any security mitigations. These triggers grant write access and secrets access to potentially untrusted code. Add at least one mitigation: restrict permissions (permissions: read-all or permissions: {}), use environment protection, add label conditions, or check github.actor. See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
+      4 👈|  pull_request_target:
 
-.github/workflows/test.yaml:13:9: the action ref should be a full length commit SHA
-  for immutability and security. [commit-sha]
+.github/workflows/demo.yaml:10:3: timeout-minutes is not set for job process-pr; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       10 👈|  process-pr:
 
-.github/workflows/test.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false'.
-  Consider adding it to prevent credential exposure. [artipacked]
+.github/workflows/demo.yaml:13:9: timeout-minutes is not set for step <unnamed>; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:15:16: checking out untrusted code from pull request
-  in workflow with privileged trigger 'issue_comment'. This allows potentially
-  malicious code to execute with access to repository secrets. [untrusted-checkout]
+.github/workflows/demo.yaml:13:9: the action ref in 'uses' for step '<unnamed>' should be a full length commit SHA for immutability and security. See https://sisaku-security.github.io/lint/docs/rules/commitsharule/ [commit-sha]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:19:35: code injection (critical): "github.event.pull_request.title"
-  is potentially untrusted. Avoid using it directly in inline scripts.
-  Instead, pass it through an environment variable. [code-injection-critical]
+.github/workflows/demo.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false' at step "<unnamed>". Credentials are stored in .git/config. While no dangerous upload-artifact was found in this job, consider adding 'persist-credentials: false' to prevent credential exposure. See https://unit42.paloaltonetworks.com/github-repo-artifacts-leak-tokens/ [artipacked]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:21:9: cache poisoning risk via build command: 'Run build'
-  runs untrusted code after checking out PR head. [cache-poisoning-poisonable-step]
+.github/workflows/demo.yaml:15:16: checking out untrusted code from pull request in workflow with privileged trigger 'pull_request_target' (line 4). This allows potentially malicious code from external contributors to execute with access to repository secrets. Use 'pull_request' trigger instead, or avoid checking out PR code when using 'pull_request_target'. See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details [untrusted-checkout]
+       15 👈|          ref: ${{ github.event.pull_request.head.sha }}
+
+.github/workflows/demo.yaml:17:9: timeout-minutes is not set for step Echo PR title; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       17 👈|      - name: Echo PR title
+
+.github/workflows/demo.yaml:19:35: code injection (critical): "github.event.pull_request.title" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
+       19 👈|          echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+.github/workflows/demo.yaml:21:9: timeout-minutes is not set for step Run build; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       21 👈|      - name: Run build
+
+.github/workflows/demo.yaml:21:9: cache poisoning risk via build command: 'Run build' runs untrusted code after checking out PR head (triggers: pull_request_target, issue_comment). Attacker can steal cache tokens [cache-poisoning-poisonable-step]
+       21 👈|      - name: Run build
 ```
 
 ### What sisakulint detected
@@ -323,6 +334,7 @@ Running `sisakulint` detects multiple security issues:
 | Finding | OWASP Risk | Severity | Auto-fix |
 |:--------|:-----------|:---------|:--------:|
 | Missing permissions block | CICD-SEC-02 | Medium | |
+| Dangerous privileged triggers | CICD-SEC-01 | Critical | |
 | Missing timeout-minutes | CICD-SEC-07 | Low | Yes |
 | Action not pinned to SHA | CICD-SEC-08 | Medium | Yes |
 | Credential exposure risk | CICD-SEC-06 | Medium | Yes |
