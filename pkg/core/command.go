@@ -277,6 +277,7 @@ func (cmd *Command) Main(args []string) int {
 
 // runRemoteScan はリモートリポジトリをスキャンする
 func (cmd *Command) runRemoteScan(input string, linterOpts *LinterOptions, scannerOpts *remote.ScannerOptions) int {
+	linterOpts.IsRemote = true
 	linter, err := NewLinter(cmd.Stdout, linterOpts)
 	if err != nil {
 		fmt.Fprintf(cmd.Stderr, "Error initializing linter: %v\n", err)

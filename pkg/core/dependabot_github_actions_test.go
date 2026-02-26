@@ -22,7 +22,7 @@ func TestDependabotGitHubActionsRule_NoDependabotFile(t *testing.T) {
 	// Create a workflow file path (file doesn't need to exist for the rule)
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	// Simulate visiting a workflow with unpinned action
 	workflow := &ast.Workflow{}
@@ -88,7 +88,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -149,7 +149,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -189,7 +189,7 @@ func TestDependabotGitHubActionsRule_PinnedActions(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -230,7 +230,7 @@ func TestDependabotGitHubActionsRule_LocalAction(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -271,7 +271,7 @@ func TestDependabotGitHubActionsRule_DockerAction(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -398,7 +398,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -429,10 +429,10 @@ updates:
 func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
 	t.Parallel()
 
-	// Test remote scan mode with virtual path (owner/repo/.github/workflows/test.yml)
+	// isRemote=true を明示的に渡してリモートスキャンモードをシミュレートする
 	workflowPath := "SynkraAI/aios-core/.github/workflows/ci.yml"
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, true)
 
 	workflow := &ast.Workflow{}
 
@@ -463,61 +463,5 @@ func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
 		for _, err := range errors {
 			t.Logf("  error: %s", err.Description)
 		}
-	}
-}
-
-func TestDependabotGitHubActionsRule_isRemoteScanMode(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name         string
-		workflowPath string
-		want         bool
-	}{
-		{
-			name:         "remote path",
-			workflowPath: "owner/repo/.github/workflows/ci.yml",
-			want:         true,
-		},
-		{
-			name:         "remote path with org",
-			workflowPath: "kubernetes/kubernetes/.github/workflows/test.yml",
-			want:         true,
-		},
-		{
-			name:         "absolute unix path",
-			workflowPath: "/home/user/project/.github/workflows/ci.yml",
-			want:         false,
-		},
-		{
-			name:         "relative path with dot",
-			workflowPath: "./.github/workflows/ci.yml",
-			want:         false,
-		},
-		{
-			name:         "relative path",
-			workflowPath: "../.github/workflows/ci.yml",
-			want:         false,
-		},
-		{
-			name:         "windows path",
-			workflowPath: "C:\\Users\\user\\.github\\workflows\\ci.yml",
-			want:         false,
-		},
-		{
-			name:         "short path without owner/repo",
-			workflowPath: ".github/workflows/ci.yml",
-			want:         false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rule := NewDependabotGitHubActionsRule(tt.workflowPath)
-			got := rule.isRemoteScanMode()
-			if got != tt.want {
-				t.Errorf("isRemoteScanMode() = %v, want %v (path: %s)", got, tt.want, tt.workflowPath)
-			}
-		})
 	}
 }

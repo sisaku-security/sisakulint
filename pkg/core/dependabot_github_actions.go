@@ -22,11 +22,16 @@ type DependabotGitHubActionsRule struct {
 	projectRoot string
 	// alreadyChecked prevents duplicate checks across multiple workflows
 	alreadyChecked map[string]bool
+	// isRemote indicates whether we are running in remote scan mode.
+	// In remote mode the dependabot file cannot be checked via the local filesystem.
+	isRemote bool
 }
 
 // NewDependabotGitHubActionsRule creates a new DependabotGitHubActionsRule instance.
 // workflowPath is the path to the workflow file being analyzed.
-func NewDependabotGitHubActionsRule(workflowPath string) *DependabotGitHubActionsRule {
+// isRemote must be true when scanning a remote repository; in that case the local
+// filesystem is not consulted for the dependabot configuration file.
+func NewDependabotGitHubActionsRule(workflowPath string, isRemote bool) *DependabotGitHubActionsRule {
 	rule := &DependabotGitHubActionsRule{
 		BaseRule: BaseRule{
 			RuleName: "dependabot-github-actions",
@@ -34,9 +39,12 @@ func NewDependabotGitHubActionsRule(workflowPath string) *DependabotGitHubAction
 		},
 		workflowPath:   workflowPath,
 		alreadyChecked: make(map[string]bool),
+		isRemote:       isRemote,
 	}
-	// Find project root from workflow path
-	rule.projectRoot = rule.findProjectRoot(workflowPath)
+	// Find project root from workflow path only for local scans
+	if !isRemote {
+		rule.projectRoot = rule.findProjectRoot(workflowPath)
+	}
 	return rule
 }
 
@@ -100,9 +108,9 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 		return nil
 	}
 
-	// Skip check if running in remote scan mode (workflowPath contains owner/repo pattern)
-	// In remote mode, we don't have access to the filesystem to check for dependabot.yaml
-	if rule.isRemoteScanMode() {
+	// Skip check if running in remote scan mode.
+	// In remote mode, we don't have access to the local filesystem to check for dependabot.yaml.
+	if rule.isRemote {
 		rule.Debug("skipping dependabot check in remote scan mode (path: %s)", rule.workflowPath)
 		return nil
 	}
@@ -153,38 +161,6 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 	}
 
 	return nil
-}
-
-// isRemoteScanMode detects if the rule is running in remote scan mode.
-// Remote scan mode uses virtual paths like "owner/repo/.github/workflows/workflow.yml"
-// instead of local filesystem paths.
-func (rule *DependabotGitHubActionsRule) isRemoteScanMode() bool {
-	// Remote scan paths contain owner/repo pattern (at least two path segments before .github)
-	// Example: "SynkraAI/aios-core/.github/workflows/ci.yml"
-	// Local paths start with / or . or a drive letter (Windows)
-	path := rule.workflowPath
-
-	// Local filesystem paths typically start with / (Unix) or drive letter (Windows) or . (relative)
-	if len(path) > 0 && (path[0] == '/' || path[0] == '.' || (len(path) > 2 && path[1] == ':')) {
-		return false
-	}
-
-	// Check if path contains the remote pattern: owner/repo/.github/
-	// We look for segments before .github that don't look like filesystem paths
-	parts := strings.Split(path, "/")
-	if len(parts) < 3 {
-		return false
-	}
-
-	// Look for .github in the path and check if there are 2+ segments before it
-	for i, part := range parts {
-		if part == ".github" && i >= 2 {
-			// Found .github with at least 2 segments before it (owner and repo)
-			return true
-		}
-	}
-
-	return false
 }
 
 // findProjectRoot finds the project root directory by looking for .github directory.
