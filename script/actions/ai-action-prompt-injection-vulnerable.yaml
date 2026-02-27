@@ -1,0 +1,17 @@
+name: Vulnerable AI Prompt Injection
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Please triage this issue:
+            Title: ${{ github.event.issue.title }}
+            Body: ${{ github.event.issue.body }}
