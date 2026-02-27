@@ -146,9 +146,8 @@ func (r *AIActionPromptInjectionRule) checkUntrustedExpression(exprContent strin
 
 	var paths []string
 	for _, err := range errs {
-		msg := err.Message
-		if strings.Contains(msg, "potentially untrusted") {
-			paths = append(paths, extractQuotedStrings(msg)...)
+		if err.IsUntrustedInput {
+			paths = append(paths, err.UntrustedPaths...)
 		}
 	}
 

@@ -120,7 +120,7 @@ func (r *AIActionExcessiveToolsRule) VisitStep(node *ast.Step) error {
 
 	r.Errorf(
 		node.Pos,
-		`action %q grants dangerous tools [%s] via claude_args in a workflow triggered by untrusted events (issues/issue_comment/discussion). This enables Clinejection attacks where malicious users can inject instructions. Use read-only tools (Read, Glob, Grep) instead.`,
+		`action %q grants dangerous tools [%s] via claude_args in a workflow triggered by untrusted events (issues, issue_comment, discussion, pull_request_target, workflow_run). This enables Clinejection attacks where malicious users can inject instructions. Use read-only tools (Read, Glob, Grep) instead.`,
 		action.Uses.Value,
 		strings.Join(foundTools, ", "),
 	)
@@ -177,5 +177,5 @@ func containsToolName(args, toolName string) bool {
 
 // isToolSeparator はツール名の区切り文字として使われる文字かどうかを判定する。
 func isToolSeparator(c byte) bool {
-	return c == ',' || c == '\t' || c == '"' || c == ' '
+	return c == ',' || c == '\t' || c == '"' || c == ' ' || c == '\n' || c == '\r' || c == '\''
 }

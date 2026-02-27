@@ -4,7 +4,7 @@
 
 **Goal:** Issue #345 に対応し、AI エージェント系アクション（claude-code-action 等）の危険な設定を検出する 3 つのルールを TDD で実装する。
 
-**Architecture:** 既存の `ArgumentInjectionRule` / `CodeInjectionRule` のパターンに倣い、`VisitStep` で AI アクションの `with:` パラメータを検査する Rule を 3 つ追加する。Rule 3（ai-prompt-injection）は既存の `ExprSemanticsChecker` を再利用して untrusted 入力を検出する。
+**Architecture:** 既存の `ArgumentInjectionRule` / `CodeInjectionRule` のパターンに倣い、`VisitStep` で AI アクションの `with:` パラメータを検査する Rule を 3 つ追加する。Rule 3（ai-action-prompt-injection）は既存の `ExprSemanticsChecker` を再利用して untrusted 入力を検出する。
 
 **Tech Stack:** Go 1.25, `pkg/core/` の Rule パターン, `pkg/expressions/` の ExprSemanticsChecker, `pkg/ast/` の ExecAction
 
@@ -540,7 +540,7 @@ git commit -m "feat(rule): add ai-action-excessive-tools rule (issue #345)"
 
 ---
 
-## Task 5: Rule 3 — `ai-prompt-injection` のテスト作成
+## Task 5: Rule 3 — `ai-action-prompt-injection` のテスト作成
 
 AI アクションの `prompt:` / `direct_prompt:` パラメータに `${{ github.event.issue.title }}` 等の untrusted 入力が展開されている場合に検出する。
 
@@ -607,7 +607,7 @@ import (
 
 func TestAIPromptInjection_DetectsIssueTitleInPrompt(t *testing.T) {
 	t.Parallel()
-	rule := NewAIPromptInjectionRule()
+	rule := NewAIActionPromptInjectionRule()
 
 	workflow := `
 on:
@@ -627,12 +627,12 @@ jobs:
 	if len(errs) == 0 {
 		t.Fatal("expected error for untrusted input in prompt, got none")
 	}
-	assertContains(t, errs[0].Message, "ai-prompt-injection")
+	assertContains(t, errs[0].Message, "ai-action-prompt-injection")
 }
 
 func TestAIPromptInjection_DetectsIssueBodyInDirectPrompt(t *testing.T) {
 	t.Parallel()
-	rule := NewAIPromptInjectionRule()
+	rule := NewAIActionPromptInjectionRule()
 
 	workflow := `
 on:
@@ -655,7 +655,7 @@ jobs:
 
 func TestAIPromptInjection_AllowsStaticPrompt(t *testing.T) {
 	t.Parallel()
-	rule := NewAIPromptInjectionRule()
+	rule := NewAIActionPromptInjectionRule()
 
 	workflow := `
 on:
@@ -678,7 +678,7 @@ jobs:
 
 func TestAIPromptInjection_AllowsTrustedInputInPrompt(t *testing.T) {
 	t.Parallel()
-	rule := NewAIPromptInjectionRule()
+	rule := NewAIActionPromptInjectionRule()
 
 	// secrets や github.repository 等の信頼できる値は許可
 	workflow := `
@@ -736,22 +736,22 @@ var aiPromptInputParams = []string{
 // expressionPattern は ${{ ... }} を抽出する正規表現
 var expressionPattern = regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
 
-// AIPromptInjectionRule は AI アクションの prompt パラメータに
+// AIActionPromptInjectionRule は AI アクションの prompt パラメータに
 // untrusted input が展開されている場合に検出する
-type AIPromptInjectionRule struct {
+type AIActionPromptInjectionRule struct {
 	BaseRule
 }
 
-// NewAIPromptInjectionRule は新しいルールインスタンスを返す
-func NewAIPromptInjectionRule() *AIPromptInjectionRule {
-	r := &AIPromptInjectionRule{}
-	r.RuleName = "ai-prompt-injection"
+// NewAIActionPromptInjectionRule は新しいルールインスタンスを返す
+func NewAIActionPromptInjectionRule() *AIActionPromptInjectionRule {
+	r := &AIActionPromptInjectionRule{}
+	r.RuleName = "ai-action-prompt-injection"
 	r.RuleDescription = "Untrusted user input is directly interpolated into AI agent prompt, enabling prompt injection attacks"
 	r.RuleSeverity = "critical"
 	return r
 }
 
-func (r *AIPromptInjectionRule) VisitStep(node *ast.Step) error {
+func (r *AIActionPromptInjectionRule) VisitStep(node *ast.Step) error {
 	if node.Exec == nil || node.Exec.Kind() != ast.ExecKindAction {
 		return nil
 	}
@@ -773,7 +773,7 @@ func (r *AIPromptInjectionRule) VisitStep(node *ast.Step) error {
 		for _, expr := range untrustedExprs {
 			r.Errorf(
 				node.Pos,
-				"ai-prompt-injection: untrusted expression %q is directly interpolated into AI agent %q parameter of %q. This enables prompt injection: an attacker can craft issue/comment content to control AI behavior. Pass untrusted data via environment variables instead.",
+				"ai-action-prompt-injection: untrusted expression %q is directly interpolated into AI agent %q parameter of %q. This enables prompt injection: an attacker can craft issue/comment content to control AI behavior. Pass untrusted data via environment variables instead.",
 				expr,
 				paramName,
 				action.Uses.Value,
@@ -785,7 +785,7 @@ func (r *AIPromptInjectionRule) VisitStep(node *ast.Step) error {
 }
 
 // findUntrustedExpressions はプロンプト文字列から untrusted な ${{ }} 式を抽出する
-func (r *AIPromptInjectionRule) findUntrustedExpressions(promptValue string) []string {
+func (r *AIActionPromptInjectionRule) findUntrustedExpressions(promptValue string) []string {
 	var untrusted []string
 
 	matches := expressionPattern.FindAllStringSubmatch(promptValue, -1)
@@ -805,7 +805,7 @@ func (r *AIPromptInjectionRule) findUntrustedExpressions(promptValue string) []s
 
 // isUntrustedExpression は既存の ExprSemanticsChecker を再利用して
 // 式が untrusted かどうかを判定する
-func (r *AIPromptInjectionRule) isUntrustedExpression(exprContent string) bool {
+func (r *AIActionPromptInjectionRule) isUntrustedExpression(exprContent string) bool {
 	l := expressions.NewTokenizer(exprContent + "}}")
 	p := expressions.NewMiniParser()
 	node, err := p.Parse(l)
@@ -834,7 +834,7 @@ go test ./pkg/core/ -run TestAIPromptInjection -v
 **Step 3: linter.go に登録**
 
 ```go
-NewAIPromptInjectionRule(),            // Detects untrusted input in AI agent prompt parameters (prompt injection)
+NewAIActionPromptInjectionRule(),            // Detects untrusted input in AI agent prompt parameters (prompt injection)
 ```
 
 **Step 4: 全テスト実行**
@@ -849,7 +849,7 @@ git add pkg/core/aiaction_prompt_injection.go \
         pkg/core/linter.go \
         script/actions/ai-action-prompt-injection-vulnerable.yaml \
         script/actions/ai-action-prompt-injection-safe.yaml
-git commit -m "feat(rule): add ai-prompt-injection rule (issue #345)"
+git commit -m "feat(rule): add ai-action-prompt-injection rule (issue #345)"
 ```
 
 ---
@@ -894,10 +894,10 @@ go build ./cmd/sisakulint
 ```
 
 期待する出力（3つのルールが全て検出）:
-```
+```text
 script/actions/clinejection-vulnerable.yaml:...: ai-action-unrestricted-trigger: ...
 script/actions/clinejection-vulnerable.yaml:...: ai-action-excessive-tools: ...
-script/actions/clinejection-vulnerable.yaml:...: ai-prompt-injection: ...
+script/actions/clinejection-vulnerable.yaml:...: ai-action-prompt-injection: ...
 ```
 
 **Step 3: コミット**
@@ -916,7 +916,7 @@ git commit -m "test: add clinejection attack pattern verification workflow"
 ```markdown
 - **AIActionUnrestrictedTriggerRule** - Detects AI agent actions (claude-code-action, etc.) configured with `allowed_non_write_users: "*"` allowing any GitHub user to trigger AI execution (auto-fix not applicable)
 - **AIActionExcessiveToolsRule** - Detects AI agent actions with dangerous tools (Bash/Write/Edit) enabled in workflows triggered by untrusted users (issues, issue_comment, discussion) (auto-fix not applicable)
-- **AIPromptInjectionRule** - Detects untrusted user input (github.event.issue.title, github.event.comment.body, etc.) directly interpolated into AI agent prompt parameters, enabling prompt injection attacks (auto-fix supported)
+- **AIActionPromptInjectionRule** - Detects untrusted user input (github.event.issue.title, github.event.comment.body, etc.) directly interpolated into AI agent prompt parameters, enabling prompt injection attacks (auto-fix supported)
 ```
 
 **Step 2: コミット**
