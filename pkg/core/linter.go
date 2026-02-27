@@ -553,6 +553,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		RequestForgeryCriticalRule(), // Detects SSRF vulnerabilities in privileged triggers
 		RequestForgeryMediumRule(),   // Detects SSRF vulnerabilities in normal triggers
 		NewCacheBloatRule(),          // Detects cache bloat risk with cache/restore and cache/save
+		NewAIActionUnrestrictedTriggerRule(), // Detects AI actions with unrestricted user access (Clinejection attack pattern)
 	}
 }
 
