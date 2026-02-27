@@ -37,8 +37,11 @@ jobs:
 	if len(ruleErrors) == 0 {
 		t.Fatal("expected error for allowed_non_write_users: \"*\", got none")
 	}
-	if !strings.Contains(ruleErrors[0].Description, "ai-action-unrestricted-trigger") {
-		t.Errorf("expected error description to contain \"ai-action-unrestricted-trigger\", got: %s", ruleErrors[0].Description)
+	if !strings.Contains(ruleErrors[0].Description, "allowed_non_write_users") {
+		t.Errorf("expected error description to contain \"allowed_non_write_users\", got: %s", ruleErrors[0].Description)
+	}
+	if ruleErrors[0].Type != "ai-action-unrestricted-trigger" {
+		t.Errorf("expected error type to be \"ai-action-unrestricted-trigger\", got: %s", ruleErrors[0].Type)
 	}
 }
 

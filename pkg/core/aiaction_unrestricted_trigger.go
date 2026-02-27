@@ -66,7 +66,7 @@ func (r *AIActionUnrestrictedTriggerRule) VisitStep(node *ast.Step) error {
 		if val != nil && val.Value != nil && strings.TrimSpace(val.Value.Value) == "*" {
 			r.Errorf(
 				node.Pos,
-				`ai-action-unrestricted-trigger: action %q has "allowed_non_write_users: \"*\"" which allows any GitHub user to trigger AI agent execution with full tool access. Restrict to specific users or organization members.`,
+				`action %q has "allowed_non_write_users: \"*\"" which allows any GitHub user to trigger AI agent execution with full tool access. Restrict to specific users or organization members.`,
 				action.Uses.Value,
 			)
 		}
