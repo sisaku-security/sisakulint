@@ -550,10 +550,11 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
 		ArgumentInjectionCriticalRule(),
 		ArgumentInjectionMediumRule(),
-		RequestForgeryCriticalRule(), // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(),   // Detects SSRF vulnerabilities in normal triggers
-		NewCacheBloatRule(),          // Detects cache bloat risk with cache/restore and cache/save
+		RequestForgeryCriticalRule(),         // Detects SSRF vulnerabilities in privileged triggers
+		RequestForgeryMediumRule(),           // Detects SSRF vulnerabilities in normal triggers
+		NewCacheBloatRule(),                  // Detects cache bloat risk with cache/restore and cache/save
 		NewAIActionUnrestrictedTriggerRule(), // Detects AI actions with unrestricted user access (Clinejection attack pattern)
+		NewAIActionExcessiveToolsRule(),      // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
 	}
 }
 
