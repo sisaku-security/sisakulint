@@ -14,3 +14,4 @@ dist/
 .beads/.worktrees/
 .worktrees/
 .worktrees
+.beads
