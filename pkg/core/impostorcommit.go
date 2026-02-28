@@ -15,10 +15,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// maxTagPages is the number of pages to fetch for repository tags.
-// The tag list is used only for HEAD direct match (fast path) and latestTag
-// collection for auto-fix; correctness is guaranteed by the default branch
-// reachability check, so one page (100 tags) is sufficient.
 const maxTagPages = 1
 
 type ImpostorCommitRule struct {
@@ -74,8 +70,6 @@ func parseImpostorActionRef(usesValue string) (owner, repo, ref string, skip boo
 
 func (rule *ImpostorCommitRule) getGitHubClient() *github.Client {
 	rule.clientOnce.Do(func() {
-		// Check for GITHUB_TOKEN environment variable for authenticated requests
-		// Authenticated requests have higher rate limits (5000/hour vs 60/hour)
 		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 			ts := oauth2.StaticTokenSource(
 				&oauth2.Token{AccessToken: token},
@@ -103,7 +97,6 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 
 	result := rule.verifyCommit(owner, repo, ref)
 	if result.err != nil {
-		// API errors should not fail the lint - just log and skip
 		rule.Debug("Error verifying commit %s/%s@%s: %v", owner, repo, ref, result.err)
 		return nil //nolint:nilerr // Intentional: API errors are logged but don't fail linting
 	}
@@ -132,7 +125,6 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 func (rule *ImpostorCommitRule) verifyCommit(owner, repo, sha string) *commitVerificationResult {
 	cacheKey := fmt.Sprintf("%s/%s@%s", owner, repo, sha)
 
-	// First check without lock (fast path)
 	rule.commitCacheMu.Lock()
 	if result, ok := rule.commitCache[cacheKey]; ok {
 		rule.commitCacheMu.Unlock()
@@ -140,13 +132,10 @@ func (rule *ImpostorCommitRule) verifyCommit(owner, repo, sha string) *commitVer
 	}
 	rule.commitCacheMu.Unlock()
 
-	// Perform verification (potentially slow)
 	result := rule.doVerifyCommit(owner, repo, sha)
 
-	// Double-checked locking: check again before caching to avoid duplicate work
 	rule.commitCacheMu.Lock()
 	if existingResult, ok := rule.commitCache[cacheKey]; ok {
-		// Another goroutine already cached the result
 		rule.commitCacheMu.Unlock()
 		return existingResult
 	}
@@ -163,7 +152,6 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	client := rule.getGitHubClient()
 	repoKey := fmt.Sprintf("%s/%s", owner, repo)
 
-	// Fast path: check if sha matches any tag HEAD directly (no extra API calls).
 	tags := rule.getTags(ctx, client, owner, repo)
 	var latestTag string
 	for _, tag := range tags {
@@ -188,11 +176,6 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	rule.latestTagCacheMu.Unlock()
 
-	// Primary check: is the commit reachable from the default branch?
-	// A legitimate pinned commit must be an ancestor of some branch in the
-	// official repository. An impostor commit (from a fork) would not be
-	// reachable from any branch even though GitHub makes it accessible via the
-	// parent repo's commit API.
 	defaultBranch := rule.getDefaultBranch(ctx, client, owner, repo)
 	if rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha) {
 		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
@@ -201,8 +184,6 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	return &commitVerificationResult{isImpostor: true, latestTag: latestTag}
 }
 
-// getDefaultBranch returns the default branch name for the given repository,
-// fetching it from the GitHub API on first call and caching the result.
 func (rule *ImpostorCommitRule) getDefaultBranch(ctx context.Context, client *github.Client, owner, repo string) string {
 	cacheKey := fmt.Sprintf("%s/%s", owner, repo)
 
