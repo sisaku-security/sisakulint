@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.8",
+  "checkpoint_id": "24eb31e7f3e4",
+  "session_id": "ca3da3a9-a384-4c4c-9357-d7cf6a0a4bdb",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-28T17:15:42.935495Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "pkg/core/privilegedtriggers_test.go",
+    "pkg/core/codeinjectioncritical_test.go",
+    "pkg/core/privilegedtriggers.go",
+    "pkg/core/reusable_workflow_taint_rule.go",
+    "script/actions/pull_request_review_injection.yaml",
+    "script/actions/pull_request_review_injection-safe.yaml"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "b92311904510",
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 135022,
+    "cache_read_tokens": 2710984,
+    "output_tokens": 358,
+    "api_call_count": 35
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-28T17:15:42.763681Z",
+    "agent_lines": 50,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 50,
+    "agent_percentage": 100
+  }
+}
