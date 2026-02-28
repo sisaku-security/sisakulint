@@ -207,16 +207,13 @@ func (rule *ImpostorCommitRule) getDefaultBranch(ctx context.Context, client *gi
 	return defaultBranch
 }
 
-// isReachableFromBranch reports whether sha is an ancestor of (or identical to)
-// the HEAD of branchName. It uses the GitHub compare API: when base=branchHead
-// and head=sha, a status of "behind" means sha is in branchHead's history.
 func (rule *ImpostorCommitRule) isReachableFromBranch(ctx context.Context, client *github.Client, owner, repo, branch, sha string) bool {
 	comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, branch, sha, nil)
 	if err != nil {
 		return false
 	}
-	status := comparison.GetStatus()
-	return status == "behind" || status == "identical"
+	shaIsAncestorOfBranch := comparison.GetStatus() == "behind" || comparison.GetStatus() == "identical"
+	return shaIsAncestorOfBranch
 }
 
 func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) []*github.RepositoryTag {
