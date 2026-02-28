@@ -19,6 +19,7 @@ var PrivilegedTriggers = map[string]bool{
 	"issue_comment":       true, // Triggered by untrusted issue/PR comments
 	"issues":              true, // Can be triggered by external users
 	"discussion_comment":  true, // Triggered by untrusted discussion comments
+	"pull_request_review": true, // Review body is attacker-controlled; runs in base repo context with secrets access
 }
 
 // HasPrivilegedTriggers checks if a workflow has any privileged triggers.
