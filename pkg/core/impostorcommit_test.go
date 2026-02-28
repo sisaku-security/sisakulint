@@ -1,9 +1,15 @@
 package core
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
@@ -27,8 +33,8 @@ func TestImpostorCommitRuleFactory(t *testing.T) {
 	if rule.tagCache == nil {
 		t.Error("Expected tagCache to be initialized")
 	}
-	if rule.branchCache == nil {
-		t.Error("Expected branchCache to be initialized")
+	if rule.defaultBranchCache == nil {
+		t.Error("Expected defaultBranchCache to be initialized")
 	}
 }
 
@@ -554,5 +560,177 @@ func TestImpostorCommitRule_ErrorMessage(t *testing.T) {
 		if !strings.Contains(errMsg, substr) {
 			t.Errorf("Error message should contain '%s', got: %s", substr, errMsg)
 		}
+	}
+}
+
+// newTestGitHubClient creates a *github.Client pointing at the given test server URL.
+func newTestGitHubClient(serverURL string) *github.Client {
+	client := github.NewClient(nil)
+	baseURL, _ := url.Parse(serverURL + "/")
+	client.BaseURL = baseURL
+	return client
+}
+
+// TestImpostorCommitRule_getDefaultBranch tests getDefaultBranch with a mocked GitHub API.
+func TestImpostorCommitRule_getDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		responseBody string
+		statusCode   int
+		wantBranch   string
+	}{
+		{
+			name:         "returns default branch from API",
+			responseBody: `{"default_branch": "main"}`,
+			statusCode:   http.StatusOK,
+			wantBranch:   "main",
+		},
+		{
+			name:         "returns master when API says master",
+			responseBody: `{"default_branch": "master"}`,
+			statusCode:   http.StatusOK,
+			wantBranch:   "master",
+		},
+		{
+			name:         "falls back to main on API error",
+			responseBody: `{"message": "Internal Server Error"}`,
+			statusCode:   http.StatusInternalServerError,
+			wantBranch:   "main",
+		},
+		{
+			name:         "falls back to main when default_branch is empty",
+			responseBody: `{"default_branch": ""}`,
+			statusCode:   http.StatusOK,
+			wantBranch:   "main",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			rule := ImpostorCommitRuleFactory()
+			client := newTestGitHubClient(server.URL)
+			branch := rule.getDefaultBranch(context.Background(), client, "owner", "repo")
+
+			if branch != tt.wantBranch {
+				t.Errorf("getDefaultBranch() = %q, want %q", branch, tt.wantBranch)
+			}
+		})
+	}
+}
+
+// TestImpostorCommitRule_getDefaultBranch_UsesCache verifies the second call uses the cache.
+func TestImpostorCommitRule_getDefaultBranch_UsesCache(t *testing.T) {
+	t.Parallel()
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"default_branch": "develop"}`))
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	client := newTestGitHubClient(server.URL)
+	ctx := context.Background()
+
+	branch1 := rule.getDefaultBranch(ctx, client, "owner", "repo")
+	branch2 := rule.getDefaultBranch(ctx, client, "owner", "repo")
+
+	if branch1 != "develop" || branch2 != "develop" {
+		t.Errorf("expected both calls to return 'develop', got %q and %q", branch1, branch2)
+	}
+	if callCount != 1 {
+		t.Errorf("expected 1 API call (cache hit on second), got %d", callCount)
+	}
+}
+
+// TestImpostorCommitRule_isReachableFromBranch tests reachability with a mocked GitHub API.
+func TestImpostorCommitRule_isReachableFromBranch(t *testing.T) {
+	t.Parallel()
+
+	const sha = "a81bbbf8298c0fa03ea29cdc473d45769f953675"
+
+	tests := []struct {
+		name          string
+		status        string
+		httpStatus    int
+		wantReachable bool
+		wantErr       bool
+	}{
+		{
+			name:          "behind means reachable",
+			status:        "behind",
+			httpStatus:    http.StatusOK,
+			wantReachable: true,
+		},
+		{
+			name:          "identical means reachable",
+			status:        "identical",
+			httpStatus:    http.StatusOK,
+			wantReachable: true,
+		},
+		{
+			name:          "ahead means not reachable",
+			status:        "ahead",
+			httpStatus:    http.StatusOK,
+			wantReachable: false,
+		},
+		{
+			name:          "diverged means not reachable",
+			status:        "diverged",
+			httpStatus:    http.StatusOK,
+			wantReachable: false,
+		},
+		{
+			name:       "API error is propagated",
+			httpStatus: http.StatusInternalServerError,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.httpStatus)
+				if tt.httpStatus == http.StatusOK {
+					_, _ = fmt.Fprintf(w, `{"status":%q,"ahead_by":0,"behind_by":1,"commits":[],"files":[]}`, tt.status)
+				} else {
+					_, _ = w.Write([]byte(`{"message":"Internal Server Error"}`))
+				}
+			}))
+			defer server.Close()
+
+			rule := ImpostorCommitRuleFactory()
+			client := newTestGitHubClient(server.URL)
+			reachable, err := rule.isReachableFromBranch(context.Background(), client, "owner", "repo", "main", sha)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if reachable != tt.wantReachable {
+				t.Errorf("isReachableFromBranch() = %v, want %v", reachable, tt.wantReachable)
+			}
+		})
 	}
 }
