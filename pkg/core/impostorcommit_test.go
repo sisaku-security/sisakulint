@@ -27,8 +27,8 @@ func TestImpostorCommitRuleFactory(t *testing.T) {
 	if rule.tagCache == nil {
 		t.Error("Expected tagCache to be initialized")
 	}
-	if rule.branchCache == nil {
-		t.Error("Expected branchCache to be initialized")
+	if rule.defaultBranchCache == nil {
+		t.Error("Expected defaultBranchCache to be initialized")
 	}
 }
 

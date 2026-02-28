@@ -15,28 +15,22 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Pagination limits for GitHub API requests
-const (
-	// maxTagPages is the maximum number of pages to fetch for repository tags.
-	// With 100 items per page, this allows fetching up to 500 tags.
-	maxTagPages = 5
-	// maxBranchPages is the maximum number of pages to fetch for repository branches.
-	// With 100 items per page, this allows fetching up to 300 branches.
-	maxBranchPages = 3
-)
+// maxTagPages is the maximum number of pages to fetch for repository tags.
+// With 100 items per page, this allows fetching up to 500 tags.
+const maxTagPages = 5
 
 type ImpostorCommitRule struct {
 	BaseRule
-	client           *github.Client
-	clientOnce       sync.Once
-	commitCache      map[string]*commitVerificationResult
-	commitCacheMu    sync.Mutex
-	tagCache         map[string][]*github.RepositoryTag
-	tagCacheMu       sync.Mutex
-	branchCache      map[string][]*github.Branch
-	branchCacheMu    sync.Mutex
-	latestTagCache   map[string]string
-	latestTagCacheMu sync.Mutex
+	client               *github.Client
+	clientOnce           sync.Once
+	commitCache          map[string]*commitVerificationResult
+	commitCacheMu        sync.Mutex
+	tagCache             map[string][]*github.RepositoryTag
+	tagCacheMu           sync.Mutex
+	latestTagCache       map[string]string
+	latestTagCacheMu     sync.Mutex
+	defaultBranchCache   map[string]string
+	defaultBranchCacheMu sync.Mutex
 }
 
 type commitVerificationResult struct {
@@ -51,10 +45,10 @@ func ImpostorCommitRuleFactory() *ImpostorCommitRule {
 			RuleName: "impostor-commit",
 			RuleDesc: "Detects impostor commits that exist in the fork network but not in the repository's branches or tags",
 		},
-		commitCache:    make(map[string]*commitVerificationResult),
-		tagCache:       make(map[string][]*github.RepositoryTag),
-		branchCache:    make(map[string][]*github.Branch),
-		latestTagCache: make(map[string]string),
+		commitCache:        make(map[string]*commitVerificationResult),
+		tagCache:           make(map[string][]*github.RepositoryTag),
+		latestTagCache:     make(map[string]string),
+		defaultBranchCache: make(map[string]string),
 	}
 }
 
@@ -167,6 +161,7 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	client := rule.getGitHubClient()
 	repoKey := fmt.Sprintf("%s/%s", owner, repo)
 
+	// Fast path: check if sha matches any tag HEAD directly (no extra API calls).
 	tags := rule.getTags(ctx, client, owner, repo)
 	var latestTag string
 	for _, tag := range tags {
@@ -174,20 +169,13 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		if tag.GetCommit().GetSHA() == sha {
 			return &commitVerificationResult{isImpostor: false}
 		}
-		// For annotated tags, also check if the SHA matches the tag object itself
-		// This handles cases where workflows use the tag SHA directly (e.g., actions/checkout@<tag-sha>)
-		tagRef, _, err := client.Git.GetRef(ctx, owner, repo, "tags/"+tag.GetName())
-		if err == nil && tagRef != nil && tagRef.GetObject().GetSHA() == sha {
-			return &commitVerificationResult{isImpostor: false}
-		}
-		if latestTag == "" && tag.GetName() != "" {
+		if latestTag == "" {
 			tagName := tag.GetName()
 			if strings.HasPrefix(tagName, "v") {
 				latestTag = tagName
 			}
 		}
 	}
-
 	if latestTag == "" && len(tags) > 0 {
 		latestTag = tags[0].GetName()
 	}
@@ -198,51 +186,54 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	rule.latestTagCacheMu.Unlock()
 
-	branches := rule.getBranches(ctx, client, owner, repo)
-	for _, branch := range branches {
-		if branch.GetCommit().GetSHA() == sha {
-			return &commitVerificationResult{isImpostor: false}
-		}
-	}
-
-	branchCommitsURL := fmt.Sprintf("repos/%s/%s/commits/%s/branches-where-head", owner, repo, sha)
-	req, err := client.NewRequest("GET", branchCommitsURL, nil)
-	if err == nil {
-		var branchList []*github.Branch
-		resp, err := client.Do(ctx, req, &branchList)
-		if err == nil && resp.StatusCode == http.StatusOK && len(branchList) > 0 {
-			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
-		}
-	}
-
-	mainBranches := []string{"main", "master", "develop"}
-	for _, branchName := range mainBranches {
-		comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, branchName, sha, nil)
-		if err != nil {
-			continue
-		}
-		status := comparison.GetStatus()
-		if status == "behind" || status == "identical" {
-			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
-		}
-	}
-
-	for _, tag := range tags {
-		tagSha := tag.GetCommit().GetSHA()
-		if tagSha == "" {
-			continue
-		}
-		comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, tagSha, sha, nil)
-		if err != nil {
-			continue
-		}
-		status := comparison.GetStatus()
-		if status == "behind" || status == "identical" {
-			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
-		}
+	// Primary check: is the commit reachable from the default branch?
+	// A legitimate pinned commit must be an ancestor of some branch in the
+	// official repository. An impostor commit (from a fork) would not be
+	// reachable from any branch even though GitHub makes it accessible via the
+	// parent repo's commit API.
+	defaultBranch := rule.getDefaultBranch(ctx, client, owner, repo)
+	if rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha) {
+		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
 	}
 
 	return &commitVerificationResult{isImpostor: true, latestTag: latestTag}
+}
+
+// getDefaultBranch returns the default branch name for the given repository,
+// fetching it from the GitHub API on first call and caching the result.
+func (rule *ImpostorCommitRule) getDefaultBranch(ctx context.Context, client *github.Client, owner, repo string) string {
+	cacheKey := fmt.Sprintf("%s/%s", owner, repo)
+
+	rule.defaultBranchCacheMu.Lock()
+	if branch, ok := rule.defaultBranchCache[cacheKey]; ok {
+		rule.defaultBranchCacheMu.Unlock()
+		return branch
+	}
+	rule.defaultBranchCacheMu.Unlock()
+
+	repoInfo, _, err := client.Repositories.Get(ctx, owner, repo)
+	defaultBranch := "main" // fallback when API is unavailable
+	if err == nil && repoInfo.GetDefaultBranch() != "" {
+		defaultBranch = repoInfo.GetDefaultBranch()
+	}
+
+	rule.defaultBranchCacheMu.Lock()
+	rule.defaultBranchCache[cacheKey] = defaultBranch
+	rule.defaultBranchCacheMu.Unlock()
+
+	return defaultBranch
+}
+
+// isReachableFromBranch reports whether sha is an ancestor of (or identical to)
+// the HEAD of branchName. It uses the GitHub compare API: when base=branchHead
+// and head=sha, a status of "behind" means sha is in branchHead's history.
+func (rule *ImpostorCommitRule) isReachableFromBranch(ctx context.Context, client *github.Client, owner, repo, branch, sha string) bool {
+	comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, branch, sha, nil)
+	if err != nil {
+		return false
+	}
+	status := comparison.GetStatus()
+	return status == "behind" || status == "identical"
 }
 
 func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) []*github.RepositoryTag {
@@ -277,37 +268,6 @@ func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Clie
 	return allTags
 }
 
-func (rule *ImpostorCommitRule) getBranches(ctx context.Context, client *github.Client, owner, repo string) []*github.Branch {
-	cacheKey := fmt.Sprintf("%s/%s", owner, repo)
-
-	rule.branchCacheMu.Lock()
-	if branches, ok := rule.branchCache[cacheKey]; ok {
-		rule.branchCacheMu.Unlock()
-		return branches
-	}
-	rule.branchCacheMu.Unlock()
-
-	var allBranches []*github.Branch
-	opts := &github.BranchListOptions{ListOptions: github.ListOptions{PerPage: 100}}
-
-	for range maxBranchPages {
-		branches, resp, err := client.Repositories.ListBranches(ctx, owner, repo, opts)
-		if err != nil {
-			break
-		}
-		allBranches = append(allBranches, branches...)
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-
-	rule.branchCacheMu.Lock()
-	rule.branchCache[cacheKey] = allBranches
-	rule.branchCacheMu.Unlock()
-
-	return allBranches
-}
 
 type impostorCommitFixer struct {
 	rule      *ImpostorCommitRule
