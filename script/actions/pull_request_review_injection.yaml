@@ -1,0 +1,13 @@
+# Vulnerable: pull_request_review trigger with review body injection
+# The review body is attacker-controlled and can be used for code injection.
+# Attackers with write access to the repo can submit a malicious review.
+# See: https://adnanekhan.github.io/gato-x/user-guide/advanced/vulnerabilities/
+on: pull_request_review
+
+jobs:
+  process-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process review comment
+        run: |
+          echo "Review: ${{ github.event.review.body }}"

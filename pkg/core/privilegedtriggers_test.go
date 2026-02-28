@@ -79,6 +79,15 @@ func TestHasPrivilegedTriggers(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "pull_request_review is privileged",
+			workflow: &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_review"}},
+				},
+			},
+			want: true,
+		},
+		{
 			name: "pull_request is not privileged",
 			workflow: &ast.Workflow{
 				On: []ast.Event{
@@ -303,6 +312,7 @@ func TestPrivilegedTriggersMap(t *testing.T) {
 		"issue_comment",
 		"issues",
 		"discussion_comment",
+		"pull_request_review",
 	}
 
 	for _, trigger := range expectedTriggers {

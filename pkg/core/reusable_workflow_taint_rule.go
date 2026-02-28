@@ -586,14 +586,7 @@ func (rule *ReusableWorkflowTaintRule) generateEnvVarName(inputName string) stri
 // not "workflow_call". For detecting potential danger in reusable workflows,
 // use isDangerousTriggerForAnalysis which includes workflow_call.
 func isPrivilegedTrigger(eventName string) bool {
-	privilegedTriggers := map[string]bool{
-		"pull_request_target": true,
-		"workflow_run":        true,
-		"issue_comment":       true,
-		"issues":              true,
-		"discussion_comment":  true,
-	}
-	return privilegedTriggers[eventName]
+	return PrivilegedTriggers[eventName]
 }
 
 // isDangerousTriggerForAnalysis checks if an event name should be considered

@@ -46,6 +46,12 @@ func TestCodeInjectionCritical_PrivilegedTriggers(t *testing.T) {
 			description:  "issues should be detected as privileged",
 		},
 		{
+			name:         "pull_request_review is privileged",
+			trigger:      "pull_request_review",
+			shouldDetect: true,
+			description:  "pull_request_review should be detected as privileged (review body is attacker-controlled)",
+		},
+		{
 			name:         "pull_request is not privileged",
 			trigger:      "pull_request",
 			shouldDetect: false,
@@ -131,6 +137,13 @@ func TestCodeInjectionCritical_RunScript(t *testing.T) {
 			runScript:   `echo "${{ github.event.pull_request.title }}"`,
 			wantErrors:  0,
 			description: "Should not detect in non-privileged trigger",
+		},
+		{
+			name:        "pull_request_review trigger + review body injection",
+			trigger:     "pull_request_review",
+			runScript:   `echo "${{ github.event.review.body }}"`,
+			wantErrors:  1,
+			description: "Should detect review body injection in pull_request_review trigger",
 		},
 		{
 			name:        "privileged trigger + trusted input",

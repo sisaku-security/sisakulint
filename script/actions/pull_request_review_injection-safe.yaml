@@ -1,0 +1,12 @@
+# Safe: pull_request_review trigger with review body passed via environment variable
+on: pull_request_review
+
+jobs:
+  process-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process review comment
+        env:
+          REVIEW_BODY: ${{ github.event.review.body }}
+        run: |
+          echo "Review: $REVIEW_BODY"
