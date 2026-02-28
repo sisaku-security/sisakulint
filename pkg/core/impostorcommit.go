@@ -176,8 +176,16 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	rule.latestTagCacheMu.Unlock()
 
+	// Check reachability from the repository's default branch only.
+	// A SHA reachable from the default branch (status "behind" or "identical") is considered legitimate.
+	// Commits that exist only on non-default branches or forks without a corresponding tag are reported as impostors.
 	defaultBranch := rule.getDefaultBranch(ctx, client, owner, repo)
-	if rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha) {
+	reachable, err := rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha)
+	if err != nil {
+		rule.Debug("Error checking reachability for %s/%s@%s from branch %s: %v", owner, repo, sha, defaultBranch, err)
+		return &commitVerificationResult{err: err}
+	}
+	if reachable {
 		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
 	}
 
@@ -207,13 +215,13 @@ func (rule *ImpostorCommitRule) getDefaultBranch(ctx context.Context, client *gi
 	return defaultBranch
 }
 
-func (rule *ImpostorCommitRule) isReachableFromBranch(ctx context.Context, client *github.Client, owner, repo, branch, sha string) bool {
+func (rule *ImpostorCommitRule) isReachableFromBranch(ctx context.Context, client *github.Client, owner, repo, branch, sha string) (bool, error) {
 	comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, branch, sha, nil)
 	if err != nil {
-		return false
+		return false, err
 	}
 	shaIsAncestorOfBranch := comparison.GetStatus() == "behind" || comparison.GetStatus() == "identical"
-	return shaIsAncestorOfBranch
+	return shaIsAncestorOfBranch, nil
 }
 
 func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) []*github.RepositoryTag {
@@ -247,7 +255,6 @@ func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Clie
 
 	return allTags
 }
-
 
 type impostorCommitFixer struct {
 	rule      *ImpostorCommitRule
