@@ -74,6 +74,9 @@ type LinterOptions struct {
 	CurrentWorkingDirectoryPath string
 	//todo: OnCheckRulesModifiedは、チェックルールの追加や削除を行うフック
 	OnCheckRulesModified func([]Rule) []Rule
+	// IsRemoteは、リモートスキャンモードで実行されているかどうかを示すフラグ
+	// trueの場合、ローカルファイルシステムへのアクセスが不要なチェックをスキップする
+	IsRemote bool
 }
 
 // Linterは、workflowをlintするための構造体
@@ -100,6 +103,8 @@ type Linter struct {
 	currentWorkingDirectory string
 	//todo: modifyCheckRulesは、チェックルールを追加または削除するためのフック関数
 	modifyCheckRules func([]Rule) []Rule
+	// isRemoteは、リモートスキャンモードで実行されているかどうかを示すフラグ
+	isRemote bool
 }
 
 // NewLinterは新しいLinterインスタンスを作成する
@@ -188,6 +193,7 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 		errorFormatter,
 		workDir,
 		options.OnCheckRulesModified,
+		options.IsRemote,
 	}, nil
 }
 
@@ -496,7 +502,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	return result, nil
 }
 
-func makeRules(filePath string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
 	return []Rule{
 		// MatrixRule(),
 		CredentialsRule(),
@@ -520,7 +526,7 @@ func makeRules(filePath string, localActions *LocalActionsMetadataCache, localRe
 		OutputClobberingCriticalRule(), // Detects output clobbering in privileged workflow triggers
 		OutputClobberingMediumRule(),   // Detects output clobbering in normal workflow triggers
 		CommitShaRule(),
-		NewDependabotGitHubActionsRule(filePath), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
+		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
 		NewActionListRule(),
@@ -635,7 +641,7 @@ func (l *Linter) validate(
 	if parsedWorkflow != nil {
 		dbg := l.debugWriter()
 
-		rules := makeRules(filePath, localActions, localReusableWorkflow)
+		rules := makeRules(filePath, l.isRemote, localActions, localReusableWorkflow)
 
 		v := NewSyntaxTreeVisitor()
 		for _, rule := range rules {

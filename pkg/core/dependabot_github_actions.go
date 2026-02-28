@@ -22,11 +22,16 @@ type DependabotGitHubActionsRule struct {
 	projectRoot string
 	// alreadyChecked prevents duplicate checks across multiple workflows
 	alreadyChecked map[string]bool
+	// isRemote indicates whether we are running in remote scan mode.
+	// In remote mode the dependabot file cannot be checked via the local filesystem.
+	isRemote bool
 }
 
 // NewDependabotGitHubActionsRule creates a new DependabotGitHubActionsRule instance.
 // workflowPath is the path to the workflow file being analyzed.
-func NewDependabotGitHubActionsRule(workflowPath string) *DependabotGitHubActionsRule {
+// isRemote must be true when scanning a remote repository; in that case the local
+// filesystem is not consulted for the dependabot configuration file.
+func NewDependabotGitHubActionsRule(workflowPath string, isRemote bool) *DependabotGitHubActionsRule {
 	rule := &DependabotGitHubActionsRule{
 		BaseRule: BaseRule{
 			RuleName: "dependabot-github-actions",
@@ -34,9 +39,12 @@ func NewDependabotGitHubActionsRule(workflowPath string) *DependabotGitHubAction
 		},
 		workflowPath:   workflowPath,
 		alreadyChecked: make(map[string]bool),
+		isRemote:       isRemote,
 	}
-	// Find project root from workflow path
-	rule.projectRoot = rule.findProjectRoot(workflowPath)
+	// Find project root from workflow path only for local scans
+	if !isRemote {
+		rule.projectRoot = rule.findProjectRoot(workflowPath)
+	}
 	return rule
 }
 
@@ -97,6 +105,13 @@ func (rule *DependabotGitHubActionsRule) VisitStep(step *ast.Step) error {
 // VisitWorkflowPost checks dependabot configuration if unpinned actions were found.
 func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) error {
 	if !rule.hasUnpinnedAction {
+		return nil
+	}
+
+	// Skip check if running in remote scan mode.
+	// In remote mode, we don't have access to the local filesystem to check for dependabot.yaml.
+	if rule.isRemote {
+		rule.Debug("skipping dependabot check in remote scan mode (path: %s)", rule.workflowPath)
 		return nil
 	}
 

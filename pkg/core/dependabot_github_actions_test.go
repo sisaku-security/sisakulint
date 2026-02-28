@@ -22,7 +22,7 @@ func TestDependabotGitHubActionsRule_NoDependabotFile(t *testing.T) {
 	// Create a workflow file path (file doesn't need to exist for the rule)
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	// Simulate visiting a workflow with unpinned action
 	workflow := &ast.Workflow{}
@@ -88,7 +88,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -149,7 +149,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -189,7 +189,7 @@ func TestDependabotGitHubActionsRule_PinnedActions(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -230,7 +230,7 @@ func TestDependabotGitHubActionsRule_LocalAction(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -271,7 +271,7 @@ func TestDependabotGitHubActionsRule_DockerAction(t *testing.T) {
 
 	workflowPath := filepath.Join(githubDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -398,7 +398,7 @@ updates:
 
 	workflowPath := filepath.Join(workflowsDir, "test.yaml")
 
-	rule := NewDependabotGitHubActionsRule(workflowPath)
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
 
 	workflow := &ast.Workflow{}
 
@@ -423,5 +423,45 @@ updates:
 	errors := rule.Errors()
 	if len(errors) != 0 {
 		t.Errorf("expected 0 errors when github-actions is configured in .yml file, got %d", len(errors))
+	}
+}
+
+func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
+	t.Parallel()
+
+	// isRemote=true を明示的に渡してリモートスキャンモードをシミュレートする
+	workflowPath := "SynkraAI/aios-core/.github/workflows/ci.yml"
+
+	rule := NewDependabotGitHubActionsRule(workflowPath, true)
+
+	workflow := &ast.Workflow{}
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	// Simulate step with unpinned action
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+		},
+	}
+
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := rule.VisitWorkflowPost(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	// In remote scan mode, the rule should not report errors
+	// because it cannot access the filesystem to check for dependabot.yaml
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("expected 0 errors in remote scan mode, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("  error: %s", err.Description)
+		}
 	}
 }
