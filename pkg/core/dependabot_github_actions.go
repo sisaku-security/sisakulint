@@ -150,13 +150,18 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 
 // findProjectRoot finds the project root directory by looking for .github directory.
 func (rule *DependabotGitHubActionsRule) findProjectRoot(workflowPath string) string {
-	// Convert to absolute path if needed
 	absPath, err := filepath.Abs(workflowPath)
 	if err != nil {
 		return ""
 	}
 
 	dir := filepath.Dir(absPath)
+
+	// If the workflow directory doesn't exist on the local filesystem (e.g. remote
+	// scan virtual paths like "owner/repo/.github/workflows/ci.yml"), skip the check.
+	if _, err := os.Stat(dir); err != nil {
+		return ""
+	}
 	for {
 		// Check if .github directory exists
 		githubDir := filepath.Join(dir, ".github")
