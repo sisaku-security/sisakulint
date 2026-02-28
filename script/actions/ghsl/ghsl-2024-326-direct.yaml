@@ -1,0 +1,18 @@
+# GHSL-2024-326 direct pattern - Code injection via branch name
+# Using direct github.event context instead of steps output
+name: Code Injection Test
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  test:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      # Direct code injection - should be detected
+      - name: Push with PR title
+        run: |
+          echo "Processing: ${{ github.event.issue.title }}"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}

@@ -1,0 +1,44 @@
+# GHSA-4mgv-m5cm-f9h7: Multi-line secrets not properly masked
+# Advisory: https://github.com/advisories/GHSA-4mgv-m5cm-f9h7
+# Vulnerability: Multi-line secrets appear unmasked in logs
+# Expected detection: Not directly detectable - runtime behavior (GitHub Actions masking mechanism)
+# Severity: High (CVSS 7.5)
+# CVE: CVE-2021-32074
+# CWE: CWE-532 (Insertion of Sensitive Information into Log File)
+# Package: hashicorp/vault-action
+
+name: Vulnerable Vault Secrets
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Version < 2.2.0 does not properly mask multi-line secrets
+      # When secrets retrieved from Vault contain line breaks,
+      # only the first line is masked - subsequent lines appear in plaintext
+      - name: Get Secrets from Vault
+        uses: hashicorp/vault-action@v2.1.0
+        with:
+          url: ${{ secrets.VAULT_ADDR }}
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: |
+            secret/data/prod/app private_key | PRIVATE_KEY ;
+            secret/data/prod/app certificate | CERTIFICATE
+
+      # Multi-line secrets like private keys and certificates
+      # will have subsequent lines exposed in logs
+      - name: Use Secrets
+        run: |
+          echo "Private key loaded"
+          # If PRIVATE_KEY is multi-line, lines after the first are NOT masked
+          echo "$PRIVATE_KEY" | head -5
+
+      # Note: The vulnerability is NOT detectable by static analysis
+      # It's in how the action registers secrets with GitHub Actions masking
+      # The action fails to split multi-line secrets properly

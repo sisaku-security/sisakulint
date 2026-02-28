@@ -1,0 +1,35 @@
+# GHSL-2025-038: TOCTOU approval bypass in github/branch-deploy
+# Vulnerability: Time-of-check-time-of-use race condition
+# Affected: Workflows using branch-deploy action
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-038_github_branch-deploy_action/
+
+name: Branch Deploy (Vulnerable TOCTOU)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  deployments: write
+
+jobs:
+  deploy:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '.deploy')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: github/branch-deploy@v9
+        id: branch-deploy
+
+      # VULNERABLE: TOCTOU - commit SHA can change between approval and checkout
+      # Attacker can push malicious commit after .deploy comment is detected
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch-deploy.outputs.sha }}
+
+      - name: Deploy
+        run: |
+          ./deploy.sh
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}

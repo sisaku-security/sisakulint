@@ -4,6 +4,19 @@
 
 Detects potential cache bloat issues when using `actions/cache/restore` and `actions/cache/save` without proper conditions. This rule helps prevent the common problem of GitHub Actions cache growing indefinitely.
 
+## Security Impact
+
+**Severity: Low (3/10)**
+
+Cache bloat is primarily a resource efficiency concern with limited security impact:
+
+1. **Resource Consumption**: Bloated caches slow down CI/CD pipelines
+2. **Cache Limit Issues**: May hit GitHub's 10GB cache limit per repository
+3. **Cache Eviction Risk**: Important caches may be evicted due to size constraints
+4. **Operational Impact**: Slower build times and increased costs
+
+This rule is classified as Low severity because it addresses operational efficiency rather than exploitable vulnerabilities. However, improper cache management can indirectly enable cache poisoning attacks by creating unpredictable cache behavior.
+
 ## Problem
 
 When using the cache/restore and cache/save action pair without proper conditions, the cache can accumulate over time:

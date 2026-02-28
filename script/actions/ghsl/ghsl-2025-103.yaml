@@ -1,0 +1,29 @@
+# GHSL-2025-103: Code injection in acl-anthology print-info.yml
+# Vulnerability: Unsanitized PR title and body in shell command
+# Affected: .github/workflows/print-info.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-102_GHSL-2025-103_acl-anthology/
+
+name: Print Info (Vulnerable)
+
+on:
+  pull_request_target:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  print-info:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: PR title and body directly interpolated
+      - name: Print PR Info
+        run: |
+          cat << 'END_OF_BLOCK'
+          PR Title: ${{ github.event.pull_request.title }}
+          Original PR Body: ${{ github.event.pull_request.body }}
+          END_OF_BLOCK
+          # Attacker can inject END_OF_BLOCK in body to escape and execute commands

@@ -88,7 +88,8 @@ func (rule *ArtipackedRule) VisitJobPost(node *ast.Job) error {
 			info.step.String(),
 			rule.getCredentialLocation(info.version),
 		)
-		rule.AddAutoFixer(NewStepFixer(info.step, rule))
+		// Do not add auto-fixer when there's no dangerous upload-artifact
+		// because the workflow may legitimately need credentials for git push or similar operations
 	}
 	rule.checkoutSteps = nil
 	return nil

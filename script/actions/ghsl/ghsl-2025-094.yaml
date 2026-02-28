@@ -1,0 +1,47 @@
+# GHSL-2025-094 vulnerability pattern
+# From: https://securitylab.github.com/advisories/GHSL-2025-094_ag2ai_faststream/
+# Arbitrary code execution via untrusted checkout in pull_request_target
+name: PR Auto Update (Vulnerable)
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # GHSL-2025-094: Checkout from untrusted PR head in privileged context
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTOMERGE_TOKEN }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+
+      # GHSL-2025-094: Execute untrusted code via pip install
+      # Attacker can inject malicious setup.py to run arbitrary code
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install -r requirements.txt
+
+      - name: Run update script
+        run: |
+          python scripts/update.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Auto update" || true
+          git push

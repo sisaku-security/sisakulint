@@ -1,0 +1,27 @@
+# GHSA-hw6r-g8gj-2987: Expression Injection in pytorch/pytorch via workflow_run.head_branch
+# Advisory: https://github.com/advisories/GHSA-hw6r-g8gj-2987
+# Affected Action: pytorch/pytorch workflows
+# Vulnerability Type: Expression Injection
+# Expected Detection Rule: CodeInjectionCriticalRule
+
+name: GHSA-hw6r-g8gj-2987 Vulnerable Pattern
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: github.event.workflow_run.head_branch is attacker-controlled
+      # An attacker can create a branch with malicious name to inject code
+      - name: Checkout branch
+        run: |
+          git checkout --branch "${{ github.event.workflow_run.head_branch }}"
+
+      - name: Run tests
+        run: |
+          echo "Testing branch: ${{ github.event.workflow_run.head_branch }}"

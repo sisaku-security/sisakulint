@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **obfuscated workflow patterns** that may be used to evade security scanners. Obfuscation techniques can hide malicious behavior from code review and automated security tools.
 
+### Security Impact
+
+**Severity: High (7/10)**
+
+Obfuscated workflow patterns pose significant detection evasion risks:
+
+1. **Security Scanner Bypass**: Malicious code hidden from automated analysis tools
+2. **Code Review Evasion**: Obfuscated patterns difficult for humans to identify
+3. **Payload Concealment**: Encoded commands hide actual malicious behavior
+4. **Persistence**: Undetected malicious workflows remain active indefinitely
+
+This vulnerability aligns with **CWE-116: Improper Encoding or Escaping of Output** and **OWASP CI/CD Security Risk CICD-SEC-4: Poisoned Pipeline Execution**.
+
 **Vulnerable Example:**
 
 ```yaml

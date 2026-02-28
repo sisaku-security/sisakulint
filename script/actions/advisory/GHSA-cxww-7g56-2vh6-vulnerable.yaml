@@ -1,0 +1,29 @@
+# GHSA-cxww-7g56-2vh6: actions/download-artifact path traversal (zip-slip)
+# Advisory: https://github.com/advisories/GHSA-cxww-7g56-2vh6
+# Affected Action: actions/download-artifact
+# Vulnerability Type: Path Traversal / Zip-Slip
+# Expected Detection Rule: KnownVulnerableActionsRule
+
+name: GHSA-cxww-7g56-2vh6 Vulnerable Pattern
+on:
+  pull_request:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: v4.1.2 and earlier have zip-slip vulnerability
+      # Malicious artifacts can contain files with paths like ../../../../etc/passwd
+      # Leading to arbitrary file write
+      - uses: actions/download-artifact@v4.1.2
+        with:
+          name: build-output
+          path: ./artifacts
+
+      - name: Process artifacts
+        run: |
+          ls -R ./artifacts
+          # If attacker uploaded artifact with ../../../.github/workflows/malicious.yml
+          # it could overwrite workflow files

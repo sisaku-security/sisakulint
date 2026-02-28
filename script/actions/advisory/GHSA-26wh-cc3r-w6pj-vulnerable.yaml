@@ -1,0 +1,37 @@
+# GHSA-26wh-cc3r-w6pj: Partial GITHUB_TOKEN exposure in exception logs
+# Advisory: https://github.com/advisories/GHSA-26wh-cc3r-w6pj
+# Vulnerability: Token appears in error output when step fails
+# Expected detection: Not directly detectable - runtime behavior (exception handling)
+# Severity: High (CVSS 8.2)
+# CVE: CVE-2025-31479
+# CWE: CWE-532 (Insertion of Sensitive Information into Log File)
+# Package: canonical/get-workflow-version-action
+
+name: Vulnerable Workflow Version Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Version < 1.0.1 may expose partial token in exception logs
+      # If this step fails, the exception may include truncated GITHUB_TOKEN
+      - name: Get Workflow Version
+        uses: canonical/get-workflow-version-action@v1.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # If this action throws an exception, the token may appear in logs
+          # GitHub's automatic redaction doesn't catch truncated tokens
+
+      - name: Use version
+        run: echo "Version retrieved"
+
+      # Note: The vulnerability is NOT in the YAML pattern
+      # It's in how the action handles exceptions internally
+      # Static analysis cannot detect this - it's runtime behavior

@@ -264,7 +264,14 @@ func (cmd *Command) Main(args []string) int {
 		fmt.Fprintln(cmd.Stderr, err.Error())
 		return ExitStatusFailure
 	}
-	if len(errs) > 0 {
+	hasErrors := false
+	for _, r := range errs {
+		if len(r.Errors) > 0 {
+			hasErrors = true
+			break
+		}
+	}
+	if hasErrors {
 		enableAutofix := autoFixMode == "on" || autoFixMode == FileFixDryRun
 		if enableAutofix {
 			cmd.runAutofix(errs, autoFixMode == FileFixDryRun)

@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **ref confusion vulnerabilities** where both a branch and tag with the same name exist in a repository. This ambiguity can lead to supply chain attacks where an attacker creates a malicious branch with the same name as an existing tag.
 
+### Security Impact
+
+**Severity: High (8/10)**
+
+Ref confusion vulnerabilities pose significant supply chain risks:
+
+1. **Ambiguous Resolution**: Git may resolve to unexpected code when both branch and tag exist
+2. **Supply Chain Attack**: Attackers can create malicious branches matching tag names
+3. **Silent Exploitation**: Users unaware they're running compromised code
+4. **Widespread Impact**: Popular actions can affect thousands of repositories
+
+This vulnerability aligns with **CWE-706: Use of Incorrectly-Resolved Name or Reference** and **OWASP CI/CD Security Risk CICD-SEC-3: Dependency Chain Abuse**.
+
 **Vulnerable Example:**
 
 ```yaml

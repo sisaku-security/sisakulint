@@ -1,0 +1,30 @@
+# GHSA-hw6r-g8gj-2987: Expression Injection in pytorch/pytorch via workflow_run.head_branch
+# Advisory: https://github.com/advisories/GHSA-hw6r-g8gj-2987
+# Affected Action: pytorch/pytorch workflows
+# Vulnerability Type: Expression Injection
+# Safe Pattern: Pass untrusted input via environment variables
+
+name: GHSA-hw6r-g8gj-2987 Safe Pattern
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Pass branch name via environment variable
+      - name: Checkout branch
+        env:
+          BRANCH_NAME: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          git checkout --branch "$BRANCH_NAME"
+
+      - name: Run tests
+        env:
+          BRANCH_NAME: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "Testing branch: $BRANCH_NAME"

@@ -1,0 +1,33 @@
+# GHSA-x6gv-2rvh-qmp6: BoldestDungeon/steam-workshop-deploy .git credential exposure
+# Advisory: https://github.com/advisories/GHSA-x6gv-2rvh-qmp6
+# Affected Action: BoldestDungeon/steam-workshop-deploy
+# Vulnerability Type: Credential Exposure via .git Directory in Deployment
+# Safe Pattern: Disable credential persistence or exclude .git from deployment
+
+name: GHSA-x6gv-2rvh-qmp6 Safe Pattern
+on:
+  push:
+    branches: [main]
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      # Safe: Disable credential persistence
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build mod
+        run: |
+          npm install
+          npm run build
+
+      # Deploy only build output, not entire workspace
+      - uses: BoldestDungeon/steam-workshop-deploy@v1
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          password: ${{ secrets.STEAM_PASSWORD }}
+          app_id: '123456'
+          workshop_id: '789012'
+          path: ./dist

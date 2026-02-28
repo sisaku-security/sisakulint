@@ -193,6 +193,20 @@ var BuiltinFuncSignatures = map[string][]*FuncSignature{
 		Ret:    BoolType{},
 		Params: []ExprType{},
 	}},
+	// case function for conditional logic (switch-case style)
+	// https://github.blog/changelog/2026-01-29-github-actions-smarter-editing-clearer-debugging-and-a-new-case-function/
+	// Syntax: case(condition1, value1, condition2, value2, ..., defaultValue)
+	// Minimum 3 arguments: condition, valueIfTrue, defaultValue
+	"case": {{
+		Name: "case",
+		Ret:  UnknownType{},
+		Params: []ExprType{
+			BoolType{},    // first condition
+			UnknownType{}, // first value
+			UnknownType{}, // default value (also serves as variadic pattern)
+		},
+		VariableLengthParams: true,
+	}},
 }
 
 //todo:  Global variables
@@ -797,10 +811,10 @@ func checkFuncSignature(n *FuncCallNode, sig *FuncSignature, args []ExprType) *E
 	return nil
 }
 
-func (sema *ExprSemanticsChecker) checkBuiltinFunctionCall(n *FuncCallNode, sig *FuncSignature) {
+func (sema *ExprSemanticsChecker) checkBuiltinFunctionCall(n *FuncCallNode, sig *FuncSignature, tys []ExprType) {
 	sema.checkSpecialFunctionAvailability(n)
 	// Special checks for specific built-in functions
-	switch n.Callee {
+	switch sig.Name {
 	case "format":
 		lit, ok := n.Args[0].(*StringNode)
 		if !ok {
@@ -827,6 +841,26 @@ func (sema *ExprSemanticsChecker) checkBuiltinFunctionCall(n *FuncCallNode, sig 
 		for i := range holders {
 			sema.errorf(n, "The format string %q contains the placeholder {%d}, but only %d argument(s) are provided for formatting. Please make sure the number of arguments matches the placeholders in the format string.",
 				lit.Value, i, l)
+		}
+	case "case":
+		// The runner enforces an odd argument count at parse time (EvenParameters error).
+		// Syntax: case(pred1, val1, pred2, val2, ..., default) — pairs plus one default.
+		// See: https://github.com/actions/runner/blob/main/src/Sdk/Expressions/ExpressionParser.cs
+		if len(n.Args)%2 == 0 {
+			sema.errorf(n, "case() requires an odd number of arguments (predicate-value pairs plus a default), but %d arguments were given", len(n.Args))
+			break
+		}
+		// All predicate positions (0, 2, 4, ..., len-2) must be boolean.
+		// The runner validates this at runtime; we catch it statically here.
+		// Note: BoolType.Assignable() always returns true (truthy coercion), so we
+		// must type-assert directly. UnknownType is skipped (can't determine statically).
+		for i := 0; i < len(tys)-1; i += 2 {
+			switch tys[i].(type) {
+			case BoolType, UnknownType:
+				// ok
+			default:
+				sema.errorf(n.Args[i], "%s argument of case() must be a boolean predicate, but got %q", ordinal(i+1), tys[i].String())
+			}
 		}
 	}
 }
@@ -855,7 +889,7 @@ func (sema *ExprSemanticsChecker) checkFuncCall(n *FuncCallNode) ExprType {
 		err := checkFuncSignature(n, sig, tys)
 		if err == nil {
 			// When one of overload pass type check, overload was resolved correctly
-			sema.checkBuiltinFunctionCall(n, sig)
+			sema.checkBuiltinFunctionCall(n, sig, tys)
 			return sig.Ret
 		}
 		errs = append(errs, err)

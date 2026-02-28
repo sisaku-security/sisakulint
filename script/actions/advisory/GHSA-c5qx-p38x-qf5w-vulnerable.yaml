@@ -1,0 +1,36 @@
+# GHSA-c5qx-p38x-qf5w: Token leakage in post-job logs
+# Advisory: https://github.com/advisories/GHSA-c5qx-p38x-qf5w
+# Vulnerability: Post-job action logs config/config.vdf containing auth tokens
+# Expected detection: Not directly detectable - runtime behavior (action internal implementation)
+# Severity: High (CVSS 8.7)
+# CWE: CWE-532 (Insertion of Sensitive Information into Log File)
+# Package: RageAgainstThePixel/setup-steamcmd
+
+name: Vulnerable SteamCMD Setup
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Action versions < 1.3.0 log config.vdf in post-job
+      # This file contains Steam authentication tokens
+      - name: Setup SteamCMD
+        uses: RageAgainstThePixel/setup-steamcmd@v1.2.0
+
+      - name: Login to Steam
+        run: |
+          steamcmd +login ${{ secrets.WORKSHOP_USERNAME }} ${{ secrets.WORKSHOP_PASSWORD }} +quit
+
+      - name: Upload Workshop Item
+        run: |
+          steamcmd +login ${{ secrets.WORKSHOP_USERNAME }} +workshop_build_item workshop.vdf +quit
+
+      # Note: Post-job action will log the contents of config/config.vdf
+      # which contains reusable authentication tokens
+      # This is NOT detectable by static analysis - it's runtime behavior

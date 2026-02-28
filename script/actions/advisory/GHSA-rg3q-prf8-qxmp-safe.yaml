@@ -1,0 +1,52 @@
+# GHSA-rg3q-prf8-qxmp: Safe pattern for PR title handling
+# Advisory URL: https://github.com/advisories/GHSA-rg3q-prf8-qxmp
+# Safe Pattern: Use environment variables to isolate untrusted input
+
+name: Safe WIP PR Title Handling
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-wip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Use environment variable
+      - name: Check WIP status
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "Checking PR title"
+
+          if echo "$PR_TITLE" | grep -i "wip"; then
+            echo "This is a WIP PR"
+            exit 1
+          fi
+
+      # Safe: Environment variable prevents command injection
+      - name: Update PR label
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Validate PR title format before use
+          if [[ "$PR_TITLE" =~ ^[a-zA-Z0-9\ \:\-\_]+$ ]]; then
+            gh pr edit "$PR_NUMBER" --add-label "status: reviewed"
+          fi
+
+      # Safe: Use environment variable for comment
+      - name: Create status comment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COMMENT="PR Title: $PR_TITLE"
+          echo "$COMMENT"
+          gh pr comment "$PR_NUMBER" --body "$COMMENT"

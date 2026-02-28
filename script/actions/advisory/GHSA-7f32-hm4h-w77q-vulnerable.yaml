@@ -1,0 +1,29 @@
+# GHSA-7f32-hm4h-w77q: Environment Variable Injection via deprecated set-env in rlespinasse/github-slug-action
+# Advisory: https://github.com/advisories/GHSA-7f32-hm4h-w77q
+# Affected Action: rlespinasse/github-slug-action
+# Vulnerability Type: Environment Variable Injection (Deprecated Command)
+# Expected Detection Rule: DeprecatedCommandsRule
+
+name: GHSA-7f32-hm4h-w77q Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: Using deprecated ::set-env command with untrusted input
+      # This command was deprecated due to security issues
+      - name: Set environment variable
+        run: |
+          echo "::set-env name=BRANCH_NAME::${{ github.event.pull_request.head.ref }}"
+          echo "::set-env name=PR_TITLE::${{ github.event.pull_request.title }}"
+
+      - name: Use variables
+        run: |
+          echo "Branch: $BRANCH_NAME"
+          echo "Title: $PR_TITLE"

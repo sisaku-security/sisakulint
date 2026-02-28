@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **use of self-hosted runners** which pose significant security risks in public repositories. Self-hosted runners can persist state between workflow runs, allowing attackers to execute arbitrary code via pull requests.
 
+### Security Impact
+
+**Severity: High (8/10)**
+
+Self-hosted runners in public repositories pose significant infrastructure risks:
+
+1. **Arbitrary Code Execution**: Any user opening a PR can execute code on your infrastructure
+2. **State Persistence**: Malware persists between workflow runs
+3. **Network Access**: Attackers can pivot to internal resources
+4. **Credential Theft**: Cached credentials and secrets exposed to attackers
+
+This vulnerability aligns with **CWE-250: Execution with Unnecessary Privileges** and **OWASP CI/CD Security Risk CICD-SEC-7: Insecure System Configuration**.
+
 **Vulnerable Example:**
 
 ```yaml

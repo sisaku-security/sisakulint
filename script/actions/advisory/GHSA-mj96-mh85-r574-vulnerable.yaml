@@ -1,0 +1,37 @@
+# GHSA-mj96-mh85-r574: Token leakage in job output logs
+# Advisory: https://github.com/advisories/GHSA-mj96-mh85-r574
+# Vulnerability: Post-job action prints sensitive config files
+# Expected detection: Not directly detectable - runtime behavior (action internal implementation)
+# Severity: High (CVSS 8.7)
+# CWE: CWE-532 (Insertion of Sensitive Information into Log File)
+# Package: buildalon/setup-steamcmd
+
+name: Vulnerable buildalon SteamCMD Setup
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-workshop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Action versions < 1.1.0 log config/config.vdf in post-job
+      # This file contains Steam authentication tokens with full account access
+      - name: Setup SteamCMD
+        uses: buildalon/setup-steamcmd@v1.0.0
+
+      - name: Authenticate with Steam
+        run: |
+          steamcmd +login ${{ secrets.STEAM_USERNAME }} ${{ secrets.STEAM_PASSWORD }} +quit
+
+      - name: Deploy to Workshop
+        run: |
+          steamcmd +login ${{ secrets.STEAM_USERNAME }} +workshop_build_item config.vdf +quit
+
+      # Note: Post-job action will print the contents of:
+      # - config/config.vdf (contains authentication tokens)
+      # - userdata/$user_id$/config/localconfig.vdf (may contain sensitive data)
+      # This is NOT detectable by static analysis - it's runtime behavior

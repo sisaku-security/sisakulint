@@ -1,0 +1,33 @@
+# GHSA-h3qr-39j9-4r5v: gradle/gradle-build-action secrets in cache
+# Advisory: https://github.com/advisories/GHSA-h3qr-39j9-4r5v
+# Affected Action: gradle/gradle-build-action
+# Vulnerability Type: Secrets Cached and Accessible to Untrusted Contexts
+# Expected Detection Rule: CachePoisoningRule (partial detection)
+
+name: GHSA-h3qr-39j9-4r5v Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: Gradle configuration cache enabled with secrets
+      # Secrets are stored in cache and may be accessible to untrusted PRs
+      - uses: gradle/gradle-build-action@v2
+        env:
+          # These secrets will be included in Gradle configuration cache
+          API_KEY: ${{ secrets.API_KEY }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        with:
+          arguments: build
+          cache-read-only: false
+
+      - name: Run tests
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: ./gradlew test

@@ -13,6 +13,28 @@ weight: 1
 
 This rule detects GitHub Actions with known security vulnerabilities using the GitHub Security Advisories database. It helps identify actions that have been reported with CVEs or other security advisories and suggests upgrading to patched versions.
 
+### Security Impact
+
+**Severity: Varies (inherits from advisory CVSS score)**
+
+The severity of each finding is determined by the GitHub Security Advisory:
+
+| Advisory Severity | CVSS Score | sisakulint Severity |
+|-------------------|------------|---------------------|
+| Critical | 9.0-10.0 | Critical |
+| High | 7.0-8.9 | High |
+| Medium | 4.0-6.9 | Medium |
+| Low | 0.1-3.9 | Low |
+
+Using actions with known vulnerabilities poses significant risks:
+
+1. **Known Exploits**: Attackers can leverage documented vulnerabilities
+2. **Supply Chain Risk**: Vulnerable actions compromise your CI/CD pipeline
+3. **Credential Theft**: Many action vulnerabilities enable secret exfiltration
+4. **Code Injection**: Attackers can execute arbitrary code in your workflows
+
+This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-3: Dependency Chain Abuse**.
+
 #### Key Features
 
 - **Real-time Advisory Lookup**: Queries GitHub Security Advisories API for up-to-date vulnerability information

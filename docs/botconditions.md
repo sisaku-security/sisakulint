@@ -7,6 +7,19 @@ weight: 1
 
 This rule detects **spoofable bot detection conditions** in GitHub Actions workflows. Using `github.actor` or similar contexts to check for bots like Dependabot is insecure because these values can be spoofed by attackers.
 
+### Security Impact
+
+**Severity: High (8/10)**
+
+Spoofable bot conditions pose significant access control risks:
+
+1. **Auto-merge Bypass**: Attackers can bypass review requirements by impersonating bots
+2. **Privilege Escalation**: Bot-specific permissions granted to malicious actors
+3. **Supply Chain Compromise**: Malicious code merged without proper review
+4. **Secrets Exposure**: Attacker's code gains access to repository secrets
+
+This vulnerability aligns with **CWE-290: Authentication Bypass by Spoofing** and **OWASP CI/CD Security Risk CICD-SEC-2: Inadequate Identity and Access Management**.
+
 **Vulnerable Example:**
 
 ```yaml

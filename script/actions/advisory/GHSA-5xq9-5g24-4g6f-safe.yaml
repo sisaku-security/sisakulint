@@ -1,0 +1,25 @@
+# GHSA-5xq9-5g24-4g6f: Argument Injection in SonarSource/sonarqube-scan-action
+# Advisory: https://github.com/advisories/GHSA-5xq9-5g24-4g6f
+# Affected Action: SonarSource/sonarqube-scan-action
+# Vulnerability Type: Argument Injection (Windows)
+# Safe Pattern: Pass untrusted input via environment variables
+
+name: GHSA-5xq9-5g24-4g6f Safe Pattern
+on:
+  pull_request_target:
+
+jobs:
+  safe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: Do not pass untrusted input to args parameter
+      # Use fixed arguments or validate input separately
+      - uses: SonarSource/sonarqube-scan-action@v2
+        with:
+          args: >
+            -Dsonar.projectKey=my-project
+            -Dsonar.sources=.

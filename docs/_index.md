@@ -31,6 +31,88 @@ It is easy to introduce because it can be installed from brew.
 It also implements an autofix function for errors related to security features as a lint.
 It supports the SARIF format, which is the output format for static analysis. This allows [reviewdog](https://github.com/reviewdog/reviewdog?tab=readme-ov-file#sarif-format) to provide a rich UI for error triage on GitHub.
 
+## Rules by Severity
+
+sisakulint categorizes security rules by severity based on CVSS scores, attack impact, and exploitability.
+
+### Severity Summary
+
+| Severity | Count | CVSS Range | Description |
+|----------|-------|------------|-------------|
+| **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
+| **High** | 17 | 7.0-8.9 | Significant risk, enables serious attacks |
+| **Medium** | 13 | 4.0-6.9 | Moderate risk, requires specific conditions |
+| **Low** | 5 | 0.1-3.9 | Best practices, minimal direct security impact |
+
+### Critical Severity Rules (9.0-10.0)
+
+| Rule | CVSS | Description | Auto-fix |
+|------|------|-------------|----------|
+| [code-injection-critical]({{< ref "codeinjectioncritical.md" >}}) | 10/10 | Code injection in privileged triggers (pull_request_target, workflow_run, issue_comment) | Yes |
+| [env-var-injection-critical]({{< ref "envvarinjectioncritical.md" >}}) | 9/10 | Environment variable injection via $GITHUB_ENV in privileged triggers | Yes |
+| [env-path-injection-critical]({{< ref "envpathinjectioncritical.md" >}}) | 9/10 | PATH injection via $GITHUB_PATH in privileged triggers | Yes |
+| [artifact-poisoning-critical]({{< ref "artifactpoisoningcritical.md" >}}) | 9/10 | Artifact download without validation in privileged triggers | Yes |
+| [untrusted-checkout]({{< ref "untrustedcheckout.md" >}}) | 9.3 | Checkout of untrusted PR code in privileged contexts | Yes |
+| [untrusted-checkout-toctou-critical]({{< ref "untrustedcheckouttoctouhigh.md" >}}) | 9.3 | TOCTOU vulnerability with labeled event type and mutable refs | Yes |
+| [impostor-commit]({{< ref "impostorcommit.md" >}}) | 9.8 | Detects impostor commits from fork network (supply chain attack) | Yes |
+| [output-clobbering-critical]({{< ref "outputclobbering.md" >}}) | Critical | Output clobbering via $GITHUB_OUTPUT in privileged triggers | Yes |
+| [argument-injection-critical]({{< ref "argumentinjection.md" >}}) | Critical | Command-line argument injection in privileged triggers | Yes |
+| [request-forgery-critical]({{< ref "requestforgery.md" >}}) | Critical | SSRF vulnerabilities in privileged triggers | Yes |
+| [dangerous-triggers-critical]({{< ref "dangeroustriggersrulecritical.md" >}}) | Critical | Privileged triggers without security mitigations | No |
+| [reusable-workflow-taint]({{< ref "reusableworkflowtaint.md" >}}) | Critical | Untrusted input passed to reusable workflows (privileged triggers) | Yes |
+| [secret-exfiltration]({{< ref "secretexfiltration.md" >}}) | Critical | Secret exfiltration via network commands | No |
+| [artipacked]({{< ref "artipacked.md" >}}) | Critical | Credential leakage when checkout credentials are persisted and workspace is uploaded | Yes |
+
+### High Severity Rules (7.0-8.9)
+
+| Rule | CVSS | Description | Auto-fix |
+|------|------|-------------|----------|
+| [permissions]({{< ref "permissions.md" >}}) | 7/10 | Validates least-privilege permissions configuration | Yes |
+| [deprecated-commands]({{< ref "deprecatedcommandsrule.md" >}}) | 7/10 | Detects deprecated workflow commands | No |
+| [commit-sha]({{< ref "commitsharule.md" >}}) | 7/10 | Enforces commit SHA pinning for actions (supply chain protection) | Yes |
+| [cache-poisoning]({{< ref "cachepoisoningrule.md" >}}) | 8/10 | Detects cache poisoning vulnerabilities | Yes |
+| [secret-exposure]({{< ref "secretexposure.md" >}}) | 8/10 | Detects excessive secrets exposure via toJSON(secrets) or dynamic access | Yes |
+| [bot-conditions]({{< ref "botconditions.md" >}}) | 8/10 | Detects spoofable bot detection conditions | Yes |
+| [ref-confusion]({{< ref "refconfusion.md" >}}) | 8/10 | Detects ref confusion attacks (branch/tag name collision) | Yes |
+| [obfuscation]({{< ref "obfuscation.md" >}}) | 7/10 | Detects obfuscated workflow patterns | Yes |
+| [self-hosted-runners]({{< ref "selfhostedrunners.md" >}}) | 8/10 | Detects self-hosted runner usage in public repos | No |
+| [untrusted-checkout-toctou-high]({{< ref "untrustedcheckouttoctouhigh.md" >}}) | 7.5 | TOCTOU vulnerability with deployment environment and mutable refs | Yes |
+| [secrets-in-artifacts]({{< ref "secretsinartifacts.md" >}}) | 7.5/10 | Detects sensitive information in artifact uploads | Yes |
+| [secrets-inherit]({{< ref "secretsinherit.md" >}}) | High | Detects excessive secret inheritance (secrets: inherit) | Yes |
+| [cache-poisoning-poisonable-step]({{< ref "cachepoisoningrule.md" >}}) | High | Cache poisoning via execution of untrusted code after unsafe checkout | Yes |
+| [unmasked-secret-exposure]({{< ref "unmaskedsecretexposure.md" >}}) | High | Detects unmasked secrets derived from fromJson() | Yes |
+| [improper-access-control]({{< ref "improperaccesscontrol.md" >}}) | High | Detects improper access control with label-based approval | Yes |
+| [known-vulnerable-actions]({{< ref "knownvulnerableactions.md" >}}) | Varies | Detects actions with known CVEs (inherits advisory severity) | Yes |
+| [credentials]({{< ref "credentialsrule.md" >}}) | High | Detects hardcoded credentials | Yes |
+
+### Medium Severity Rules (4.0-6.9)
+
+| Rule | CVSS | Description | Auto-fix |
+|------|------|-------------|----------|
+| [code-injection-medium]({{< ref "codeinjectionmedium.md" >}}) | 6/10 | Code injection in normal triggers (pull_request, push) | Yes |
+| [env-var-injection-medium]({{< ref "envvarinjectionmedium.md" >}}) | 5/10 | Environment variable injection in normal triggers | Yes |
+| [env-path-injection-medium]({{< ref "envpathinjectionmedium.md" >}}) | 6/10 | PATH injection in normal triggers | Yes |
+| [artifact-poisoning-medium]({{< ref "artifactpoisoningmedium.md" >}}) | 6/10 | Third-party artifact download in untrusted triggers | Yes |
+| [expression]({{< ref "expression.md" >}}) | 5/10 | Validates GitHub Actions expression syntax | No |
+| [conditional]({{< ref "conditionalrule.md" >}}) | 5/10 | Validates conditional expressions | Yes |
+| [output-clobbering-medium]({{< ref "outputclobbering.md" >}}) | Medium | Output clobbering in normal triggers | Yes |
+| [dangerous-triggers-medium]({{< ref "dangeroustriggersrulemedium.md" >}}) | Medium | Privileged triggers with partial mitigations | No |
+| [argument-injection-medium]({{< ref "argumentinjection.md" >}}) | Medium | Command-line argument injection in normal triggers | Yes |
+| [request-forgery-medium]({{< ref "requestforgery.md" >}}) | Medium | SSRF vulnerabilities in normal triggers | Yes |
+| [unsound-contains]({{< ref "unsoundcontains.md" >}}) | 6/10 | Detects bypassable contains() function usage | Yes |
+| [archived-uses]({{< ref "archiveduses.md" >}}) | 5/10 | Detects usage of archived actions | No |
+| [unpinned-images]({{< ref "unpinnedimages.md" >}}) | 6/10 | Container images not pinned by SHA256 digest | No |
+
+### Low Severity Rules (0.1-3.9)
+
+| Rule | CVSS | Description | Auto-fix |
+|------|------|-------------|----------|
+| [timeout-minutes]({{< ref "timeoutminutesrule.md" >}}) | 3/10 | Enforces timeout-minutes configuration | Yes |
+| [id]({{< ref "idrule.md" >}}) | 2/10 | Validates job and step ID naming conventions | No |
+| [env-var]({{< ref "envvarrule.md" >}}) | 2/10 | Validates environment variable naming | No |
+| [cache-bloat]({{< ref "cachebloatrule.md" >}}) | 3/10 | Detects cache bloat with restore/save pairs | Yes |
+| [action-list]({{< ref "actionlist.md" >}}) | 3/10 | Policy enforcement for allowed/blocked actions | No |
+
 ## Main Tool features:
 - **id collision detection**
  	- Environment variable names collision

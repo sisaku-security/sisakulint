@@ -1,0 +1,36 @@
+# GHSA-2c6m-6gqh-6qg3: Docker command escaping with untrusted env vars
+# Advisory: https://github.com/advisories/GHSA-2c6m-6gqh-6qg3
+# Affected Action: actions/runner (Container jobs)
+# Vulnerability Type: Environment Variable Injection
+# Expected Detection Rule: EnvVarInjectionCriticalRule (partial detection)
+
+name: GHSA-2c6m-6gqh-6qg3 Vulnerable Pattern
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    # Container jobs with untrusted input in environment variables
+    container:
+      image: node:18
+      env:
+        # Vulnerability: Untrusted input in container environment variable
+        # can escape docker command and execute arbitrary commands
+        USER_INPUT: ${{ github.event.pull_request.title }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The vulnerability is in how the runner constructs docker commands
+      # when passing environment variables to containers.
+      #
+      # If USER_INPUT contains special characters like `$(command)` or backticks,
+      # they may be evaluated during docker command construction, leading to
+      # command injection.
+      - name: Process user input in container
+        run: |
+          echo "Processing: $USER_INPUT"
+          # The injected command may have already executed during container startup

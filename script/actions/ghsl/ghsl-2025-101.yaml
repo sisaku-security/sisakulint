@@ -1,0 +1,35 @@
+# GHSL-2025-101: Code injection via issue body in issues trigger
+# Vulnerable workflow pattern from JurajNyiri/HomeAssistant-Tapo-Control
+# https://securitylab.github.com/advisories/GHSL-2025-101_homeassistant-tapo-control/
+#
+# The vulnerability exists because github.event.issue.body
+# is directly interpolated in a bash condition within an issues trigger.
+# An attacker can craft a malicious issue body to execute arbitrary commands.
+# CVE-2025-55192
+
+name: Issues
+
+on:
+  issues:
+    types:
+      - opened
+
+jobs:
+  close-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Close issues with invalid cloud password
+        # VULNERABLE: github.event.issue.body is user-controlled
+        # and directly used in bash condition (CWE-94)
+        run: |
+          if [[ "${{ github.event.issue.body }}" == *"Invalid cloud password"* ]]; then
+            echo "Closing issue with invalid cloud password"
+            # gh issue close ...
+          elif [[ "${{ github.event.issue.body }}" == *"Invalid authentication data"* ]]; then
+            echo "Closing issue with invalid authentication data"
+            # gh issue close ...
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

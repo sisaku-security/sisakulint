@@ -170,7 +170,14 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	tags := rule.getTags(ctx, client, owner, repo)
 	var latestTag string
 	for _, tag := range tags {
+		// Check if SHA matches the commit the tag points to
 		if tag.GetCommit().GetSHA() == sha {
+			return &commitVerificationResult{isImpostor: false}
+		}
+		// For annotated tags, also check if the SHA matches the tag object itself
+		// This handles cases where workflows use the tag SHA directly (e.g., actions/checkout@<tag-sha>)
+		tagRef, _, err := client.Git.GetRef(ctx, owner, repo, "tags/"+tag.GetName())
+		if err == nil && tagRef != nil && tagRef.GetObject().GetSHA() == sha {
 			return &commitVerificationResult{isImpostor: false}
 		}
 		if latestTag == "" && tag.GetName() != "" {

@@ -1,0 +1,44 @@
+# GHSL-2025-084: Code execution from untrusted checkout in workflow_run
+# Repository: int128/datadog-actions-metrics
+# Advisory: https://securitylab.github.com/advisories/GHSL-2025-084_int128_datadog-actions-metrics/
+#
+# Vulnerability: workflow_run trigger checks out attacker-controlled code and executes it
+# The workflow uses github.event.workflow_run.head_sha to checkout PR code,
+# then runs pnpm install/build and executes local action (uses: ./),
+# allowing arbitrary code execution with access to DATADOG_API_KEY secret.
+
+name: GHSL-2025-084 Vulnerable Workflow
+
+on:
+  workflow_run:
+    workflows: [ts]
+    types:
+      - completed
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # VULNERABLE: Checking out untrusted PR code via workflow_run.head_sha
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: corepack enable pnpm
+
+      # VULNERABLE: Running pnpm install executes attacker's package.json scripts
+      - run: pnpm i
+
+      # VULNERABLE: Running pnpm build executes attacker's build scripts
+      - run: pnpm build
+
+      # VULNERABLE: Executing local action from checked out untrusted code
+      - uses: ./
+        with:
+          datadog-api-key: ${{ secrets.DATADOG_API_KEY }}
+          collect-job-metrics: true

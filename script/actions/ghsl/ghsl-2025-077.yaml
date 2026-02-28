@@ -1,0 +1,33 @@
+# GHSL-2025-077: Untrusted actions checkout in beeware/beeware.github.io
+# Vulnerability: PR branch checkout with pip install in pull_request_target
+# Affected: ci.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-077_beeware_beeware_github_io/
+
+name: CI (Vulnerable)
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    if: contains(github.event.label.name, 'preview')
+    runs-on: ubuntu-latest
+    steps:
+      # VULNERABLE: Checks out PR branch code in privileged context
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # VULNERABLE: Executes attacker-controlled requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build site
+        run: |
+          make build

@@ -35,6 +35,12 @@ func isFullLengthSha(ref string) bool {
 func (rule *CommitSha) VisitStep(step *ast.Step) error {
 	if action, ok := step.Exec.(*ast.ExecAction); ok {
 		usesValue := action.Uses.Value
+		// Skip local action references (e.g., ./my-action). Local actions are part of the
+		// same repository and are checked out at the same commit as the workflow, so they
+		// have no supply chain risk and do not need commit SHA pinning.
+		if strings.HasPrefix(usesValue, "./") {
+			return nil
+		}
 		if !isFullLengthSha(usesValue) {
 			rule.Errorf(step.Pos,
 				"the action ref in 'uses' for step '%s' should be a full length commit SHA for immutability and security. See https://sisaku-security.github.io/lint/docs/rules/commitsharule/",

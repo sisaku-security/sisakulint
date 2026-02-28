@@ -1,0 +1,34 @@
+# GHSA-7f32-hm4h-w77q: Environment Variable Injection via deprecated set-env in rlespinasse/github-slug-action
+# Advisory: https://github.com/advisories/GHSA-7f32-hm4h-w77q
+# Affected Action: rlespinasse/github-slug-action
+# Vulnerability Type: Environment Variable Injection (Deprecated Command)
+# Safe Pattern: Use $GITHUB_ENV with proper sanitization
+
+name: GHSA-7f32-hm4h-w77q Safe Pattern
+on:
+  pull_request_target:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: Use $GITHUB_ENV with environment variable passing
+      - name: Set environment variable
+        env:
+          BRANCH_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE_VALUE: ${{ github.event.pull_request.title }}
+        run: |
+          # Sanitize by removing newlines to prevent injection
+          SAFE_BRANCH=$(echo "$BRANCH_REF" | tr -d '\n')
+          SAFE_TITLE=$(echo "$PR_TITLE_VALUE" | tr -d '\n')
+          echo "BRANCH_NAME=$SAFE_BRANCH" >> $GITHUB_ENV
+          echo "PR_TITLE=$SAFE_TITLE" >> $GITHUB_ENV
+
+      - name: Use variables
+        run: |
+          echo "Branch: $BRANCH_NAME"
+          echo "Title: $PR_TITLE"

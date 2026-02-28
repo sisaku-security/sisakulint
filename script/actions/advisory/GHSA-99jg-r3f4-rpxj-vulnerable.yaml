@@ -1,0 +1,34 @@
+# GHSA-99jg-r3f4-rpxj: Memory overflow in OpenEXR parser
+# Advisory: https://github.com/advisories/GHSA-99jg-r3f4-rpxj
+# Affected Action: afichet/openexr-viewer
+# Vulnerability Type: Buffer Overflow (Not Workflow Related)
+# Expected Detection Rule: Not detectable (not a workflow vulnerability)
+
+name: GHSA-99jg-r3f4-rpxj Vulnerable Pattern
+on:
+  push:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # This advisory is NOT related to GitHub Actions workflows at all.
+      # It's a memory overflow vulnerability in the OpenEXR image parsing
+      # library used by the openexr-viewer application.
+      #
+      # The vulnerability is in the C++ code that parses OpenEXR image files,
+      # specifically in how it handles malformed image headers, leading to
+      # buffer overflows and potential arbitrary code execution.
+      #
+      # There's no workflow pattern that demonstrates this vulnerability
+      # because it's a traditional software vulnerability, not a CI/CD
+      # security issue.
+
+      - name: This workflow cannot demonstrate the vulnerability
+        run: |
+          echo "GHSA-99jg-r3f4-rpxj is a buffer overflow in OpenEXR image parsing"
+          echo "It's not related to GitHub Actions workflow security"
+          echo "This advisory was incorrectly included in the workflow analysis"

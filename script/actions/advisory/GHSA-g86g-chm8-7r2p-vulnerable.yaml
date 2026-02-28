@@ -1,0 +1,40 @@
+# GHSA-g86g-chm8-7r2p: GITHUB_TOKEN exposure via symlink attack in pull_request_target
+# Advisory: https://github.com/advisories/GHSA-g86g-chm8-7r2p
+# Vulnerability: Symlink attack allows token leakage with pull_request_target trigger
+# Expected detection: UntrustedCheckoutRule, PermissionsRule
+# Severity: Critical (CVSS 9.6)
+# CVE: CVE-2021-32724
+# CWE: CWE-532 (Insertion of Sensitive Information into Log File)
+# Package: check-spelling/check-spelling
+
+name: Vulnerable Check Spelling
+
+on:
+  pull_request_target:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      # Vulnerable: Checking out untrusted PR code in pull_request_target context
+      # This gives the PR author's code access to GITHUB_TOKEN with write permissions
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        # Dangerous: No explicit ref means checking out the PR head
+        # Combined with pull_request_target, this is a critical vulnerability
+
+      # Vulnerable: check-spelling v0.0.18 or earlier with pull_request_target
+      # Attacker can send a crafted PR with symlinks to expose GITHUB_TOKEN
+      - name: Check Spelling
+        uses: check-spelling/check-spelling@v0.0.18
+        with:
+          suppress_push_for_open_pull_requests: 1
+
+      # Attack vector: Attacker creates a PR with malicious symlinks
+      # The action processes files, following symlinks that can point to
+      # sensitive files or trigger token exposure in logs
+      # With write permissions from pull_request_target, attacker can:
+      # 1. Push commits to repository
+      # 2. Steal all secrets

@@ -7,6 +7,18 @@ weight: 1
 
 This rule validates that job and step IDs in GitHub Actions workflows follow the required naming conventions. Invalid IDs can cause workflow parsing errors, reference failures, and unexpected behavior.
 
+### Security Impact
+
+**Severity: Low (2/10)**
+
+Invalid IDs are primarily a syntax validation concern with minimal direct security impact:
+
+1. **Workflow Parsing Failures**: Invalid IDs cause GitHub Actions to reject workflows
+2. **Reference Errors**: Expressions referencing invalid IDs fail at runtime
+3. **Debugging Difficulty**: Poor naming conventions complicate troubleshooting
+
+This rule is classified as Low severity because it addresses syntactic correctness rather than security vulnerabilities. Invalid IDs will prevent workflows from running rather than creating exploitable conditions.
+
 **Invalid Example:**
 
 ```yaml

@@ -1,0 +1,31 @@
+# GHSA-vxmw-7h4f-hqxh: Expression Injection in pypa/gh-action-pypi-publish
+# Advisory: https://github.com/advisories/GHSA-vxmw-7h4f-hqxh
+# Affected Action: pypa/gh-action-pypi-publish
+# Vulnerability Type: Expression Injection
+# Safe Pattern: Use environment variables to pass untrusted input
+
+name: GHSA-vxmw-7h4f-hqxh Safe Pattern
+on:
+  pull_request_target:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: Pass untrusted input via environment variable
+      - name: Set version from ref
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          ACTION_REF: ${{ env.ACTION_REF }}
+          PR_REF: ${{ env.PR_REF }}
+        run: |
+          REF="${ACTION_REF:-${PR_REF:-$REF_NAME}}"
+          echo "VERSION=${REF}" >> $GITHUB_ENV
+
+      - name: Build and publish
+        run: |
+          echo "Publishing version: $VERSION"

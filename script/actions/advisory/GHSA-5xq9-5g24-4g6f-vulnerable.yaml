@@ -1,0 +1,23 @@
+# GHSA-5xq9-5g24-4g6f: Argument Injection in SonarSource/sonarqube-scan-action
+# Advisory: https://github.com/advisories/GHSA-5xq9-5g24-4g6f
+# Affected Action: SonarSource/sonarqube-scan-action
+# Vulnerability Type: Argument Injection (Windows)
+# Expected Detection Rule: ArgumentInjectionCriticalRule
+
+name: GHSA-5xq9-5g24-4g6f Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: args parameter accepts untrusted input on Windows
+      # Attacker can inject: "/d:sonar.projectKey=test /d:sonar.token=secret"
+      - uses: SonarSource/sonarqube-scan-action@v2
+        with:
+          args: ${{ github.event.issue.title }}

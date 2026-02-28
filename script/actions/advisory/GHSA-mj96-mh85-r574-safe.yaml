@@ -1,0 +1,29 @@
+# GHSA-mj96-mh85-r574: Safe pattern with patched action version
+# Advisory: https://github.com/advisories/GHSA-mj96-mh85-r574
+# Mitigation: Use action version 1.1.0 or later + rotate exposed tokens
+
+name: Safe buildalon SteamCMD Setup
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-workshop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Version 1.1.0+ does not log sensitive config files in post-job
+      - name: Setup SteamCMD
+        uses: buildalon/setup-steamcmd@v1.1.0
+
+      - name: Authenticate with Steam
+        run: |
+          steamcmd +login ${{ secrets.STEAM_USERNAME }} ${{ secrets.STEAM_PASSWORD }} +quit
+
+      - name: Deploy to Workshop
+        run: |
+          steamcmd +login ${{ secrets.STEAM_USERNAME }} +workshop_build_item config.vdf +quit
+
+      # Post-job action in v1.1.0+ does not expose authentication tokens

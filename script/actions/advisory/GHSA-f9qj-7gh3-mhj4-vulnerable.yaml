@@ -1,0 +1,46 @@
+# GHSA-f9qj-7gh3-mhj4: RCE via terraform plan with PR input in kartverket/github-workflows
+# Advisory: https://github.com/advisories/GHSA-f9qj-7gh3-mhj4
+# Vulnerability Type: Remote Code Execution (CWE-94)
+# Expected Rule: CodeInjectionCriticalRule
+# Severity: High
+
+name: Vulnerable - RCE via Terraform Plan
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  terraform-plan-vulnerable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Plan (vulnerable pattern from kartverket/github-workflows)
+        run: |
+          # Vulnerable: Using PR title/body in terraform command without sanitization
+          # An attacker can inject commands via PR title/body
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+
+          # This is vulnerable to command injection
+          terraform plan -var="comment=$PR_TITLE" -out=tfplan
+
+          # Vulnerable: Using PR content in shell command
+          echo "Planning changes for: $PR_TITLE"
+
+      - name: Comment on PR (vulnerable)
+        run: |
+          # Vulnerable: PR body content used directly
+          PLAN_OUTPUT=$(terraform show -no-color tfplan)
+          COMMENT="## Terraform Plan\n\nPR: ${{ github.event.pull_request.title }}\n\n$PLAN_OUTPUT"
+          echo "$COMMENT"

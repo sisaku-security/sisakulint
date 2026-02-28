@@ -1,0 +1,31 @@
+# GHSA-5xr6-xhww-33m4: dawidd6/action-download-artifact artifact poisoning
+# Advisory: https://github.com/advisories/GHSA-5xr6-xhww-33m4
+# Affected Action: dawidd6/action-download-artifact
+# Vulnerability Type: Artifact Poisoning - Forks Searched by Default
+# Expected Detection Rule: ArtifactPoisoningMediumRule
+
+name: GHSA-5xr6-xhww-33m4 Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Vulnerable: Downloads artifacts from forks by default
+      # Attacker can upload malicious artifact from fork
+      # and it will be downloaded and executed in privileged context
+      - uses: dawidd6/action-download-artifact@v5
+        with:
+          workflow: build.yml
+          name: dist
+          path: ./dist
+
+      - name: Execute downloaded code
+        run: |
+          chmod +x ./dist/deploy.sh
+          ./dist/deploy.sh
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}

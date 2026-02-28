@@ -7,6 +7,19 @@ weight: 1
 
 This rule enforces the `timeout-minutes` attribute for all jobs in GitHub Actions workflows. Without explicit timeouts, jobs can run indefinitely, consuming CI/CD resources and potentially being exploited for malicious purposes.
 
+### Security Impact
+
+**Severity: Low (3/10)**
+
+Missing timeouts are primarily a best practice and resource management concern:
+
+1. **Resource Exhaustion**: Long-running jobs consume CI/CD compute quotas
+2. **Cost Overruns**: Billable minutes accumulate when jobs hang indefinitely
+3. **C2 Potential**: Compromised workflows could use runners for extended operations
+4. **Pipeline Blocking**: Stuck jobs delay releases and block other workflows
+
+While not a direct security vulnerability, missing timeouts can enable or exacerbate security issues. This rule is classified as Low severity because it primarily addresses operational best practices rather than exploitable vulnerabilities.
+
 **Invalid Example:**
 
 ```yaml

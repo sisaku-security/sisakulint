@@ -49,14 +49,18 @@ import (
 // - CWE-367: Time-of-check Time-of-use (TOCTOU) Race Condition
 type UntrustedCheckoutTOCTOUCriticalRule struct {
 	BaseRule
-	// hasLabeledTrigger indicates if the workflow uses 'labeled' event type
-	hasLabeledTrigger bool
-	// labeledTriggerPos stores the position of the labeled trigger for error reporting
-	labeledTriggerPos *ast.Position
-	// triggerEventName stores the event name (pull_request_target, pull_request, etc.)
-	triggerEventName string
-	// webhookEvent stores the webhook event for reference
-	webhookEvent *ast.WebhookEvent
+	// workflowTriggerInfos stores all workflow trigger names and positions for job-level filtering
+	workflowTriggerInfos []TriggerInfo
+	// labeledTriggerEvents maps event names that have the 'labeled' type to their trigger positions
+	// e.g., {"pull_request_target": pos} when pull_request_target has types: [labeled]
+	labeledTriggerEvents map[string]*ast.Position
+	// jobHasLabeledTrigger indicates if the current job can execute on a labeled trigger
+	// This is set per-job in VisitJobPre after analyzing job-level if conditions
+	jobHasLabeledTrigger bool
+	// jobLabeledTriggerName stores the matched trigger name for error reporting
+	jobLabeledTriggerName string
+	// jobLabeledTriggerPos stores the matched trigger position for error reporting
+	jobLabeledTriggerPos *ast.Position
 }
 
 // NewUntrustedCheckoutTOCTOUCriticalRule creates a new instance of the TOCTOU critical rule.
@@ -72,10 +76,11 @@ func NewUntrustedCheckoutTOCTOUCriticalRule() *UntrustedCheckoutTOCTOUCriticalRu
 // VisitWorkflowPre analyzes the workflow triggers for labeled event types.
 func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitWorkflowPre(n *ast.Workflow) error {
 	// Reset state for each workflow
-	rule.hasLabeledTrigger = false
-	rule.labeledTriggerPos = nil
-	rule.triggerEventName = ""
-	rule.webhookEvent = nil
+	rule.workflowTriggerInfos = nil
+	rule.labeledTriggerEvents = make(map[string]*ast.Position)
+	rule.jobHasLabeledTrigger = false
+	rule.jobLabeledTriggerName = ""
+	rule.jobLabeledTriggerPos = nil
 
 	// Check all workflow triggers
 	for _, event := range n.On {
@@ -85,7 +90,14 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitWorkflowPre(n *ast.Workflo
 		}
 
 		eventName := webhookEvent.EventName()
-		// Only check pull_request_target and pull_request events
+
+		// Collect all triggers for job-level filtering via JobTriggerAnalyzer
+		rule.workflowTriggerInfos = append(rule.workflowTriggerInfos, TriggerInfo{
+			Name: eventName,
+			Pos:  webhookEvent.Pos,
+		})
+
+		// Only check pull_request_target and pull_request events for labeled type
 		// These are the events that can be triggered by external contributors
 		if eventName != EventPullRequestTarget && eventName != "pull_request" {
 			continue
@@ -94,17 +106,10 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitWorkflowPre(n *ast.Workflo
 		// Check if 'labeled' is in the types
 		for _, eventType := range webhookEvent.Types {
 			if eventType.Value == EventTypeLabeled {
-				rule.hasLabeledTrigger = true
-				rule.labeledTriggerPos = eventType.Pos
-				rule.triggerEventName = eventName
-				rule.webhookEvent = webhookEvent
+				rule.labeledTriggerEvents[eventName] = eventType.Pos
 				rule.Debug("Found 'labeled' event type for %s at %s", eventName, eventType.Pos)
 				break
 			}
-		}
-
-		if rule.hasLabeledTrigger {
-			break
 		}
 	}
 
@@ -113,8 +118,8 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitWorkflowPre(n *ast.Workflo
 
 // VisitStep checks for dangerous checkout patterns in steps.
 func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitStep(step *ast.Step) error {
-	// Skip if no labeled trigger found
-	if !rule.hasLabeledTrigger {
+	// Skip if the current job cannot execute on a labeled trigger
+	if !rule.jobHasLabeledTrigger {
 		return nil
 	}
 
@@ -143,8 +148,8 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitStep(step *ast.Step) error
 			"An attacker can modify code after label approval. The checked-out code may differ from what was reviewed. "+
 			"Use immutable '${{ github.event.pull_request.head.sha }}' instead of mutable branch references. "+
 			"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctoucritical/",
-		rule.triggerEventName,
-		rule.labeledTriggerPos.Line,
+		rule.jobLabeledTriggerName,
+		rule.jobLabeledTriggerPos.Line,
 	)
 
 	// Add auto-fixer
@@ -184,20 +189,64 @@ func (rule *UntrustedCheckoutTOCTOUCriticalRule) usesMutableRef(action *ast.Exec
 
 // VisitWorkflowPost resets state after workflow processing.
 func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitWorkflowPost(_ *ast.Workflow) error {
-	rule.hasLabeledTrigger = false
-	rule.labeledTriggerPos = nil
-	rule.triggerEventName = ""
-	rule.webhookEvent = nil
+	rule.workflowTriggerInfos = nil
+	rule.labeledTriggerEvents = nil
+	rule.jobHasLabeledTrigger = false
+	rule.jobLabeledTriggerName = ""
+	rule.jobLabeledTriggerPos = nil
 	return nil
 }
 
-// VisitJobPre is required by the TreeVisitor interface but not used.
-func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitJobPre(_ *ast.Job) error {
+// VisitJobPre analyzes job-level if conditions to determine if the job
+// can actually execute on a trigger with 'labeled' event type.
+// This prevents false positives when workflows use job-level conditionals
+// to restrict which triggers run specific jobs.
+func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitJobPre(node *ast.Job) error {
+	// Reset job-level state
+	rule.jobHasLabeledTrigger = false
+	rule.jobLabeledTriggerName = ""
+	rule.jobLabeledTriggerPos = nil
+
+	// Skip if no labeled triggers in workflow
+	if len(rule.labeledTriggerEvents) == 0 {
+		return nil
+	}
+
+	// Use JobTriggerAnalyzer to determine which triggers this job can actually execute on
+	analyzer := NewJobTriggerAnalyzerWithPositions(rule.workflowTriggerInfos)
+	effectiveTriggers := analyzer.AnalyzeJobTriggers(node)
+
+	// Check if any of the effective triggers have the labeled event type
+	for _, trigger := range effectiveTriggers {
+		if pos, ok := rule.labeledTriggerEvents[trigger]; ok {
+			rule.jobHasLabeledTrigger = true
+			rule.jobLabeledTriggerName = trigger
+			rule.jobLabeledTriggerPos = pos
+			jobID := "<nil>"
+			if node.ID != nil {
+				jobID = node.ID.Value
+			}
+			rule.Debug("Job '%s' can execute on labeled trigger '%s'", jobID, trigger)
+			break
+		}
+	}
+
+	if !rule.jobHasLabeledTrigger {
+		jobID := "<nil>"
+		if node.ID != nil {
+			jobID = node.ID.Value
+		}
+		rule.Debug("Job '%s' filtered out labeled triggers via if condition", jobID)
+	}
+
 	return nil
 }
 
-// VisitJobPost is required by the TreeVisitor interface but not used.
+// VisitJobPost resets job-specific state.
 func (rule *UntrustedCheckoutTOCTOUCriticalRule) VisitJobPost(_ *ast.Job) error {
+	rule.jobHasLabeledTrigger = false
+	rule.jobLabeledTriggerName = ""
+	rule.jobLabeledTriggerPos = nil
 	return nil
 }
 

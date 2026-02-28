@@ -1,0 +1,24 @@
+# GHSA-qmg3-hpqr-gqvc: reviewdog/action-setup supply chain compromise
+# Advisory: https://github.com/advisories/GHSA-qmg3-hpqr-gqvc
+# Affected Action: reviewdog/action-setup
+# Vulnerability Type: Supply Chain Compromise
+# Safe Pattern: Pin to commit SHA from before compromise
+
+name: GHSA-qmg3-hpqr-gqvc Safe Pattern
+on:
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Pinned to commit SHA from trusted version before compromise
+      # This prevents automatic updates to compromised versions
+      - uses: reviewdog/action-setup@3f401fe1b897d3dfd3a8fb7d8f404a7b0d7e6f5d # v1.0.0 (safe version)
+
+      - name: Run linter
+        run: |
+          reviewdog --version
+          reviewdog -reporter=github-pr-review -runners=golint

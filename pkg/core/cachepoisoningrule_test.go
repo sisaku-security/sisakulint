@@ -1407,6 +1407,17 @@ func TestCachePoisoningRule_IsPushToDefaultBranch(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			name: "tags only (no branches)",
+			event: &ast.WebhookEvent{
+				Hook:     &ast.String{Value: "push"},
+				Branches: nil,
+				Tags: &ast.WebhookEventFilter{
+					Values: []*ast.String{{Value: "v*"}},
+				},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

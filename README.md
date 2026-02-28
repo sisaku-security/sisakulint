@@ -76,61 +76,72 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 | [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
 | [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob], [request-forgery-*][r-rf] |
 
+### Severity Summary
+
+sisakulint categorizes rules by severity based on CVSS scores, attack impact, and exploitability:
+
+| Severity | Count | CVSS Range | Description |
+|:---------|:-----:|:-----------|:------------|
+| **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
+| **High** | 17 | 7.0-8.9 | Significant risk, enables serious attacks |
+| **Medium** | 13 | 4.0-6.9 | Moderate risk, requires specific conditions |
+| **Low** | 5 | 0.1-3.9 | Best practices, minimal direct security impact |
+
 ### Complete Rule Reference
 
-| Category | Rule | Description | Fix | Docs | GitHub Ref |
-|:---------|:-----|:------------|:---:|:----:|:----------:|
-| **Syntax** | id | ID collision detection for jobs/env vars | | [docs][r-id] | [ref][gh-shell] |
-| | env-var | Environment variable name validation | | [docs][r-env] | |
-| | permissions | Permission scopes and values validation | | [docs][r-perm] | [ref][gh-perm] |
-| | workflow-call | Reusable workflow call validation | | [docs][r-wc] | [ref][gh-reuse] |
-| | job-needs | Job dependency validation | | [docs][r-jn] | |
-| | expression | Expression syntax validation | | [docs][r-expr] | |
-| | cond | Conditional expression validation | | [docs][r-cond] | |
-| | deprecated-commands | Deprecated workflow commands detection | | [docs][r-dc] | [ref][gh-cmd] |
-| **Config** | timeout-minutes | Ensures timeout-minutes is set | Yes | [docs][r-tm] | [ref][gh-timeout] |
-| | cache-bloat | Cache bloat with restore/save pair | Yes | [docs][r-cb] | |
-| **Credentials** | credentials | Hardcoded credentials detection | Yes | [docs][r-cred] | |
-| | secret-exposure | Excessive secrets exposure detection | Yes | [docs][r-se] | |
-| | unmasked-secret-exposure | Unmasked derived secrets detection | Yes | [docs][r-use] | |
-| | artipacked | Credential leakage via persisted checkout | Yes | [docs][r-ap] | |
-| | secrets-in-artifacts | Sensitive data in artifact uploads | Yes | [docs][r-sia] | |
-| | secrets-inherit | Excessive secrets inheritance | Yes | [docs][r-si] | |
-| | secret-exfiltration | Secret exfiltration via network commands | | [docs][r-sef] | |
-| **Injection** | code-injection-critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] | [ref][gh-inject] |
-| | code-injection-medium | Untrusted input in normal triggers | Yes | [docs][r-cim] | |
-| | envvar-injection-critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] | |
-| | envvar-injection-medium | Untrusted input to $GITHUB_ENV (normal) | Yes | [docs][r-evim] | |
-| | envpath-injection-critical | Untrusted input to $GITHUB_PATH (privileged) | Yes | [docs][r-epi] | |
-| | envpath-injection-medium | Untrusted input to $GITHUB_PATH (normal) | Yes | [docs][r-epim] | |
-| | output-clobbering-critical | Untrusted input to $GITHUB_OUTPUT (privileged) | Yes | [docs][r-oc] | |
-| | output-clobbering-medium | Untrusted input to $GITHUB_OUTPUT (normal) | Yes | [docs][r-oc] | |
-| | argument-injection-critical | Command-line argument injection (privileged) | Yes | [docs][r-ai] | |
-| | argument-injection-medium | Command-line argument injection (normal) | Yes | [docs][r-ai] | |
-| **Checkout** | untrusted-checkout | Untrusted PR code in privileged contexts | Yes | [docs][r-uco] | [ref][gh-pwn] |
-| | untrusted-checkout-toctou-critical | TOCTOU with labeled events | Yes | [docs][r-toctou-c] | |
-| | untrusted-checkout-toctou-high | TOCTOU with deployment environment | Yes | [docs][r-toctou-h] | |
-| **Supply Chain** | commit-sha | Action version pinning validation | Yes | [docs][r-sha] | [ref][gh-3p] |
-| | action-list | Organization allowlist/blocklist enforcement | | [docs][r-al] | |
-| | impostor-commit | Fork network impostor commit detection | Yes | [docs][r-ic] | |
-| | ref-confusion | Branch/tag name collision detection | Yes | [docs][r-rc] | |
-| | known-vulnerable-actions | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] | |
-| | archived-uses | Archived action/workflow detection | | [docs][r-au] | |
-| | unpinned-images | Container image digest pinning | | [docs][r-ui] | |
-| | reusable-workflow-taint | Untrusted inputs in reusable workflow calls | Yes | [docs][r-rwt] | |
-| **Poisoning** | artifact-poisoning-critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] | |
-| | artifact-poisoning-medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] | |
-| | cache-poisoning | Unsafe cache patterns with untrusted inputs | Yes | [docs][r-cp] | |
-| | cache-poisoning-poisonable-step | Untrusted code execution after unsafe checkout | Yes | [docs][r-cpp] | |
-| **Access Control** | improper-access-control | Label-based approval and synchronize events | Yes | [docs][r-iac] | |
-| | bot-conditions | Spoofable bot detection conditions | Yes | [docs][r-bot] | |
-| | unsound-contains | Bypassable contains() in conditions | Yes | [docs][r-uc] | |
-| | dangerous-triggers-critical | Privileged triggers without mitigations | Yes | [docs][r-dt-c] | |
-| | dangerous-triggers-medium | Privileged triggers with partial mitigations | Yes | [docs][r-dt-m] | |
-| **Other** | obfuscation | Obfuscated workflow pattern detection | Yes | [docs][r-ob] | |
-| | self-hosted-runners | Self-hosted runner security risks | | [docs][r-shr] | |
-| | request-forgery-critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] | |
-| | request-forgery-medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] | |
+| Category | Rule | Severity | Description | Fix | Docs |
+|:---------|:-----|:--------:|:------------|:---:|:----:|
+| **Syntax** | id | Low | ID collision detection for jobs/env vars | | [docs][r-id] |
+| | env-var | Low | Environment variable name validation | | [docs][r-env] |
+| | permissions | High | Permission scopes and values validation | Yes | [docs][r-perm] |
+| | workflow-call | Medium | Reusable workflow call validation | | [docs][r-wc] |
+| | job-needs | Low | Job dependency validation | | [docs][r-jn] |
+| | expression | Medium | Expression syntax validation | | [docs][r-expr] |
+| | cond | Medium | Conditional expression validation | Yes | [docs][r-cond] |
+| | deprecated-commands | High | Deprecated workflow commands detection | | [docs][r-dc] |
+| **Config** | timeout-minutes | Low | Ensures timeout-minutes is set | Yes | [docs][r-tm] |
+| | cache-bloat | Low | Cache bloat with restore/save pair | Yes | [docs][r-cb] |
+| **Credentials** | credentials | High | Hardcoded credentials detection | Yes | [docs][r-cred] |
+| | secret-exposure | High | Excessive secrets exposure detection | Yes | [docs][r-se] |
+| | unmasked-secret-exposure | High | Unmasked derived secrets detection | Yes | [docs][r-use] |
+| | artipacked | Critical | Credential leakage via persisted checkout | Yes | [docs][r-ap] |
+| | secrets-in-artifacts | High | Sensitive data in artifact uploads | Yes | [docs][r-sia] |
+| | secrets-inherit | High | Excessive secrets inheritance | Yes | [docs][r-si] |
+| | secret-exfiltration | Critical | Secret exfiltration via network commands | | [docs][r-sef] |
+| **Injection** | code-injection-critical | Critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] |
+| | code-injection-medium | Medium | Untrusted input in normal triggers | Yes | [docs][r-cim] |
+| | envvar-injection-critical | Critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] |
+| | envvar-injection-medium | Medium | Untrusted input to $GITHUB_ENV (normal) | Yes | [docs][r-evim] |
+| | envpath-injection-critical | Critical | Untrusted input to $GITHUB_PATH (privileged) | Yes | [docs][r-epi] |
+| | envpath-injection-medium | Medium | Untrusted input to $GITHUB_PATH (normal) | Yes | [docs][r-epim] |
+| | output-clobbering-critical | Critical | Untrusted input to $GITHUB_OUTPUT (privileged) | Yes | [docs][r-oc] |
+| | output-clobbering-medium | Medium | Untrusted input to $GITHUB_OUTPUT (normal) | Yes | [docs][r-oc] |
+| | argument-injection-critical | Critical | Command-line argument injection (privileged) | Yes | [docs][r-ai] |
+| | argument-injection-medium | Medium | Command-line argument injection (normal) | Yes | [docs][r-ai] |
+| **Checkout** | untrusted-checkout | Critical | Untrusted PR code in privileged contexts | Yes | [docs][r-uco] |
+| | untrusted-checkout-toctou-critical | Critical | TOCTOU with labeled events | Yes | [docs][r-toctou-c] |
+| | untrusted-checkout-toctou-high | High | TOCTOU with deployment environment | Yes | [docs][r-toctou-h] |
+| **Supply Chain** | commit-sha | High | Action version pinning validation | Yes | [docs][r-sha] |
+| | action-list | Low | Organization allowlist/blocklist enforcement | | [docs][r-al] |
+| | impostor-commit | Critical | Fork network impostor commit detection | Yes | [docs][r-ic] |
+| | ref-confusion | High | Branch/tag name collision detection | Yes | [docs][r-rc] |
+| | known-vulnerable-actions | Varies | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] |
+| | archived-uses | Medium | Archived action/workflow detection | | [docs][r-au] |
+| | unpinned-images | Medium | Container image digest pinning | | [docs][r-ui] |
+| | reusable-workflow-taint | Critical | Untrusted inputs in reusable workflow calls | Yes | [docs][r-rwt] |
+| **Poisoning** | artifact-poisoning-critical | Critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] |
+| | artifact-poisoning-medium | Medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] |
+| | cache-poisoning | High | Unsafe cache patterns with untrusted inputs | Yes | [docs][r-cp] |
+| | cache-poisoning-poisonable-step | High | Untrusted code execution after unsafe checkout | Yes | [docs][r-cpp] |
+| **Access Control** | improper-access-control | High | Label-based approval and synchronize events | Yes | [docs][r-iac] |
+| | bot-conditions | High | Spoofable bot detection conditions | Yes | [docs][r-bot] |
+| | unsound-contains | Medium | Bypassable contains() in conditions | Yes | [docs][r-uc] |
+| | dangerous-triggers-critical | Critical | Privileged triggers without mitigations | | [docs][r-dt-c] |
+| | dangerous-triggers-medium | Medium | Privileged triggers with partial mitigations | | [docs][r-dt-m] |
+| **Other** | obfuscation | High | Obfuscated workflow pattern detection | Yes | [docs][r-ob] |
+| | self-hosted-runners | High | Self-hosted runner security risks | | [docs][r-shr] |
+| | request-forgery-critical | Critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] |
+| | request-forgery-medium | Medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] | |
 
 <!-- OWASP Links -->
 [owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
@@ -284,27 +295,38 @@ jobs:
 Running `sisakulint` detects multiple security issues:
 
 ```
-.github/workflows/test.yaml:1:1: workflow does not have explicit 'permissions' block.
-  Add a 'permissions:' block to follow the principle of least privilege. [permissions]
+.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block. Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. Add a 'permissions:' block to follow the principle of least privilege. See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
+      1 👈|name: PR Comment Handler
 
-.github/workflows/test.yaml:10:3: timeout-minutes is not set for job process-pr [missing-timeout-minutes]
+.github/workflows/demo.yaml:4:3: dangerous trigger (critical): workflow uses privileged trigger(s) [pull_request_target, issue_comment] without any security mitigations. These triggers grant write access and secrets access to potentially untrusted code. Add at least one mitigation: restrict permissions (permissions: read-all or permissions: {}), use environment protection, add label conditions, or check github.actor. See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
+      4 👈|  pull_request_target:
 
-.github/workflows/test.yaml:13:9: the action ref should be a full length commit SHA
-  for immutability and security. [commit-sha]
+.github/workflows/demo.yaml:10:3: timeout-minutes is not set for job process-pr; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       10 👈|  process-pr:
 
-.github/workflows/test.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false'.
-  Consider adding it to prevent credential exposure. [artipacked]
+.github/workflows/demo.yaml:13:9: timeout-minutes is not set for step <unnamed>; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:15:16: checking out untrusted code from pull request
-  in workflow with privileged trigger 'issue_comment'. This allows potentially
-  malicious code to execute with access to repository secrets. [untrusted-checkout]
+.github/workflows/demo.yaml:13:9: the action ref in 'uses' for step '<unnamed>' should be a full length commit SHA for immutability and security. See https://sisaku-security.github.io/lint/docs/rules/commitsharule/ [commit-sha]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:19:35: code injection (critical): "github.event.pull_request.title"
-  is potentially untrusted. Avoid using it directly in inline scripts.
-  Instead, pass it through an environment variable. [code-injection-critical]
+.github/workflows/demo.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false' at step "<unnamed>". Credentials are stored in .git/config. While no dangerous upload-artifact was found in this job, consider adding 'persist-credentials: false' to prevent credential exposure. See https://unit42.paloaltonetworks.com/github-repo-artifacts-leak-tokens/ [artipacked]
+       13 👈|      - uses: actions/checkout@v4
 
-.github/workflows/test.yaml:21:9: cache poisoning risk via build command: 'Run build'
-  runs untrusted code after checking out PR head. [cache-poisoning-poisonable-step]
+.github/workflows/demo.yaml:15:16: checking out untrusted code from pull request in workflow with privileged trigger 'pull_request_target' (line 4). This allows potentially malicious code from external contributors to execute with access to repository secrets. Use 'pull_request' trigger instead, or avoid checking out PR code when using 'pull_request_target'. See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details [untrusted-checkout]
+       15 👈|          ref: ${{ github.event.pull_request.head.sha }}
+
+.github/workflows/demo.yaml:17:9: timeout-minutes is not set for step Echo PR title; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       17 👈|      - name: Echo PR title
+
+.github/workflows/demo.yaml:19:35: code injection (critical): "github.event.pull_request.title" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
+       19 👈|          echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+.github/workflows/demo.yaml:21:9: timeout-minutes is not set for step Run build; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
+       21 👈|      - name: Run build
+
+.github/workflows/demo.yaml:21:9: cache poisoning risk via build command: 'Run build' runs untrusted code after checking out PR head (triggers: pull_request_target, issue_comment). Attacker can steal cache tokens [cache-poisoning-poisonable-step]
+       21 👈|      - name: Run build
 ```
 
 ### What sisakulint detected
@@ -312,6 +334,7 @@ Running `sisakulint` detects multiple security issues:
 | Finding | OWASP Risk | Severity | Auto-fix |
 |:--------|:-----------|:---------|:--------:|
 | Missing permissions block | CICD-SEC-02 | Medium | |
+| Dangerous privileged triggers | CICD-SEC-01 | Critical | |
 | Missing timeout-minutes | CICD-SEC-07 | Low | Yes |
 | Action not pinned to SHA | CICD-SEC-08 | Medium | Yes |
 | Credential exposure risk | CICD-SEC-06 | Medium | Yes |

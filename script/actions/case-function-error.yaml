@@ -1,0 +1,60 @@
+name: Case Function - Error Cases
+on: push
+
+permissions: read-all
+
+jobs:
+  # ERROR: even argument count (4 args) - missing default value
+  even-args-4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Even arg count (4)
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ case(github.event_name == 'push', 'pushed', github.event_name == 'pull_request', 'pr') }}
+        run: echo "$RESULT"
+
+  # ERROR: even argument count (6 args) - missing default value
+  even-args-6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Even arg count (6)
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ case(github.event_name == 'push', 'a', github.event_name == 'pull_request', 'b', github.event_name == 'schedule', 'c') }}
+        run: echo "$RESULT"
+
+  # ERROR: too few arguments (2 args) - missing default
+  too-few-args:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Only condition and value, no default
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ case(github.ref == 'refs/heads/main', 'main') }}
+        run: echo "$RESULT"
+
+  # ERROR: non-boolean predicate (string literal in predicate position)
+  non-bool-predicate-string:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: String used as second predicate
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ case(true, 'a', 'not-a-bool', 'b', 'default') }}
+        run: echo "$RESULT"
+
+  # ERROR: non-boolean predicate (number in predicate position)
+  non-bool-predicate-number:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Number used as predicate
+        timeout-minutes: 1
+        env:
+          RESULT: ${{ case(github.run_number == 1, 'first', 42, 'other', 'default') }}
+        run: echo "$RESULT"

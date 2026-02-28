@@ -1,0 +1,19 @@
+name: Test Case Function
+on: push
+
+permissions: read-all
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test case function
+        timeout-minutes: 1
+        run: |
+          echo "Result: ${{ case(github.event_name == 'push', 'pushed', github.event_name == 'pull_request', 'pr', 'other') }}"
+      - name: Simple case
+        timeout-minutes: 1
+        env:
+          STATUS: ${{ case(github.ref == 'refs/heads/main', 'production', 'development') }}
+        run: echo "Status is $STATUS"

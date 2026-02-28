@@ -1,0 +1,29 @@
+# GHSA-mxr3-8whj-j74r: disable-sudo policy bypassed via docker group (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-mxr3-8whj-j74r
+# Affected Action: step-security/harden-runner
+# Safe Pattern: Remove docker group from runner or use disable-docker option
+
+name: GHSA-mxr3-8whj-j74r Safe Pattern
+on:
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner with docker disabled
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+          # Note: This advisory was fixed in later versions by properly
+          # handling docker group permissions
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Avoid using docker commands in workflows with disable-sudo
+      - name: Regular build without docker
+        run: |
+          npm install
+          npm test

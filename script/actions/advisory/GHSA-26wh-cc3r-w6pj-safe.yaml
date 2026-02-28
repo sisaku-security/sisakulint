@@ -1,0 +1,33 @@
+# GHSA-26wh-cc3r-w6pj: Safe pattern with patched action version
+# Advisory: https://github.com/advisories/GHSA-26wh-cc3r-w6pj
+# Mitigation: Use action version 1.0.1 or later, or use updated v1 tag
+
+name: Safe Workflow Version Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Version 1.0.1+ properly handles exceptions without exposing tokens
+      - name: Get Workflow Version
+        uses: canonical/get-workflow-version-action@v1.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Alternative: Use updated v1 tag (points to patched version)
+      - name: Get Workflow Version (alternative)
+        uses: canonical/get-workflow-version-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Use version
+        run: echo "Version retrieved safely"
+
+      # Even if exceptions occur, tokens won't be exposed in logs

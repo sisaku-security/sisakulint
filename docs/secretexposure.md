@@ -13,6 +13,19 @@ weight: 1
 
 This rule detects excessive secrets exposure patterns in GitHub Actions workflows. It identifies dangerous patterns that expose more secrets than necessary, violating the principle of least privilege.
 
+### Security Impact
+
+**Severity: High (8/10)**
+
+Excessive secrets exposure poses significant risks:
+
+1. **Credential Leakage**: All secrets become accessible if workflow is compromised
+2. **Blast Radius Expansion**: Single vulnerability exposes entire secrets inventory
+3. **Audit Difficulty**: Dynamic access makes it impossible to determine actual secret usage
+4. **Least Privilege Violation**: Workflows access more secrets than required
+
+This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-2: Inadequate Identity and Access Management**.
+
 #### Key Features
 
 - **toJSON(secrets) Detection**: Identifies when all secrets are exposed at once

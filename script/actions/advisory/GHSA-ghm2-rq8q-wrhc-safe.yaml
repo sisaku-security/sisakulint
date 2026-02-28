@@ -1,0 +1,39 @@
+# GHSA-ghm2-rq8q-wrhc: Command injection via malicious filenames in tj-actions/verify-changed-files
+# Advisory: https://github.com/advisories/GHSA-ghm2-rq8q-wrhc
+# Safe Pattern: Use environment variables and proper quoting
+
+name: Safe - Command Injection via Malicious Filenames
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  verify-changed-files-safe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify changed files (safe pattern)
+        id: verify-changed-files
+        run: |
+          CHANGED_FILES="file1.txt file2.txt"
+          echo "changed_files=$CHANGED_FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Process changed files (safe)
+        env:
+          CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
+        run: |
+          # Safe: Use environment variable to prevent command injection
+          echo "Changed files: $CHANGED_FILES"
+
+          # Safe: Use proper quoting and read from variable
+          while IFS= read -r file; do
+            echo "Processing: $file"
+          done <<< "$CHANGED_FILES"

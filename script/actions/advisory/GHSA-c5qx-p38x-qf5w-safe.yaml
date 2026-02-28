@@ -1,0 +1,29 @@
+# GHSA-c5qx-p38x-qf5w: Safe pattern with patched action version
+# Advisory: https://github.com/advisories/GHSA-c5qx-p38x-qf5w
+# Mitigation: Use action version 1.3.0 or later + rotate exposed tokens
+
+name: Safe SteamCMD Setup
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Version 1.3.0+ does not log config.vdf in post-job
+      - name: Setup SteamCMD
+        uses: RageAgainstThePixel/setup-steamcmd@v1.3.0
+
+      - name: Login to Steam
+        run: |
+          steamcmd +login ${{ secrets.WORKSHOP_USERNAME }} ${{ secrets.WORKSHOP_PASSWORD }} +quit
+
+      - name: Upload Workshop Item
+        run: |
+          steamcmd +login ${{ secrets.WORKSHOP_USERNAME }} +workshop_build_item workshop.vdf +quit
+
+      # Post-job action in v1.3.0+ does not expose sensitive configuration files

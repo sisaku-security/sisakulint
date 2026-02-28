@@ -11,4 +11,7 @@ sisakulint
 .DS_Store
 dist/
 .claude
-.beads/
+.beads/.worktrees/
+.worktrees/
+.worktrees
+.beads

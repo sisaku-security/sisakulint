@@ -1,0 +1,40 @@
+# GHSA-2487-9f55-2vg9: Safe pattern for branch name handling
+# Advisory URL: https://github.com/advisories/GHSA-2487-9f55-2vg9
+# Safe Pattern: Use environment variables and validate branch names
+
+name: Safe OZI Publish Branch Name Handling
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Safe: Use environment variable to isolate untrusted input
+      - name: Create release PR with safe branch name
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Validate branch name format
+          if [[ "$BRANCH_NAME" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
+            echo "Valid branch name: $BRANCH_NAME"
+            gh pr create --title "Release from $BRANCH_NAME" --body "Automated release"
+          else
+            echo "Invalid branch name format"
+            exit 1
+          fi
+
+      # Safe: Generate release notes with environment variable
+      - name: Generate release notes
+        env:
+          BRANCH_NAME: ${{ github.head_ref }}
+        run: |
+          echo "Release notes for $BRANCH_NAME" > notes.txt
+          cat notes.txt

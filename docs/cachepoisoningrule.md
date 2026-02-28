@@ -13,6 +13,19 @@ weight: 1
 
 This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It identifies two types of cache poisoning attacks:
 
+### Security Impact
+
+**Severity: High (8/10)**
+
+Cache poisoning vulnerabilities pose significant risks to CI/CD pipeline integrity:
+
+1. **Supply Chain Compromise**: Attackers can inject malicious code into cached dependencies
+2. **Persistent Attacks**: Poisoned caches affect all subsequent builds until evicted
+3. **Cross-Repository Impact**: Shared caches can spread compromise across multiple repositories
+4. **Difficult Detection**: Cache-based attacks are often invisible in code review
+
+This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-9: Improper Artifact Integrity Validation**.
+
 1. **Indirect Cache Poisoning**: Dangerous combinations of untrusted triggers with unsafe checkout and cache operations
 2. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
 

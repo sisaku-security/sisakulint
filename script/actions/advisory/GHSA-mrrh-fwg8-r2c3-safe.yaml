@@ -1,0 +1,30 @@
+# GHSA-mrrh-fwg8-r2c3: tj-actions/changed-files supply chain attack
+# Advisory: https://github.com/advisories/GHSA-mrrh-fwg8-r2c3
+# Affected Action: tj-actions/changed-files
+# Vulnerability Type: Supply Chain Attack - Secrets Dumping
+# Safe Pattern: Pin to safe version SHA
+
+name: GHSA-mrrh-fwg8-r2c3 Safe Pattern
+on:
+  pull_request:
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Safe: Pinned to commit SHA of safe version (v44 or earlier)
+      # Or use patched v46+
+      - uses: tj-actions/changed-files@a59f9d159fb5d5c1a3e5e2dcc51cb90f8b9b4c3e # v44 (safe version)
+        with:
+          files: |
+            **/*.go
+            **/*.ts
+
+      - name: Process changed files
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "Changed files: ${{ steps.changed-files.outputs.all_changed_files }}"

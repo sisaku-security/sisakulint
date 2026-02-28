@@ -1,0 +1,61 @@
+# GHSL-2025-091: Code Injection in ansys/pymapdl migrator workflow
+# https://securitylab.github.com/advisories/GHSL-2025-091_ansys_pymapdl/
+#
+# Vulnerability: issue_comment trigger with untrusted comment body in github-script
+# The comment body is used directly in JavaScript template literals, allowing code injection.
+#
+# Attack vector:
+# 1. Attacker posts comment with malicious JavaScript: `; malicious_code(); `
+# 2. Workflow triggers on issue_comment event
+# 3. Malicious code executes with workflow permissions (contents: write)
+# 4. Attacker can steal secrets, modify repository, etc.
+
+name: GHSL-2025-091 Migrator Workflow Vulnerability
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  # VULNERABLE: Direct use of comment body in github-script template literal
+  vulnerable-migrator:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // VULNERABLE: comment body directly interpolated in template literal
+            const commentBody = `${{ github.event.comment.body }}`;
+
+            // Also vulnerable: issue title
+            const issueTitle = `${{ github.event.issue.title }}`;
+
+            // Parse the comment to check for migration command
+            if (commentBody.includes('/migrate')) {
+              console.log('Migration requested');
+            }
+
+  # SAFE: Using environment variables
+  safe-migrator:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v6
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // SAFE: Access through process.env
+            const commentBody = process.env.COMMENT_BODY;
+            const issueTitle = process.env.ISSUE_TITLE;
+
+            if (commentBody.includes('/migrate')) {
+              console.log('Migration requested');
+            }

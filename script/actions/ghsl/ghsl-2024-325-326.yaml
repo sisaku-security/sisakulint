@@ -1,0 +1,49 @@
+# GHSL-2024-325 and GHSL-2024-326 vulnerability patterns
+# From: https://securitylab.github.com/advisories/GHSL-2024-325_GHSL-2024-326_Actual/
+name: Update VRT (Vulnerable)
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  update-vrt:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/update-vrt')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Get PR branch info
+        id: comment-branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            core.setOutput('head_owner', pr.data.head.repo.owner.login);
+            core.setOutput('head_repo', pr.data.head.repo.name);
+            core.setOutput('head_ref', pr.data.head.ref);
+
+      # GHSL-2024-325: Checkout from untrusted fork repository
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.comment-branch.outputs.head_owner }}/${{ steps.comment-branch.outputs.head_repo }}
+          ref: ${{ steps.comment-branch.outputs.head_ref }}
+
+      # GHSL-2024-325: Execute local action from untrusted code
+      - name: Set up environment
+        uses: ./.github/actions/setup
+
+      # GHSL-2024-326: Code injection via branch name
+      - name: Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Update VRT" || true
+          git push origin HEAD:${{ steps.comment-branch.outputs.head_ref }}

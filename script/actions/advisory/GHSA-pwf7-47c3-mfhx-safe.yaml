@@ -1,0 +1,46 @@
+# GHSA-pwf7-47c3-mfhx: Safe pattern for prek-action
+# Advisory URL: https://github.com/advisories/GHSA-pwf7-47c3-mfhx
+# Safe Pattern: Use fixed version strings and avoid dynamic input interpolation
+
+name: Safe prek-action Usage
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  setup-prek:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Safe: Use fixed version string without dynamic inputs
+      - name: Setup prek with fixed version
+        uses: j178/prek-action@v0.2.0
+        with:
+          prek-version: '0.2.2'
+          extra_args: '--verbose'
+
+      # Alternative safe pattern: Validate input before use
+      - name: Validate and use prek version
+        env:
+          PREK_VERSION: ${{ github.event.inputs.prek-version }}
+        run: |
+          # Validate version format (only alphanumeric, dots, hyphens)
+          if [[ "$PREK_VERSION" =~ ^[a-zA-Z0-9.\-]+$ ]]; then
+            echo "Valid version: $PREK_VERSION"
+          else
+            echo "Invalid version format"
+            exit 1
+          fi
+
+      - name: Run prek commands
+        run: |
+          prek run

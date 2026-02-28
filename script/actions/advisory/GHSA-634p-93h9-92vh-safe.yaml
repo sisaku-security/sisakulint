@@ -1,0 +1,36 @@
+# GHSA-634p-93h9-92vh: CSV injection in exported files (Safe Pattern)
+# Advisory: https://github.com/advisories/GHSA-634p-93h9-92vh
+# Affected Action: some-natalie/ghas-to-csv
+# Safe Pattern: Use patched version with CSV sanitization
+
+name: GHSA-634p-93h9-92vh Safe Pattern
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export GHAS alerts to CSV (Patched)
+        uses: some-natalie/ghas-to-csv@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          output: security-alerts.csv
+          # Note: Patched version sanitizes CSV output by:
+          # 1. Prefixing formula characters (=+-@) with single quote
+          # 2. Wrapping potentially dangerous values in quotes
+          # 3. Escaping special characters
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-alerts.csv
+
+      # Alternative safe pattern: Export to JSON instead
+      - name: Export to JSON (safer format)
+        run: |
+          gh api "/repos/${{ github.repository }}/code-scanning/alerts" > security-alerts.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

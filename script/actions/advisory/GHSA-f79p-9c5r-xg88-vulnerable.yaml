@@ -1,0 +1,23 @@
+# GHSA-f79p-9c5r-xg88: Command Injection in SonarSource/sonarqube-scan-action
+# Advisory: https://github.com/advisories/GHSA-f79p-9c5r-xg88
+# Affected Action: SonarSource/sonarqube-scan-action
+# Vulnerability Type: Command Injection
+# Expected Detection Rule: ArgumentInjectionCriticalRule or CodeInjectionCriticalRule
+
+name: GHSA-f79p-9c5r-xg88 Vulnerable Pattern
+on:
+  pull_request_target:
+
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Vulnerable: args treated as shell expressions, not properly neutralized
+      # Attacker can inject shell commands via special characters
+      - uses: SonarSource/sonarqube-scan-action@v2
+        with:
+          args: ${{ github.event.pull_request.title }}

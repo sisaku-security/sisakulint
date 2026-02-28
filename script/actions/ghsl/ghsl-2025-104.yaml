@@ -1,0 +1,31 @@
+# GHSL-2025-104: Code injection in weaviate notifier.yml
+# Vulnerability: Unsanitized issue title in Slack notification
+# Affected: .github/workflows/notifier.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-104_weaviate/
+
+name: Issue Notifier (Vulnerable)
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "A new Issue has been opened:\n*User:* ${{ github.actor }}\n*Title:* ${{ github.event.issue.title }}\n*Labels:* `${{ join(github.event.issue.labels.*.name, ', ') }}`\n*Link:* ${{ github.event.issue.html_url }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # VULNERABLE: Issue title can contain malicious code
+      - name: Log issue
+        run: |
+          echo "Issue: ${{ github.event.issue.title }}"

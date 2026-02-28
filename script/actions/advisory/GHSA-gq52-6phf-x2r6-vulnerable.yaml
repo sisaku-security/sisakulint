@@ -1,0 +1,35 @@
+# GHSA-gq52-6phf-x2r6: Command injection via eval printf in tj-actions/branch-names
+# Advisory: https://github.com/advisories/GHSA-gq52-6phf-x2r6
+# Vulnerability Type: Command Injection (CWE-78)
+# Expected Rule: CodeInjectionCriticalRule, OutputClobberingCriticalRule
+# Severity: Critical
+
+name: Vulnerable - Command Injection via eval printf
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  branch-names-vulnerable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Get branch names (vulnerable pattern from tj-actions/branch-names@v7.0.7)
+        id: branch-names
+        run: |
+          # Vulnerable: Uses eval printf with unsanitized BASE_REF
+          # An attacker can inject commands via branch name like: $(malicious_command)
+          BASE_REF="${{ github.base_ref }}"
+          HEAD_REF="${{ github.head_ref }}"
+
+          # This eval printf pattern is vulnerable to command injection
+          # Note: The vulnerable pattern uses eval which allows command injection
+          printf 'base_ref_branch=%s\n' "$(eval printf '%s' "$BASE_REF")" >> "$GITHUB_OUTPUT"
+          printf 'head_ref_branch=%s\n' "$(eval printf '%s' "$HEAD_REF")" >> "$GITHUB_OUTPUT"
+
+      - name: Use branch names
+        run: |
+          echo "Base branch: ${{ steps.branch-names.outputs.base_ref_branch }}"
+          echo "Head branch: ${{ steps.branch-names.outputs.head_ref_branch }}"

