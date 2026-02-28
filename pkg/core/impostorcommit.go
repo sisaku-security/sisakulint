@@ -15,9 +15,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// maxTagPages is the maximum number of pages to fetch for repository tags.
-// With 100 items per page, this allows fetching up to 500 tags.
-const maxTagPages = 5
+// maxTagPages is the number of pages to fetch for repository tags.
+// The tag list is used only for HEAD direct match (fast path) and latestTag
+// collection for auto-fix; correctness is guaranteed by the default branch
+// reachability check, so one page (100 tags) is sufficient.
+const maxTagPages = 1
 
 type ImpostorCommitRule struct {
 	BaseRule
