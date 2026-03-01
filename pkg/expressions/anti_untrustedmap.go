@@ -117,7 +117,10 @@ var BuiltinUntrustedInputs = ContextPropertySearchRoots{
 				NewContextPropertyMap("head",
 					NewContextPropertyMap("ref"),
 					NewContextPropertyMap("label"),
-					NewContextPropertyMap("sha"),
+					// Note: head.sha is intentionally NOT included here.
+					// A commit SHA is always [0-9a-f]{40} and cannot contain shell
+					// metacharacters, making it safe from code injection.
+					// See: https://github.com/sisaku-security/sisakulint/issues/371
 					NewContextPropertyMap("repo",
 						NewContextPropertyMap("default_branch"),
 					),

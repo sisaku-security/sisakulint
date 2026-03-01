@@ -139,6 +139,20 @@ func TestCodeInjectionMedium_RunScript(t *testing.T) {
 			description: "Should not detect trusted input",
 		},
 		{
+			name:        "normal trigger + head.sha (hex-only, cannot inject)",
+			trigger:     "pull_request",
+			runScript:   `git checkout ${{ github.event.pull_request.head.sha }}`,
+			wantErrors:  0,
+			description: "head.sha is always [0-9a-f]{40} and cannot cause shell injection",
+		},
+		{
+			name:        "normal trigger + head.ref (branch name, can inject)",
+			trigger:     "pull_request",
+			runScript:   `git checkout ${{ github.event.pull_request.head.ref }}`,
+			wantErrors:  1,
+			description: "head.ref is a branch name that can contain special chars",
+		},
+		{
 			name:        "normal trigger + env variable",
 			trigger:     "pull_request",
 			runScript:   `echo "$PR_TITLE"`,
