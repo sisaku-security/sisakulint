@@ -33,6 +33,9 @@ func TestImpostorCommitRuleFactory(t *testing.T) {
 	if rule.tagCache == nil {
 		t.Error("Expected tagCache to be initialized")
 	}
+	if rule.branchCache == nil {
+		t.Error("Expected branchCache to be initialized")
+	}
 	if rule.defaultBranchCache == nil {
 		t.Error("Expected defaultBranchCache to be initialized")
 	}
@@ -732,5 +735,227 @@ func TestImpostorCommitRule_isReachableFromBranch(t *testing.T) {
 				t.Errorf("isReachableFromBranch() = %v, want %v", reachable, tt.wantReachable)
 			}
 		})
+	}
+}
+
+// TestImpostorCommitRule_getTags_ReturnsErrorOnFirstPageFailure tests that getTags
+// returns an error when the first API page fails.
+func TestImpostorCommitRule_getTags_ReturnsErrorOnFirstPageFailure(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	client := newTestGitHubClient(server.URL)
+
+	tags, err := rule.getTags(context.Background(), client, "owner", "repo")
+	if err == nil {
+		t.Fatal("expected error when first page fails, got nil")
+	}
+	if tags != nil {
+		t.Errorf("expected nil tags on error, got %d tags", len(tags))
+	}
+	if !strings.Contains(err.Error(), "failed to fetch tags") {
+		t.Errorf("expected error message to contain 'failed to fetch tags', got: %s", err.Error())
+	}
+
+	// Verify result was NOT cached
+	rule.tagCacheMu.Lock()
+	_, cached := rule.tagCache["owner/repo"]
+	rule.tagCacheMu.Unlock()
+	if cached {
+		t.Error("expected error result to NOT be cached")
+	}
+}
+
+// TestImpostorCommitRule_getTags_ReturnsCachedResult tests that getTags returns cached results.
+func TestImpostorCommitRule_getTags_ReturnsCachedResult(t *testing.T) {
+	t.Parallel()
+
+	rule := ImpostorCommitRuleFactory()
+	cachedTags := []*github.RepositoryTag{
+		{Name: github.Ptr("v1.0.0")},
+	}
+	rule.tagCache["owner/repo"] = cachedTags
+
+	// No server needed - should return from cache
+	tags, err := rule.getTags(context.Background(), nil, "owner", "repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tags) != 1 || tags[0].GetName() != "v1.0.0" {
+		t.Errorf("expected cached tag v1.0.0, got %v", tags)
+	}
+}
+
+// TestImpostorCommitRule_getBranches_ReturnsErrorOnFirstPageFailure tests that getBranches
+// returns an error when the first API page fails.
+func TestImpostorCommitRule_getBranches_ReturnsErrorOnFirstPageFailure(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	client := newTestGitHubClient(server.URL)
+
+	branches, err := rule.getBranches(context.Background(), client, "owner", "repo")
+	if err == nil {
+		t.Fatal("expected error when first page fails, got nil")
+	}
+	if branches != nil {
+		t.Errorf("expected nil branches on error, got %d branches", len(branches))
+	}
+	if !strings.Contains(err.Error(), "failed to fetch branches") {
+		t.Errorf("expected error message to contain 'failed to fetch branches', got: %s", err.Error())
+	}
+
+	// Verify result was NOT cached
+	rule.branchCacheMu.Lock()
+	_, cached := rule.branchCache["owner/repo"]
+	rule.branchCacheMu.Unlock()
+	if cached {
+		t.Error("expected error result to NOT be cached")
+	}
+}
+
+// TestImpostorCommitRule_getBranches_ReturnsCachedResult tests that getBranches returns cached results.
+func TestImpostorCommitRule_getBranches_ReturnsCachedResult(t *testing.T) {
+	t.Parallel()
+
+	rule := ImpostorCommitRuleFactory()
+	cachedBranches := []*github.Branch{
+		{Name: github.Ptr("main")},
+	}
+	rule.branchCache["owner/repo"] = cachedBranches
+
+	// No server needed - should return from cache
+	branches, err := rule.getBranches(context.Background(), nil, "owner", "repo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(branches) != 1 || branches[0].GetName() != "main" {
+		t.Errorf("expected cached branch main, got %v", branches)
+	}
+}
+
+// TestImpostorCommitRule_doVerifyCommit_FailOpenOnTagsError tests that doVerifyCommit
+// returns isImpostor: false when getTags fails.
+func TestImpostorCommitRule_doVerifyCommit_FailOpenOnTagsError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	rule.client = newTestGitHubClient(server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false (fail open), but got true")
+	}
+	if result.err == nil {
+		t.Error("expected error to be set")
+	}
+}
+
+// TestImpostorCommitRule_doVerifyCommit_FailOpenOnBranchesError tests that doVerifyCommit
+// returns isImpostor: false when getBranches fails (tags succeed but no SHA match).
+func TestImpostorCommitRule_doVerifyCommit_FailOpenOnBranchesError(t *testing.T) {
+	t.Parallel()
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/tags") {
+			// Tags API succeeds with a tag that doesn't match
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"v1.0.0","commit":{"sha":"0000000000000000000000000000000000000000"}}]`))
+		} else if strings.Contains(r.URL.Path, "/branches") {
+			// Branches API fails
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	rule.client = newTestGitHubClient(server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false (fail open on branch error), but got true")
+	}
+	if result.err == nil {
+		t.Error("expected error to be set")
+	}
+}
+
+// TestImpostorCommitRule_doVerifyCommit_FailOpenOnAllTagCompareFail tests that doVerifyCommit
+// returns isImpostor: false when tags/branches succeed but all per-tag CompareCommits fail.
+func TestImpostorCommitRule_doVerifyCommit_FailOpenOnAllTagCompareFail(t *testing.T) {
+	t.Parallel()
+
+	const testSha = "a81bbbf8298c0fa03ea29cdc473d45769f953675"
+	tagSha := "0000000000000000000000000000000000000000"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// Tags API succeeds with a tag that doesn't match
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `[{"name":"v1.0.0","commit":{"sha":"%s"}}]`, tagSha)
+		case strings.Contains(path, "/branches"):
+			// Branches API succeeds with empty list
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/commits/"+testSha+"/branches-where-head"):
+			// branches-where-head returns empty
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/compare/"):
+			// ALL CompareCommits calls fail (rate limited)
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+		case strings.HasSuffix(path, "/repos/owner/repo"):
+			// getDefaultBranch
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	rule.client = newTestGitHubClient(server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", testSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false (fail open when all tag comparisons fail), but got true")
+	}
+	if result.err == nil {
+		t.Error("expected error to be set when all tag comparisons fail")
 	}
 }

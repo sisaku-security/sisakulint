@@ -15,7 +15,19 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const maxTagPages = 1
+// Pagination limits for GitHub API requests
+const (
+	// maxTagPages is the maximum number of pages to fetch for repository tags.
+	// With 100 items per page, this allows fetching up to 500 tags.
+	maxTagPages = 5
+	// maxBranchPages is the maximum number of pages to fetch for repository branches.
+	// With 100 items per page, this allows fetching up to 300 branches.
+	maxBranchPages = 3
+)
+
+// maxTagCompareCommits limits the number of per-tag CompareCommits API calls
+// to avoid exhausting rate limits.
+const maxTagCompareCommits = 10
 
 type ImpostorCommitRule struct {
 	BaseRule
@@ -25,6 +37,8 @@ type ImpostorCommitRule struct {
 	commitCacheMu        sync.Mutex
 	tagCache             map[string][]*github.RepositoryTag
 	tagCacheMu           sync.Mutex
+	branchCache          map[string][]*github.Branch
+	branchCacheMu        sync.Mutex
 	latestTagCache       map[string]string
 	latestTagCacheMu     sync.Mutex
 	defaultBranchCache   map[string]string
@@ -45,6 +59,7 @@ func ImpostorCommitRuleFactory() *ImpostorCommitRule {
 		},
 		commitCache:        make(map[string]*commitVerificationResult),
 		tagCache:           make(map[string][]*github.RepositoryTag),
+		branchCache:        make(map[string][]*github.Branch),
 		latestTagCache:     make(map[string]string),
 		defaultBranchCache: make(map[string]string),
 	}
@@ -70,6 +85,8 @@ func parseImpostorActionRef(usesValue string) (owner, repo, ref string, skip boo
 
 func (rule *ImpostorCommitRule) getGitHubClient() *github.Client {
 	rule.clientOnce.Do(func() {
+		// Check for GITHUB_TOKEN environment variable for authenticated requests
+		// Authenticated requests have higher rate limits (5000/hour vs 60/hour)
 		if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 			ts := oauth2.StaticTokenSource(
 				&oauth2.Token{AccessToken: token},
@@ -97,6 +114,7 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 
 	result := rule.verifyCommit(owner, repo, ref)
 	if result.err != nil {
+		// API errors should not fail the lint - just log and skip
 		rule.Debug("Error verifying commit %s/%s@%s: %v", owner, repo, ref, result.err)
 		return nil //nolint:nilerr // Intentional: API errors are logged but don't fail linting
 	}
@@ -125,6 +143,7 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 func (rule *ImpostorCommitRule) verifyCommit(owner, repo, sha string) *commitVerificationResult {
 	cacheKey := fmt.Sprintf("%s/%s@%s", owner, repo, sha)
 
+	// First check without lock (fast path)
 	rule.commitCacheMu.Lock()
 	if result, ok := rule.commitCache[cacheKey]; ok {
 		rule.commitCacheMu.Unlock()
@@ -132,10 +151,13 @@ func (rule *ImpostorCommitRule) verifyCommit(owner, repo, sha string) *commitVer
 	}
 	rule.commitCacheMu.Unlock()
 
+	// Perform verification (potentially slow)
 	result := rule.doVerifyCommit(owner, repo, sha)
 
+	// Double-checked locking: check again before caching to avoid duplicate work
 	rule.commitCacheMu.Lock()
 	if existingResult, ok := rule.commitCache[cacheKey]; ok {
+		// Another goroutine already cached the result
 		rule.commitCacheMu.Unlock()
 		return existingResult
 	}
@@ -152,20 +174,24 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	client := rule.getGitHubClient()
 	repoKey := fmt.Sprintf("%s/%s", owner, repo)
 
-	tags := rule.getTags(ctx, client, owner, repo)
+	tags, tagsErr := rule.getTags(ctx, client, owner, repo)
+	if tagsErr != nil {
+		// GitHub API unavailable (rate limited or other error) - fail open to avoid false positives
+		return &commitVerificationResult{isImpostor: false, err: tagsErr}
+	}
 	var latestTag string
 	for _, tag := range tags {
-		// Check if SHA matches the commit the tag points to
 		if tag.GetCommit().GetSHA() == sha {
 			return &commitVerificationResult{isImpostor: false}
 		}
-		if latestTag == "" {
+		if latestTag == "" && tag.GetName() != "" {
 			tagName := tag.GetName()
 			if strings.HasPrefix(tagName, "v") {
 				latestTag = tagName
 			}
 		}
 	}
+
 	if latestTag == "" && len(tags) > 0 {
 		latestTag = tags[0].GetName()
 	}
@@ -176,20 +202,106 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	rule.latestTagCacheMu.Unlock()
 
-	// Check reachability from the repository's default branch only.
+	branches, branchErr := rule.getBranches(ctx, client, owner, repo)
+	if branchErr != nil {
+		// GitHub API unavailable - fail open to avoid false positives
+		return &commitVerificationResult{isImpostor: false, err: branchErr}
+	}
+	for _, branch := range branches {
+		if branch.GetCommit().GetSHA() == sha {
+			return &commitVerificationResult{isImpostor: false}
+		}
+	}
+
+	branchCommitsURL := fmt.Sprintf("repos/%s/%s/commits/%s/branches-where-head", owner, repo, sha)
+	req, err := client.NewRequest("GET", branchCommitsURL, nil)
+	if err == nil {
+		var branchList []*github.Branch
+		resp, err := client.Do(ctx, req, &branchList)
+		if err == nil && resp.StatusCode == http.StatusOK && len(branchList) > 0 {
+			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
+		}
+	}
+
+	// Check reachability from the repository's default branch.
 	// A SHA reachable from the default branch (status "behind" or "identical") is considered legitimate.
-	// Commits that exist only on non-default branches or forks without a corresponding tag are reported as impostors.
 	defaultBranch := rule.getDefaultBranch(ctx, client, owner, repo)
 	reachable, err := rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha)
 	if err != nil {
 		rule.Debug("Error checking reachability for %s/%s@%s from branch %s: %v", owner, repo, sha, defaultBranch, err)
-		return &commitVerificationResult{err: err}
+		return &commitVerificationResult{isImpostor: false, err: err}
 	}
 	if reachable {
 		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
 	}
 
+	// Check reachability from recent tags (limited to avoid exhausting API rate limits).
+	// Track whether any comparison succeeded to detect API degradation.
+	var tagCompareSuccess bool
+	for i, tag := range tags {
+		if i >= maxTagCompareCommits {
+			break
+		}
+		tagSha := tag.GetCommit().GetSHA()
+		if tagSha == "" {
+			continue
+		}
+		comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, tagSha, sha, nil)
+		if err != nil {
+			continue
+		}
+		tagCompareSuccess = true
+		status := comparison.GetStatus()
+		if status == "behind" || status == "identical" {
+			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
+		}
+	}
+
+	// If we had tags to compare but all API calls failed, fail open
+	if len(tags) > 0 && !tagCompareSuccess {
+		return &commitVerificationResult{
+			isImpostor: false,
+			err:        fmt.Errorf("all tag comparison API calls failed for %s/%s, failing open", owner, repo),
+		}
+	}
+
 	return &commitVerificationResult{isImpostor: true, latestTag: latestTag}
+}
+
+func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) ([]*github.RepositoryTag, error) {
+	cacheKey := fmt.Sprintf("%s/%s", owner, repo)
+
+	rule.tagCacheMu.Lock()
+	if tags, ok := rule.tagCache[cacheKey]; ok {
+		rule.tagCacheMu.Unlock()
+		return tags, nil
+	}
+	rule.tagCacheMu.Unlock()
+
+	var allTags []*github.RepositoryTag
+	opts := &github.ListOptions{PerPage: 100}
+
+	for range maxTagPages {
+		tags, resp, err := client.Repositories.ListTags(ctx, owner, repo, opts)
+		if err != nil {
+			if len(allTags) == 0 {
+				// First page failed - API unavailable, return error without caching
+				return nil, fmt.Errorf("failed to fetch tags for %s/%s: %w", owner, repo, err)
+			}
+			break
+		}
+		allTags = append(allTags, tags...)
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	rule.tagCacheMu.Lock()
+	rule.tagCache[cacheKey] = allTags
+	rule.tagCacheMu.Unlock()
+
+	return allTags, nil
 }
 
 func (rule *ImpostorCommitRule) getDefaultBranch(ctx context.Context, client *github.Client, owner, repo string) string {
@@ -224,36 +336,40 @@ func (rule *ImpostorCommitRule) isReachableFromBranch(ctx context.Context, clien
 	return shaIsAncestorOfBranch, nil
 }
 
-func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) []*github.RepositoryTag {
+func (rule *ImpostorCommitRule) getBranches(ctx context.Context, client *github.Client, owner, repo string) ([]*github.Branch, error) {
 	cacheKey := fmt.Sprintf("%s/%s", owner, repo)
 
-	rule.tagCacheMu.Lock()
-	if tags, ok := rule.tagCache[cacheKey]; ok {
-		rule.tagCacheMu.Unlock()
-		return tags
+	rule.branchCacheMu.Lock()
+	if branches, ok := rule.branchCache[cacheKey]; ok {
+		rule.branchCacheMu.Unlock()
+		return branches, nil
 	}
-	rule.tagCacheMu.Unlock()
+	rule.branchCacheMu.Unlock()
 
-	var allTags []*github.RepositoryTag
-	opts := &github.ListOptions{PerPage: 100}
+	var allBranches []*github.Branch
+	opts := &github.BranchListOptions{ListOptions: github.ListOptions{PerPage: 100}}
 
-	for range maxTagPages {
-		tags, resp, err := client.Repositories.ListTags(ctx, owner, repo, opts)
+	for range maxBranchPages {
+		branches, resp, err := client.Repositories.ListBranches(ctx, owner, repo, opts)
 		if err != nil {
+			if len(allBranches) == 0 {
+				// First page failed - API unavailable, return error without caching
+				return nil, fmt.Errorf("failed to fetch branches for %s/%s: %w", owner, repo, err)
+			}
 			break
 		}
-		allTags = append(allTags, tags...)
+		allBranches = append(allBranches, branches...)
 		if resp.NextPage == 0 {
 			break
 		}
 		opts.Page = resp.NextPage
 	}
 
-	rule.tagCacheMu.Lock()
-	rule.tagCache[cacheKey] = allTags
-	rule.tagCacheMu.Unlock()
+	rule.branchCacheMu.Lock()
+	rule.branchCache[cacheKey] = allBranches
+	rule.branchCacheMu.Unlock()
 
-	return allTags
+	return allBranches, nil
 }
 
 type impostorCommitFixer struct {
