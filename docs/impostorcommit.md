@@ -147,7 +147,7 @@ Compares the SHA against up to 10 recent tags using `CompareCommits`. If any tag
 ```go
 for _, tag := range tags[:maxTagCompareCommits] {
     comparison := client.Repositories.CompareCommits(ctx, owner, repo, tagSha, sha, nil)
-    if comparison.GetStatus() == "behind" || "identical" { return legitimate }
+    if comparison.GetStatus() == "behind" || comparison.GetStatus() == "identical" { return legitimate }
 }
 ```
 

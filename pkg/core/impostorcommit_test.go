@@ -868,7 +868,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnTagsError(t *testing.T) {
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
 	if result.isImpostor {
@@ -902,7 +902,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnBranchesError(t *testing.T)
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
 	if result.isImpostor {
@@ -954,7 +954,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnAllTagCompareFail(t *testin
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", testSha)
 	if result.isImpostor {
