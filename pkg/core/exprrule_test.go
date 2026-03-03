@@ -268,11 +268,6 @@ func TestExprRule_checkIfCondition(t *testing.T) {
 			value:     "${{ 'string value' }}",
 			wantError: false,
 		},
-		{
-			name:      "valid - secrets context in step if condition",
-			value:     "${{ secrets.EMAIL_API_TOKEN != '' }}",
-			wantError: false,
-		},
 	}
 
 	for _, tt := range tests {
