@@ -356,9 +356,11 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String,
 			})
 		}
 
-		// Check for environment variable usage that contains secrets
+		// Check for environment variable usage that contains secrets.
+		// Only flag if the env var is used in a data-sending context (after a data flag),
+		// not when it is used as the URL destination argument (e.g. webhook URL).
 		for envName, secretRef := range envSecrets {
-			if rule.lineUsesEnvVar(line, envName) {
+			if rule.lineUsesEnvVar(line, envName) && !rule.isEnvVarUsedAsURL(line, envName, cmd) {
 				pos := rule.calculatePosition(runStr, lineIdx, lineOffset, line, "$"+envName)
 				severity := "high"
 				if cmd.isHighRisk && rule.hasDataFlag(line, cmd) {
@@ -455,6 +457,52 @@ func (rule *SecretExfiltrationRule) lineUsesEnvVar(line, envName string) bool {
 		}
 	}
 	return false
+}
+
+// isEnvVarUsedAsURL checks if an env var appears as the URL destination argument in a network
+// command rather than in a data-sending context (after a data flag like -d, --data, -H, etc.).
+// Returns true if the env var is the URL (should NOT be flagged as exfiltration).
+// For commands without data flags (nc, netcat, etc.), always returns false since any
+// secret usage with those commands is suspicious.
+func (rule *SecretExfiltrationRule) isEnvVarUsedAsURL(line, envName string, cmd networkCommand) bool {
+	if len(cmd.dataFlags) == 0 {
+		return false
+	}
+
+	// Find the position of the env var in the line
+	varPatterns := []string{
+		`\$` + regexp.QuoteMeta(envName) + `(?:\s|$|"|'|;|\\)`,
+		`\$\{` + regexp.QuoteMeta(envName) + `\}`,
+	}
+
+	varIdx := -1
+	for _, p := range varPatterns {
+		re := regexp.MustCompile(p)
+		match := re.FindStringIndex(line)
+		if match != nil {
+			varIdx = match[0]
+			break
+		}
+	}
+
+	if varIdx == -1 {
+		return false
+	}
+
+	// If any data flag appears before the env var in the line,
+	// the env var is in a data-sending context (not a URL destination).
+	for _, flag := range cmd.dataFlags {
+		re := regexp.MustCompile(regexp.QuoteMeta(flag) + `(?:\s|=)`)
+		matches := re.FindAllStringIndex(line, -1)
+		for _, match := range matches {
+			if match[0] < varIdx {
+				return false
+			}
+		}
+	}
+
+	// No data flag precedes the env var: it is used as the URL destination.
+	return true
 }
 
 // calculatePosition calculates the position for an error

