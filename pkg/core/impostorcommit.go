@@ -213,18 +213,15 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		}
 	}
 
-	// Supplementary check: query branches-where-head API.
-	// Errors are intentionally ignored here (no fail-open) because this is an
-	// optional fast-path; subsequent getDefaultBranch/isReachableFromBranch
-	// calls will fail-open if the API is unavailable.
-	branchCommitsURL := fmt.Sprintf("repos/%s/%s/commits/%s/branches-where-head", owner, repo, sha)
-	req, err := client.NewRequest("GET", branchCommitsURL, nil)
-	if err == nil {
-		var branchList []*github.Branch
-		resp, err := client.Do(ctx, req, &branchList)
-		if err == nil && resp.StatusCode == http.StatusOK && len(branchList) > 0 {
-			return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
-		}
+	// Supplementary check: query branches-where-head API via typed client.
+	// This catches cases where the SHA is a branch HEAD but was not returned
+	// by getBranches (e.g., repos with 300+ branches). Errors are intentionally
+	// not fail-open here because subsequent reachability checks will fail-open.
+	isBranchHead, err := rule.isBranchHead(ctx, client, owner, repo, sha)
+	if err != nil {
+		rule.Debug("Error checking branches-where-head for %s/%s@%s: %v", owner, repo, sha, err)
+	} else if isBranchHead {
+		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
 	}
 
 	// Check reachability from the repository's default branch.
@@ -374,6 +371,20 @@ func (rule *ImpostorCommitRule) getBranches(ctx context.Context, client *github.
 	rule.branchCacheMu.Unlock()
 
 	return allBranches, nil
+}
+
+// isBranchHead checks whether the given SHA is the HEAD of any branch using
+// the typed ListBranchesHeadCommit API. A 404 response (commit not found)
+// returns false, nil. Other errors are propagated to the caller.
+func (rule *ImpostorCommitRule) isBranchHead(ctx context.Context, client *github.Client, owner, repo, sha string) (bool, error) {
+	branches, resp, err := client.Repositories.ListBranchesHeadCommit(ctx, owner, repo, sha)
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return len(branches) > 0, nil
 }
 
 type impostorCommitFixer struct {
