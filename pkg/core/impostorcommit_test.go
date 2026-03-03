@@ -574,6 +574,13 @@ func newTestGitHubClient(serverURL string) *github.Client {
 	return client
 }
 
+// setTestClient injects a test client into the rule, ensuring that
+// getGitHubClient() does not overwrite it via clientOnce.
+func setTestClient(rule *ImpostorCommitRule, serverURL string) {
+	rule.clientOnce.Do(func() {}) // exhaust Once so getGitHubClient won't overwrite
+	rule.client = newTestGitHubClient(serverURL)
+}
+
 // TestImpostorCommitRule_getDefaultBranch tests getDefaultBranch with a mocked GitHub API.
 func TestImpostorCommitRule_getDefaultBranch(t *testing.T) {
 	t.Parallel()
@@ -861,7 +868,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnTagsError(t *testing.T) {
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
 	if result.isImpostor {
@@ -895,7 +902,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnBranchesError(t *testing.T)
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", "a81bbbf8298c0fa03ea29cdc473d45769f953675")
 	if result.isImpostor {
@@ -947,7 +954,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnAllTagCompareFail(t *testin
 	defer server.Close()
 
 	rule := ImpostorCommitRuleFactory()
-	rule.client = newTestGitHubClient(server.URL)
+	setTestClient(rule, server.URL)
 
 	result := rule.doVerifyCommit("owner", "repo", testSha)
 	if result.isImpostor {
@@ -955,5 +962,234 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnAllTagCompareFail(t *testin
 	}
 	if result.err == nil {
 		t.Error("expected error to be set when all tag comparisons fail")
+	}
+}
+
+// TestImpostorCommitRule_isBranchHead tests the isBranchHead method with various API responses.
+func TestImpostorCommitRule_isBranchHead(t *testing.T) {
+	t.Parallel()
+
+	const testSha = "a81bbbf8298c0fa03ea29cdc473d45769f953675"
+
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantResult bool
+		wantErr    bool
+	}{
+		{
+			name:       "SHA is branch HEAD - single branch",
+			statusCode: http.StatusOK,
+			body:       `[{"name":"main","commit":{"sha":"` + testSha + `"}}]`,
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name:       "SHA is branch HEAD - multiple branches",
+			statusCode: http.StatusOK,
+			body:       `[{"name":"main","commit":{"sha":"` + testSha + `"}},{"name":"stable","commit":{"sha":"` + testSha + `"}}]`,
+			wantResult: true,
+			wantErr:    false,
+		},
+		{
+			name:       "SHA is not a branch HEAD - empty array",
+			statusCode: http.StatusOK,
+			body:       `[]`,
+			wantResult: false,
+			wantErr:    false,
+		},
+		{
+			name:       "commit not found - 404",
+			statusCode: http.StatusNotFound,
+			body:       `{"message":"Not Found"}`,
+			wantResult: false,
+			wantErr:    false,
+		},
+		{
+			name:       "server error - 500",
+			statusCode: http.StatusInternalServerError,
+			body:       `{"message":"Internal Server Error"}`,
+			wantResult: false,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				expectedPath := fmt.Sprintf("/repos/owner/repo/commits/%s/branches-where-head", testSha)
+				if r.URL.Path != expectedPath {
+					t.Errorf("unexpected request path: %s, want %s", r.URL.Path, expectedPath)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			rule := ImpostorCommitRuleFactory()
+			client := newTestGitHubClient(server.URL)
+
+			result, err := rule.isBranchHead(context.Background(), client, "owner", "repo", testSha)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result != tt.wantResult {
+				t.Errorf("isBranchHead() = %v, want %v", result, tt.wantResult)
+			}
+		})
+	}
+}
+
+// TestImpostorCommitRule_NonDefaultBranchHead tests that a commit that is the HEAD
+// of a non-default branch is NOT flagged as an impostor. The getBranches() fast-path
+// should catch this before reaching the branches-where-head API.
+func TestImpostorCommitRule_NonDefaultBranchHead(t *testing.T) {
+	t.Parallel()
+
+	const testSha = "a81bbbf8298c0fa03ea29cdc473d45769f953675"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// No tags match the SHA
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"v1.0.0","commit":{"sha":"0000000000000000000000000000000000000000"}}]`))
+		case strings.Contains(path, "/branches"):
+			// Branch list includes "stable" whose HEAD matches the test SHA
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `[{"name":"main","commit":{"sha":"1111111111111111111111111111111111111111"}},{"name":"stable","commit":{"sha":"%s"}}]`, testSha)
+		default:
+			// No other API should be called — if it is, the test should still pass
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", testSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false for non-default branch HEAD, but got true")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+}
+
+// TestImpostorCommitRule_ForkNetworkImpostor tests that a commit not found in any
+// branch, tag, or via reachability is correctly flagged as an impostor.
+func TestImpostorCommitRule_ForkNetworkImpostor(t *testing.T) {
+	t.Parallel()
+
+	const impostorSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	const tagSha = "0000000000000000000000000000000000000000"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `[{"name":"v1.0.0","commit":{"sha":"%s"}}]`, tagSha)
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"1111111111111111111111111111111111111111"}}]`))
+		case strings.Contains(path, "/branches-where-head"):
+			// Not a branch HEAD
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.HasSuffix(path, "/repos/owner/repo"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// SHA is diverged from all branches/tags — not reachable
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":1,"behind_by":0,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", impostorSha)
+	if !result.isImpostor {
+		t.Error("expected isImpostor to be true for fork network impostor commit, but got false")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+	if result.latestTag != "v1.0.0" {
+		t.Errorf("expected latestTag to be 'v1.0.0', got %q", result.latestTag)
+	}
+}
+
+// TestImpostorCommitRule_BranchHeadAPIUnavailable_FallthroughToReachability tests that
+// when the branches-where-head API is unavailable (500), the rule falls through to
+// the default branch reachability check and succeeds.
+func TestImpostorCommitRule_BranchHeadAPIUnavailable_FallthroughToReachability(t *testing.T) {
+	t.Parallel()
+
+	const testSha = "a81bbbf8298c0fa03ea29cdc473d45769f953675"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"v1.0.0","commit":{"sha":"0000000000000000000000000000000000000000"}}]`))
+		case strings.Contains(path, "/branches-where-head"):
+			// branches-where-head API unavailable
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"Internal Server Error"}`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			// Branch list — SHA doesn't match any branch HEAD
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"1111111111111111111111111111111111111111"}}]`))
+		case strings.HasSuffix(path, "/repos/owner/repo"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// SHA is reachable from main (behind = ancestor of main)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"behind","ahead_by":0,"behind_by":5,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", testSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false (reachability fallback should succeed), but got true")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
 	}
 }
