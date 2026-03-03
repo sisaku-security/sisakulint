@@ -184,6 +184,8 @@ func (u *UntiChecker) endWithIntermediateCheck(checkIntermediate bool) {
 			"%q is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
 			inputs[0],
 		)
+		err.IsUntrustedInput = true
+		err.UntrustedPaths = inputs
 		u.errs = append(u.errs, err)
 	} else if len(inputs) > 1 {
 		// 複数の信頼できない入力が検出された場合、式がオブジェクトフィルター構文で複数のプロパティを抽出していることを意味します。エラーメッセージにすべてのプロパティを表示します。
@@ -192,6 +194,8 @@ func (u *UntiChecker) endWithIntermediateCheck(checkIntermediate bool) {
 			"Object filter extracts potentially untrusted properties %s. Avoid using the value directly in inline scripts. Instead, pass the value through an environment variable. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
 			SortedQuotes(inputs),
 		)
+		err.IsUntrustedInput = true
+		err.UntrustedPaths = inputs
 		u.errs = append(u.errs, err)
 	}
 
@@ -204,6 +208,8 @@ func (u *UntiChecker) endWithIntermediateCheck(checkIntermediate bool) {
 				"%q contains potentially untrusted properties. Avoid passing entire objects to functions in inline scripts. Instead, access specific safe properties or pass values through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
 				intermediateInputs[0],
 			)
+			err.IsUntrustedInput = true
+			err.UntrustedPaths = intermediateInputs
 			u.errs = append(u.errs, err)
 		} else {
 			err := errorfAtExpr(
@@ -211,6 +217,8 @@ func (u *UntiChecker) endWithIntermediateCheck(checkIntermediate bool) {
 				"Objects %s contain potentially untrusted properties. Avoid passing entire objects to functions in inline scripts. Instead, access specific safe properties or pass values through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions for more details.",
 				SortedQuotes(intermediateInputs),
 			)
+			err.IsUntrustedInput = true
+			err.UntrustedPaths = intermediateInputs
 			u.errs = append(u.errs, err)
 		}
 	}

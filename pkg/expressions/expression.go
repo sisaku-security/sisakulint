@@ -13,6 +13,13 @@ type ExprError struct {
 	Line int
 	// Columnはエラーの原因となった列番号の位置です。この値は1ベースであることに注意してください。
 	Column int
+	// IsUntrustedInput は、このエラーが信頼されていない入力（untrusted input）の検出によって
+	// 生成された場合に true になる。UntrustedPaths フィールドとともに使用することで、
+	// エラーメッセージの文字列マッチングに依存せずに untrusted 入力パスを取得できる。
+	IsUntrustedInput bool
+	// UntrustedPaths は IsUntrustedInput が true の場合に、検出された untrusted な
+	// コンテキストパス（例: "github.event.issue.title"）の一覧を保持する。
+	UntrustedPaths []string
 }
 
 // Errorは行、列、オフセット情報を持つエラーメッセージを返します。
