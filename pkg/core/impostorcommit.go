@@ -143,7 +143,7 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 func (rule *ImpostorCommitRule) verifyCommit(owner, repo, sha string) *commitVerificationResult {
 	cacheKey := fmt.Sprintf("%s/%s@%s", owner, repo, sha)
 
-	// First check without lock (fast path)
+	// Check cache
 	rule.commitCacheMu.Lock()
 	if result, ok := rule.commitCache[cacheKey]; ok {
 		rule.commitCacheMu.Unlock()
@@ -213,6 +213,10 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		}
 	}
 
+	// Supplementary check: query branches-where-head API.
+	// Errors are intentionally ignored here (no fail-open) because this is an
+	// optional fast-path; subsequent getDefaultBranch/isReachableFromBranch
+	// calls will fail-open if the API is unavailable.
 	branchCommitsURL := fmt.Sprintf("repos/%s/%s/commits/%s/branches-where-head", owner, repo, sha)
 	req, err := client.NewRequest("GET", branchCommitsURL, nil)
 	if err == nil {

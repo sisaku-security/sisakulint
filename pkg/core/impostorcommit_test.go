@@ -877,9 +877,7 @@ func TestImpostorCommitRule_doVerifyCommit_FailOpenOnTagsError(t *testing.T) {
 func TestImpostorCommitRule_doVerifyCommit_FailOpenOnBranchesError(t *testing.T) {
 	t.Parallel()
 
-	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.URL.Path, "/tags") {
 			// Tags API succeeds with a tag that doesn't match
