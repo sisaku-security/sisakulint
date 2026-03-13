@@ -170,6 +170,9 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **RequestForgeryCriticalRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with privileged triggers (auto-fix supported)
 - **RequestForgeryMediumRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with normal triggers (auto-fix supported)
 - **CacheBloatRule** - Detects cache bloat risk with actions/cache/restore and actions/cache/save without proper conditions (auto-fix supported)
+- **AIActionUnrestrictedTriggerRule** - Detects AI agent actions (claude-code-action, etc.) configured with `allowed_non_write_users: "*"` allowing any GitHub user to trigger AI execution (Clinejection attack pattern)
+- **AIActionExcessiveToolsRule** - Detects AI agent actions with dangerous tools (Bash/Write/Edit) enabled in workflows triggered by untrusted users (issues, issue_comment, discussion) (Clinejection attack pattern)
+- **AIActionPromptInjectionRule** - Detects untrusted user input (github.event.issue.title, github.event.comment.body, etc.) directly interpolated into AI agent prompt parameters, enabling prompt injection attacks (Clinejection attack pattern)
 
 ## Key Files
 
