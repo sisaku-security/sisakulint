@@ -16,3 +16,4 @@ dist/
 .worktrees
 .beads
 .entire/
+.agents/
