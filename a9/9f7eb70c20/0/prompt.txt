@@ -1,0 +1,52 @@
+新しいバージョンリリースしようとしたらこれ：## The Problem
+
+Your `go.mod` file specifies `go 1.25.0` (or higher), but the GitHub Actions runner only has Go 1.24.0 installed, and `GOTOOLCHAIN=local` prevents Go from automatically downloading a newer toolchain.
+
+You have two ways to fix this:
+
+---
+
+### Option 1: Upgrade the Go version in your workflow (recommended)
+
+In your `.github/workflows/release.yml`, make sure the `setup-go` step targets at least `1.25`:
+
+```yaml
+- name: Set up Go
+  uses: actions/setup-go@v5
+  with:
+    go-version: '1.25'   # ← bump this to match your go.mod
+```
+
+---
+
+### Option 2: Downgrade the `go` directive in `go.mod`
+
+If you don't actually need Go 1.25 features, lower the requirement in `go.mod`:
+
+```
+go 1.24.0   # ← match what the runner provides
+```
+
+And run `go mod tidy` locally to verify nothing breaks.
+
+---
+
+### Why `GOTOOLCHAIN=local` matters
+
+The `GOTOOLCHAIN=local` setting tells Go **not** to auto-download a newer toolchain even when `go.mod` demands one — it just errors out instead. You can also override this in your workflow if you prefer letting Go manage its own toolchain:
+
+```yaml
+- name: Set up Go
+  uses: actions/setup-go@v5
+  with:
+    go-version: '1.24'
+
+- name: Allow toolchain auto-download
+  run: go env -w GOTOOLCHAIN=auto
+```
+
+But upgrading the pinned version (Option 1) is the cleanest solution.
+
+---
+
+commit push
