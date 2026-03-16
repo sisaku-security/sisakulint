@@ -402,13 +402,13 @@ func (project *parser) parseStrategy(pos *ast.Position, node *yaml.Node) *ast.St
 //parseContainer
 //*https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idcontainer
 
-func (project *parser) parseStringSequence(sec string, node *yaml.Node, allowEmpty bool, caseSensitive bool) []*ast.String {
+func (project *parser) parseStringSequence(sec string, node *yaml.Node, allowEmpty bool, allowEmptyElement bool) []*ast.String {
 	if ok := project.checkSequence(sec, node, allowEmpty); !ok {
 		return nil
 	}
 	ret := make([]*ast.String, 0, len(node.Content))
 	for _, c := range node.Content {
-		s := project.parseString(c, caseSensitive)
+		s := project.parseString(c, allowEmptyElement)
 		if s != nil {
 			ret = append(ret, s)
 		}
@@ -416,7 +416,7 @@ func (project *parser) parseStringSequence(sec string, node *yaml.Node, allowEmp
 	return ret
 }
 
-func (project *parser) parseSSSequence(sec string, node *yaml.Node, allowEmpty bool, caseSensitive bool) []*ast.String {
+func (project *parser) parseSSSequence(sec string, node *yaml.Node, allowEmpty bool, allowEmptyElement bool) []*ast.String {
 	switch node.Kind {
 	case yaml.DocumentNode:
 		// DocumentNode not supported here
@@ -426,9 +426,9 @@ func (project *parser) parseSSSequence(sec string, node *yaml.Node, allowEmpty b
 		if allowEmpty && node.Tag == "!!null" {
 			return []*ast.String{}
 		}
-		return []*ast.String{project.parseString(node, caseSensitive)}
+		return []*ast.String{project.parseString(node, allowEmptyElement)}
 	case yaml.SequenceNode:
-		return project.parseStringSequence(sec, node, allowEmpty, caseSensitive)
+		return project.parseStringSequence(sec, node, allowEmpty, allowEmptyElement)
 	case yaml.MappingNode:
 		project.errorf(node, "mapping node not supported in string sequence")
 		return []*ast.String{}
@@ -485,7 +485,7 @@ func (project *parser) parseWorkflowDispatchEvent(pos *ast.Position, node *yaml.
 						project.errorf(attract.val, "expected one of \"string\", \"number\", \"boolean\", \"choice\", \"environment\" for \"type\" but found %q", attract.val.Value)
 					}
 				case "options":
-					options = project.parseStringSequence("options", attract.val, false, false)
+					options = project.parseStringSequence("options", attract.val, false, true)
 				default:
 					project.unexpectedKey(attract.key, "input setting for \"workflow_dispatch\" event", []string{"description", "required", "default", "type", "options"})
 				}
