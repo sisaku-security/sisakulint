@@ -120,13 +120,13 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 		if x.Param != nil && x.Param.Value == varName {
 			usage := ShellVarUsage{
 				VarName:    varName,
-				StartPos:   int(x.Pos().Offset()),
-				EndPos:     int(x.End().Offset()),
+				StartPos:   int(x.Pos().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+				EndPos:     int(x.End().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
 				IsQuoted:   p.isParamExpQuoted(x),
 				InEval:     ctx.inEval,
 				InShellCmd: ctx.inShellCmd,
 				InCmdSubst: ctx.inCmdSubst,
-				Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
+				Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
 			}
 			*usages = append(*usages, usage)
 		}
@@ -905,13 +905,13 @@ func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName str
 			usage := VarArgUsage{
 				ShellVarUsage: ShellVarUsage{
 					VarName:    varName,
-					StartPos:   int(x.Pos().Offset()),
-					EndPos:     int(x.End().Offset()),
+					StartPos:   int(x.Pos().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+					EndPos:     int(x.End().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
 					IsQuoted:   p.isParamExpQuoted(x),
 					InEval:     false,
 					InShellCmd: false,
 					InCmdSubst: false,
-					Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())),
+					Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
 				},
 				CommandName:       cmdName,
 				ArgPosition:       argPos,

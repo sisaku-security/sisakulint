@@ -162,7 +162,7 @@ func GenerateActionListConfig(root string) error {
 		buf.WriteString(fmt.Sprintf("  - %s\n", action))
 	}
 
-	if err := os.WriteFile(configPath, []byte(buf.String()), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(buf.String()), 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
