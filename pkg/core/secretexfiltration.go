@@ -446,9 +446,11 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, 
 			})
 		}
 
-		// Check for environment variable usage that contains secrets
+		// Check for environment variable usage that contains secrets.
+		// Only flag if the env var is used in a data-sending context (after a data flag),
+		// not when it is used as the URL destination argument (e.g. webhook URL).
 		for envName, secretRef := range envSecrets {
-			if rule.lineUsesEnvVar(line, envName) {
+			if rule.lineUsesEnvVar(line, envName) && !rule.isEnvVarUsedAsURL(line, envName, cmd) {
 				pos := rule.calculatePosition(runStr, lineIdx, lineOffset, line, "$"+envName)
 				severity := "high"
 				if cmd.isHighRisk && rule.hasDataFlag(line, cmd) {
@@ -545,6 +547,107 @@ func (rule *SecretExfiltrationRule) lineUsesEnvVar(line, envName string) bool {
 		}
 	}
 	return false
+}
+
+// headerFlags are flags that carry metadata (headers), not data payloads.
+// An env var inside a header flag's quoted argument (e.g. -H "Authorization: Bearer $SECRET")
+// is exfiltration, but an env var as a separate positional argument after a header flag
+// (e.g. curl -H "Content-Type: application/json" "$WEBHOOK_URL") is a URL destination.
+var headerFlags = map[string]bool{
+	"-H": true, "--header": true,
+}
+
+// isEnvVarUsedAsURL checks if an env var appears as the URL destination argument in a network
+// command rather than in a data-sending context.
+//
+// The check distinguishes between:
+//   - Payload flags (-d, --data, -F, etc.): if any appears before the env var, the env var
+//     is in a data-sending context → flag it.
+//   - Header flags (-H, --header): if the env var is inside the flag's quoted argument
+//     (e.g. -H "Authorization: Bearer $SECRET") → flag it. If the env var is a separate
+//     positional argument (e.g. curl -H "Content-Type: ..." "$WEBHOOK") → it's the URL.
+//
+// Returns true if the env var is the URL (should NOT be flagged as exfiltration).
+// For commands without data flags (nc, netcat, etc.), always returns false since any
+// secret usage with those commands is suspicious.
+func (rule *SecretExfiltrationRule) isEnvVarUsedAsURL(line, envName string, cmd networkCommand) bool {
+	if len(cmd.dataFlags) == 0 {
+		return false
+	}
+
+	// Find the position of the env var in the line
+	varPatterns := []string{
+		`\$` + regexp.QuoteMeta(envName) + `(?:\s|$|"|'|;|\\)`,
+		`\$\{` + regexp.QuoteMeta(envName) + `\}`,
+	}
+
+	varIdx := -1
+	for _, p := range varPatterns {
+		re := regexp.MustCompile(p)
+		match := re.FindStringIndex(line)
+		if match != nil {
+			varIdx = match[0]
+			break
+		}
+	}
+
+	if varIdx == -1 {
+		return false
+	}
+
+	// Check if the env var is inside a header flag's quoted argument.
+	// e.g. -H "Authorization: Bearer $API_KEY" → env var is in the header value → flag it.
+	for _, flag := range cmd.dataFlags {
+		if !headerFlags[flag] {
+			continue
+		}
+		// Match: -H "...$ENV_VAR..." or -H '...$ENV_VAR...'
+		for _, q := range []string{`"`, `'`} {
+			pattern := regexp.QuoteMeta(flag) + `\s+` + q + `[^` + q + `]*` +
+				`\$(?:` + regexp.QuoteMeta(envName) + `|\{` + regexp.QuoteMeta(envName) + `\})`
+			re := regexp.MustCompile(pattern)
+			if re.MatchString(line) {
+				return false // env var is inside header value, not a URL
+			}
+		}
+	}
+
+	// Check if any payload flag's value is still "open" at the env var position.
+	// A payload flag whose quoted value is closed before varIdx means the env var
+	// is a separate positional argument (the URL destination), not the payload.
+	for _, flag := range cmd.dataFlags {
+		if headerFlags[flag] {
+			continue // already handled above
+		}
+		re := regexp.MustCompile(regexp.QuoteMeta(flag) + `(?:\s|=)`)
+		matches := re.FindAllStringIndex(line, -1)
+		for _, match := range matches {
+			if match[0] >= varIdx {
+				continue // flag is after env var, irrelevant
+			}
+			// Flag appears before env var. Check whether its value is still open
+			// (unclosed quote) at the env var position.
+			afterFlag := strings.TrimLeft(line[match[1]:varIdx], " \t")
+			if afterFlag == "" {
+				// Flag marker immediately precedes env var (unquoted positional).
+				return false
+			}
+			if strings.HasPrefix(afterFlag, `"`) {
+				if !strings.Contains(afterFlag[1:], `"`) {
+					return false // double-quoted value not closed at env var position
+				}
+			} else if strings.HasPrefix(afterFlag, `'`) {
+				if !strings.Contains(afterFlag[1:], `'`) {
+					return false // single-quoted value not closed at env var position
+				}
+			}
+			// Otherwise the flag's value is fully closed; the env var is a
+			// separate positional argument (URL destination).
+		}
+	}
+
+	// No open payload flag precedes the env var, and env var is not in a header value.
+	return true
 }
 
 // calculatePosition calculates the position for an error
