@@ -87,36 +87,73 @@ The attacker's modified `actions/checkout` could:
 
 ### Technical Detection Mechanism
 
-The rule implements a multi-stage verification process:
+The rule implements a 5-stage verification pipeline. Each stage is an independent check; if a stage confirms the commit is legitimate, verification stops immediately. All API failure paths **fail open** (i.e., assume legitimate) to avoid false positives.
 
-**Stage 1: Fast Path - Tag/Branch Tips**
+**Stage 1: Fast Path — Tag Tips**
+
+Fetches up to 500 tags (5 pages × 100) via `getTags()` and compares each tag's HEAD SHA against the target. Also records the latest semver tag for auto-fix suggestions.
 
 ```go
-// Check if SHA matches any tag or branch tip
 tags := rule.getTags(ctx, client, owner, repo)
 for _, tag := range tags {
-    if tag.GetCommit().GetSHA() == sha {
-        return &commitVerificationResult{isImpostor: false}
-    }
+    if tag.GetCommit().GetSHA() == sha { return legitimate }
 }
 ```
 
-**Stage 2: Medium Path - Branch Commits API**
+*Fail-open:* If the first page of the tags API fails (e.g., rate-limited), verification returns `isImpostor: false` immediately.
+
+**Stage 2: Fast Path — Branch Tips**
+
+Fetches up to 300 branches (3 pages × 100) via `getBranches()` and compares each branch HEAD SHA. This catches commits that are the current HEAD of any branch, including non-default branches (e.g., `stable`, `release/*`).
 
 ```go
-// Use GitHub's undocumented branches-where-head API
-branchCommitsURL := fmt.Sprintf("repos/%s/%s/commits/%s/branches-where-head", owner, repo, sha)
-```
-
-**Stage 3: Slow Path - Compare API**
-
-```go
-// Check if commit is in the history of main branches
-comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, branchName, sha, nil)
-if comparison.GetStatus() == "behind" || comparison.GetStatus() == "identical" {
-    return &commitVerificationResult{isImpostor: false}
+branches := rule.getBranches(ctx, client, owner, repo)
+for _, branch := range branches {
+    if branch.GetCommit().GetSHA() == sha { return legitimate }
 }
 ```
+
+*Fail-open:* If the first page of the branches API fails, verification returns `isImpostor: false` immediately.
+
+**Stage 3: Targeted Check — `branches-where-head` API**
+
+Uses the typed `ListBranchesHeadCommit` API (`GET /repos/{owner}/{repo}/commits/{sha}/branches-where-head`) to check whether the SHA is the HEAD of any branch. This handles repositories with 300+ branches where Stage 2's pagination limit may miss the match.
+
+```go
+isBranchHead, err := rule.isBranchHead(ctx, client, owner, repo, sha)
+if isBranchHead { return legitimate }
+```
+
+*Note on git alternates:* GitHub's `GET /commits/{sha}` endpoint may return `200 OK` for commits that only exist in the fork network (due to git alternates / shared object storage). This is why a simple "does the commit exist?" check is insufficient — the `branches-where-head` API is needed to verify the commit is actually referenced by a branch.
+
+*Fail behavior:* Errors are logged but do **not** fail-open here, because subsequent stages provide the safety net.
+
+**Stage 4: Fallback — Default Branch Reachability**
+
+Fetches the repository's default branch name via `getDefaultBranch()` (falls back to `"main"` on API error), then uses `CompareCommits` to check if the SHA is an ancestor of that branch (status `"behind"` or `"identical"`).
+
+```go
+defaultBranch := rule.getDefaultBranch(ctx, client, owner, repo)
+reachable := rule.isReachableFromBranch(ctx, client, owner, repo, defaultBranch, sha)
+if reachable { return legitimate }
+```
+
+*Fail-open:* If `CompareCommits` fails, verification returns `isImpostor: false`.
+
+**Stage 5: Extended — Per-Tag Reachability**
+
+Compares the SHA against up to 10 recent tags using `CompareCommits`. If any tag can reach the SHA (`"behind"` or `"identical"`), it is legitimate.
+
+```go
+for _, tag := range tags[:maxTagCompareCommits] {
+    comparison := client.Repositories.CompareCommits(ctx, owner, repo, tagSha, sha, nil)
+    if comparison.GetStatus() == "behind" || comparison.GetStatus() == "identical" { return legitimate }
+}
+```
+
+*Fail-open:* If all tag comparisons fail (e.g., rate-limited), verification returns `isImpostor: false`.
+
+**Final verdict:** If all 5 stages pass without confirming legitimacy, the commit is flagged as an impostor.
 
 ### Detection Logic Explanation
 
@@ -165,7 +202,11 @@ False positives can occur in these scenarios:
 
 3. **Rate limiting**
    - GitHub API rate limits may prevent verification
-   - Errors are logged but don't fail the lint
+   - All API failure paths fail open — the rule will NOT flag a commit as impostor when the API is unavailable
+
+4. ~~**Non-default branch HEAD commits**~~ *(Fixed)*
+   - Previously, commits at the HEAD of non-default branches (e.g., `stable`, `release/v2`) could be falsely flagged
+   - Now resolved by `getBranches()` (Stage 2) and the `branches-where-head` API (Stage 3)
 
 ### References
 
