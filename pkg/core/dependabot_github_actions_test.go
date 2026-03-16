@@ -82,7 +82,7 @@ updates:
       interval: "daily"
 `
 	dependabotPath := filepath.Join(githubDir, "dependabot.yaml")
-	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil {
+	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
 		t.Fatal(err)
 	}
 
@@ -143,7 +143,7 @@ updates:
       interval: "weekly"
 `
 	dependabotPath := filepath.Join(githubDir, "dependabot.yaml")
-	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil {
+	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
 		t.Fatal(err)
 	}
 
@@ -347,7 +347,7 @@ updates:
       interval: "daily"
 `
 	dependabotPath := filepath.Join(githubDir, "dependabot.yaml")
-	if err := os.WriteFile(dependabotPath, []byte(existingContent), 0o644); err != nil {
+	if err := os.WriteFile(dependabotPath, []byte(existingContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
 		t.Fatal(err)
 	}
 
@@ -392,7 +392,7 @@ updates:
       interval: "weekly"
 `
 	dependabotPath := filepath.Join(githubDir, "dependabot.yml")
-	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil {
+	if err := os.WriteFile(dependabotPath, []byte(dependabotContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
 		t.Fatal(err)
 	}
 

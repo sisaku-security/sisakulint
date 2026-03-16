@@ -129,7 +129,7 @@ action-list:
 # 🧠 Example: some-option: value
 # Note: Refer to the sisakulint documentation for more information on available settings.
 	`)
-	if err := os.WriteFile(path, b, 0644); err != nil {
+	if err := os.WriteFile(path, b, 0644); err != nil { //nolint:gosec // config file is committed to git and must be readable by CI
 		return fmt.Errorf("failed to write config file %q: %w", path, err)
 	}
 	return nil

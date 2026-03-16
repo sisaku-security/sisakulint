@@ -243,7 +243,7 @@ updates:
       interval: "weekly"
 `
 
-	return os.WriteFile(path, []byte(content), 0o644)
+	return os.WriteFile(path, []byte(content), 0o644) //nolint:gosec // dependabot.yaml is committed to git and must be readable by CI
 }
 
 // updateDependabotFile updates existing dependabot.yaml to add github-actions ecosystem.
@@ -304,5 +304,5 @@ func updateDependabotFile(dependabotPath string) error {
 		return err
 	}
 
-	return os.WriteFile(dependabotPath, output, 0o644)
+	return os.WriteFile(dependabotPath, output, 0o644) //nolint:gosec // dependabot.yaml is committed to git and must be readable by CI
 }

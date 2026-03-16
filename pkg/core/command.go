@@ -153,10 +153,10 @@ func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) {
 		if isDryRun {
 			fmt.Fprintf(cmd.Stdout, "Fixed workflow %s:\n%s\n", res.FilePath, string(data))
 		} else {
-			err := os.WriteFile(res.FilePath, data, 0644)
+			err := os.WriteFile(res.FilePath, data, 0644) //nolint:gosec // auto-fix overwrites existing workflow files; preserving 0644 for git and CI compatibility
 			if err != nil {
 				fmt.Fprintf(cmd.Stderr, "Error while writing the fixed workflow: %v\n", err)
-				err := os.WriteFile(res.FilePath, res.Source, 0644) // restore the original file
+				err := os.WriteFile(res.FilePath, res.Source, 0644) //nolint:gosec // restore original workflow file
 				if err != nil {
 					fmt.Fprintf(cmd.Stderr, "Error while restoring the original workflow: %v\n", err)
 				}

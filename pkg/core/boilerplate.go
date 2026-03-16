@@ -102,7 +102,7 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v3
 	`)
-	if err := os.WriteFile(path, b, 0644); err != nil {
+	if err := os.WriteFile(path, b, 0644); err != nil { //nolint:gosec // workflow files require group-readable permissions for git and CI
 		return fmt.Errorf("failed to write config file %q: %w", path, err)
 	}
 	return nil
