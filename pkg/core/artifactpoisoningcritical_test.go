@@ -92,6 +92,11 @@ func TestDetectRunnerOS(t *testing.T) {
 			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos"}}},
 			wantOS: "macos",
 		},
+		{
+			name:   "mac label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "mac"}}},
+			wantOS: "macos",
+		},
 		// unknown
 		{
 			name:   "self-hosted only",
@@ -173,7 +178,7 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "Windows C drive on linux", path: `C:\Temp\artifacts`, runnerOS: "linux", wantUnsafe: true},
 		{name: "Windows C drive on macos", path: "C:/Temp/artifacts", runnerOS: "macos", wantUnsafe: true},
 		{name: "Windows C drive on unknown", path: `C:\Temp\artifacts`, runnerOS: "unknown", wantUnsafe: true},
-		{name: "Windows workspace path on windows", path: `C:\actions-runner\_work\repo\artifacts`, runnerOS: "windows", wantUnsafe: false},
+		{name: "Windows absolute path on windows runner", path: `C:\actions-runner\_work\repo\artifacts`, runnerOS: "windows", wantUnsafe: false},
 	}
 
 	for _, tt := range tests {
