@@ -94,7 +94,7 @@ func isUnsafePath(path string, runnerOS string) bool {
 	if strings.HasPrefix(path, "/") {
 		switch runnerOS {
 		case "linux", "macos":
-			return false // All absolute Unix paths are outside the workspace
+			return false // Absolute Unix paths with no workspace expression are treated as safe on Linux/macOS
 		case "windows":
 			return true // Wrong OS
 		default: // "unknown" - conservative: only /tmp is safe
@@ -156,7 +156,7 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	}
 
 	if isUnsafePath(pathValue, "unknown") {
-		if pathValue == "" {
+		if pathValue == "" || strings.TrimSpace(pathValue) == "" {
 			// Missing or empty path - safe to auto-fix
 			rule.Errorf(
 				step.Pos,

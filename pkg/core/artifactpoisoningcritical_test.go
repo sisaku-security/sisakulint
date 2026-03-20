@@ -747,6 +747,24 @@ func TestArtifactPoisoning_Integration(t *testing.T) {
 			wantErrors:     1,
 			wantAutoFixers: 0, // No auto-fix for existing unsafe paths
 		},
+		{
+			name: "whitespace-only path creates error and autofixer",
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "   "},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors:     1,
+			wantAutoFixers: 1,
+		},
 	}
 
 	for _, tt := range tests {
