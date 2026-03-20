@@ -103,6 +103,11 @@ func TestDetectRunnerOS(t *testing.T) {
 			runner: &ast.Runner{Labels: []*ast.String{}},
 			wantOS: "unknown",
 		},
+		{
+			name:   "nil label element",
+			runner: &ast.Runner{Labels: []*ast.String{nil, {Value: "ubuntu-latest"}}},
+			wantOS: "linux",
+		},
 	}
 
 	for _, tt := range tests {

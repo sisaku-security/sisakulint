@@ -36,14 +36,15 @@ func detectRunnerOS(runner *ast.Runner) string {
 		if label == nil {
 			continue
 		}
-		lower := strings.ToLower(label.Value)
-		if strings.HasPrefix(lower, "ubuntu-") || lower == "linux" {
+		v := label.Value
+		lower := strings.ToLower(v)
+		if strings.HasPrefix(lower, "ubuntu-") || strings.EqualFold(v, "linux") {
 			return "linux"
 		}
-		if strings.HasPrefix(lower, "windows-") || lower == "windows" {
+		if strings.HasPrefix(lower, "windows-") || strings.EqualFold(v, "windows") {
 			return "windows"
 		}
-		if strings.HasPrefix(lower, "macos-") || lower == "macos" || lower == "mac" {
+		if strings.HasPrefix(lower, "macos-") || strings.EqualFold(v, "macos") || strings.EqualFold(v, "mac") {
 			return "macos"
 		}
 	}
