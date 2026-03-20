@@ -51,55 +51,63 @@ func detectRunnerOS(runner *ast.Runner) string {
 	return "unknown"
 }
 
-// isUnsafePath checks if the provided path is unsafe for artifact extraction.
-// Safe paths must use runner.temp to isolate artifacts from the workspace.
-// Absolute paths outside the workspace (like /tmp on Linux) are also safe.
-func isUnsafePath(path string) bool {
+// isWindowsAbsPath reports whether path is an absolute Windows path (e.g. C:\, D:/).
+func isWindowsAbsPath(path string) bool {
+	if len(path) < 3 {
+		return false
+	}
+	drive := path[0]
+	return ((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')) &&
+		path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+}
+
+// isUnsafePath reports whether path is unsafe for artifact extraction.
+// runnerOS must be "linux", "windows", "macos", or "unknown".
+// A safe path is one guaranteed to be outside the workspace on the given OS.
+func isUnsafePath(path string, runnerOS string) bool {
 	if path == "" {
 		return true
 	}
 
-	// Trim whitespace
 	path = strings.TrimSpace(path)
 
-	// Workspace-relative paths are unsafe
+	// Workspace-relative paths are unsafe on all OS
 	if path == "." || path == "./" {
 		return true
 	}
-
-	// Relative paths (even if not directly in workspace root) are unsafe
 	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
 		return true
 	}
-
-	// Check for github.workspace reference (unsafe)
 	if strings.Contains(path, "github.workspace") {
 		return true
 	}
-
-	// Check for GITHUB_WORKSPACE env var (unsafe)
 	if strings.Contains(path, "GITHUB_WORKSPACE") {
 		return true
 	}
 
-	// runner.temp is safe (cross-platform recommended approach)
+	// runner.temp is safe on all OS (cross-platform recommended)
 	if strings.Contains(path, "runner.temp") || strings.Contains(path, "RUNNER_TEMP") {
 		return false
 	}
 
-	// System temporary directory /tmp is safe (Linux/macOS)
-	// This is outside the workspace and cannot overwrite source files
-	// Note: We only allow /tmp, not all absolute paths, to maintain security
-	if strings.HasPrefix(path, "/tmp/") || path == "/tmp" {
-		return false
+	// Unix absolute paths
+	if strings.HasPrefix(path, "/") {
+		switch runnerOS {
+		case "linux", "macos":
+			return false // All absolute Unix paths are outside the workspace
+		case "windows":
+			return true // Wrong OS
+		default: // "unknown" - conservative: only /tmp is safe
+			return !(strings.HasPrefix(path, "/tmp/") || path == "/tmp")
+		}
 	}
 
-	// All other paths are unsafe (including relative paths and arbitrary absolute paths)
-	// This includes:
-	// - Relative paths: "artifacts", "./build"
-	// - Workspace paths: "/home/runner/work/repo/artifacts"
-	// - Windows paths: "C:\", "D:\" (too broad to safely validate without OS context)
-	// - Other absolute paths: "/var/", "/home/", etc.
+	// Windows absolute paths
+	if isWindowsAbsPath(path) {
+		return runnerOS != "windows"
+	}
+
+	// Everything else (relative paths, bare names, etc.)
 	return true
 }
 
@@ -147,7 +155,7 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 		pathValue = pathInput.Value.Value
 	}
 
-	if isUnsafePath(pathValue) {
+	if isUnsafePath(pathValue, "unknown") {
 		if pathValue == "" {
 			// Missing or empty path - safe to auto-fix
 			rule.Errorf(
