@@ -8,7 +8,8 @@ import (
 
 type ArtifactPoisoning struct {
 	BaseRule
-	hasCheckout bool // Tracks if the current job checks out the repository
+	hasCheckout   bool // Tracks if the current job checks out the repository
+	currentRunsOn *ast.Runner
 }
 
 func ArtifactPoisoningRule() *ArtifactPoisoning {
@@ -116,6 +117,7 @@ func isUnsafePath(path string, runnerOS string) bool {
 // poisoning non-exploitable even with workspace-relative paths.
 func (rule *ArtifactPoisoning) VisitJobPre(job *ast.Job) error {
 	rule.hasCheckout = false
+	rule.currentRunsOn = job.RunsOn
 	for _, step := range job.Steps {
 		if action, ok := step.Exec.(*ast.ExecAction); ok {
 			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/checkout@") {
@@ -155,7 +157,7 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 		pathValue = pathInput.Value.Value
 	}
 
-	if isUnsafePath(pathValue, "unknown") {
+	if isUnsafePath(pathValue, detectRunnerOS(rule.currentRunsOn)) {
 		if pathValue == "" || strings.TrimSpace(pathValue) == "" {
 			// Missing or empty path - safe to auto-fix
 			rule.Errorf(

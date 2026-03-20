@@ -189,6 +189,7 @@ func TestIsUnsafePath(t *testing.T) {
 func TestArtifactPoisoning_VisitStep(t *testing.T) {
 	tests := []struct {
 		name       string
+		runsOn     *ast.Runner
 		step       *ast.Step
 		wantErrors int
 	}{
@@ -479,6 +480,78 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			},
 			wantErrors: 1,
 		},
+		{
+			name:   "Windows path on windows runner - no error",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "windows-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: `C:\Temp\artifacts`},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0,
+		},
+		{
+			name:   "Windows path on linux runner - should error",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: `C:\Temp\artifacts`},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
+		{
+			name:   "/var path on linux runner - no error",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "/var/tmp/artifacts"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0,
+		},
+		{
+			name:   "/var path on unknown runner - should error",
+			runsOn: nil,
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "/var/tmp/artifacts"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -487,6 +560,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
+				RunsOn: tt.runsOn,
 				Steps: []*ast.Step{
 					{
 						Exec: &ast.ExecAction{
