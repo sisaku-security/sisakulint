@@ -20,6 +20,101 @@ func TestArtifactPoisoningRule(t *testing.T) {
 	}
 }
 
+func TestDetectRunnerOS(t *testing.T) {
+	tests := []struct {
+		name   string
+		runner *ast.Runner
+		wantOS string
+	}{
+		// nil runner
+		{name: "nil runner", runner: nil, wantOS: "unknown"},
+		// expression (e.g. ${{ matrix.os }})
+		{
+			name: "expression label",
+			runner: &ast.Runner{
+				LabelsExpr: &ast.String{Value: "${{ matrix.os }}"},
+			},
+			wantOS: "unknown",
+		},
+		// Linux
+		{
+			name:   "ubuntu-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "ubuntu-22.04",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-22.04"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "linux label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "linux"}}},
+			wantOS: "linux",
+		},
+		{
+			name: "self-hosted linux array",
+			runner: &ast.Runner{Labels: []*ast.String{
+				{Value: "self-hosted"},
+				{Value: "linux"},
+			}},
+			wantOS: "linux",
+		},
+		// Windows
+		{
+			name:   "windows-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows-latest"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "windows-2022",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows-2022"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "windows label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows"}}},
+			wantOS: "windows",
+		},
+		// macOS
+		{
+			name:   "macos-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos-latest"}}},
+			wantOS: "macos",
+		},
+		{
+			name:   "macos-14",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos-14"}}},
+			wantOS: "macos",
+		},
+		{
+			name:   "macos label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos"}}},
+			wantOS: "macos",
+		},
+		// unknown
+		{
+			name:   "self-hosted only",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "self-hosted"}}},
+			wantOS: "unknown",
+		},
+		{
+			name:   "empty labels",
+			runner: &ast.Runner{Labels: []*ast.String{}},
+			wantOS: "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := detectRunnerOS(tt.runner)
+			if got != tt.wantOS {
+				t.Errorf("detectRunnerOS() = %q, want %q", got, tt.wantOS)
+			}
+		})
+	}
+}
+
 // TestIsUnsafePath tests the isUnsafePath function with various path inputs
 func TestIsUnsafePath(t *testing.T) {
 	tests := []struct {

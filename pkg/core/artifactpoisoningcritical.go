@@ -20,6 +20,36 @@ func ArtifactPoisoningRule() *ArtifactPoisoning {
 	}
 }
 
+// detectRunnerOS returns the OS type based on the runner labels.
+// Returns "linux", "windows", "macos", or "unknown".
+func detectRunnerOS(runner *ast.Runner) string {
+	if runner == nil {
+		return "unknown"
+	}
+
+	// Expression (e.g. ${{ matrix.os }}) - cannot determine OS
+	if runner.LabelsExpr != nil {
+		return "unknown"
+	}
+
+	for _, label := range runner.Labels {
+		if label == nil {
+			continue
+		}
+		lower := strings.ToLower(label.Value)
+		if strings.HasPrefix(lower, "ubuntu-") || lower == "linux" {
+			return "linux"
+		}
+		if strings.HasPrefix(lower, "windows-") || lower == "windows" {
+			return "windows"
+		}
+		if strings.HasPrefix(lower, "macos-") || lower == "macos" || lower == "mac" {
+			return "macos"
+		}
+	}
+	return "unknown"
+}
+
 // isUnsafePath checks if the provided path is unsafe for artifact extraction.
 // Safe paths must use runner.temp to isolate artifacts from the workspace.
 // Absolute paths outside the workspace (like /tmp on Linux) are also safe.
