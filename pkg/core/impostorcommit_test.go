@@ -1144,6 +1144,122 @@ func TestImpostorCommitRule_ForkNetworkImpostor(t *testing.T) {
 	}
 }
 
+// TestImpostorCommitRule_LatestTagExcludesFakeTag tests that latestTag in the result
+// does NOT point to the impostor SHA itself. When a fake tag (e.g. v0.69.4) points
+// to the impostor commit and a legitimate previous tag (e.g. v0.69.3) also exists,
+// auto-fix must use the legitimate tag — not the attacker-controlled one.
+func TestImpostorCommitRule_LatestTagExcludesFakeTag(t *testing.T) {
+	t.Parallel()
+
+	const impostorSha = "1885610ba91f78a85bd655ee2d5bc4bc06d2e43b"
+	const legitimateSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// v0.69.4 is the fake tag pointing to impostor; v0.69.3 is the legitimate previous tag
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w,
+				`[{"name":"v0.69.4","commit":{"sha":"%s"}},{"name":"v0.69.3","commit":{"sha":"%s"}}]`,
+				impostorSha, legitimateSha)
+		case strings.Contains(path, "/branches-where-head"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}]`))
+		case strings.HasSuffix(path, "/repos/aquasecurity/trivy-action"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":5,"behind_by":0,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("aquasecurity", "trivy-action", impostorSha)
+	if !result.isImpostor {
+		t.Error("expected isImpostor to be true")
+	}
+	// auto-fix must NOT suggest the fake tag that points to the impostor SHA
+	if result.latestTag == "v0.69.4" {
+		t.Errorf("latestTag must not be the fake tag 'v0.69.4' that points to the impostor SHA; auto-fix would re-use the malicious commit")
+	}
+	if result.latestTag != "v0.69.3" {
+		t.Errorf("expected latestTag to be the legitimate previous tag 'v0.69.3', got %q", result.latestTag)
+	}
+}
+
+// TestImpostorCommitRule_TagPointingToForkCommitIsImpostor tests that a SHA which is
+// pointed to by a tag but NOT reachable from the default branch is flagged as an impostor.
+// This reproduces the Trivy supply chain attack pattern where an attacker with
+// write access created a fake tag (e.g. v0.69.4) pointing to a fork commit, bypassing
+// the previous early-return check that treated any tag-SHA match as legitimate.
+func TestImpostorCommitRule_TagPointingToForkCommitIsImpostor(t *testing.T) {
+	t.Parallel()
+
+	// The fork commit injected by the attacker via a fake tag
+	const impostorSha = "1885610ba91f78a85bd655ee2d5bc4bc06d2e43b"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// The attacker created a fake v0.69.4 tag pointing to the impostor SHA
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `[{"name":"v0.69.4","commit":{"sha":"%s"}}]`, impostorSha)
+		case strings.Contains(path, "/branches-where-head"):
+			// Not a branch HEAD in the official repo
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			// Official branches — none match the impostor SHA
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]`))
+		case strings.HasSuffix(path, "/repos/aquasecurity/trivy-action"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// Fork commit is diverged from all branches and the fake tag itself
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":5,"behind_by":0,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("aquasecurity", "trivy-action", impostorSha)
+	if !result.isImpostor {
+		t.Error("expected isImpostor to be true: tag v0.69.4 points to a fork commit not reachable from main, but got false")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+	// The only tag (v0.69.4) points to the impostor SHA itself — it must not be
+	// used as an auto-fix suggestion. No safe alternative tag exists, so latestTag
+	// should be empty.
+	if result.latestTag != "" {
+		t.Errorf("expected latestTag to be empty (fake tag must not be suggested), got %q", result.latestTag)
+	}
+}
+
 // TestImpostorCommitRule_BranchHeadAPIUnavailable_FallthroughToReachability tests that
 // when the branches-where-head API is unavailable (500), the rule falls through to
 // the default branch reachability check and succeeds.
