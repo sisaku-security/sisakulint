@@ -346,17 +346,23 @@ func buildLogicalCommand(lines []string, startIdx int) string {
 
 // resolveVarInScript looks up shell variable assignments within script and returns the
 // assigned value for varName, or "" if not found.
+// When the variable is assigned multiple times, the last assignment is returned to match
+// shell semantics where later assignments overwrite earlier ones. This prevents a bypass
+// where an attacker shadows a legitimate assignment with a malicious one.
 func resolveVarInScript(script, varName string) string {
-	// Match: VAR="value", VAR='value', or VAR=value (no quotes)
-	patterns := []string{
-		`(?m)^\s*` + regexp.QuoteMeta(varName) + `="([^"]+)"`,
-		`(?m)^\s*` + regexp.QuoteMeta(varName) + `='([^']+)'`,
-		`(?m)^\s*` + regexp.QuoteMeta(varName) + `=(\S+)`,
+	// Single regex matching all three quote styles: VAR="value", VAR='value', VAR=value
+	// Group 1: double-quoted value, Group 2: single-quoted value, Group 3: unquoted value
+	pattern := `(?m)^\s*` + regexp.QuoteMeta(varName) + `=(?:"([^"]+)"|'([^']+)'|(\S+))`
+	re := regexp.MustCompile(pattern)
+	all := re.FindAllStringSubmatch(script, -1)
+	if len(all) == 0 {
+		return ""
 	}
-	for _, p := range patterns {
-		re := regexp.MustCompile(p)
-		if m := re.FindStringSubmatch(script); len(m) >= 2 {
-			return m[1]
+	// Take the last assignment to match shell semantics.
+	last := all[len(all)-1]
+	for _, group := range last[1:] {
+		if group != "" {
+			return group
 		}
 	}
 	return ""

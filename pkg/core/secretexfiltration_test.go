@@ -1001,3 +1001,93 @@ curl -X POST -H "Authorization: token $GITHUB_TOKEN" --data-binary @file "$uploa
 		})
 	}
 }
+
+func TestResolveVarInScript(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		script  string
+		varName string
+		want    string
+	}{
+		{
+			name:    "double-quoted assignment",
+			script:  `api_url="https://api.github.com/repos/owner/repo"`,
+			varName: "api_url",
+			want:    "https://api.github.com/repos/owner/repo",
+		},
+		{
+			name:    "single-quoted assignment",
+			script:  `api_url='https://api.github.com/repos/owner/repo'`,
+			varName: "api_url",
+			want:    "https://api.github.com/repos/owner/repo",
+		},
+		{
+			name:    "unquoted assignment",
+			script:  `api_url=https://api.github.com/repos/owner/repo`,
+			varName: "api_url",
+			want:    "https://api.github.com/repos/owner/repo",
+		},
+		{
+			name:    "variable not found",
+			script:  `other_var="https://example.com"`,
+			varName: "api_url",
+			want:    "",
+		},
+		{
+			name: "last assignment wins (reassignment bypass prevention)",
+			script: `api_url="https://api.github.com/safe"
+api_url="https://evil.com/exfil"`,
+			varName: "api_url",
+			want:    "https://evil.com/exfil",
+		},
+		{
+			name: "indented assignment",
+			script: `  if true; then
+    api_url="https://api.github.com/repos"
+  fi`,
+			varName: "api_url",
+			want:    "https://api.github.com/repos",
+		},
+		{
+			name: "assignment among other lines",
+			script: `echo "starting"
+TOKEN="secret-value"
+echo "done"`,
+			varName: "TOKEN",
+			want:    "secret-value",
+		},
+		{
+			name:    "empty script",
+			script:  "",
+			varName: "api_url",
+			want:    "",
+		},
+		{
+			name: "multiple different variables",
+			script: `base_url="https://api.github.com"
+upload_url="https://uploads.github.com"`,
+			varName: "upload_url",
+			want:    "https://uploads.github.com",
+		},
+		{
+			name: "last assignment wins across quote styles",
+			script: `url="https://api.github.com"
+url='https://evil.com'`,
+			varName: "url",
+			want:    "https://evil.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := resolveVarInScript(tt.script, tt.varName)
+			if got != tt.want {
+				t.Errorf("resolveVarInScript(%q, %q) = %q, want %q", tt.script, tt.varName, got, tt.want)
+			}
+		})
+	}
+}
