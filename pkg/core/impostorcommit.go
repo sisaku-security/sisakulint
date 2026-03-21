@@ -181,19 +181,27 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	var latestTag string
 	for _, tag := range tags {
+		tagName := tag.GetName()
 		if tag.GetCommit().GetSHA() == sha {
-			return &commitVerificationResult{isImpostor: false}
+			// Do NOT use this tag as a latestTag suggestion. A fake tag pointing to
+			// the impostor SHA must not be offered as an auto-fix target — doing so
+			// would "fix" the workflow to the same malicious commit (Trivy 2026-03).
+			// Fall through to the reachability check without returning early.
+			continue
 		}
-		if latestTag == "" && tag.GetName() != "" {
-			tagName := tag.GetName()
-			if strings.HasPrefix(tagName, "v") {
-				latestTag = tagName
-			}
+		if latestTag == "" && tagName != "" && strings.HasPrefix(tagName, "v") {
+			latestTag = tagName
 		}
 	}
 
 	if latestTag == "" && len(tags) > 0 {
-		latestTag = tags[0].GetName()
+		// Use the first tag that does NOT point to the impostor SHA.
+		for _, tag := range tags {
+			if tag.GetCommit().GetSHA() != sha && tag.GetName() != "" {
+				latestTag = tag.GetName()
+				break
+			}
+		}
 	}
 
 	rule.latestTagCacheMu.Lock()
@@ -237,8 +245,10 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 
 	// Check reachability from recent tags (limited to avoid exhausting API rate limits).
-	// Track whether any comparison succeeded to detect API degradation.
-	var tagCompareSuccess bool
+	// hadComparableTag tracks whether at least one tag (other than a self-pointing fake
+	// tag) was attempted. tagCompareSuccess tracks whether at least one API call succeeded.
+	// We only fail-open when API calls were attempted but all failed.
+	var tagCompareSuccess, hadComparableTag bool
 	for i, tag := range tags {
 		if i >= maxTagCompareCommits {
 			break
@@ -247,6 +257,13 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		if tagSha == "" {
 			continue
 		}
+		// Skip comparing the SHA against itself. A fake tag pointing directly to
+		// the impostor SHA would cause CompareCommits(sha, sha) → "identical",
+		// falsely clearing the impostor flag (Trivy supply chain attack).
+		if tagSha == sha {
+			continue
+		}
+		hadComparableTag = true
 		comparison, _, err := client.Repositories.CompareCommits(ctx, owner, repo, tagSha, sha, nil)
 		if err != nil {
 			continue
@@ -258,10 +275,12 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		}
 	}
 
-	// If we had tags to compare but all API calls failed, fail open
-	if len(tags) > 0 && !tagCompareSuccess {
+	// If we had non-self tags to compare but all API calls failed, fail open to avoid
+	// false positives caused by transient API degradation.
+	if hadComparableTag && !tagCompareSuccess {
 		return &commitVerificationResult{
 			isImpostor: false,
+			latestTag:  latestTag,
 			err:        fmt.Errorf("all tag comparison API calls failed for %s/%s, failing open", owner, repo),
 		}
 	}
