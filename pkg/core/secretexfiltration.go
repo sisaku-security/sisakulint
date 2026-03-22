@@ -37,6 +37,7 @@ var networkCommands = []networkCommand{
 		isHighRisk: true,
 		legitPatterns: []string{
 			"api.github.com",
+			"uploads.github.com",
 			"registry.npmjs.org",
 			"pypi.org",
 			"upload.pypi.org",
@@ -300,21 +301,101 @@ func (rule *SecretExfiltrationRule) isLegitimateUse(script string) bool {
 	return false
 }
 
-// buildLogicalCommand joins a line and its shell line-continuation lines
-// (lines ending with '\') into a single logical command string.
-// This is used to check legitimate patterns even when the URL is on a
-// continuation line (e.g., curl -H "Auth: ${{ secrets.TOKEN }}" \
-//                               "https://api.github.com/...").
+// buildLogicalCommand joins a line and its continuation lines into a single logical
+// command string. It handles two kinds of continuations:
+//  1. Shell line-continuation: lines ending with '\'
+//  2. Open single-quoted strings: a line that contains an unmatched ' keeps
+//     collecting subsequent lines until the quote is closed.
+//
+// This ensures that multi-line curl commands such as:
+//
+//	curl -H "Auth: $TOKEN" \
+//	  -d '{
+//	    "key": "val"
+//	  }' "https://api.github.com/..."
+//
+// are fully collected so that the legit-pattern check sees the URL.
 func buildLogicalCommand(lines []string, startIdx int) string {
 	var parts []string
+	inSingleQuote := false
 	for i := startIdx; i < len(lines); i++ {
-		parts = append(parts, lines[i])
-		trimmed := strings.TrimRight(lines[i], " \t")
+		line := lines[i]
+		parts = append(parts, line)
+
+		// Count unescaped single quotes to track whether we are inside a
+		// single-quoted string at the end of this line.
+		for j := 0; j < len(line); j++ {
+			if line[j] == '\'' {
+				inSingleQuote = !inSingleQuote
+			}
+		}
+
+		if inSingleQuote {
+			// Still inside a single-quoted literal; keep collecting lines.
+			continue
+		}
+
+		// Outside a quoted string: stop unless there is a line continuation.
+		trimmed := strings.TrimRight(line, " \t")
 		if !strings.HasSuffix(trimmed, "\\") {
 			break
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// resolveVarInScript looks up shell variable assignments within script and returns the
+// assigned value for varName, or "" if not found.
+// When the variable is assigned multiple times, the last assignment is returned to match
+// shell semantics where later assignments overwrite earlier ones. This prevents a bypass
+// where an attacker shadows a legitimate assignment with a malicious one.
+func resolveVarInScript(script, varName string) string {
+	// Single regex matching all three quote styles: VAR="value", VAR='value', VAR=value
+	// Group 1: double-quoted value, Group 2: single-quoted value, Group 3: unquoted value
+	pattern := `(?m)^\s*` + regexp.QuoteMeta(varName) + `=(?:"([^"]+)"|'([^']+)'|(\S+))`
+	re := regexp.MustCompile(pattern)
+	all := re.FindAllStringSubmatch(script, -1)
+	if len(all) == 0 {
+		return ""
+	}
+	// Take the last assignment to match shell semantics.
+	last := all[len(all)-1]
+	for _, group := range last[1:] {
+		if group != "" {
+			return group
+		}
+	}
+	return ""
+}
+
+// matchesLegitPatternWithVarResolution checks whether the curl/wget line matches a legit
+// destination pattern, resolving any shell variable references in the URL argument against
+// earlier assignments in the full script block.
+func (rule *SecretExfiltrationRule) matchesLegitPatternWithVarResolution(line, script string, cmd networkCommand) bool {
+	// First: direct check on the logical command (already joined continuations).
+	if rule.matchesLegitPattern(line, cmd) {
+		return true
+	}
+	// Second: resolve $VAR / ${VAR} references on the line and check those values.
+	varRe := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+	varMatches := varRe.FindAllStringSubmatch(line, -1)
+	for _, vm := range varMatches {
+		if len(vm) < 2 {
+			continue
+		}
+		varName := vm[1]
+		value := resolveVarInScript(script, varName)
+		if value == "" {
+			continue
+		}
+		// Build an augmented line where the variable reference is replaced with
+		// its resolved value, then re-check legit patterns.
+		augmented := strings.ReplaceAll(line, vm[0], value)
+		if rule.matchesLegitPattern(augmented, cmd) {
+			return true
+		}
+	}
+	return false
 }
 
 // detectExfiltrationPatterns analyzes the script for exfiltration patterns
@@ -329,7 +410,7 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 		// Build the logical command (joining shell line continuations) for
 		// legitimate pattern matching across multi-line curl commands.
 		logicalCmd := buildLogicalCommand(lines, lineIdx)
-		linePatterns := rule.analyzeLine(line, logicalCmd, runStr, lineIdx, lineOffset, envSecrets)
+		linePatterns := rule.analyzeLine(line, logicalCmd, script, runStr, lineIdx, lineOffset, envSecrets)
 		patterns = append(patterns, linePatterns...)
 		lineOffset += len(line) + 1 // +1 for newline
 	}
@@ -400,7 +481,7 @@ func (rule *SecretExfiltrationRule) isSecretAsUrlArg(line string, secretRef stri
 }
 
 // analyzeLine analyzes a single line for exfiltration patterns
-func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
+func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, script string, runStr *ast.String, lineIdx, lineOffset int, envSecrets map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
 
 	// Skip comment lines
@@ -417,7 +498,10 @@ func (rule *SecretExfiltrationRule) analyzeLine(line string, logicalCmd string, 
 
 		// Skip if the logical command (including shell line continuations)
 		// matches a known-legitimate destination for this command.
-		if rule.matchesLegitPattern(logicalCmd, cmd) {
+		// Also resolve shell variable references within the full script block
+		// to handle cases like: api_url="https://api.github.com/..." followed by
+		// curl -H "..." "$api_url/endpoint"
+		if rule.matchesLegitPatternWithVarResolution(logicalCmd, script, cmd) {
 			continue
 		}
 
