@@ -113,6 +113,17 @@ func TestDetectRunnerOS(t *testing.T) {
 			runner: &ast.Runner{Labels: []*ast.String{{Value: "MacOS-Latest"}}},
 			wantOS: "macos",
 		},
+		// bare distro names (no version suffix)
+		{
+			name:   "bare ubuntu label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "bare Ubuntu label (uppercase)",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "Ubuntu"}}},
+			wantOS: "linux",
+		},
 		// unknown
 		{
 			name:   "self-hosted only",

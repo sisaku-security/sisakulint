@@ -269,6 +269,46 @@ func TestArtifactPoisoningMedium_VisitStep(t *testing.T) {
 			wantErrors: 1,
 			wantFixers: 1, // Should fix unsafe path
 		},
+		{
+			// runner.tempDir is NOT runner.temp; must be treated as unsafe
+			name:     "runner.tempDir is not a safe path",
+			triggers: []string{"workflow_run"},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "dawidd6/action-download-artifact@v2"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "${{ runner.tempDir }}/artifacts"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+			wantFixers: 1, // unsafe path should trigger fixer
+		},
+		{
+			// Path traversal via runner.temp must not be treated as safe
+			name:     "runner.temp path traversal is unsafe",
+			triggers: []string{"workflow_run"},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "dawidd6/action-download-artifact@v2"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "${{ runner.temp }}/../_work/repo"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+			wantFixers: 1, // unsafe path should trigger fixer
+		},
 	}
 
 	for _, tt := range tests {
