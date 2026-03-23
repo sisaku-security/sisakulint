@@ -36,6 +36,27 @@ func TestDetectRunnerOS(t *testing.T) {
 			},
 			wantOS: "unknown",
 		},
+		// plain scalar stored in LabelsExpr by the parser (no ${{ }})
+		{
+			name:   "LabelsExpr ubuntu-latest plain string",
+			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "ubuntu-latest"}},
+			wantOS: "linux",
+		},
+		{
+			name:   "LabelsExpr windows-latest plain string",
+			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "windows-latest"}},
+			wantOS: "windows",
+		},
+		{
+			name:   "LabelsExpr macos-latest plain string",
+			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "macos-latest"}},
+			wantOS: "macos",
+		},
+		{
+			name:   "LabelsExpr unknown plain string",
+			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "some-custom-runner"}},
+			wantOS: "unknown",
+		},
 		// Linux
 		{
 			name:   "ubuntu-latest",

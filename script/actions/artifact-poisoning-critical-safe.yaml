@@ -1,0 +1,101 @@
+# This workflow demonstrates safe patterns for artifact poisoning (critical severity)
+#
+# SECURE: Artifacts are extracted to locations that are guaranteed to be outside
+# the checkout workspace, preventing malicious artifacts from overwriting source files.
+#
+# Expected sisakulint detection:
+# - No errors should be reported for this workflow
+
+name: Secure Workflow - Artifact Poisoning Critical
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+
+jobs:
+  # Job 1: runner.temp - recommended cross-platform safe path
+  runner-temp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SECURE: ${{ runner.temp }} is the runner's temporary directory,
+      # guaranteed to be outside the workspace on all OS (Linux, Windows, macOS).
+      # This is the recommended approach for cross-platform workflows.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/artifacts
+
+      - name: Use artifact
+        run: cp ${{ runner.temp }}/artifacts/binary ./deploy/
+
+  # Job 2: /tmp on Linux runner - system temporary directory
+  linux-tmp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SECURE: /tmp is the system temporary directory on Linux, outside the workspace.
+      # Only allowed when the runner is confirmed to be Linux (ubuntu-* label).
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: /tmp/artifacts
+
+      - name: Use artifact
+        run: cp /tmp/artifacts/binary ./deploy/
+
+  # Job 3: /var on Linux runner - also safe (outside workspace)
+  linux-var:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SECURE: /var/tmp is a valid system directory on Linux, outside the workspace.
+      # Allowed for confirmed Linux runners (ubuntu-* label).
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: /var/tmp/artifacts
+
+  # Job 4: /tmp on macOS runner
+  macos-tmp:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SECURE: /tmp is safe on macOS runners as well.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: /tmp/artifacts
+
+  # Job 5: Publish job without checkout - no poisoning risk
+  publish-no-checkout:
+    runs-on: ubuntu-latest
+    steps:
+      # No checkout step - no source files to overwrite, so any path is acceptable.
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-package
+          path: dist/
+
+      - name: Publish to registry
+        run: npx npm publish dist/
+
+  # Job 6: Windows runner - must use runner.temp (no safe drive-rooted paths)
+  windows-runner-temp:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SECURE: On Windows runners, ${{ runner.temp }} is the only reliably safe
+      # extraction path. Drive-rooted paths (C:\...) cannot be verified as outside
+      # the workspace without knowing the workspace root at lint time.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ${{ runner.temp }}/artifacts
