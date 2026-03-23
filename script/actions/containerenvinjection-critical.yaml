@@ -1,0 +1,21 @@
+name: Vulnerable - Container Env Injection (Critical)
+
+on:
+  pull_request_target:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18
+      env:
+        # VULNERABLE: attacker controls head.ref; injected into Docker -e flag (CVE-2022-39321)
+        BRANCH: ${{ github.event.pull_request.head.ref }}
+    services:
+      redis:
+        image: redis
+        env:
+          # VULNERABLE: issue body is attacker-controlled
+          CUSTOM: ${{ github.event.issue.body }}
+    steps:
+      - run: echo "Building branch $BRANCH"

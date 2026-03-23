@@ -1,0 +1,22 @@
+name: Safe - Container Env Injection (Fixed)
+
+on:
+  pull_request_target:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:18
+      env:
+        # SAFE: using trusted values only
+        NODE_ENV: production
+        COMMIT_SHA: ${{ github.sha }}
+    services:
+      redis:
+        image: redis
+        env:
+          # SAFE: static value
+          REDIS_PORT: "6379"
+    steps:
+      - run: echo "Building commit $COMMIT_SHA"

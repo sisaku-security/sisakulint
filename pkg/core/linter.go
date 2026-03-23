@@ -554,6 +554,8 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
+		ContainerEnvInjectionCriticalRule(), // Detects untrusted input in container.env in privileged triggers (CVE-2022-39321)
+		ContainerEnvInjectionMediumRule(),    // Detects untrusted input in container.env in normal triggers (CVE-2022-39321)
 		ArgumentInjectionCriticalRule(),
 		ArgumentInjectionMediumRule(),
 		RequestForgeryCriticalRule(),         // Detects SSRF vulnerabilities in privileged triggers
