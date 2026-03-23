@@ -173,16 +173,23 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "/home on unknown", path: "/home/runner/artifacts", runnerOS: "unknown", wantUnsafe: true},
 		{name: "/var on windows", path: "/var/temp/artifacts", runnerOS: "windows", wantUnsafe: true},
 
-		// Windows absolute paths - safe on windows only, unsafe on linux/macos/unknown
-		{name: "Windows C drive backslash on windows", path: `C:\Temp\artifacts`, runnerOS: "windows", wantUnsafe: false},
-		{name: "Windows C drive forward slash on windows", path: "C:/Temp/artifacts", runnerOS: "windows", wantUnsafe: false},
-		{name: "Windows D drive on windows", path: `D:\temp\build`, runnerOS: "windows", wantUnsafe: false},
-		{name: "Windows lowercase c on windows", path: `c:\temp`, runnerOS: "windows", wantUnsafe: false},
-		{name: "Windows Z drive on windows", path: `Z:\artifacts`, runnerOS: "windows", wantUnsafe: false},
+		// Windows absolute paths - always unsafe: drive-rooted paths can point into
+		// the workspace (e.g. C:\actions-runner\_work\...) on Windows runners too.
+		// Use ${{ runner.temp }} instead.
+		{name: "Windows C drive backslash on windows", path: `C:\Temp\artifacts`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows C drive forward slash on windows", path: "C:/Temp/artifacts", runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows D drive on windows", path: `D:\temp\build`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows lowercase c on windows", path: `c:\temp`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows Z drive on windows", path: `Z:\artifacts`, runnerOS: "windows", wantUnsafe: true},
 		{name: "Windows C drive on linux", path: `C:\Temp\artifacts`, runnerOS: "linux", wantUnsafe: true},
 		{name: "Windows C drive on macos", path: "C:/Temp/artifacts", runnerOS: "macos", wantUnsafe: true},
 		{name: "Windows C drive on unknown", path: `C:\Temp\artifacts`, runnerOS: "unknown", wantUnsafe: true},
-		{name: "Windows absolute path on windows runner", path: `C:\actions-runner\_work\repo\artifacts`, runnerOS: "windows", wantUnsafe: false},
+		{name: "Windows workspace path on windows", path: `C:\actions-runner\_work\repo\artifacts`, runnerOS: "windows", wantUnsafe: true},
+
+		// Unix path traversal - must be rejected even with allowed prefix
+		{name: "/tmp traversal to workspace", path: "/tmp/../home/runner/work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "/var traversal to workspace", path: "/var/../home/runner/work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "/tmp traversal on unknown", path: "/tmp/../etc/passwd", runnerOS: "unknown", wantUnsafe: true},
 	}
 
 	for _, tt := range tests {
@@ -490,7 +497,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			wantErrors: 1,
 		},
 		{
-			name:   "Windows path on windows runner - no error",
+			name:   "Windows path on windows runner - should error (workspace-unsafe)",
 			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "windows-latest"}}},
 			step: &ast.Step{
 				ID: &ast.String{Value: "download"},
@@ -505,7 +512,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				},
 				Pos: &ast.Position{Line: 10, Col: 5},
 			},
-			wantErrors: 0,
+			wantErrors: 1,
 		},
 		{
 			name:   "Windows path on linux runner - should error",

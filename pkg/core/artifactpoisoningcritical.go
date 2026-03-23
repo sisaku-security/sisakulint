@@ -1,6 +1,7 @@
 package core
 
 import (
+	pathpkg "path"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -92,7 +93,9 @@ func isRunnerTempPath(path string) bool {
 // isSafeUnixPath reports whether an absolute Unix path (must start with "/")
 // is safe for artifact extraction on Linux/macOS. Only /tmp and /var are
 // allowed to avoid false-negatives for workspace paths like /home/runner/work/.
+// The path is cleaned first to reject traversal like /tmp/../home/runner/work.
 func isSafeUnixPath(path string) bool {
+	path = pathpkg.Clean(path)
 	return path == "/tmp" || strings.HasPrefix(path, "/tmp/") ||
 		path == "/var" || strings.HasPrefix(path, "/var/")
 }
@@ -136,13 +139,16 @@ func isUnsafePath(path string, runnerOS string) bool {
 		case "windows":
 			return true // Wrong OS
 		default: // "unknown" - conservative: only /tmp is safe
-			return !(strings.HasPrefix(path, "/tmp/") || path == "/tmp")
+			cleaned := pathpkg.Clean(path)
+			return !(cleaned == "/tmp" || strings.HasPrefix(cleaned, "/tmp/"))
 		}
 	}
 
-	// Windows absolute paths
+	// Windows absolute paths: drive-rooted paths can point into the checkout
+	// workspace (e.g. C:\actions-runner\_work\...) so we cannot safely allow
+	// them without knowing the workspace root. Use ${{ runner.temp }} instead.
 	if isWindowsAbsPath(path) {
-		return runnerOS != "windows"
+		return true
 	}
 
 	// Everything else (relative paths, bare names, etc.)
