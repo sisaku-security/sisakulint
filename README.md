@@ -65,16 +65,16 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 
 | OWASP Risk | Description | sisakulint Rules |
 |:-----------|:------------|:-----------------|
-| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc], [dangerous-triggers-*][r-dt-c] |
-| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si], [ai-action-unrestricted-trigger][r-aaut] |
+| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc], [ai-action-unrestricted-trigger][r-aaut] |
+| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm] |
 | [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc], [reusable-workflow-taint][r-rwt] |
-| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [output-clobbering-*][r-oc], [argument-injection-*][r-ai], [untrusted-checkout-*][r-uco] |
-| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr] |
-| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef], [ai-action-excessive-tools][r-aaet], [ai-action-prompt-injection][r-aapi] |
+| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [dangerous-triggers-*][r-dt-c], [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [output-clobbering-*][r-oc], [argument-injection-*][r-ai], [untrusted-checkout-*][r-uco], [request-forgery-*][r-rf], [ai-action-prompt-injection][r-aapi] |
+| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr], [ai-action-excessive-tools][r-aaet] |
+| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si] |
 | [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc], [cache-bloat][r-cb] |
 | [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui] |
 | [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
-| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob], [request-forgery-*][r-rf] |
+| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob] |
 
 ### Severity Summary
 
