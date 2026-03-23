@@ -20,59 +20,199 @@ func TestArtifactPoisoningRule(t *testing.T) {
 	}
 }
 
-// TestIsUnsafePath tests the isUnsafePath function with various path inputs
-func TestIsUnsafePath(t *testing.T) {
+func TestDetectRunnerOS(t *testing.T) {
 	tests := []struct {
-		name       string
-		path       string
-		wantUnsafe bool
+		name   string
+		runner *ast.Runner
+		wantOS string
 	}{
-		// Unsafe paths
-		{name: "empty path", path: "", wantUnsafe: true},
-		{name: "whitespace only", path: "   ", wantUnsafe: true},
-		{name: "current directory", path: ".", wantUnsafe: true},
-		{name: "current directory with slash", path: "./", wantUnsafe: true},
-		{name: "relative path", path: "./artifacts", wantUnsafe: true},
-		{name: "parent relative path", path: "../artifacts", wantUnsafe: true},
-		{name: "github.workspace", path: "${{ github.workspace }}/artifacts", wantUnsafe: true},
-		{name: "GITHUB_WORKSPACE env", path: "$GITHUB_WORKSPACE/artifacts", wantUnsafe: true},
-		{name: "simple directory name", path: "artifacts", wantUnsafe: true},
-		{name: "nested directory", path: "build/artifacts", wantUnsafe: true},
-
-		// Safe paths - runner.temp (cross-platform recommended)
-		{name: "runner.temp basic", path: "${{ runner.temp }}/artifacts", wantUnsafe: false},
-		{name: "runner.temp nested", path: "${{ runner.temp }}/build/artifacts", wantUnsafe: false},
-		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", wantUnsafe: false},
-		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", wantUnsafe: false},
-		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", wantUnsafe: false},
-
-		// Safe paths - /tmp only (system temporary directory)
-		{name: "/tmp absolute path", path: "/tmp/artifacts", wantUnsafe: false},
-		{name: "/tmp root", path: "/tmp", wantUnsafe: false},
-		{name: "/tmp with nested dirs", path: "/tmp/build/artifacts", wantUnsafe: false},
-
-		// Unsafe paths - other absolute paths (too broad without OS context)
-		{name: "/var absolute path", path: "/var/temp/artifacts", wantUnsafe: true},
-		{name: "/var/folders macOS", path: "/var/folders/tmp/artifacts", wantUnsafe: true},
-		{name: "/home absolute path", path: "/home/runner/artifacts", wantUnsafe: true},
-		{name: "workspace-like absolute path", path: "/home/runner/work/repo/artifacts", wantUnsafe: true},
-
-		// Unsafe paths - Windows absolute paths (cannot validate safely without OS context)
-		{name: "Windows C drive backslash", path: "C:\\Temp\\artifacts", wantUnsafe: true},
-		{name: "Windows C drive forward slash", path: "C:/Temp/artifacts", wantUnsafe: true},
-		{name: "Windows D drive backslash", path: "D:\\temp\\build", wantUnsafe: true},
-		{name: "Windows D drive forward slash", path: "D:/temp/build", wantUnsafe: true},
-		{name: "Windows lowercase c drive", path: "c:\\temp", wantUnsafe: true},
-		{name: "Windows lowercase d drive", path: "d:/temp", wantUnsafe: true},
-		{name: "Windows Z drive", path: "Z:\\artifacts", wantUnsafe: true},
-		{name: "Windows workspace-like path", path: "C:\\actions-runner\\_work\\repo\\artifacts", wantUnsafe: true},
+		// nil runner
+		{name: "nil runner", runner: nil, wantOS: "unknown"},
+		// expression (e.g. ${{ matrix.os }})
+		{
+			name: "expression label",
+			runner: &ast.Runner{
+				LabelsExpr: &ast.String{Value: "${{ matrix.os }}"},
+			},
+			wantOS: "unknown",
+		},
+		// Linux
+		{
+			name:   "ubuntu-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "ubuntu-22.04",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-22.04"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "linux label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "linux"}}},
+			wantOS: "linux",
+		},
+		{
+			name: "self-hosted linux array",
+			runner: &ast.Runner{Labels: []*ast.String{
+				{Value: "self-hosted"},
+				{Value: "linux"},
+			}},
+			wantOS: "linux",
+		},
+		// Windows
+		{
+			name:   "windows-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows-latest"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "windows-2022",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows-2022"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "windows label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "windows"}}},
+			wantOS: "windows",
+		},
+		// macOS
+		{
+			name:   "macos-latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos-latest"}}},
+			wantOS: "macos",
+		},
+		{
+			name:   "macos-14",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos-14"}}},
+			wantOS: "macos",
+		},
+		{
+			name:   "macos label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "macos"}}},
+			wantOS: "macos",
+		},
+		{
+			name:   "mac label",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "mac"}}},
+			wantOS: "macos",
+		},
+		// mixed case - strings.ToLower + EqualFold should handle these
+		{
+			name:   "mixed case Ubuntu-Latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "Ubuntu-Latest"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "uppercase WINDOWS-2022",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "WINDOWS-2022"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "mixed case MacOS-Latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "MacOS-Latest"}}},
+			wantOS: "macos",
+		},
+		// unknown
+		{
+			name:   "self-hosted only",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "self-hosted"}}},
+			wantOS: "unknown",
+		},
+		{
+			name:   "empty labels",
+			runner: &ast.Runner{Labels: []*ast.String{}},
+			wantOS: "unknown",
+		},
+		{
+			name:   "nil label element",
+			runner: &ast.Runner{Labels: []*ast.String{nil, {Value: "ubuntu-latest"}}},
+			wantOS: "linux",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isUnsafePath(tt.path)
+			got := detectRunnerOS(tt.runner)
+			if got != tt.wantOS {
+				t.Errorf("detectRunnerOS() = %q, want %q", got, tt.wantOS)
+			}
+		})
+	}
+}
+
+func TestIsUnsafePath(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		runnerOS   string
+		wantUnsafe bool
+	}{
+		// Unsafe paths (OS-independent)
+		{name: "empty path", path: "", runnerOS: "linux", wantUnsafe: true},
+		{name: "whitespace only", path: "   ", runnerOS: "linux", wantUnsafe: true},
+		{name: "current directory", path: ".", runnerOS: "linux", wantUnsafe: true},
+		{name: "current directory with slash", path: "./", runnerOS: "linux", wantUnsafe: true},
+		{name: "relative path", path: "./artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "parent relative path", path: "../artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "github.workspace", path: "${{ github.workspace }}/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "GITHUB_WORKSPACE env", path: "$GITHUB_WORKSPACE/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "simple directory name", path: "artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "nested directory", path: "build/artifacts", runnerOS: "linux", wantUnsafe: true},
+
+		// Safe paths - runner.temp (OS-independent)
+		{name: "runner.temp basic", path: "${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp nested", path: "${{ runner.temp }}/build/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp on windows", path: "${{ runner.temp }}/artifacts", runnerOS: "windows", wantUnsafe: false},
+		{name: "runner.temp on unknown", path: "${{ runner.temp }}/artifacts", runnerOS: "unknown", wantUnsafe: false},
+		// runner.temp strict matching - path traversal and similar-named vars are unsafe
+		{name: "runner.temp path traversal", path: "${{ runner.temp }}/../_work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "runner.tempDir is not runner.temp", path: "${{ runner.tempDir }}/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "RUNNER_TEMP path traversal", path: "$RUNNER_TEMP/../_work/repo", runnerOS: "linux", wantUnsafe: true},
+
+		// /tmp - safe on linux/macos/unknown, unsafe on windows
+		{name: "/tmp on linux", path: "/tmp/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "/tmp root on linux", path: "/tmp", runnerOS: "linux", wantUnsafe: false},
+		{name: "/tmp nested on linux", path: "/tmp/build/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "/tmp on macos", path: "/tmp/artifacts", runnerOS: "macos", wantUnsafe: false},
+		{name: "/tmp on unknown", path: "/tmp/artifacts", runnerOS: "unknown", wantUnsafe: false},
+		{name: "/tmp on windows", path: "/tmp/artifacts", runnerOS: "windows", wantUnsafe: true},
+
+		// Unix absolute paths (/var etc) - safe on linux/macos, unsafe on windows/unknown
+		{name: "/var on linux", path: "/var/temp/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "/var/folders on macos", path: "/var/folders/tmp/artifacts", runnerOS: "macos", wantUnsafe: false},
+		{name: "/home on linux", path: "/home/runner/artifacts", runnerOS: "linux", wantUnsafe: true}, // workspace path on GitHub-hosted runners
+		{name: "/var on unknown", path: "/var/temp/artifacts", runnerOS: "unknown", wantUnsafe: true},
+		{name: "/home on unknown", path: "/home/runner/artifacts", runnerOS: "unknown", wantUnsafe: true},
+		{name: "/var on windows", path: "/var/temp/artifacts", runnerOS: "windows", wantUnsafe: true},
+
+		// Windows absolute paths - always unsafe: drive-rooted paths can point into
+		// the workspace (e.g. C:\actions-runner\_work\...) on Windows runners too.
+		// Use ${{ runner.temp }} instead.
+		{name: "Windows C drive backslash on windows", path: `C:\Temp\artifacts`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows C drive forward slash on windows", path: "C:/Temp/artifacts", runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows D drive on windows", path: `D:\temp\build`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows lowercase c on windows", path: `c:\temp`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows Z drive on windows", path: `Z:\artifacts`, runnerOS: "windows", wantUnsafe: true},
+		{name: "Windows C drive on linux", path: `C:\Temp\artifacts`, runnerOS: "linux", wantUnsafe: true},
+		{name: "Windows C drive on macos", path: "C:/Temp/artifacts", runnerOS: "macos", wantUnsafe: true},
+		{name: "Windows C drive on unknown", path: `C:\Temp\artifacts`, runnerOS: "unknown", wantUnsafe: true},
+		{name: "Windows workspace path on windows", path: `C:\actions-runner\_work\repo\artifacts`, runnerOS: "windows", wantUnsafe: true},
+
+		// Unix path traversal - must be rejected even with allowed prefix
+		{name: "/tmp traversal to workspace", path: "/tmp/../home/runner/work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "/var traversal to workspace", path: "/var/../home/runner/work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "/tmp traversal on unknown", path: "/tmp/../etc/passwd", runnerOS: "unknown", wantUnsafe: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnsafePath(tt.path, tt.runnerOS)
 			if got != tt.wantUnsafe {
-				t.Errorf("isUnsafePath(%q) = %v, want %v", tt.path, got, tt.wantUnsafe)
+				t.Errorf("isUnsafePath(%q, %q) = %v, want %v", tt.path, tt.runnerOS, got, tt.wantUnsafe)
 			}
 		})
 	}
@@ -81,6 +221,7 @@ func TestIsUnsafePath(t *testing.T) {
 func TestArtifactPoisoning_VisitStep(t *testing.T) {
 	tests := []struct {
 		name       string
+		runsOn     *ast.Runner
 		step       *ast.Step
 		wantErrors int
 	}{
@@ -371,6 +512,78 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			},
 			wantErrors: 1,
 		},
+		{
+			name:   "Windows path on windows runner - should error (workspace-unsafe)",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "windows-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: `C:\Temp\artifacts`},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
+		{
+			name:   "Windows path on linux runner - should error",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: `C:\Temp\artifacts`},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
+		{
+			name:   "/var path on linux runner - no error",
+			runsOn: &ast.Runner{Labels: []*ast.String{{Value: "ubuntu-latest"}}},
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "/var/tmp/artifacts"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 0,
+		},
+		{
+			name:   "/var path on unknown runner - should error",
+			runsOn: nil,
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "/var/tmp/artifacts"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors: 1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -379,6 +592,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
+				RunsOn: tt.runsOn,
 				Steps: []*ast.Step{
 					{
 						Exec: &ast.ExecAction{
@@ -638,6 +852,24 @@ func TestArtifactPoisoning_Integration(t *testing.T) {
 			},
 			wantErrors:     1,
 			wantAutoFixers: 0, // No auto-fix for existing unsafe paths
+		},
+		{
+			name: "whitespace-only path creates error and autofixer",
+			step: &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "   "},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			},
+			wantErrors:     1,
+			wantAutoFixers: 1,
 		},
 	}
 

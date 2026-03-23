@@ -1,6 +1,7 @@
 package core
 
 import (
+	pathpkg "path"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -8,7 +9,8 @@ import (
 
 type ArtifactPoisoning struct {
 	BaseRule
-	hasCheckout bool // Tracks if the current job checks out the repository
+	hasCheckout   bool // Tracks if the current job checks out the repository
+	currentRunsOn *ast.Runner
 }
 
 func ArtifactPoisoningRule() *ArtifactPoisoning {
@@ -20,55 +22,136 @@ func ArtifactPoisoningRule() *ArtifactPoisoning {
 	}
 }
 
-// isUnsafePath checks if the provided path is unsafe for artifact extraction.
-// Safe paths must use runner.temp to isolate artifacts from the workspace.
-// Absolute paths outside the workspace (like /tmp on Linux) are also safe.
-func isUnsafePath(path string) bool {
+// detectRunnerOS returns the OS type based on the runner labels.
+// Returns "linux", "windows", "macos", or "unknown".
+func detectRunnerOS(runner *ast.Runner) string {
+	if runner == nil {
+		return "unknown"
+	}
+
+	// Expression (e.g. ${{ matrix.os }}) - cannot determine OS
+	if runner.LabelsExpr != nil {
+		return "unknown"
+	}
+
+	for _, label := range runner.Labels {
+		if label == nil {
+			continue
+		}
+		v := label.Value
+		lower := strings.ToLower(v)
+		if strings.HasPrefix(lower, "ubuntu-") || strings.EqualFold(v, "linux") {
+			return "linux"
+		}
+		if strings.HasPrefix(lower, "windows-") || strings.EqualFold(v, "windows") {
+			return "windows"
+		}
+		if strings.HasPrefix(lower, "macos-") || strings.EqualFold(v, "macos") || strings.EqualFold(v, "mac") {
+			return "macos"
+		}
+	}
+	return "unknown"
+}
+
+// isWindowsAbsPath reports whether path is an absolute Windows path (e.g. C:\, D:/).
+func isWindowsAbsPath(path string) bool {
+	if len(path) < 3 {
+		return false
+	}
+	drive := path[0]
+	return ((drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')) &&
+		path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+}
+
+// isRunnerTempPath reports whether path is rooted at the runner's temporary
+// directory (${{ runner.temp }} or $RUNNER_TEMP) with no path-traversal segments.
+func isRunnerTempPath(path string) bool {
+	for _, prefix := range []string{"${{ runner.temp }}", "$RUNNER_TEMP"} {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(path, prefix)
+		if rest == "" {
+			return true
+		}
+		if rest[0] != '/' && rest[0] != '\\' {
+			// e.g. "${{ runner.tempDir }}" — not the same variable
+			return false
+		}
+		for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
+			return r == '/' || r == '\\'
+		}) {
+			if part == ".." {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// isSafeUnixPath reports whether an absolute Unix path (must start with "/")
+// is safe for artifact extraction on Linux/macOS. Only /tmp and /var are
+// allowed to avoid false-negatives for workspace paths like /home/runner/work/.
+// The path is cleaned first to reject traversal like /tmp/../home/runner/work.
+func isSafeUnixPath(path string) bool {
+	path = pathpkg.Clean(path)
+	return path == "/tmp" || strings.HasPrefix(path, "/tmp/") ||
+		path == "/var" || strings.HasPrefix(path, "/var/")
+}
+
+// isUnsafePath reports whether path is unsafe for artifact extraction.
+// runnerOS must be "linux", "windows", "macos", or "unknown".
+// A safe path is one guaranteed to be outside the workspace on the given OS.
+func isUnsafePath(path string, runnerOS string) bool {
 	if path == "" {
 		return true
 	}
 
-	// Trim whitespace
 	path = strings.TrimSpace(path)
 
-	// Workspace-relative paths are unsafe
+	// Workspace-relative paths are unsafe on all OS
 	if path == "." || path == "./" {
 		return true
 	}
-
-	// Relative paths (even if not directly in workspace root) are unsafe
 	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
 		return true
 	}
-
-	// Check for github.workspace reference (unsafe)
 	if strings.Contains(path, "github.workspace") {
 		return true
 	}
-
-	// Check for GITHUB_WORKSPACE env var (unsafe)
 	if strings.Contains(path, "GITHUB_WORKSPACE") {
 		return true
 	}
 
-	// runner.temp is safe (cross-platform recommended approach)
-	if strings.Contains(path, "runner.temp") || strings.Contains(path, "RUNNER_TEMP") {
+	// runner.temp is safe on all OS (cross-platform recommended).
+	// Use strict prefix matching to avoid matching runner.tempDir or path traversal.
+	if isRunnerTempPath(path) {
 		return false
 	}
 
-	// System temporary directory /tmp is safe (Linux/macOS)
-	// This is outside the workspace and cannot overwrite source files
-	// Note: We only allow /tmp, not all absolute paths, to maintain security
-	if strings.HasPrefix(path, "/tmp/") || path == "/tmp" {
-		return false
+	// Unix absolute paths
+	if strings.HasPrefix(path, "/") {
+		switch runnerOS {
+		case "linux", "macos":
+			// Only /tmp and /var are safe; /home/runner/work/... is inside the workspace
+			return !isSafeUnixPath(path)
+		case "windows":
+			return true // Wrong OS
+		default: // "unknown" - conservative: only /tmp is safe
+			cleaned := pathpkg.Clean(path)
+			return !(cleaned == "/tmp" || strings.HasPrefix(cleaned, "/tmp/"))
+		}
 	}
 
-	// All other paths are unsafe (including relative paths and arbitrary absolute paths)
-	// This includes:
-	// - Relative paths: "artifacts", "./build"
-	// - Workspace paths: "/home/runner/work/repo/artifacts"
-	// - Windows paths: "C:\", "D:\" (too broad to safely validate without OS context)
-	// - Other absolute paths: "/var/", "/home/", etc.
+	// Windows absolute paths: drive-rooted paths can point into the checkout
+	// workspace (e.g. C:\actions-runner\_work\...) so we cannot safely allow
+	// them without knowing the workspace root. Use ${{ runner.temp }} instead.
+	if isWindowsAbsPath(path) {
+		return true
+	}
+
+	// Everything else (relative paths, bare names, etc.)
 	return true
 }
 
@@ -77,6 +160,7 @@ func isUnsafePath(path string) bool {
 // poisoning non-exploitable even with workspace-relative paths.
 func (rule *ArtifactPoisoning) VisitJobPre(job *ast.Job) error {
 	rule.hasCheckout = false
+	rule.currentRunsOn = job.RunsOn
 	for _, step := range job.Steps {
 		if action, ok := step.Exec.(*ast.ExecAction); ok {
 			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/checkout@") {
@@ -116,8 +200,8 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 		pathValue = pathInput.Value.Value
 	}
 
-	if isUnsafePath(pathValue) {
-		if pathValue == "" {
+	if isUnsafePath(pathValue, detectRunnerOS(rule.currentRunsOn)) {
+		if pathValue == "" || strings.TrimSpace(pathValue) == "" {
 			// Missing or empty path - safe to auto-fix
 			rule.Errorf(
 				step.Pos,
