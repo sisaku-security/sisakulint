@@ -97,6 +97,22 @@ func TestDetectRunnerOS(t *testing.T) {
 			runner: &ast.Runner{Labels: []*ast.String{{Value: "mac"}}},
 			wantOS: "macos",
 		},
+		// mixed case - strings.ToLower + EqualFold should handle these
+		{
+			name:   "mixed case Ubuntu-Latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "Ubuntu-Latest"}}},
+			wantOS: "linux",
+		},
+		{
+			name:   "uppercase WINDOWS-2022",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "WINDOWS-2022"}}},
+			wantOS: "windows",
+		},
+		{
+			name:   "mixed case MacOS-Latest",
+			runner: &ast.Runner{Labels: []*ast.String{{Value: "MacOS-Latest"}}},
+			wantOS: "macos",
+		},
 		// unknown
 		{
 			name:   "self-hosted only",
