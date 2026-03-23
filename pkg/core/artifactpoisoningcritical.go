@@ -40,7 +40,7 @@ func detectRunnerOS(runner *ast.Runner) string {
 		// Plain string label — fall through to match against it directly.
 		v := runner.LabelsExpr.Value
 		lower := strings.ToLower(v)
-		if strings.HasPrefix(lower, "ubuntu-") || strings.EqualFold(v, "linux") {
+		if strings.HasPrefix(lower, "ubuntu-") || strings.EqualFold(v, "ubuntu") || strings.EqualFold(v, "linux") {
 			return "linux"
 		}
 		if strings.HasPrefix(lower, "windows-") || strings.EqualFold(v, "windows") {

@@ -77,7 +77,8 @@ jobs:
   publish-no-checkout:
     runs-on: ubuntu-latest
     steps:
-      # No checkout step - no source files to overwrite, so any path is acceptable.
+      # No checkout step - for artifact-poisoning-critical rule, workspace overwrite risk
+      # is not present without a checkout, so this rule does not flag the download path.
       - uses: actions/download-artifact@v4
         with:
           name: dist-package

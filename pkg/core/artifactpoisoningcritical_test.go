@@ -43,6 +43,11 @@ func TestDetectRunnerOS(t *testing.T) {
 			wantOS: "linux",
 		},
 		{
+			name:   "LabelsExpr ubuntu bare label plain string",
+			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "ubuntu"}},
+			wantOS: "linux",
+		},
+		{
 			name:   "LabelsExpr windows-latest plain string",
 			runner: &ast.Runner{LabelsExpr: &ast.String{Value: "windows-latest"}},
 			wantOS: "windows",
