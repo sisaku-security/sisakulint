@@ -152,6 +152,10 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", runnerOS: "linux", wantUnsafe: false},
 		{name: "runner.temp on windows", path: "${{ runner.temp }}/artifacts", runnerOS: "windows", wantUnsafe: false},
 		{name: "runner.temp on unknown", path: "${{ runner.temp }}/artifacts", runnerOS: "unknown", wantUnsafe: false},
+		// runner.temp strict matching - path traversal and similar-named vars are unsafe
+		{name: "runner.temp path traversal", path: "${{ runner.temp }}/../_work/repo", runnerOS: "linux", wantUnsafe: true},
+		{name: "runner.tempDir is not runner.temp", path: "${{ runner.tempDir }}/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "RUNNER_TEMP path traversal", path: "$RUNNER_TEMP/../_work/repo", runnerOS: "linux", wantUnsafe: true},
 
 		// /tmp - safe on linux/macos/unknown, unsafe on windows
 		{name: "/tmp on linux", path: "/tmp/artifacts", runnerOS: "linux", wantUnsafe: false},
@@ -164,7 +168,7 @@ func TestIsUnsafePath(t *testing.T) {
 		// Unix absolute paths (/var etc) - safe on linux/macos, unsafe on windows/unknown
 		{name: "/var on linux", path: "/var/temp/artifacts", runnerOS: "linux", wantUnsafe: false},
 		{name: "/var/folders on macos", path: "/var/folders/tmp/artifacts", runnerOS: "macos", wantUnsafe: false},
-		{name: "/home on linux", path: "/home/runner/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "/home on linux", path: "/home/runner/artifacts", runnerOS: "linux", wantUnsafe: true}, // workspace path on GitHub-hosted runners
 		{name: "/var on unknown", path: "/var/temp/artifacts", runnerOS: "unknown", wantUnsafe: true},
 		{name: "/home on unknown", path: "/home/runner/artifacts", runnerOS: "unknown", wantUnsafe: true},
 		{name: "/var on windows", path: "/var/temp/artifacts", runnerOS: "windows", wantUnsafe: true},

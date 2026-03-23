@@ -62,6 +62,41 @@ func isWindowsAbsPath(path string) bool {
 		path[1] == ':' && (path[2] == '\\' || path[2] == '/')
 }
 
+// isRunnerTempPath reports whether path is rooted at the runner's temporary
+// directory (${{ runner.temp }} or $RUNNER_TEMP) with no path-traversal segments.
+func isRunnerTempPath(path string) bool {
+	for _, prefix := range []string{"${{ runner.temp }}", "$RUNNER_TEMP"} {
+		if !strings.HasPrefix(path, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(path, prefix)
+		if rest == "" {
+			return true
+		}
+		if rest[0] != '/' && rest[0] != '\\' {
+			// e.g. "${{ runner.tempDir }}" — not the same variable
+			return false
+		}
+		for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
+			return r == '/' || r == '\\'
+		}) {
+			if part == ".." {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// isSafeUnixPath reports whether an absolute Unix path (must start with "/")
+// is safe for artifact extraction on Linux/macOS. Only /tmp and /var are
+// allowed to avoid false-negatives for workspace paths like /home/runner/work/.
+func isSafeUnixPath(path string) bool {
+	return path == "/tmp" || strings.HasPrefix(path, "/tmp/") ||
+		path == "/var" || strings.HasPrefix(path, "/var/")
+}
+
 // isUnsafePath reports whether path is unsafe for artifact extraction.
 // runnerOS must be "linux", "windows", "macos", or "unknown".
 // A safe path is one guaranteed to be outside the workspace on the given OS.
@@ -86,8 +121,9 @@ func isUnsafePath(path string, runnerOS string) bool {
 		return true
 	}
 
-	// runner.temp is safe on all OS (cross-platform recommended)
-	if strings.Contains(path, "runner.temp") || strings.Contains(path, "RUNNER_TEMP") {
+	// runner.temp is safe on all OS (cross-platform recommended).
+	// Use strict prefix matching to avoid matching runner.tempDir or path traversal.
+	if isRunnerTempPath(path) {
 		return false
 	}
 
@@ -95,7 +131,8 @@ func isUnsafePath(path string, runnerOS string) bool {
 	if strings.HasPrefix(path, "/") {
 		switch runnerOS {
 		case "linux", "macos":
-			return false // Absolute Unix paths with no workspace expression are treated as safe on Linux/macOS
+			// Only /tmp and /var are safe; /home/runner/work/... is inside the workspace
+			return !isSafeUnixPath(path)
 		case "windows":
 			return true // Wrong OS
 		default: // "unknown" - conservative: only /tmp is safe
