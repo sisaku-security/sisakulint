@@ -125,8 +125,10 @@ func (rule *ArtifactPoisoningMedium) VisitStep(node *ast.Step) error {
 	hasSafePath := false
 	if pathInput, ok := action.Inputs["path"]; ok && pathInput != nil && pathInput.Value != nil {
 		pathValue := pathInput.Value.Value
-		// Check if path uses runner.temp (safe extraction location)
-		if strings.Contains(pathValue, "runner.temp") || strings.Contains(pathValue, "RUNNER_TEMP") {
+		// Check if path uses runner.temp (safe extraction location).
+		// Use strict prefix matching to avoid false positives from similar-named variables
+		// (e.g. runner.tempDir) or path-traversal bypasses (e.g. runner.temp/../_work).
+		if isRunnerTempPath(pathValue) {
 			hasSafePath = true
 		}
 	}
