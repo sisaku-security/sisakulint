@@ -142,9 +142,9 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | | self-hosted-runners | High | Self-hosted runner security risks | | [docs][r-shr] |
 | | request-forgery-critical | Critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] |
 | | request-forgery-medium | Medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] |
-| **AI Actions** | ai-action-unrestricted-trigger | High | AI agent actions with `allowed_non_write_users: "*"` (Clinejection) | | [docs][r-aaut] |
-| | ai-action-excessive-tools | High | Dangerous tools (Bash/Write/Edit) in AI agents with untrusted triggers (Clinejection) | | [docs][r-aaet] |
-| | ai-action-prompt-injection | High | Untrusted input interpolated into AI agent prompt parameters (Clinejection) | | [docs][r-aapi] |
+| **AI Actions** | ai-action-unrestricted-trigger | High | AI agent actions with `allowed_non_write_users: "*"`| | [docs][r-aaut] |
+| | ai-action-excessive-tools | High | Dangerous tools (Bash/Write/Edit) in AI agents with untrusted triggers | | [docs][r-aaet] |
+| | ai-action-prompt-injection | High | Untrusted input interpolated into AI agent prompt parameters | | [docs][r-aapi] |
 
 <!-- OWASP Links -->
 [owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
