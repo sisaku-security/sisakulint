@@ -83,9 +83,9 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | Severity | Count | CVSS Range | Description |
 |:---------|:-----:|:-----------|:------------|
 | **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
-| **High** | 20 | 7.0-8.9 | Significant risk, enables serious attacks |
-| **Medium** | 13 | 4.0-6.9 | Moderate risk, requires specific conditions |
-| **Low** | 5 | 0.1-3.9 | Best practices, minimal direct security impact |
+| **High** | 19 | 7.0-8.9 | Significant risk, enables serious attacks |
+| **Medium** | 14 | 4.0-6.9 | Moderate risk, requires specific conditions |
+| **Low** | 6 | 0.1-3.9 | Best practices, minimal direct security impact |
 
 ### Complete Rule Reference
 
