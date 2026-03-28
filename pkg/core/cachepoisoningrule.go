@@ -194,6 +194,11 @@ func (rule *CachePoisoningRule) VisitJobPost(node *ast.Job) error {
 }
 
 func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
+	// Respect zizmor: ignore[cache-poisoning] inline suppression comments
+	if HasZizmorIgnoreComment(node.BaseNode, rule.RuleName) {
+		return nil
+	}
+
 	action, ok := node.Exec.(*ast.ExecAction)
 	if !ok || action.Uses == nil {
 		return nil

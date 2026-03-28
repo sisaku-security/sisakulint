@@ -129,6 +129,11 @@ func (rule *ArtipackedRule) isUploadArtifactAction(uses string) bool {
 }
 
 func (rule *ArtipackedRule) handleCheckout(step *ast.Step, action *ast.ExecAction) {
+	// Respect zizmor: ignore[artipacked] inline suppression comments
+	if HasZizmorIgnoreComment(step.BaseNode, rule.RuleName) {
+		return
+	}
+
 	if action.Inputs != nil {
 		if persistCreds, exists := action.Inputs[persistCredentialsKey]; exists {
 			if persistCreds.Value != nil && strings.ToLower(persistCreds.Value.Value) == "false" {
