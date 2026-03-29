@@ -3,7 +3,7 @@ module github.com/sisaku-security/sisakulint
 go 1.25.0
 
 require (
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/haya14busa/go-sarif v0.0.0-20240630170108-a3ba8d79599f
 	github.com/mattn/go-colorable v0.1.14

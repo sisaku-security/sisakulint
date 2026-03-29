@@ -1,0 +1,73 @@
+# This workflow demonstrates vulnerable patterns for artifact poisoning (critical severity)
+#
+# VULNERABILITY: actions/download-artifact is used without a safe extraction path,
+# or with a workspace-relative path, allowing malicious artifacts to overwrite
+# source code, scripts, or dependencies.
+#
+# Expected sisakulint detection:
+# - artifact-poisoning-critical rule should flag all download steps below
+
+name: Insecure Workflow - Artifact Poisoning Critical
+
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+
+jobs:
+  # Job 1: No path specified - artifacts land in workspace root
+  no-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: No path specified - artifacts extract to workspace root by default.
+      # A malicious artifact could overwrite source files, Makefiles, or CI scripts.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Use artifact
+        run: make deploy
+
+  # Job 2: Relative path - still inside workspace
+  relative-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: Relative path resolves inside the workspace.
+      # Artifacts could overwrite files under ./dist/ if the workspace already contains them.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ./dist
+
+      - name: Use artifact
+        run: ./dist/deploy.sh
+
+  # Job 3: github.workspace reference - explicit workspace path
+  workspace-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: ${{ github.workspace }} explicitly points to the checkout root.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ${{ github.workspace }}/artifacts
+
+  # Job 4: Windows path on Linux runner - wrong OS, evaluated as unsafe
+  wrong-os-path:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # VULNERABLE: C:\ path is meaningless on a Linux runner and cannot be
+      # validated as outside the workspace.
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: C:\Temp\artifacts

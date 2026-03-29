@@ -29,8 +29,26 @@ func detectRunnerOS(runner *ast.Runner) string {
 		return "unknown"
 	}
 
-	// Expression (e.g. ${{ matrix.os }}) - cannot determine OS
+	// LabelsExpr is set for both plain strings (e.g. "ubuntu-latest") and real
+	// expressions (e.g. "${{ matrix.os }}") because the parser stores all scalar
+	// runs-on values there. Only treat it as opaque when it actually contains
+	// an expression, following the same pattern as selfhostedrunnersrule.go.
 	if runner.LabelsExpr != nil {
+		if strings.Contains(runner.LabelsExpr.Value, "${{") {
+			return "unknown"
+		}
+		// Plain string label — fall through to match against it directly.
+		v := runner.LabelsExpr.Value
+		lower := strings.ToLower(v)
+		if strings.HasPrefix(lower, "ubuntu-") || strings.EqualFold(v, "ubuntu") || strings.EqualFold(v, "linux") {
+			return "linux"
+		}
+		if strings.HasPrefix(lower, "windows-") || strings.EqualFold(v, "windows") {
+			return "windows"
+		}
+		if strings.HasPrefix(lower, "macos-") || strings.EqualFold(v, "macos") || strings.EqualFold(v, "mac") {
+			return "macos"
+		}
 		return "unknown"
 	}
 
