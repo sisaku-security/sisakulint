@@ -164,3 +164,210 @@ func TestTaintTracker_IntegrationWithNodeParsing(t *testing.T) {
 		t.Logf("Taint sources: %v", sources)
 	}
 }
+
+func TestCrossJobTaintPropagation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		workflow       string
+		expectError    bool
+		expectContains string
+	}{
+		{
+			name: "直接参照: pull_request_target + 2ジョブ構成で検出される",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.meta.outputs.title }}
+    steps:
+      - id: meta
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Processing ${{ needs.extract.outputs.pr_title }}"
+`,
+			expectError:    true,
+			expectContains: "tainted via",
+		},
+		{
+			name: "3ジョブチェーン: multi-hop で検出される",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  job-a:
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.get.outputs.title }}
+    steps:
+      - id: get
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+
+  job-b:
+    needs: job-a
+    runs-on: ubuntu-latest
+    outputs:
+      processed: ${{ needs.job-a.outputs.title }}
+    steps:
+      - run: echo "pass-through"
+
+  job-c:
+    needs: job-b
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Final ${{ needs.job-b.outputs.processed }}"
+`,
+			expectError:    true,
+			expectContains: "tainted via",
+		},
+		{
+			name: "誤検知なし: 定数値ジョブ出力は報告しない",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  safe-job:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - id: get-version
+        run: echo "version=1.0.0" >> $GITHUB_OUTPUT
+
+  consumer:
+    needs: safe-job
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Version ${{ needs.safe-job.outputs.version }}"
+`,
+			expectError:    false,
+			expectContains: "",
+		},
+		{
+			name: "Medium: 通常トリガーでも検出される",
+			workflow: `name: Test
+on: pull_request
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.meta.outputs.title }}
+    steps:
+      - id: meta
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Processing ${{ needs.extract.outputs.pr_title }}"
+`,
+			expectError:    true,
+			expectContains: "tainted via",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			linter, err := NewLinter(io.Discard, &LinterOptions{})
+			if err != nil {
+				t.Fatalf("failed to create linter: %v", err)
+			}
+
+			result, err := linter.Lint("<test>", []byte(tt.workflow), nil)
+			if err != nil {
+				t.Fatalf("failed to lint: %v", err)
+			}
+
+			var crossJobErrors []string
+			for _, e := range result.Errors {
+				if strings.Contains(e.Description, "tainted via") {
+					crossJobErrors = append(crossJobErrors, e.Description)
+				}
+			}
+
+			if tt.expectError && len(crossJobErrors) == 0 {
+				t.Errorf("expected cross-job taint error containing %q, but got none", tt.expectContains)
+				for _, e := range result.Errors {
+					t.Logf("Error: %s", e.Description)
+				}
+			}
+
+			if !tt.expectError && len(crossJobErrors) > 0 {
+				t.Errorf("expected no cross-job taint errors, but got: %v", crossJobErrors)
+			}
+
+			if tt.expectError && tt.expectContains != "" {
+				found := false
+				for _, e := range crossJobErrors {
+					if strings.Contains(e, tt.expectContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected error containing %q, but none found in: %v", tt.expectContains, crossJobErrors)
+				}
+			}
+		})
+	}
+}
+
+func TestCrossJobTaintPropagation_ReverseOrder(t *testing.T) {
+	t.Parallel()
+
+	// yaml に逆順で記述されていても検出されること（pending 機構の検証）
+	workflow := `name: Test
+on: pull_request_target
+
+jobs:
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Processing ${{ needs.extract.outputs.pr_title }}"
+
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.meta.outputs.title }}
+    steps:
+      - id: meta
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+`
+
+	linter, err := NewLinter(io.Discard, &LinterOptions{})
+	if err != nil {
+		t.Fatalf("failed to create linter: %v", err)
+	}
+
+	result, err := linter.Lint("<test>", []byte(workflow), nil)
+	if err != nil {
+		t.Fatalf("failed to lint: %v", err)
+	}
+
+	var crossJobErrors []string
+	for _, e := range result.Errors {
+		if strings.Contains(e.Description, "tainted via") {
+			crossJobErrors = append(crossJobErrors, e.Description)
+		}
+	}
+
+	if len(crossJobErrors) == 0 {
+		t.Error("expected cross-job taint error even with reverse yaml order, but got none")
+		for _, e := range result.Errors {
+			t.Logf("Error: %s", e.Description)
+		}
+	}
+}
