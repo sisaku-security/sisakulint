@@ -513,9 +513,19 @@ func (t *TaintTracker) IsTainted(node expressions.ExprNode) (bool, []string) {
 	return t.IsTaintedExpr(exprStr)
 }
 
-// GetTaintedOutputs returns all tracked tainted outputs (for testing/debugging).
+// GetTaintedOutputs returns a deep copy of all tracked tainted outputs (for testing/debugging).
 func (t *TaintTracker) GetTaintedOutputs() map[string]map[string][]string {
-	return t.taintedOutputs
+	result := make(map[string]map[string][]string, len(t.taintedOutputs))
+	for step, outputMap := range t.taintedOutputs {
+		inner := make(map[string][]string, len(outputMap))
+		for output, sources := range outputMap {
+			srcs := make([]string, len(sources))
+			copy(srcs, sources)
+			inner[output] = srcs
+		}
+		result[step] = inner
+	}
+	return result
 }
 
 // nodeToString converts an expression AST node to its string representation.

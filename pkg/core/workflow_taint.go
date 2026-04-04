@@ -1,15 +1,11 @@
 package core
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
-
-// exprExtractRegexp matches ${{ expr }} patterns in strings.
-var exprExtractRegexp = regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
 
 // WorkflowTaintMap tracks taint propagation across job boundaries via needs.*.outputs.*.
 // It is created once per workflow analysis and shared between CodeInjectionCritical and
@@ -64,8 +60,7 @@ func (m *WorkflowTaintMap) setJobOutputTaint(jobID, outputName string, sources [
 		m.jobOutputTaints[jobID] = make(map[string][]string)
 	}
 
-	existing := m.jobOutputTaints[jobID][outputName]
-	merged := append(existing, sources...) //nolint:gocritic
+	merged := append(m.jobOutputTaints[jobID][outputName], sources...)
 	m.jobOutputTaints[jobID][outputName] = deduplicateStrings(merged)
 }
 
@@ -112,16 +107,12 @@ func (m *WorkflowTaintMap) RegisterJobOutputs(jobID string, tracker *TaintTracke
 
 // extractTaintSourcesFromValue extracts taint sources from an output value expression string.
 // Handles both steps.X.outputs.Y (via tracker) and needs.X.outputs.Y (via self).
+// Uses extractExpressionsFromString (which searches for "}}" as a delimiter) so that
+// expressions containing single "}" characters (e.g. format('{0}', ...)) are handled correctly.
 func (m *WorkflowTaintMap) extractTaintSourcesFromValue(value string, tracker *TaintTracker) []string {
 	var sources []string
 
-	matches := exprExtractRegexp.FindAllStringSubmatch(value, -1)
-
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-		exprContent := strings.TrimSpace(match[1])
+	for _, exprContent := range extractExpressionsFromString(value) {
 		lower := strings.ToLower(exprContent)
 
 		// Pattern 1: steps.X.outputs.Y → check TaintTracker

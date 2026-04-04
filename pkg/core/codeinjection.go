@@ -279,21 +279,19 @@ func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 			continue
 		}
 
-		for _, source := range sources {
-			taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, source)
-			if rule.checkPrivileged {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-					taintPath,
-				)
-			} else {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-					taintPath,
-				)
-			}
+		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
+		if rule.checkPrivileged {
+			rule.Errorf(
+				pending.expr.pos,
+				"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+				taintPath,
+			)
+		} else {
+			rule.Errorf(
+				pending.expr.pos,
+				"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+				taintPath,
+			)
 		}
 	}
 

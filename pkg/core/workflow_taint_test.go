@@ -74,7 +74,7 @@ func TestWorkflowTaintMap_RegisterJobOutputs_StepsRef(t *testing.T) {
 	t.Parallel()
 
 	tracker := NewTaintTracker()
-	tracker.GetTaintedOutputs()["meta"] = map[string][]string{
+	tracker.taintedOutputs["meta"] = map[string][]string{
 		"title": {"github.event.pull_request.title"},
 	}
 
@@ -139,7 +139,7 @@ func TestWorkflowTaintMap_MultiHopChain(t *testing.T) {
 
 	// job-A: untrusted → steps output
 	trackerA := NewTaintTracker()
-	trackerA.GetTaintedOutputs()["meta"] = map[string][]string{
+	trackerA.taintedOutputs["meta"] = map[string][]string{
 		"title": {"github.event.pull_request.title"},
 	}
 
