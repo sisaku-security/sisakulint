@@ -513,13 +513,28 @@ func (t *TaintTracker) IsTainted(node expressions.ExprNode) (bool, []string) {
 	return t.IsTaintedExpr(exprStr)
 }
 
+// GetTaintedOutputs returns all tracked tainted outputs (for testing/debugging).
+func (t *TaintTracker) GetTaintedOutputs() map[string]map[string][]string {
+	return t.taintedOutputs
+}
+
 // nodeToString converts an expression AST node to its string representation.
+// Delegates to the package-level exprNodeToString for reuse across rules.
 func (t *TaintTracker) nodeToString(node expressions.ExprNode) string {
+	return exprNodeToString(node)
+}
+
+// exprNodeToString converts an expression AST node to its dot-separated string representation.
+// Examples:
+//   - needs.extract.outputs.pr_title → "needs.extract.outputs.pr_title"
+//   - steps.get-ref.outputs.ref → "steps.get-ref.outputs.ref"
+//   - github.event.pull_request.title → "github.event.pull_request.title"
+func exprNodeToString(node expressions.ExprNode) string {
 	switch n := node.(type) {
 	case *expressions.ObjectDerefNode:
-		return t.buildObjectDerefString(n)
+		return buildExprObjectDerefString(n)
 	case *expressions.IndexAccessNode:
-		return t.buildIndexAccessString(n)
+		return buildExprIndexAccessString(n)
 	case *expressions.VariableNode:
 		return n.Name
 	default:
@@ -527,10 +542,8 @@ func (t *TaintTracker) nodeToString(node expressions.ExprNode) string {
 	}
 }
 
-// buildObjectDerefString builds the string representation of a property access chain.
-func (t *TaintTracker) buildObjectDerefString(node *expressions.ObjectDerefNode) string {
+func buildExprObjectDerefString(node *expressions.ObjectDerefNode) string {
 	var parts []string
-
 	var current expressions.ExprNode = node
 	for current != nil {
 		switch n := current.(type) {
@@ -544,26 +557,16 @@ func (t *TaintTracker) buildObjectDerefString(node *expressions.ObjectDerefNode)
 			current = nil
 		}
 	}
-
 	return strings.Join(parts, ".")
 }
 
-// buildIndexAccessString builds the string representation of an index access.
-func (t *TaintTracker) buildIndexAccessString(node *expressions.IndexAccessNode) string {
-	operandStr := t.nodeToString(node.Operand)
+func buildExprIndexAccessString(node *expressions.IndexAccessNode) string {
+	operandStr := exprNodeToString(node.Operand)
 	if operandStr == "" {
 		return ""
 	}
-
-	// For string index, append it as a property
 	if strNode, ok := node.Index.(*expressions.StringNode); ok {
 		return operandStr + "." + strNode.Value
 	}
-
 	return operandStr
-}
-
-// GetTaintedOutputs returns all tracked tainted outputs (for testing/debugging).
-func (t *TaintTracker) GetTaintedOutputs() map[string]map[string][]string {
-	return t.taintedOutputs
 }
