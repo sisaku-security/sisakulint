@@ -531,14 +531,26 @@ func (rule *CodeInjectionRule) checkUntrustedInput(expr parsedExpression) []stri
 // Example: If step "get-ref" writes untrusted input to $GITHUB_OUTPUT,
 // then steps.get-ref.outputs.ref will be detected as tainted.
 func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) []string {
-	// First check built-in untrusted inputs
+	// Check built-in untrusted inputs
 	paths := rule.checkUntrustedInput(expr)
 
-	// Then check tainted step outputs
+	// Check intra-job tainted step outputs (steps.X.outputs.Y)
 	if rule.taintTracker != nil {
 		if tainted, sources := rule.taintTracker.IsTainted(expr.node); tainted {
-			// Format the taint path to include the propagation chain
-			// e.g., "steps.get-ref.outputs.ref (tainted via github.head_ref)"
+			for _, source := range sources {
+				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
+				paths = append(paths, taintPath)
+			}
+		}
+	}
+
+	// Check cross-job tainted needs outputs (needs.X.outputs.Y)
+	if rule.workflowTaintMap != nil {
+		sources, pending := rule.workflowTaintMap.ResolveFromExprNode(expr.node)
+		if pending {
+			// Upstream job not yet processed; defer to VisitWorkflowPost
+			rule.addPendingCrossJobCheck(expr)
+		} else if len(sources) > 0 {
 			for _, source := range sources {
 				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
 				paths = append(paths, taintPath)
@@ -547,6 +559,22 @@ func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpressio
 	}
 
 	return paths
+}
+
+// addPendingCrossJobCheck parses expr for needs.X.outputs.Y and stores it for retry in VisitWorkflowPost.
+func (rule *CodeInjectionRule) addPendingCrossJobCheck(expr parsedExpression) {
+	exprStr := exprNodeToString(expr.node)
+	lower := strings.ToLower(exprStr)
+	parts := strings.Split(lower, ".")
+	if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
+		return
+	}
+	// Note: auto-fix is not supported for pending checks (reverse yaml order).
+	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
+		expr:       expr,
+		needsJobID: parts[1],
+		outputName: parts[3],
+	})
 }
 
 // isDefinedInEnv checks if the expression is defined in the step's env section
