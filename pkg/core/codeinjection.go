@@ -101,12 +101,23 @@ func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 		}
 	}
 
+	// Reset WorkflowTaintMap for this workflow
+	if rule.workflowTaintMap != nil {
+		rule.workflowTaintMap.Reset()
+		rule.pendingCrossJobChecks = nil
+	}
+
 	return nil
 }
 
 func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 	// Reset job-level state
 	rule.jobHasMatchingTriggers = false
+
+	// Track current job ID for cross-job taint registration
+	if node.ID != nil {
+		rule.currentJobID = node.ID.Value
+	}
 
 	// Use JobTriggerAnalyzer to determine effective triggers for this job
 	// This considers job-level if conditions that may filter out certain triggers
@@ -134,19 +145,27 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 		rule.jobHasMatchingTriggers = hasNormal && !hasPrivileged
 	}
 
-	// Skip if this job doesn't match our trigger criteria
-	if !rule.jobHasMatchingTriggers {
-		return nil
-	}
-
-	// Initialize taint tracker per job to avoid cross-job contamination
-	// This ensures step IDs don't collide across different jobs
+	// Initialize taint tracker per job to avoid cross-job contamination.
+	// This must happen for every job (not just matching ones) so that
+	// RegisterJobOutputs can analyze outputs for downstream cross-job tracking.
 	rule.taintTracker = NewTaintTracker()
 
 	// First pass: collect taint information from all steps
 	// This allows us to detect tainted step outputs before checking for code injection
 	for _, s := range node.Steps {
 		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Register this job's outputs into WorkflowTaintMap for downstream jobs.
+	// Done before the trigger-match skip so that even skipped jobs contribute their
+	// outputs to the cross-job taint graph.
+	if rule.workflowTaintMap != nil && node.ID != nil {
+		rule.workflowTaintMap.RegisterJobOutputs(node.ID.Value, rule.taintTracker, node.Outputs)
+	}
+
+	// Skip injection checks if this job doesn't match our trigger criteria
+	if !rule.jobHasMatchingTriggers {
+		return nil
 	}
 
 	// Second pass: check for code injection vulnerabilities
