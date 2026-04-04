@@ -503,6 +503,10 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 }
 
 func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+	// WorkflowTaintMap is shared between Critical and Medium rules to enable
+	// cross-job taint propagation tracking via needs.*.outputs.*
+	wfTaintMap := NewWorkflowTaintMap()
+
 	return []Rule{
 		// MatrixRule(),
 		CredentialsRule(),
@@ -517,8 +521,8 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		DeprecatedCommandsRule(),
 		NewConditionalRule(),
 		TimeoutMinuteRule(),
-		CodeInjectionCriticalRule(),    // Detects untrusted input in privileged workflow triggers
-		CodeInjectionMediumRule(),      // Detects untrusted input in normal workflow triggers
+		CodeInjectionCriticalRule(wfTaintMap), // Detects untrusted input in privileged workflow triggers
+		CodeInjectionMediumRule(wfTaintMap),   // Detects untrusted input in normal workflow triggers
 		EnvVarInjectionCriticalRule(),  // Detects envvar injection in privileged workflow triggers
 		EnvVarInjectionMediumRule(),    // Detects envvar injection in normal workflow triggers
 		EnvPathInjectionCriticalRule(), // Detects PATH injection in privileged workflow triggers

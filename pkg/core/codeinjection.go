@@ -22,6 +22,21 @@ type CodeInjectionRule struct {
 	// jobHasMatchingTriggers indicates if the current job can execute on matching triggers
 	// (privileged for critical, normal for medium)
 	jobHasMatchingTriggers bool
+	// workflowTaintMap is shared between Critical and Medium rule instances.
+	// Nil if cross-job taint propagation is disabled (e.g., in unit tests).
+	workflowTaintMap *WorkflowTaintMap
+	// currentJobID tracks which job is currently being analyzed.
+	currentJobID string
+	// pendingCrossJobChecks holds checks that couldn't be resolved because the upstream
+	// job hadn't been processed yet (reverse yaml order). Flushed in VisitWorkflowPost.
+	pendingCrossJobChecks []pendingCrossJobCheck
+}
+
+// pendingCrossJobCheck stores a cross-job taint check that needs to be retried in VisitWorkflowPost.
+type pendingCrossJobCheck struct {
+	expr       parsedExpression
+	needsJobID string
+	outputName string
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -45,8 +60,9 @@ type parsedExpression struct {
 	pos  *ast.Position        // Position in source
 }
 
-// newCodeInjectionRule creates a new code injection rule with the specified severity level
-func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjectionRule {
+// newCodeInjectionRule creates a new code injection rule with the specified severity level.
+// wfTaintMap is shared between Critical and Medium instances; pass nil to disable cross-job tracking.
+func newCodeInjectionRule(severityLevel string, checkPrivileged bool, wfTaintMap *WorkflowTaintMap) *CodeInjectionRule {
 	var desc string
 
 	if checkPrivileged {
@@ -63,6 +79,7 @@ func newCodeInjectionRule(severityLevel string, checkPrivileged bool) *CodeInjec
 		severityLevel:      severityLevel,
 		checkPrivileged:    checkPrivileged,
 		stepsWithUntrusted: make([]*stepWithUntrustedInput, 0),
+		workflowTaintMap:   wfTaintMap,
 	}
 }
 

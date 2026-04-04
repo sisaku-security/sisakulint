@@ -8,7 +8,7 @@ import (
 )
 
 func TestCodeInjectionCriticalRule(t *testing.T) {
-	rule := CodeInjectionCriticalRule()
+	rule := CodeInjectionCriticalRule(nil)
 	if rule.RuleName != "code-injection-critical" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "code-injection-critical")
 	}
@@ -67,7 +67,7 @@ func TestCodeInjectionCritical_PrivilegedTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionCriticalRule()
+			rule := CodeInjectionCriticalRule(nil)
 
 			// Create workflow with specified trigger
 			workflow := &ast.Workflow{
@@ -163,7 +163,7 @@ func TestCodeInjectionCritical_RunScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionCriticalRule()
+			rule := CodeInjectionCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -247,7 +247,7 @@ func TestCodeInjectionCritical_GitHubScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionCriticalRule()
+			rule := CodeInjectionCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -396,7 +396,7 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionCriticalRule()
+			rule := CodeInjectionCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -432,7 +432,7 @@ func TestCodeInjectionCritical_ComplexExpressions(t *testing.T) {
 // TestCodeInjectionCritical_FuncArgDepthReset tests that funcArgDepth is correctly
 // reset between different expressions and steps to ensure no state leakage.
 func TestCodeInjectionCritical_FuncArgDepthReset(t *testing.T) {
-	rule := CodeInjectionCriticalRule()
+	rule := CodeInjectionCriticalRule(nil)
 
 	workflow := &ast.Workflow{
 		On: []ast.Event{
