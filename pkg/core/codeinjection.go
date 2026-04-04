@@ -265,6 +265,42 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 	return nil
 }
 
+// VisitWorkflowPost is called after all jobs have been visited.
+// It flushes pending cross-job taint checks that couldn't be resolved during VisitJobPre
+// (e.g., when a downstream job appears before its upstream job in the yaml file).
+func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
+	if rule.workflowTaintMap == nil || len(rule.pendingCrossJobChecks) == 0 {
+		return nil
+	}
+
+	for _, pending := range rule.pendingCrossJobChecks {
+		sources, stillPending := rule.workflowTaintMap.ResolveFromExprNode(pending.expr.node)
+		if stillPending || len(sources) == 0 {
+			continue
+		}
+
+		for _, source := range sources {
+			taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, source)
+			if rule.checkPrivileged {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+					taintPath,
+				)
+			} else {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+					taintPath,
+				)
+			}
+		}
+	}
+
+	rule.pendingCrossJobChecks = nil
+	return nil
+}
+
 // RuleNames implements StepFixer interface
 func (rule *CodeInjectionRule) RuleNames() string {
 	return rule.RuleName
