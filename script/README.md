@@ -34,6 +34,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `supply_chain_protection.yaml` | Supply chain security examples |
 | `test-actionlist.yaml` | Action list rule testing |
 | `test-actionlist-blacklist.yaml` | Blacklist validation testing |
+| `cross-job-taint.yaml` | Cross-job taint propagation via `needs.*.outputs.*` (vulnerable) |
+| `cross-job-taint-safe.yaml` | Cross-job taint propagation - safe pattern using env: variable |
 
 ### Usage
 

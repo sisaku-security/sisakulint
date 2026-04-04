@@ -1,0 +1,29 @@
+# SAFE: Cross-job taint propagation - safe pattern using env: variable
+# Job "extract" extracts PR title (untrusted) into a job output.
+# Job "deploy" maps the tainted output to an env var and uses it quoted,
+# preventing shell injection. sisakulint should NOT report any errors here.
+name: cross-job-taint-safe
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.get_title.outputs.pr_title }}
+    steps:
+      - name: get_title
+        id: get_title
+        # SAFE: untrusted input is passed through env var before writing to GITHUB_OUTPUT
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "pr_title=$PR_TITLE" >> "$GITHUB_OUTPUT"
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [extract]
+    steps:
+      - name: use_title
+        # SAFE: tainted value is mapped to an env var and used with double quotes.
+        env:
+          PR_TITLE: ${{ needs.extract.outputs.pr_title }}
+        run: echo "$PR_TITLE"
