@@ -34,8 +34,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `supply_chain_protection.yaml` | Supply chain security examples |
 | `test-actionlist.yaml` | Action list rule testing |
 | `test-actionlist-blacklist.yaml` | Blacklist validation testing |
-| `cross-job-taint.yaml` | Cross-job taint propagation via `needs.*.outputs.*` (vulnerable) |
-| `cross-job-taint-safe.yaml` | Cross-job taint propagation - safe pattern using env: variable |
+| `cross-job-taint.yaml` | Cross-job taint propagation via `needs.*.outputs.*` (code-injection-critical) |
+| `cross-job-taint-safe.yaml` | Safe pattern: untrusted needs output moved to `env:` and referenced with double quotes (e.g. `echo "$PR_TITLE"` not `echo $PR_TITLE`) to avoid shell expansion; see `pkg/core/codeinjection_shell_test.go` for unquoted env detection |
 
 ### Usage
 
