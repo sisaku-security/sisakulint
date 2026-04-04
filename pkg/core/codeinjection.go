@@ -25,8 +25,6 @@ type CodeInjectionRule struct {
 	// workflowTaintMap is shared between Critical and Medium rule instances.
 	// Nil if cross-job taint propagation is disabled (e.g., in unit tests).
 	workflowTaintMap *WorkflowTaintMap
-	// currentJobID tracks which job is currently being analyzed.
-	currentJobID string
 	// pendingCrossJobChecks holds checks that couldn't be resolved because the upstream
 	// job hadn't been processed yet (reverse yaml order). Flushed in VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
@@ -116,11 +114,6 @@ func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 	// Reset job-level state
 	rule.jobHasMatchingTriggers = false
-
-	// Track current job ID for cross-job taint registration
-	if node.ID != nil {
-		rule.currentJobID = node.ID.Value
-	}
 
 	// Use JobTriggerAnalyzer to determine effective triggers for this job
 	// This considers job-level if conditions that may filter out certain triggers
