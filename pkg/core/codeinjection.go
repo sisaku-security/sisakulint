@@ -34,9 +34,12 @@ type CodeInjectionRule struct {
 
 // pendingCrossJobCheck stores a cross-job taint check that needs to be retried in VisitWorkflowPost.
 type pendingCrossJobCheck struct {
-	expr       parsedExpression
-	needsJobID string
-	outputName string
+	expr          parsedExpression
+	needsJobID    string
+	outputName    string
+	step          *ast.Step  // the step containing the expression; needed for isDefinedInEnv and auto-fix
+	isInRunScript bool       // true = run: script, false = actions/github-script
+	scriptInput   *ast.Input // non-nil when isInRunScript is false
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -183,7 +186,10 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 
 			for _, expr := range exprs {
 				// Use checkUntrustedInputWithTaint to also detect tainted step outputs
-				untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
+				untrustedPaths, crossJobPending := rule.checkUntrustedInputWithTaint(expr)
+				if crossJobPending {
+					rule.addPendingCrossJobCheck(expr, s, true, nil)
+				}
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
 						stepUntrusted = &stepWithUntrustedInput{step: s}
@@ -220,7 +226,10 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 
 					for _, expr := range exprs {
 						// Use checkUntrustedInputWithTaint to also detect tainted step outputs
-						untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
+						untrustedPaths, crossJobPending := rule.checkUntrustedInputWithTaint(expr)
+						if crossJobPending {
+							rule.addPendingCrossJobCheck(expr, s, false, scriptInput)
+						}
 						if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 							if stepUntrusted == nil {
 								stepUntrusted = &stepWithUntrustedInput{step: s}
@@ -279,19 +288,65 @@ func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 			continue
 		}
 
+		// Mirror the normal-path filter: skip if the expression is already
+		// assigned to an env variable in the same step.
+		if pending.step != nil && rule.isDefinedInEnv(pending.expr, pending.step.Env) {
+			continue
+		}
+
 		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
-		if rule.checkPrivileged {
-			rule.Errorf(
-				pending.expr.pos,
-				"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-				taintPath,
-			)
+
+		// Emit the same message as the normal path, using the correct script type.
+		if pending.isInRunScript {
+			if rule.checkPrivileged {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+					taintPath,
+				)
+			} else {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+					taintPath,
+				)
+			}
 		} else {
-			rule.Errorf(
-				pending.expr.pos,
-				"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-				taintPath,
-			)
+			if rule.checkPrivileged {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+					taintPath,
+				)
+			} else {
+				rule.Errorf(
+					pending.expr.pos,
+					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+					taintPath,
+				)
+			}
+		}
+
+		// Wire up auto-fix, mirroring the normal path.
+		if pending.step != nil {
+			var stepUntrusted *stepWithUntrustedInput
+			for _, s := range rule.stepsWithUntrusted {
+				if s.step == pending.step {
+					stepUntrusted = s
+					break
+				}
+			}
+			if stepUntrusted == nil {
+				stepUntrusted = &stepWithUntrustedInput{step: pending.step}
+				rule.stepsWithUntrusted = append(rule.stepsWithUntrusted, stepUntrusted)
+				rule.AddAutoFixer(NewStepFixer(pending.step, rule))
+			}
+			stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, untrustedExprInfo{
+				expr:          pending.expr,
+				paths:         []string{taintPath},
+				isInRunScript: pending.isInRunScript,
+				scriptInput:   pending.scriptInput,
+			})
 		}
 	}
 
@@ -562,9 +617,14 @@ func (rule *CodeInjectionRule) checkUntrustedInput(expr parsedExpression) []stri
 // including tainted step outputs tracked by TaintTracker.
 // This extends checkUntrustedInput to detect indirect taint propagation.
 //
+// The second return value is true when the expression references a cross-job
+// needs output whose upstream job has not yet been processed.  In that case
+// the caller is responsible for recording a pendingCrossJobCheck with the
+// full step context so that VisitWorkflowPost can re-evaluate and emit errors.
+//
 // Example: If step "get-ref" writes untrusted input to $GITHUB_OUTPUT,
 // then steps.get-ref.outputs.ref will be detected as tainted.
-func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) []string {
+func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) ([]string, bool) {
 	// Check built-in untrusted inputs
 	paths := rule.checkUntrustedInput(expr)
 
@@ -582,8 +642,8 @@ func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpressio
 	if rule.workflowTaintMap != nil {
 		sources, pending := rule.workflowTaintMap.ResolveFromExprNode(expr.node)
 		if pending {
-			// Upstream job not yet processed; defer to VisitWorkflowPost
-			rule.addPendingCrossJobCheck(expr)
+			// Upstream job not yet processed; signal the caller to defer.
+			return paths, true
 		} else if len(sources) > 0 {
 			for _, source := range sources {
 				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
@@ -592,22 +652,26 @@ func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpressio
 		}
 	}
 
-	return paths
+	return paths, false
 }
 
 // addPendingCrossJobCheck parses expr for needs.X.outputs.Y and stores it for retry in VisitWorkflowPost.
-func (rule *CodeInjectionRule) addPendingCrossJobCheck(expr parsedExpression) {
+// step, isInRunScript, and scriptInput carry the context from the calling site so that
+// VisitWorkflowPost can call isDefinedInEnv and wire up auto-fix correctly.
+func (rule *CodeInjectionRule) addPendingCrossJobCheck(expr parsedExpression, step *ast.Step, isInRunScript bool, scriptInput *ast.Input) {
 	exprStr := exprNodeToString(expr.node)
 	lower := strings.ToLower(exprStr)
 	parts := strings.Split(lower, ".")
 	if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
 		return
 	}
-	// Note: auto-fix is not supported for pending checks (reverse yaml order).
 	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
-		expr:       expr,
-		needsJobID: parts[1],
-		outputName: parts[3],
+		expr:          expr,
+		needsJobID:    parts[1],
+		outputName:    parts[3],
+		step:          step,
+		isInRunScript: isInRunScript,
+		scriptInput:   scriptInput,
 	})
 }
 
