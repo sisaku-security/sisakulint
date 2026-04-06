@@ -30,6 +30,30 @@ type CodeInjectionRule struct {
 	pendingCrossJobChecks []pendingCrossJobCheck
 }
 
+// reportCodeInjectionError emits the appropriate Errorf for a code injection finding.
+// It centralises the message formatting that is shared between VisitJobPre (normal path)
+// and VisitWorkflowPost (deferred cross-job path).
+func (rule *CodeInjectionRule) reportCodeInjectionError(pos *ast.Position, taintPath string, isInRunScript bool) {
+	scriptType := "github-script"
+	if isInRunScript {
+		scriptType = "inline scripts"
+	}
+
+	if rule.checkPrivileged {
+		rule.Errorf(
+			pos,
+			"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in %s. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+			taintPath, scriptType,
+		)
+	} else {
+		rule.Errorf(
+			pos,
+			"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in %s. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+			taintPath, scriptType,
+		)
+	}
+}
+
 // pendingCrossJobCheck stores a cross-job taint check that needs to be retried in VisitWorkflowPost.
 type pendingCrossJobCheck struct {
 	expr          parsedExpression
@@ -193,19 +217,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 						isInRunScript: true,
 					})
 
-					if rule.checkPrivileged {
-						rule.Errorf(
-							expr.pos,
-							"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-							strings.Join(untrustedPaths, "\", \""),
-						)
-					} else {
-						rule.Errorf(
-							expr.pos,
-							"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-							strings.Join(untrustedPaths, "\", \""),
-						)
-					}
+					rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), true)
 				}
 			}
 		}
@@ -234,19 +246,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 								scriptInput:   scriptInput,
 							})
 
-							if rule.checkPrivileged {
-								rule.Errorf(
-									expr.pos,
-									"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-									strings.Join(untrustedPaths, "\", \""),
-								)
-							} else {
-								rule.Errorf(
-									expr.pos,
-									"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-									strings.Join(untrustedPaths, "\", \""),
-								)
-							}
+							rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), false)
 						}
 					}
 				}
@@ -277,7 +277,14 @@ func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 
 	for _, pending := range rule.pendingCrossJobChecks {
 		sources, stillPending := rule.workflowTaintMap.ResolveFromExprNode(pending.expr.node)
-		if stillPending || len(sources) == 0 {
+		if stillPending {
+			// This can happen when the upstream job ID referenced in the expression
+			// (needs.<jobID>.outputs.<name>) was never registered in the workflow taint map,
+			// e.g., a typo in the job ID or a conditional job that was excluded from analysis.
+			rule.Debug("cross-job taint check still pending after all jobs visited: expr=%q, needsJobID=%q, outputName=%q", pending.expr.raw, pending.needsJobID, pending.outputName)
+			continue
+		}
+		if len(sources) == 0 {
 			continue
 		}
 
@@ -289,36 +296,7 @@ func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 
 		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
 
-		// Emit the same message as the normal path, using the correct script type.
-		if pending.isInRunScript {
-			if rule.checkPrivileged {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-					taintPath,
-				)
-			} else {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-					taintPath,
-				)
-			}
-		} else {
-			if rule.checkPrivileged {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (critical): \"%s\" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-					taintPath,
-				)
-			} else {
-				rule.Errorf(
-					pending.expr.pos,
-					"code injection (medium): \"%s\" is potentially untrusted. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-					taintPath,
-				)
-			}
-		}
+		rule.reportCodeInjectionError(pending.expr.pos, taintPath, pending.isInRunScript)
 
 		// Wire up auto-fix, mirroring the normal path.
 		if pending.step != nil {
@@ -661,7 +639,7 @@ func (rule *CodeInjectionRule) addPendingCrossJobCheck(expr parsedExpression, st
 	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
 		expr:          expr,
 		needsJobID:    parts[1],
-		outputName:    parts[3],
+		outputName:    strings.Join(parts[3:], "."),
 		step:          step,
 		isInRunScript: isInRunScript,
 		scriptInput:   scriptInput,
