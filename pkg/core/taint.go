@@ -493,7 +493,7 @@ func (t *TaintTracker) IsTaintedExpr(exprStr string) (bool, []string) {
 	}
 
 	stepID := parts[1]
-	outputName := parts[3]
+	outputName := strings.Join(parts[3:], ".")
 
 	// Check if this output is tainted
 	if outputs, exists := t.taintedOutputs[stepID]; exists {

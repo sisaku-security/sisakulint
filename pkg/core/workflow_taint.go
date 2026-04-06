@@ -152,7 +152,7 @@ func (m *WorkflowTaintMap) resolveFromExprStr(exprStr string) (sources []string,
 	}
 
 	jobID := parts[1]
-	outputName := parts[3]
+	outputName := strings.Join(parts[3:], ".")
 
 	src, registered := m.IsTaintedNeedsOutput(jobID, outputName)
 	if !registered {
