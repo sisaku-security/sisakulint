@@ -203,8 +203,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 
 			for _, expr := range exprs {
 				// Use checkUntrustedInputWithTaint to also detect tainted step outputs
-				untrustedPaths, crossJobPending := rule.checkUntrustedInputWithTaint(expr)
-				if crossJobPending {
+				untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
+				if rule.workflowTaintMap != nil && rule.isNeedsOutputExpr(expr) {
 					rule.addPendingCrossJobCheck(expr, s, true, nil)
 				}
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
@@ -231,8 +231,8 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 
 					for _, expr := range exprs {
 						// Use checkUntrustedInputWithTaint to also detect tainted step outputs
-						untrustedPaths, crossJobPending := rule.checkUntrustedInputWithTaint(expr)
-						if crossJobPending {
+						untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
+						if rule.workflowTaintMap != nil && rule.isNeedsOutputExpr(expr) {
 							rule.addPendingCrossJobCheck(expr, s, false, scriptInput)
 						}
 						if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
@@ -588,14 +588,13 @@ func (rule *CodeInjectionRule) checkUntrustedInput(expr parsedExpression) []stri
 // including tainted step outputs tracked by TaintTracker.
 // This extends checkUntrustedInput to detect indirect taint propagation.
 //
-// The second return value is true when the expression references a cross-job
-// needs output whose upstream job has not yet been processed.  In that case
-// the caller is responsible for recording a pendingCrossJobCheck with the
-// full step context so that VisitWorkflowPost can re-evaluate and emit errors.
+// Cross-job taint (needs.X.outputs.Y) is NOT resolved here; all such
+// expressions are deferred to VisitWorkflowPost via pendingCrossJobChecks.
+// This keeps cross-job resolution in a single code path.
 //
 // Example: If step "get-ref" writes untrusted input to $GITHUB_OUTPUT,
 // then steps.get-ref.outputs.ref will be detected as tainted.
-func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) ([]string, bool) {
+func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpression) []string {
 	// Check built-in untrusted inputs
 	paths := rule.checkUntrustedInput(expr)
 
@@ -609,21 +608,15 @@ func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpressio
 		}
 	}
 
-	// Check cross-job tainted needs outputs (needs.X.outputs.Y)
-	if rule.workflowTaintMap != nil {
-		sources, pending := rule.workflowTaintMap.ResolveFromExprNode(expr.node)
-		if pending {
-			// Upstream job not yet processed; signal the caller to defer.
-			return paths, true
-		} else if len(sources) > 0 {
-			for _, source := range sources {
-				taintPath := fmt.Sprintf("%s (tainted via %s)", expr.raw, source)
-				paths = append(paths, taintPath)
-			}
-		}
-	}
+	return paths
+}
 
-	return paths, false
+// isNeedsOutputExpr returns true if the expression is a needs.X.outputs.Y reference.
+func (rule *CodeInjectionRule) isNeedsOutputExpr(expr parsedExpression) bool {
+	exprStr := exprNodeToString(expr.node)
+	lower := strings.ToLower(exprStr)
+	parts := strings.Split(lower, ".")
+	return len(parts) >= 4 && parts[0] == "needs" && parts[2] == "outputs"
 }
 
 // addPendingCrossJobCheck parses expr for needs.X.outputs.Y and stores it for retry in VisitWorkflowPost.
