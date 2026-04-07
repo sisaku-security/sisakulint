@@ -41,7 +41,7 @@ func TestCodeInjectionCritical_AutoFix_YAMLOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionCriticalRule()
+			rule := CodeInjectionCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -148,7 +148,7 @@ func TestCodeInjectionMedium_AutoFix_YAMLOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionMediumRule()
+			rule := CodeInjectionMediumRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -220,7 +220,7 @@ func TestCodeInjectionMedium_AutoFix_YAMLOutput(t *testing.T) {
 }
 
 func TestCodeInjectionCritical_AutoFix_GitHubScript_YAMLOutput(t *testing.T) {
-	rule := CodeInjectionCriticalRule()
+	rule := CodeInjectionCriticalRule(nil)
 
 	workflow := &ast.Workflow{
 		On: []ast.Event{

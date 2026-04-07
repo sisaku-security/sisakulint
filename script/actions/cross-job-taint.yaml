@@ -1,0 +1,25 @@
+# VULNERABLE: Cross-job taint propagation via needs.*.outputs.*
+# Job "extract" extracts PR title (untrusted) into a job output.
+# Job "deploy" consumes that output directly in a run: script without quoting,
+# allowing shell injection. sisakulint should report code-injection-critical here.
+name: cross-job-taint-vulnerable
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.get_title.outputs.pr_title }}
+    steps:
+      - name: get_title
+        id: get_title
+        run: echo "pr_title=${{ github.event.pull_request.title }}" >> "$GITHUB_OUTPUT"
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [extract]
+    steps:
+      - name: use_title
+        # VULNERABLE: needs.extract.outputs.pr_title is tainted (originates from
+        # github.event.pull_request.title) and used unquoted in shell.
+        run: echo ${{ needs.extract.outputs.pr_title }}

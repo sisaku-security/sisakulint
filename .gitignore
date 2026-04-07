@@ -9,6 +9,7 @@ sisakulint
 /sisakulint-workflow-ast
 /.DS_Store
 .DS_Store
+/blog
 dist/
 .claude
 .beads/.worktrees/

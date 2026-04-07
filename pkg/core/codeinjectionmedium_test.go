@@ -7,7 +7,7 @@ import (
 )
 
 func TestCodeInjectionMediumRule(t *testing.T) {
-	rule := CodeInjectionMediumRule()
+	rule := CodeInjectionMediumRule(nil)
 	if rule.RuleName != "code-injection-medium" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "code-injection-medium")
 	}
@@ -60,7 +60,7 @@ func TestCodeInjectionMedium_NormalTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionMediumRule()
+			rule := CodeInjectionMediumRule(nil)
 
 			// Create workflow with specified trigger
 			workflow := &ast.Workflow{
@@ -171,7 +171,7 @@ echo "${{ github.event.pull_request.body }}"`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionMediumRule()
+			rule := CodeInjectionMediumRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -255,7 +255,7 @@ func TestCodeInjectionMedium_GitHubScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CodeInjectionMediumRule()
+			rule := CodeInjectionMediumRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -330,8 +330,8 @@ func TestCodeInjectionMedium_NoOverlapWithCritical(t *testing.T) {
 		},
 	}
 
-	criticalRule := CodeInjectionCriticalRule()
-	mediumRule := CodeInjectionMediumRule()
+	criticalRule := CodeInjectionCriticalRule(nil)
+	mediumRule := CodeInjectionMediumRule(nil)
 
 	// Visit with critical rule
 	_ = criticalRule.VisitWorkflowPre(workflow)

@@ -70,9 +70,9 @@ func TestCodeInjection_ShellMetacharacterInjection_Unquoted(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := newCodeInjectionRule("critical", tt.trigger == EventPullRequestTarget)
+			rule := newCodeInjectionRule("critical", tt.trigger == EventPullRequestTarget, nil)
 			if tt.trigger != EventPullRequestTarget {
-				rule = newCodeInjectionRule("medium", false)
+				rule = newCodeInjectionRule("medium", false, nil)
 			}
 
 			workflow := &ast.Workflow{
@@ -158,7 +158,7 @@ func TestCodeInjection_ShellMetacharacterInjection_Eval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := newCodeInjectionRule("critical", true)
+			rule := newCodeInjectionRule("critical", true, nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -253,7 +253,7 @@ func TestCodeInjection_ShellMetacharacterInjection_ShellCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := newCodeInjectionRule("critical", true)
+			rule := newCodeInjectionRule("critical", true, nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -341,7 +341,7 @@ func TestCodeInjection_ShellMetacharacterInjection_CommandSubstitution(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := newCodeInjectionRule("critical", true)
+			rule := newCodeInjectionRule("critical", true, nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -388,7 +388,7 @@ func TestCodeInjection_ShellMetacharacterInjection_CommandSubstitution(t *testin
 
 func TestCodeInjection_ErrorMessages(t *testing.T) {
 	// Test that error messages contain appropriate information
-	rule := newCodeInjectionRule("critical", true)
+	rule := newCodeInjectionRule("critical", true, nil)
 
 	workflow := &ast.Workflow{
 		On: []ast.Event{
