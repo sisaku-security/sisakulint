@@ -427,6 +427,29 @@ jobs:
 			expectError:    false,
 			expectContains: "",
 		},
+		{
+			name: "needs output の汚染値を GITHUB_ENV に書き込み - medium (pull_request)",
+			workflow: `name: Test
+on: pull_request
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.meta.outputs.title }}
+    steps:
+      - id: meta
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TITLE=${{ needs.extract.outputs.pr_title }}" >> $GITHUB_ENV
+`,
+			expectError:    true,
+			expectContains: "environment variable injection",
+		},
 	}
 
 	for _, tt := range tests {
@@ -519,6 +542,29 @@ jobs:
 			expectError:    false,
 			expectContains: "",
 		},
+		{
+			name: "needs output の汚染値をコマンド引数に展開 - medium (pull_request)",
+			workflow: `name: Test
+on: pull_request
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.meta.outputs.branch }}
+    steps:
+      - id: meta
+        run: echo "branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout ${{ needs.extract.outputs.branch }}
+`,
+			expectError:    true,
+			expectContains: "argument injection",
+		},
 	}
 
 	for _, tt := range tests {
@@ -610,6 +656,29 @@ jobs:
 `,
 			expectError:    false,
 			expectContains: "",
+		},
+		{
+			name: "needs output の汚染値を curl URL に使用 - medium (pull_request)",
+			workflow: `name: Test
+on: pull_request
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.meta.outputs.url }}
+    steps:
+      - id: meta
+        run: echo "url=${{ github.event.pull_request.body }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl ${{ needs.extract.outputs.api_url }}
+`,
+			expectError:    true,
+			expectContains: "request forgery",
 		},
 	}
 

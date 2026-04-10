@@ -277,14 +277,10 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 			}
 		}
 
-		// Register cross-job pending checks for each dangerous usage (unique commands)
+		// Register cross-job pending checks for each dangerous usage (one per occurrence)
 		if rule.workflowTaintMap != nil && isNeedsOutputExpr(*expr) {
-			registered := make(map[string]bool)
 			for _, usage := range dangerousUsages {
-				if !registered[usage.CommandName] {
-					registered[usage.CommandName] = true
-					rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
-				}
+				rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
 			}
 		}
 
