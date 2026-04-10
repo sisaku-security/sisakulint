@@ -3,7 +3,7 @@ title: "AI Action Unsafe Sandbox Rule"
 weight: 1
 ---
 
-### AI Action Unsafe Sandbox Rule Overview
+## AI Action Unsafe Sandbox Rule Overview
 
 This rule detects **AI agent actions configured with unsafe sandbox or safety-strategy settings**, which disable sandbox protections and allow the AI agent to execute with unrestricted system access.
 

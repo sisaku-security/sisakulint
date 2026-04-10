@@ -77,11 +77,18 @@ func (r *AIActionUnrestrictedTriggerRule) VisitStep(node *ast.Step) error {
 }
 
 // isKnownAIActionPrefix は uses の値が既知の AI アクションプレフィックスに一致するかを確認する。
+// プレフィックスの直後が '@'、'/'、または文字列終端であることを確認し、
+// "openai/codex-action-malicious@v1" のような誤検知を防ぐ。
 func isKnownAIActionPrefix(uses string) bool {
 	usesLower := strings.ToLower(uses)
 	for _, prefix := range knownAIActionPrefixes {
 		if strings.HasPrefix(usesLower, prefix) {
-			return true
+			// Exact match or followed by '@' or '/' (version or sub-path)
+			if len(usesLower) == len(prefix) ||
+				usesLower[len(prefix)] == '@' ||
+				usesLower[len(prefix)] == '/' {
+				return true
+			}
 		}
 	}
 	return false

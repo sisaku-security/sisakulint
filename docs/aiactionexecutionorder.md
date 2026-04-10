@@ -3,7 +3,7 @@ title: "AI Action Execution Order Rule"
 weight: 1
 ---
 
-### AI Action Execution Order Rule Overview
+## AI Action Execution Order Rule Overview
 
 This rule detects **AI agent actions that are not the last step in a job**. The OpenAI Codex security checklist recommends running AI agent actions as the final step to prevent subsequent steps from inheriting potentially compromised state.
 
@@ -64,7 +64,7 @@ The rule operates at the job level:
 
 ### Attack Scenario
 
-```
+```text
 1. A workflow checks out code and runs an AI agent
 2. The AI agent, potentially manipulated via prompt injection, modifies source files
 3. A subsequent step (npm publish, docker build, terraform apply) executes
