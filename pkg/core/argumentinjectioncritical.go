@@ -1,5 +1,5 @@
 package core
 
-func ArgumentInjectionCriticalRule() *ArgumentInjectionRule {
-	return newArgumentInjectionRule("critical", true)
+func ArgumentInjectionCriticalRule(wfTaintMap *WorkflowTaintMap) *ArgumentInjectionRule {
+	return newArgumentInjectionRule("critical", true, wfTaintMap)
 }

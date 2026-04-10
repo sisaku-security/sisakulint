@@ -558,8 +558,8 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
-		ArgumentInjectionCriticalRule(),
-		ArgumentInjectionMediumRule(),
+		ArgumentInjectionCriticalRule(wfTaintMap),
+		ArgumentInjectionMediumRule(wfTaintMap),
 		RequestForgeryCriticalRule(),         // Detects SSRF vulnerabilities in privileged triggers
 		RequestForgeryMediumRule(),           // Detects SSRF vulnerabilities in normal triggers
 		NewCacheBloatRule(),                  // Detects cache bloat risk with cache/restore and cache/save
