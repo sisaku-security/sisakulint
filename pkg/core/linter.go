@@ -503,8 +503,9 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 }
 
 func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
-	// WorkflowTaintMap is shared between Critical and Medium rules to enable
-	// cross-job taint propagation tracking via needs.*.outputs.*
+	// WorkflowTaintMap is shared between Critical and Medium variants of
+	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
+	// to enable cross-job taint propagation tracking via needs.*.outputs.*
 	wfTaintMap := NewWorkflowTaintMap()
 
 	return []Rule{

@@ -371,3 +371,279 @@ jobs:
 		}
 	}
 }
+
+func TestCrossJobTaintPropagation_EnvVarInjection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		workflow       string
+		expectError    bool
+		expectContains string
+	}{
+		{
+			name: "needs output の汚染値を GITHUB_ENV に書き込み - critical",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_title: ${{ steps.meta.outputs.title }}
+    steps:
+      - id: meta
+        run: echo "title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TITLE=${{ needs.extract.outputs.pr_title }}" >> $GITHUB_ENV
+`,
+			expectError:    true,
+			expectContains: "environment variable injection",
+		},
+		{
+			name: "定数値 needs output は GITHUB_ENV に書いても安全",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  safe-job:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        run: echo "version=1.0.0" >> $GITHUB_OUTPUT
+
+  consumer:
+    needs: safe-job
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "VER=${{ needs.safe-job.outputs.version }}" >> $GITHUB_ENV
+`,
+			expectError:    false,
+			expectContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			linter, err := NewLinter(io.Discard, &LinterOptions{})
+			if err != nil {
+				t.Fatalf("failed to create linter: %v", err)
+			}
+
+			result, err := linter.Lint("<test>", []byte(tt.workflow), nil)
+			if err != nil {
+				t.Fatalf("failed to lint: %v", err)
+			}
+
+			var matchingErrors []string
+			for _, e := range result.Errors {
+				if strings.Contains(e.Description, "tainted via") && strings.Contains(e.Description, "environment variable injection") {
+					matchingErrors = append(matchingErrors, e.Description)
+				}
+			}
+
+			if tt.expectError && len(matchingErrors) == 0 {
+				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+				for _, e := range result.Errors {
+					t.Logf("Error: %s", e.Description)
+				}
+			}
+
+			if !tt.expectError && len(matchingErrors) > 0 {
+				t.Errorf("expected no matching errors, but got: %v", matchingErrors)
+			}
+		})
+	}
+}
+
+func TestCrossJobTaintPropagation_ArgumentInjection(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		workflow       string
+		expectError    bool
+		expectContains string
+	}{
+		{
+			name: "needs output の汚染値をコマンド引数に展開 - critical",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.meta.outputs.branch }}
+    steps:
+      - id: meta
+        run: echo "branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout ${{ needs.extract.outputs.branch }}
+`,
+			expectError:    true,
+			expectContains: "argument injection",
+		},
+		{
+			name: "定数値 needs output をコマンド引数に使っても安全",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  safe-job:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        run: echo "tag=v1.0.0" >> $GITHUB_OUTPUT
+
+  consumer:
+    needs: safe-job
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout ${{ needs.safe-job.outputs.tag }}
+`,
+			expectError:    false,
+			expectContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			linter, err := NewLinter(io.Discard, &LinterOptions{})
+			if err != nil {
+				t.Fatalf("failed to create linter: %v", err)
+			}
+
+			result, err := linter.Lint("<test>", []byte(tt.workflow), nil)
+			if err != nil {
+				t.Fatalf("failed to lint: %v", err)
+			}
+
+			var matchingErrors []string
+			for _, e := range result.Errors {
+				if strings.Contains(e.Description, "tainted via") && strings.Contains(e.Description, "argument injection") {
+					matchingErrors = append(matchingErrors, e.Description)
+				}
+			}
+
+			if tt.expectError && len(matchingErrors) == 0 {
+				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+				for _, e := range result.Errors {
+					t.Logf("Error: %s", e.Description)
+				}
+			}
+
+			if !tt.expectError && len(matchingErrors) > 0 {
+				t.Errorf("expected no matching errors, but got: %v", matchingErrors)
+			}
+		})
+	}
+}
+
+func TestCrossJobTaintPropagation_RequestForgery(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		workflow       string
+		expectError    bool
+		expectContains string
+	}{
+		{
+			name: "needs output の汚染値を curl URL に使用 - critical",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.meta.outputs.url }}
+    steps:
+      - id: meta
+        run: echo "url=${{ github.event.pull_request.body }}" >> $GITHUB_OUTPUT
+
+  process:
+    needs: extract
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl ${{ needs.extract.outputs.api_url }}
+`,
+			expectError:    true,
+			expectContains: "request forgery",
+		},
+		{
+			name: "定数値 needs output を curl に使っても安全",
+			workflow: `name: Test
+on: pull_request_target
+
+jobs:
+  safe-job:
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.v.outputs.url }}
+    steps:
+      - id: v
+        run: echo "url=https://api.github.com" >> $GITHUB_OUTPUT
+
+  consumer:
+    needs: safe-job
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl ${{ needs.safe-job.outputs.url }}
+`,
+			expectError:    false,
+			expectContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			linter, err := NewLinter(io.Discard, &LinterOptions{})
+			if err != nil {
+				t.Fatalf("failed to create linter: %v", err)
+			}
+
+			result, err := linter.Lint("<test>", []byte(tt.workflow), nil)
+			if err != nil {
+				t.Fatalf("failed to lint: %v", err)
+			}
+
+			var matchingErrors []string
+			for _, e := range result.Errors {
+				if strings.Contains(e.Description, "tainted via") && strings.Contains(e.Description, "request forgery") {
+					matchingErrors = append(matchingErrors, e.Description)
+				}
+			}
+
+			if tt.expectError && len(matchingErrors) == 0 {
+				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+				for _, e := range result.Errors {
+					t.Logf("Error: %s", e.Description)
+				}
+			}
+
+			if !tt.expectError && len(matchingErrors) > 0 {
+				t.Errorf("expected no matching errors, but got: %v", matchingErrors)
+			}
+		})
+	}
+}
