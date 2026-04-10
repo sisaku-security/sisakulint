@@ -7,14 +7,14 @@ import (
 )
 
 func TestRequestForgeryCriticalRule(t *testing.T) {
-	rule := RequestForgeryCriticalRule()
+	rule := RequestForgeryCriticalRule(nil)
 	if rule.RuleName != "request-forgery-critical" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "request-forgery-critical")
 	}
 }
 
 func TestRequestForgeryMediumRule(t *testing.T) {
-	rule := RequestForgeryMediumRule()
+	rule := RequestForgeryMediumRule(nil)
 	if rule.RuleName != "request-forgery-medium" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "request-forgery-medium")
 	}
@@ -67,7 +67,7 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryCriticalRule()
+			rule := RequestForgeryCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -166,7 +166,7 @@ func TestRequestForgery_NetworkCommands(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryCriticalRule()
+			rule := RequestForgeryCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -234,7 +234,7 @@ func TestRequestForgery_CloudMetadataDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryCriticalRule()
+			rule := RequestForgeryCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -300,7 +300,7 @@ func TestRequestForgery_GitHubScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryCriticalRule()
+			rule := RequestForgeryCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -380,7 +380,7 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryMediumRule()
+			rule := RequestForgeryMediumRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -447,7 +447,7 @@ func TestRequestForgery_SeverityDetermination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := RequestForgeryCriticalRule()
+			rule := RequestForgeryCriticalRule(nil)
 
 			workflow := &ast.Workflow{
 				On: []ast.Event{
@@ -489,7 +489,7 @@ func TestRequestForgery_SeverityDetermination(t *testing.T) {
 }
 
 func TestRequestForgery_EnvVarName(t *testing.T) {
-	rule := RequestForgeryCriticalRule()
+	rule := RequestForgeryCriticalRule(nil)
 
 	tests := []struct {
 		path     string
@@ -513,7 +513,7 @@ func TestRequestForgery_EnvVarName(t *testing.T) {
 }
 
 func TestRequestForgery_DetectNetworkCommand(t *testing.T) {
-	rule := RequestForgeryCriticalRule()
+	rule := RequestForgeryCriticalRule(nil)
 
 	tests := []struct {
 		line     string
@@ -544,7 +544,7 @@ func TestRequestForgery_DetectNetworkCommand(t *testing.T) {
 
 // TestRequestForgery_MultipleUntrustedInputs tests detection of multiple untrusted inputs
 func TestRequestForgery_MultipleUntrustedInputs(t *testing.T) {
-	rule := RequestForgeryCriticalRule()
+	rule := RequestForgeryCriticalRule(nil)
 
 	workflow := &ast.Workflow{
 		On: []ast.Event{
