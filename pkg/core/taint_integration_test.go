@@ -450,8 +450,8 @@ jobs:
 				}
 			}
 
-			if tt.expectError && len(matchingErrors) == 0 {
-				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+			if tt.expectError && len(matchingErrors) != 1 {
+				t.Errorf("expected exactly 1 error containing %q, but got %d: %v", tt.expectContains, len(matchingErrors), matchingErrors)
 				for _, e := range result.Errors {
 					t.Logf("Error: %s", e.Description)
 				}
@@ -542,8 +542,8 @@ jobs:
 				}
 			}
 
-			if tt.expectError && len(matchingErrors) == 0 {
-				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+			if tt.expectError && len(matchingErrors) != 1 {
+				t.Errorf("expected exactly 1 error containing %q, but got %d: %v", tt.expectContains, len(matchingErrors), matchingErrors)
 				for _, e := range result.Errors {
 					t.Logf("Error: %s", e.Description)
 				}
@@ -634,8 +634,8 @@ jobs:
 				}
 			}
 
-			if tt.expectError && len(matchingErrors) == 0 {
-				t.Errorf("expected error containing %q, but got none", tt.expectContains)
+			if tt.expectError && len(matchingErrors) != 1 {
+				t.Errorf("expected exactly 1 error containing %q, but got %d: %v", tt.expectContains, len(matchingErrors), matchingErrors)
 				for _, e := range result.Errors {
 					t.Logf("Error: %s", e.Description)
 				}

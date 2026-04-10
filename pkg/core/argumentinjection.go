@@ -181,7 +181,20 @@ func (rule *ArgumentInjectionRule) processStep(s *ast.Step) {
 	}
 
 	untrustedSet := rule.buildUntrustedSet(exprs, s.Env)
-	if len(untrustedSet) == 0 {
+
+	// Even if no expressions are directly untrusted, needs output expressions
+	// may be tainted cross-job and need shell AST analysis for context.
+	hasNeedsOutputs := false
+	if rule.workflowTaintMap != nil {
+		for _, expr := range exprs {
+			if isNeedsOutputExpr(expr) {
+				hasNeedsOutputs = true
+				break
+			}
+		}
+	}
+
+	if len(untrustedSet) == 0 && !hasNeedsOutputs {
 		return
 	}
 
@@ -215,9 +228,6 @@ func (rule *ArgumentInjectionRule) buildUntrustedSet(exprs []parsedExpression, e
 		untrustedPaths := rule.checkUntrustedInput(expr)
 		if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, env) {
 			untrustedSet[expr.raw] = untrustedPaths
-		}
-		if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
-			rule.addPendingArgInjCrossJobCheck(expr)
 		}
 	}
 	return untrustedSet
@@ -256,19 +266,34 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 	for i := range exprs {
 		expr := &exprs[i]
 
+		placeholderName := exprToPlaceholder[expr.raw]
+		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
+
+		// Filter to dangerous usages (not after --)
+		var dangerousUsages []shell.VarArgUsage
+		for _, varUsage := range varUsages {
+			if !varUsage.IsAfterDoubleDash {
+				dangerousUsages = append(dangerousUsages, varUsage)
+			}
+		}
+
+		// Register cross-job pending checks for each dangerous usage (unique commands)
+		if rule.workflowTaintMap != nil && isNeedsOutputExpr(*expr) {
+			registered := make(map[string]bool)
+			for _, usage := range dangerousUsages {
+				if !registered[usage.CommandName] {
+					registered[usage.CommandName] = true
+					rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
+				}
+			}
+		}
+
 		untrustedPaths, isUntrusted := untrustedSet[expr.raw]
 		if !isUntrusted {
 			continue
 		}
 
-		placeholderName := exprToPlaceholder[expr.raw]
-		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
-
-		for _, varUsage := range varUsages {
-			if varUsage.IsAfterDoubleDash {
-				continue
-			}
-
+		for _, varUsage := range dangerousUsages {
 			if stepUntrusted == nil {
 				stepUntrusted = &stepWithArgumentInjection{step: s}
 			}
@@ -311,7 +336,8 @@ func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, pa
 }
 
 // addPendingArgInjCrossJobCheck queues a needs.*.outputs.* expression for deferred cross-job resolution.
-func (rule *ArgumentInjectionRule) addPendingArgInjCrossJobCheck(expr parsedExpression) {
+// commandName is the sink command confirmed by shell AST analysis to be in a dangerous arg position.
+func (rule *ArgumentInjectionRule) addPendingArgInjCrossJobCheck(expr parsedExpression, commandName string, step *ast.Step) {
 	exprStr := exprNodeToString(expr.node)
 	lower := strings.ToLower(exprStr)
 	parts := strings.Split(lower, ".")
@@ -319,9 +345,11 @@ func (rule *ArgumentInjectionRule) addPendingArgInjCrossJobCheck(expr parsedExpr
 		return
 	}
 	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
-		expr:       expr,
-		needsJobID: parts[1],
-		outputName: strings.Join(parts[3:], "."),
+		expr:        expr,
+		needsJobID:  parts[1],
+		outputName:  strings.Join(parts[3:], "."),
+		commandName: commandName,
+		step:        step,
 	})
 }
 
@@ -337,7 +365,16 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 			continue
 		}
 
+		if pending.step != nil && rule.isDefinedInEnv(pending.expr, pending.step.Env) {
+			continue
+		}
+
 		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
+
+		cmdDesc := pending.commandName
+		if cmdDesc == "" {
+			cmdDesc = "command"
+		}
 
 		severity := "medium"
 		suffix := ""
@@ -348,9 +385,10 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 
 		rule.Errorf(
 			pending.expr.pos,
-			"argument injection (%s): \"%s\" is potentially untrusted and may be used as command-line argument%s. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+			"argument injection (%s): \"%s\" is potentially untrusted and used as command-line argument to '%s'%s. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
 			severity,
 			taintPath,
+			cmdDesc,
 			suffix,
 		)
 	}

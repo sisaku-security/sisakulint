@@ -62,6 +62,10 @@ type pendingCrossJobCheck struct {
 	step          *ast.Step  // the step containing the expression; needed for isDefinedInEnv and auto-fix
 	isInRunScript bool       // true = run: script, false = actions/github-script
 	scriptInput   *ast.Input // non-nil when isInRunScript is false
+	// commandName is the sink command (e.g., "git", "curl"); used by argument-injection and request-forgery rules.
+	commandName string
+	// reqForgerySeverity preserves the original severity from the sink analysis; used by request-forgery rule.
+	reqForgerySeverity RequestForgerySeverity
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
