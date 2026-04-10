@@ -22,6 +22,8 @@ type ArgumentInjectionRule struct {
 	taintTracker *TaintTracker
 	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
+	// pendingCrossJobSet deduplicates pending checks by expr.raw + commandName + step pointer.
+	pendingCrossJobSet map[string]bool
 }
 
 type stepWithArgumentInjection struct {
@@ -135,6 +137,7 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	if rule.workflowTaintMap != nil {
 		rule.workflowTaintMap.Reset()
 		rule.pendingCrossJobChecks = nil
+		rule.pendingCrossJobSet = nil
 	}
 
 	return nil
@@ -277,10 +280,17 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 			}
 		}
 
-		// Register cross-job pending checks for each dangerous usage (one per occurrence)
+		// Register cross-job pending checks for each dangerous usage (deduplicated by expr+command+step)
 		if rule.workflowTaintMap != nil && isNeedsOutputExpr(*expr) {
 			for _, usage := range dangerousUsages {
-				rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
+				key := fmt.Sprintf("%s@%s@%p", expr.raw, usage.CommandName, s)
+				if rule.pendingCrossJobSet == nil {
+					rule.pendingCrossJobSet = make(map[string]bool)
+				}
+				if !rule.pendingCrossJobSet[key] {
+					rule.pendingCrossJobSet[key] = true
+					rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
+				}
 			}
 		}
 
@@ -390,6 +400,7 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 	}
 
 	rule.pendingCrossJobChecks = nil
+	rule.pendingCrossJobSet = nil
 	return nil
 }
 
