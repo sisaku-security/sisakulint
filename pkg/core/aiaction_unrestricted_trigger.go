@@ -11,6 +11,7 @@ var knownAIActionPrefixes = []string{
 	"anthropics/claude-code-action",
 	"github/copilot-swe-agent",
 	"openai/openai-actions",
+	"openai/codex-action",
 }
 
 // AIActionUnrestrictedTriggerRule は allowed_non_write_users: "*" を検出するルール。

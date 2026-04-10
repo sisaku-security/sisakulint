@@ -1,0 +1,13 @@
+name: Vulnerable AI Sandbox
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: openai/codex-action@v1
+        with:
+          safety-strategy: unsafe

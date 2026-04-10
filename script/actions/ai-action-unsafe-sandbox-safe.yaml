@@ -1,0 +1,12 @@
+name: Safe AI Sandbox
+
+on:
+  push:
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: openai/codex-action@v1
+        with:
+          safety-strategy: drop-sudo

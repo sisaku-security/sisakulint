@@ -1,0 +1,13 @@
+name: Safe AI Execution Order
+
+on:
+  push:
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          safety-strategy: drop-sudo
