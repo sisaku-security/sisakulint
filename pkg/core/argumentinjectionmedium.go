@@ -1,5 +1,5 @@
 package core
 
-func ArgumentInjectionMediumRule() *ArgumentInjectionRule {
-	return newArgumentInjectionRule("medium", false)
+func ArgumentInjectionMediumRule(wfTaintMap *WorkflowTaintMap) *ArgumentInjectionRule {
+	return newArgumentInjectionRule("medium", false, wfTaintMap)
 }

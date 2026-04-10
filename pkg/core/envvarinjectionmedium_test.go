@@ -8,7 +8,7 @@ import (
 )
 
 func TestEnvVarInjectionMediumRule(t *testing.T) {
-	rule := EnvVarInjectionMediumRule()
+	rule := EnvVarInjectionMediumRule(nil)
 	if rule.RuleName != "envvar-injection-medium" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "envvar-injection-medium")
 	}
@@ -76,7 +76,7 @@ echo "BODY=${{ github.event.pull_request.body }}" >> "$GITHUB_ENV"`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := EnvVarInjectionMediumRule()
+			rule := EnvVarInjectionMediumRule(nil)
 
 			// Create workflow with specified trigger
 			workflow := &ast.Workflow{
@@ -126,7 +126,7 @@ echo "BODY=${{ github.event.pull_request.body }}" >> "$GITHUB_ENV"`,
 }
 
 func TestEnvVarInjectionMedium_AutoFix(t *testing.T) {
-	rule := EnvVarInjectionMediumRule()
+	rule := EnvVarInjectionMediumRule(nil)
 
 	// Create workflow with normal trigger
 	workflow := &ast.Workflow{

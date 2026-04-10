@@ -8,7 +8,7 @@ import (
 )
 
 func TestEnvVarInjectionCriticalRule(t *testing.T) {
-	rule := EnvVarInjectionCriticalRule()
+	rule := EnvVarInjectionCriticalRule(nil)
 	if rule.RuleName != "envvar-injection-critical" {
 		t.Errorf("RuleName = %q, want %q", rule.RuleName, "envvar-injection-critical")
 	}
@@ -72,7 +72,7 @@ echo "EOF_$EOF" >> "$GITHUB_ENV"`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := EnvVarInjectionCriticalRule()
+			rule := EnvVarInjectionCriticalRule(nil)
 
 			// Create workflow with specified trigger
 			workflow := &ast.Workflow{
@@ -122,7 +122,7 @@ echo "EOF_$EOF" >> "$GITHUB_ENV"`,
 }
 
 func TestEnvVarInjectionCritical_AutoFix(t *testing.T) {
-	rule := EnvVarInjectionCriticalRule()
+	rule := EnvVarInjectionCriticalRule(nil)
 
 	// Create workflow with privileged trigger
 	workflow := &ast.Workflow{

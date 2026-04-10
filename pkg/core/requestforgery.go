@@ -17,6 +17,14 @@ type RequestForgeryRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithRequestForgery
 	workflow           *ast.Workflow
+	// workflowTaintMap is shared between Critical and Medium rule instances.
+	workflowTaintMap *WorkflowTaintMap
+	// taintTracker tracks intra-job taint; used only for RegisterJobOutputs.
+	taintTracker *TaintTracker
+	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
+	pendingCrossJobChecks []pendingCrossJobCheck
+	// pendingCrossJobSet deduplicates pending checks by expr.raw + step pointer.
+	pendingCrossJobSet map[string]bool
 }
 
 type stepWithRequestForgery struct {
@@ -69,7 +77,7 @@ var networkCommandPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?:^|[\s|&;(])(netcat)\b`),
 }
 
-func newRequestForgeryRule(severityLevel string, checkPrivileged bool) *RequestForgeryRule {
+func newRequestForgeryRule(severityLevel string, checkPrivileged bool, wfTaintMap *WorkflowTaintMap) *RequestForgeryRule {
 	var desc string
 
 	if checkPrivileged {
@@ -86,15 +94,34 @@ func newRequestForgeryRule(severityLevel string, checkPrivileged bool) *RequestF
 		severityLevel:      severityLevel,
 		checkPrivileged:    checkPrivileged,
 		stepsWithUntrusted: make([]*stepWithRequestForgery, 0),
+		workflowTaintMap:   wfTaintMap,
 	}
 }
 
 func (rule *RequestForgeryRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+
+	if rule.workflowTaintMap != nil {
+		rule.workflowTaintMap.Reset()
+		rule.pendingCrossJobChecks = nil
+		rule.pendingCrossJobSet = nil
+	}
+
 	return nil
 }
 
 func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
+	// Initialize taint tracker per job for cross-job output registration.
+	rule.taintTracker = NewTaintTracker()
+	for _, s := range node.Steps {
+		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Register this job's outputs into WorkflowTaintMap for downstream jobs.
+	if rule.workflowTaintMap != nil && node.ID != nil {
+		rule.workflowTaintMap.RegisterJobOutputs(node.ID.Value, rule.taintTracker, node.Outputs)
+	}
+
 	isPrivileged := rule.hasPrivilegedTriggers()
 	if rule.checkPrivileged != isPrivileged {
 		return nil
@@ -169,12 +196,17 @@ func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkComma
 					}
 
 					untrustedPaths := rule.checkUntrustedInput(expr)
+
+					severity := rule.determineSeverityFromArg(arg)
+
+					if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
+						rule.addPendingReqForgeryCrossJobCheck(expr, step, cmdCall.CommandName, severity)
+					}
+
 					if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, step.Env) {
 						if stepUntrusted == nil {
 							stepUntrusted = &stepWithRequestForgery{step: step}
 						}
-
-						severity := rule.determineSeverityFromArg(arg)
 
 						stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
 							expr:     expr,
@@ -216,12 +248,17 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 			}
 
 			untrustedPaths := rule.checkUntrustedInput(expr)
+
+			severity := rule.determineSeverity(line, expr)
+
+			if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
+				rule.addPendingReqForgeryCrossJobCheck(expr, step, networkCmd, severity)
+			}
+
 			if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, step.Env) {
 				if stepUntrusted == nil {
 					stepUntrusted = &stepWithRequestForgery{step: step}
 				}
-
-				severity := rule.determineSeverity(line, expr)
 
 				stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, requestForgeryExprInfo{
 					expr:     expr,
@@ -374,6 +411,63 @@ func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []
 			command,
 		)
 	}
+}
+
+func (rule *RequestForgeryRule) addPendingReqForgeryCrossJobCheck(expr parsedExpression, step *ast.Step, command string, severity RequestForgerySeverity) {
+	exprStr := exprNodeToString(expr.node)
+	lower := strings.ToLower(exprStr)
+	parts := strings.Split(lower, ".")
+	if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
+		return
+	}
+
+	// Deduplicate by expression text + step pointer
+	key := fmt.Sprintf("%s@%p", expr.raw, step)
+	if rule.pendingCrossJobSet == nil {
+		rule.pendingCrossJobSet = make(map[string]bool)
+	}
+	if rule.pendingCrossJobSet[key] {
+		return
+	}
+	rule.pendingCrossJobSet[key] = true
+
+	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
+		expr:               expr,
+		needsJobID:         parts[1],
+		outputName:         strings.Join(parts[3:], "."),
+		step:               step,
+		commandName:        command,
+		reqForgerySeverity: severity,
+	})
+}
+
+func (rule *RequestForgeryRule) VisitWorkflowPost(node *ast.Workflow) error {
+	if rule.workflowTaintMap == nil || len(rule.pendingCrossJobChecks) == 0 {
+		return nil
+	}
+
+	for _, pending := range rule.pendingCrossJobChecks {
+		sources, stillPending := rule.workflowTaintMap.ResolveFromExprNode(pending.expr.node)
+		if stillPending || len(sources) == 0 {
+			continue
+		}
+
+		if pending.step != nil && rule.isDefinedInEnv(pending.expr, pending.step.Env) {
+			continue
+		}
+
+		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
+
+		cmdDesc := pending.commandName
+		if cmdDesc == "" {
+			cmdDesc = "network command"
+		}
+		rule.reportError(pending.expr.pos, []string{taintPath}, cmdDesc, pending.reqForgerySeverity)
+	}
+
+	rule.pendingCrossJobChecks = nil
+	rule.pendingCrossJobSet = nil
+	return nil
 }
 
 func (rule *RequestForgeryRule) hasPrivilegedTriggers() bool {

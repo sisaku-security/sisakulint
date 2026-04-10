@@ -62,6 +62,10 @@ type pendingCrossJobCheck struct {
 	step          *ast.Step  // the step containing the expression; needed for isDefinedInEnv and auto-fix
 	isInRunScript bool       // true = run: script, false = actions/github-script
 	scriptInput   *ast.Input // non-nil when isInRunScript is false
+	// commandName is the sink command (e.g., "git", "curl"); used by argument-injection and request-forgery rules.
+	commandName string
+	// reqForgerySeverity preserves the original severity from the sink analysis; used by request-forgery rule.
+	reqForgerySeverity RequestForgerySeverity
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -204,7 +208,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 			for _, expr := range exprs {
 				// Use checkUntrustedInputWithTaint to also detect tainted step outputs
 				untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
-				if rule.workflowTaintMap != nil && rule.isNeedsOutputExpr(expr) {
+				if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
 					rule.addPendingCrossJobCheck(expr, s, true, nil)
 				}
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
@@ -232,7 +236,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 					for _, expr := range exprs {
 						// Use checkUntrustedInputWithTaint to also detect tainted step outputs
 						untrustedPaths := rule.checkUntrustedInputWithTaint(expr)
-						if rule.workflowTaintMap != nil && rule.isNeedsOutputExpr(expr) {
+						if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
 							rule.addPendingCrossJobCheck(expr, s, false, scriptInput)
 						}
 						if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
@@ -612,7 +616,8 @@ func (rule *CodeInjectionRule) checkUntrustedInputWithTaint(expr parsedExpressio
 }
 
 // isNeedsOutputExpr returns true if the expression is a needs.X.outputs.Y reference.
-func (rule *CodeInjectionRule) isNeedsOutputExpr(expr parsedExpression) bool {
+// This is a package-level function so it can be reused by multiple injection rules.
+func isNeedsOutputExpr(expr parsedExpression) bool {
 	exprStr := exprNodeToString(expr.node)
 	lower := strings.ToLower(exprStr)
 	parts := strings.Split(lower, ".")

@@ -19,6 +19,13 @@ type EnvVarInjectionRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithEnvVarInjection
 	workflow           *ast.Workflow
+	// workflowTaintMap is shared between Critical and Medium rule instances.
+	// Nil if cross-job taint propagation is disabled (e.g., in unit tests).
+	workflowTaintMap *WorkflowTaintMap
+	// taintTracker tracks intra-job taint; used only for RegisterJobOutputs.
+	taintTracker *TaintTracker
+	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
+	pendingCrossJobChecks []pendingCrossJobCheck
 }
 
 // stepWithEnvVarInjection tracks steps that need auto-fixing for environment variable injection
@@ -48,7 +55,7 @@ type envVarUntrustedExprInfo struct {
 var githubEnvPattern = regexp.MustCompile(`>>\s*["']?\$\{?GITHUB_ENV\}?["']?`)
 
 // newEnvVarInjectionRule creates a new environment variable injection rule with the specified severity level
-func newEnvVarInjectionRule(severityLevel string, checkPrivileged bool) *EnvVarInjectionRule {
+func newEnvVarInjectionRule(severityLevel string, checkPrivileged bool, wfTaintMap *WorkflowTaintMap) *EnvVarInjectionRule {
 	var desc string
 
 	if checkPrivileged {
@@ -65,16 +72,34 @@ func newEnvVarInjectionRule(severityLevel string, checkPrivileged bool) *EnvVarI
 		severityLevel:      severityLevel,
 		checkPrivileged:    checkPrivileged,
 		stepsWithUntrusted: make([]*stepWithEnvVarInjection, 0),
+		workflowTaintMap:   wfTaintMap,
 	}
 }
 
 // VisitWorkflowPre is called before visiting a workflow
 func (rule *EnvVarInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+
+	if rule.workflowTaintMap != nil {
+		rule.workflowTaintMap.Reset()
+		rule.pendingCrossJobChecks = nil
+	}
+
 	return nil
 }
 
 func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
+	// Initialize taint tracker per job for cross-job output registration.
+	rule.taintTracker = NewTaintTracker()
+	for _, s := range node.Steps {
+		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Register this job's outputs into WorkflowTaintMap for downstream jobs.
+	if rule.workflowTaintMap != nil && node.ID != nil {
+		rule.workflowTaintMap.RegisterJobOutputs(node.ID.Value, rule.taintTracker, node.Outputs)
+	}
+
 	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
 
@@ -124,6 +149,9 @@ func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
 				}
 
 				untrustedPaths := rule.checkUntrustedInput(expr)
+				if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
+					rule.addPendingEnvVarCrossJobCheck(expr, s)
+				}
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
 						stepUntrusted = &stepWithEnvVarInjection{step: s}
@@ -489,4 +517,59 @@ func (rule *EnvVarInjectionRule) isDefinedInEnv(expr parsedExpression, env *ast.
 	}
 
 	return false
+}
+
+// addPendingEnvVarCrossJobCheck parses expr for needs.X.outputs.Y and stores it for retry in VisitWorkflowPost.
+func (rule *EnvVarInjectionRule) addPendingEnvVarCrossJobCheck(expr parsedExpression, step *ast.Step) {
+	exprStr := exprNodeToString(expr.node)
+	lower := strings.ToLower(exprStr)
+	parts := strings.Split(lower, ".")
+	if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
+		return
+	}
+	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
+		expr:       expr,
+		needsJobID: parts[1],
+		outputName: strings.Join(parts[3:], "."),
+		step:       step,
+	})
+}
+
+// VisitWorkflowPost is called after all jobs have been visited.
+// It flushes pending cross-job taint checks that couldn't be resolved during VisitJobPre
+// (e.g., when a downstream job appears before its upstream job in the yaml file).
+func (rule *EnvVarInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
+	if rule.workflowTaintMap == nil || len(rule.pendingCrossJobChecks) == 0 {
+		return nil
+	}
+
+	for _, pending := range rule.pendingCrossJobChecks {
+		sources, stillPending := rule.workflowTaintMap.ResolveFromExprNode(pending.expr.node)
+		if stillPending || len(sources) == 0 {
+			continue
+		}
+
+		if pending.step != nil && rule.isDefinedInEnv(pending.expr, pending.step.Env) {
+			continue
+		}
+
+		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
+
+		if rule.checkPrivileged {
+			rule.Errorf(
+				pending.expr.pos,
+				"environment variable injection (critical): \"%s\" is potentially untrusted and written to $GITHUB_ENV in a workflow with privileged triggers. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/",
+				taintPath,
+			)
+		} else {
+			rule.Errorf(
+				pending.expr.pos,
+				"environment variable injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_ENV. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/",
+				taintPath,
+			)
+		}
+	}
+
+	rule.pendingCrossJobChecks = nil
+	return nil
 }

@@ -15,6 +15,15 @@ type ArgumentInjectionRule struct {
 	checkPrivileged    bool
 	stepsWithUntrusted []*stepWithArgumentInjection
 	workflow           *ast.Workflow
+	// workflowTaintMap is shared between Critical and Medium rule instances.
+	// Nil if cross-job taint propagation is disabled (e.g., in unit tests).
+	workflowTaintMap *WorkflowTaintMap
+	// taintTracker tracks intra-job taint; used only for RegisterJobOutputs.
+	taintTracker *TaintTracker
+	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
+	pendingCrossJobChecks []pendingCrossJobCheck
+	// pendingCrossJobSet deduplicates pending checks by expr.raw + commandName + step pointer.
+	pendingCrossJobSet map[string]bool
 }
 
 type stepWithArgumentInjection struct {
@@ -101,7 +110,7 @@ func init() {
 	}
 }
 
-func newArgumentInjectionRule(severityLevel string, checkPrivileged bool) *ArgumentInjectionRule {
+func newArgumentInjectionRule(severityLevel string, checkPrivileged bool, wfTaintMap *WorkflowTaintMap) *ArgumentInjectionRule {
 	var desc string
 
 	if checkPrivileged {
@@ -118,15 +127,34 @@ func newArgumentInjectionRule(severityLevel string, checkPrivileged bool) *Argum
 		severityLevel:      severityLevel,
 		checkPrivileged:    checkPrivileged,
 		stepsWithUntrusted: make([]*stepWithArgumentInjection, 0),
+		workflowTaintMap:   wfTaintMap,
 	}
 }
 
 func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+
+	if rule.workflowTaintMap != nil {
+		rule.workflowTaintMap.Reset()
+		rule.pendingCrossJobChecks = nil
+		rule.pendingCrossJobSet = nil
+	}
+
 	return nil
 }
 
 func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
+	// Initialize taint tracker per job for cross-job output registration.
+	rule.taintTracker = NewTaintTracker()
+	for _, s := range node.Steps {
+		rule.taintTracker.AnalyzeStep(s)
+	}
+
+	// Register this job's outputs into WorkflowTaintMap for downstream jobs.
+	if rule.workflowTaintMap != nil && node.ID != nil {
+		rule.workflowTaintMap.RegisterJobOutputs(node.ID.Value, rule.taintTracker, node.Outputs)
+	}
+
 	if !rule.shouldProcessJob() {
 		return nil
 	}
@@ -156,7 +184,20 @@ func (rule *ArgumentInjectionRule) processStep(s *ast.Step) {
 	}
 
 	untrustedSet := rule.buildUntrustedSet(exprs, s.Env)
-	if len(untrustedSet) == 0 {
+
+	// Even if no expressions are directly untrusted, needs output expressions
+	// may be tainted cross-job and need shell AST analysis for context.
+	hasNeedsOutputs := false
+	if rule.workflowTaintMap != nil {
+		for _, expr := range exprs {
+			if isNeedsOutputExpr(expr) {
+				hasNeedsOutputs = true
+				break
+			}
+		}
+	}
+
+	if len(untrustedSet) == 0 && !hasNeedsOutputs {
 		return
 	}
 
@@ -228,19 +269,37 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 	for i := range exprs {
 		expr := &exprs[i]
 
+		placeholderName := exprToPlaceholder[expr.raw]
+		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
+
+		// Filter to dangerous usages (not after --)
+		var dangerousUsages []shell.VarArgUsage
+		for _, varUsage := range varUsages {
+			if !varUsage.IsAfterDoubleDash {
+				dangerousUsages = append(dangerousUsages, varUsage)
+			}
+		}
+
+		// Register cross-job pending checks for each dangerous usage (deduplicated by expr+command+step)
+		if rule.workflowTaintMap != nil && isNeedsOutputExpr(*expr) {
+			for _, usage := range dangerousUsages {
+				key := fmt.Sprintf("%s@%s@%p", expr.raw, usage.CommandName, s)
+				if rule.pendingCrossJobSet == nil {
+					rule.pendingCrossJobSet = make(map[string]bool)
+				}
+				if !rule.pendingCrossJobSet[key] {
+					rule.pendingCrossJobSet[key] = true
+					rule.addPendingArgInjCrossJobCheck(*expr, usage.CommandName, s)
+				}
+			}
+		}
+
 		untrustedPaths, isUntrusted := untrustedSet[expr.raw]
 		if !isUntrusted {
 			continue
 		}
 
-		placeholderName := exprToPlaceholder[expr.raw]
-		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
-
-		for _, varUsage := range varUsages {
-			if varUsage.IsAfterDoubleDash {
-				continue
-			}
-
+		for _, varUsage := range dangerousUsages {
 			if stepUntrusted == nil {
 				stepUntrusted = &stepWithArgumentInjection{step: s}
 			}
@@ -280,6 +339,69 @@ func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, pa
 		cmdName,
 		suffix,
 	)
+}
+
+// addPendingArgInjCrossJobCheck queues a needs.*.outputs.* expression for deferred cross-job resolution.
+// commandName is the sink command confirmed by shell AST analysis to be in a dangerous arg position.
+func (rule *ArgumentInjectionRule) addPendingArgInjCrossJobCheck(expr parsedExpression, commandName string, step *ast.Step) {
+	exprStr := exprNodeToString(expr.node)
+	lower := strings.ToLower(exprStr)
+	parts := strings.Split(lower, ".")
+	if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
+		return
+	}
+	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
+		expr:        expr,
+		needsJobID:  parts[1],
+		outputName:  strings.Join(parts[3:], "."),
+		commandName: commandName,
+		step:        step,
+	})
+}
+
+// VisitWorkflowPost resolves deferred needs.*.outputs.* checks via WorkflowTaintMap.
+func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
+	if rule.workflowTaintMap == nil || len(rule.pendingCrossJobChecks) == 0 {
+		return nil
+	}
+
+	for _, pending := range rule.pendingCrossJobChecks {
+		sources, stillPending := rule.workflowTaintMap.ResolveFromExprNode(pending.expr.node)
+		if stillPending || len(sources) == 0 {
+			continue
+		}
+
+		if pending.step != nil && rule.isDefinedInEnv(pending.expr, pending.step.Env) {
+			continue
+		}
+
+		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
+
+		cmdDesc := pending.commandName
+		if cmdDesc == "" {
+			cmdDesc = "command"
+		}
+
+		severity := "medium"
+		suffix := ""
+		if rule.checkPrivileged {
+			severity = "critical"
+			suffix = " in a workflow with privileged triggers"
+		}
+
+		rule.Errorf(
+			pending.expr.pos,
+			"argument injection (%s): \"%s\" is potentially untrusted and used as command-line argument to '%s'%s. Attackers can inject malicious options (e.g., --output=/etc/passwd). Use '--' to end option parsing or pass through environment variables. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions",
+			severity,
+			taintPath,
+			cmdDesc,
+			suffix,
+		)
+	}
+
+	rule.pendingCrossJobChecks = nil
+	rule.pendingCrossJobSet = nil
+	return nil
 }
 
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {

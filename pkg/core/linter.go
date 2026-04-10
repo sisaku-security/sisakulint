@@ -503,8 +503,9 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 }
 
 func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
-	// WorkflowTaintMap is shared between Critical and Medium rules to enable
-	// cross-job taint propagation tracking via needs.*.outputs.*
+	// WorkflowTaintMap is shared between Critical and Medium variants of
+	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
+	// to enable cross-job taint propagation tracking via needs.*.outputs.*
 	wfTaintMap := NewWorkflowTaintMap()
 
 	return []Rule{
@@ -523,8 +524,8 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		TimeoutMinuteRule(),
 		CodeInjectionCriticalRule(wfTaintMap), // Detects untrusted input in privileged workflow triggers
 		CodeInjectionMediumRule(wfTaintMap),   // Detects untrusted input in normal workflow triggers
-		EnvVarInjectionCriticalRule(),  // Detects envvar injection in privileged workflow triggers
-		EnvVarInjectionMediumRule(),    // Detects envvar injection in normal workflow triggers
+		EnvVarInjectionCriticalRule(wfTaintMap),  // Detects envvar injection in privileged workflow triggers
+		EnvVarInjectionMediumRule(wfTaintMap),    // Detects envvar injection in normal workflow triggers
 		EnvPathInjectionCriticalRule(), // Detects PATH injection in privileged workflow triggers
 		EnvPathInjectionMediumRule(),   // Detects PATH injection in normal workflow triggers
 		OutputClobberingCriticalRule(), // Detects output clobbering in privileged workflow triggers
@@ -558,10 +559,10 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
 		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
-		ArgumentInjectionCriticalRule(),
-		ArgumentInjectionMediumRule(),
-		RequestForgeryCriticalRule(),         // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(),           // Detects SSRF vulnerabilities in normal triggers
+		ArgumentInjectionCriticalRule(wfTaintMap),
+		ArgumentInjectionMediumRule(wfTaintMap),
+		RequestForgeryCriticalRule(wfTaintMap), // Detects SSRF vulnerabilities in privileged triggers
+		RequestForgeryMediumRule(wfTaintMap),  // Detects SSRF vulnerabilities in normal triggers
 		NewCacheBloatRule(),                  // Detects cache bloat risk with cache/restore and cache/save
 		NewAIActionUnrestrictedTriggerRule(), // Detects AI actions with unrestricted user access (Clinejection attack pattern)
 		NewAIActionExcessiveToolsRule(),      // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
