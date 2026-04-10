@@ -26,8 +26,6 @@ type EnvVarInjectionRule struct {
 	taintTracker *TaintTracker
 	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
-	// workflowTriggers stores all trigger names from the workflow
-	workflowTriggers []string
 }
 
 // stepWithEnvVarInjection tracks steps that need auto-fixing for environment variable injection
@@ -81,18 +79,6 @@ func newEnvVarInjectionRule(severityLevel string, checkPrivileged bool, wfTaintM
 // VisitWorkflowPre is called before visiting a workflow
 func (rule *EnvVarInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
-	rule.workflowTriggers = nil
-
-	for _, event := range node.On {
-		switch e := event.(type) {
-		case *ast.WebhookEvent:
-			if e.Hook != nil {
-				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
-			}
-		case *ast.WorkflowCallEvent:
-			rule.workflowTriggers = append(rule.workflowTriggers, "workflow_call")
-		}
-	}
 
 	if rule.workflowTaintMap != nil {
 		rule.workflowTaintMap.Reset()
@@ -164,7 +150,7 @@ func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
 
 				untrustedPaths := rule.checkUntrustedInput(expr)
 				if rule.workflowTaintMap != nil && isNeedsOutputExpr(expr) {
-					rule.addPendingEnvVarCrossJobCheck(expr, s, line)
+					rule.addPendingEnvVarCrossJobCheck(expr, s)
 				}
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
@@ -534,7 +520,7 @@ func (rule *EnvVarInjectionRule) isDefinedInEnv(expr parsedExpression, env *ast.
 }
 
 // addPendingEnvVarCrossJobCheck parses expr for needs.X.outputs.Y and stores it for retry in VisitWorkflowPost.
-func (rule *EnvVarInjectionRule) addPendingEnvVarCrossJobCheck(expr parsedExpression, step *ast.Step, line string) {
+func (rule *EnvVarInjectionRule) addPendingEnvVarCrossJobCheck(expr parsedExpression, step *ast.Step) {
 	exprStr := exprNodeToString(expr.node)
 	lower := strings.ToLower(exprStr)
 	parts := strings.Split(lower, ".")

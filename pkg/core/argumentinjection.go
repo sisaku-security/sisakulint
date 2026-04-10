@@ -22,8 +22,6 @@ type ArgumentInjectionRule struct {
 	taintTracker *TaintTracker
 	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
-	// workflowTriggers stores all trigger names from the workflow
-	workflowTriggers []string
 }
 
 type stepWithArgumentInjection struct {
@@ -133,18 +131,6 @@ func newArgumentInjectionRule(severityLevel string, checkPrivileged bool, wfTain
 
 func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
-	rule.workflowTriggers = nil
-
-	for _, event := range node.On {
-		switch e := event.(type) {
-		case *ast.WebhookEvent:
-			if e.Hook != nil {
-				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
-			}
-		case *ast.WorkflowCallEvent:
-			rule.workflowTriggers = append(rule.workflowTriggers, "workflow_call")
-		}
-	}
 
 	if rule.workflowTaintMap != nil {
 		rule.workflowTaintMap.Reset()
