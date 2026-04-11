@@ -79,6 +79,7 @@ func (r *AIActionUnsafeSandboxRule) VisitStep(node *ast.Step) error {
 }
 
 // checkSafetyStrategy は safety-strategy 入力の値を検査する。
+// safety-strategy が未設定の場合、デフォルト値は "drop-sudo"（安全）のため警告不要。
 func (r *AIActionUnsafeSandboxRule) checkSafetyStrategy(node *ast.Step, action *ast.ExecAction) {
 	for _, key := range sandboxStrategyInputKeys {
 		input, exists := action.Inputs[key]
