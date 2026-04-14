@@ -36,6 +36,10 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `test-actionlist-blacklist.yaml` | Blacklist validation testing |
 | `cross-job-taint.yaml` | Cross-job taint propagation via `needs.*.outputs.*` (code-injection-critical) |
 | `cross-job-taint-safe.yaml` | Safe pattern: untrusted needs output moved to `env:` and referenced with double quotes (e.g. `echo "$PR_TITLE"` not `echo $PR_TITLE`) to avoid shell expansion; see `pkg/core/codeinjection_shell_test.go` for unquoted env detection |
+| `ai-action-unsafe-sandbox-vulnerable.yaml` | AI action with unsafe sandbox settings (`safety-strategy: unsafe`) |
+| `ai-action-unsafe-sandbox-safe.yaml` | Safe AI action sandbox configuration (`safety-strategy: drop-sudo`) |
+| `ai-action-execution-order-vulnerable.yaml` | AI action followed by additional steps (compromised state risk) |
+| `ai-action-execution-order-safe.yaml` | AI action as the last step in the job (recommended pattern) |
 
 ### Usage
 
