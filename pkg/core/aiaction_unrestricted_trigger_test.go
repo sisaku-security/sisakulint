@@ -78,6 +78,40 @@ jobs:
 	}
 }
 
+func TestAIActionUnrestrictedTrigger_IgnoresSimilarActionName(t *testing.T) {
+	t.Parallel()
+	rule := NewAIActionUnrestrictedTriggerRule()
+
+	// "openai/codex-action-malicious" should NOT match prefix "openai/codex-action"
+	workflow := `
+on:
+  issues:
+    types: [opened]
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: openai/codex-action-malicious@v1
+        with:
+          allowed_non_write_users: "*"
+`
+	parsed, errs := Parse([]byte(workflow))
+	if len(errs) > 0 {
+		t.Fatalf("failed to parse workflow: %v", errs)
+	}
+
+	v := NewSyntaxTreeVisitor()
+	v.AddVisitor(rule)
+	if err := v.VisitTree(parsed); err != nil {
+		t.Fatalf("failed to visit tree: %v", err)
+	}
+
+	ruleErrors := rule.Errors()
+	if len(ruleErrors) != 0 {
+		t.Fatalf("expected no errors for similar-but-different action name, got %d: %v", len(ruleErrors), ruleErrors)
+	}
+}
+
 func TestAIActionUnrestrictedTrigger_IgnoresNonAIAction(t *testing.T) {
 	t.Parallel()
 	rule := NewAIActionUnrestrictedTriggerRule()

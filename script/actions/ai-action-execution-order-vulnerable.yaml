@@ -1,0 +1,14 @@
+name: Vulnerable AI Execution Order
+
+on:
+  push:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          safety-strategy: drop-sudo
+      - run: npm publish
