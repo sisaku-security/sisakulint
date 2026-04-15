@@ -714,6 +714,73 @@ func TestTaintTracker_KnownTaintedActionIntegration(t *testing.T) {
 	t.Logf("Taint sources for head_ref: %v", sources)
 }
 
+func TestTaintTracker_KnownTaintedAction_TjActionsChangedFiles(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+
+	// Test tj-actions/changed-files action (GHSL-2023-271, Case 10)
+	step := &ast.Step{
+		ID: &ast.String{Value: "changed-files"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "tj-actions/changed-files@v40"},
+		},
+	}
+	tracker.AnalyzeStep(step)
+
+	// Verify outputs are marked as tainted
+	outputs, exists := tracker.taintedOutputs["changed-files"]
+	if !exists {
+		t.Fatal("tj-actions/changed-files should have tainted outputs")
+	}
+
+	// Check for expected tainted outputs
+	expectedOutputs := []string{
+		"all_changed_files",
+		"modified_files",
+		"added_files",
+		"deleted_files",
+		"renamed_files",
+		"all_changed_and_modified_files",
+		"all_modified_files",
+		"other_changed_files",
+		"other_modified_files",
+		"other_deleted_files",
+	}
+	for _, outputName := range expectedOutputs {
+		if _, outputExists := outputs[outputName]; !outputExists {
+			t.Errorf("output %s should be tainted for tj-actions/changed-files", outputName)
+		}
+	}
+}
+
+func TestTaintTracker_KnownTaintedAction_TjActionsChangedFilesIntegration(t *testing.T) {
+	t.Parallel()
+
+	// Full integration test: tj-actions/changed-files -> run step with output in ${{ }}
+	// This is the Case 10 pattern from github-actions-goat
+	tracker := NewTaintTracker()
+
+	// Step 1: Use tj-actions/changed-files
+	step1 := &ast.Step{
+		ID: &ast.String{Value: "changed-files"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "tj-actions/changed-files@v40"},
+		},
+	}
+	tracker.AnalyzeStep(step1)
+
+	// Verify the action's output is detected as tainted
+	tainted, sources := tracker.IsTaintedExpr("steps.changed-files.outputs.all_changed_files")
+	if !tainted {
+		t.Fatal("steps.changed-files.outputs.all_changed_files should be tainted")
+	}
+	if len(sources) == 0 {
+		t.Fatal("taint sources should not be empty")
+	}
+	t.Logf("Taint sources for all_changed_files: %v", sources)
+}
+
 func TestTaintTracker_VariableAssignmentWithKeywordPrefix(t *testing.T) {
 	t.Parallel()
 

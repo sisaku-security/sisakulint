@@ -28,19 +28,18 @@ The output of `tj-actions/changed-files` (`steps.changed-files.outputs.all_chang
 
 ## sisakulint Detection Status
 
-### Indirect Detection
+### Direct Detection (code-injection rule via Phase 3 Known Tainted Actions)
 
-The `known-vulnerable-actions` rule detected the known vulnerabilities in `tj-actions/changed-files@v40` and `@v35` (see Case 03).
+The `code-injection` rule detects this pattern via the Phase 3 Known Tainted Actions database. `tj-actions/changed-files` is registered as a known tainted action because its file-list outputs (`all_changed_files`, `modified_files`, etc.) reflect PR filenames, which are attacker-controlled.
 
-### Why Not Directly Detected
+```
+code injection (medium): "steps.changed-files.outputs.all_changed_files (tainted via PR filenames
+(attacker-controlled via pull request))" is potentially untrusted. Avoid using it directly in
+inline scripts. Instead, pass it through an environment variable.
+```
 
-sisakulint's `code-injection` rule tracks known untrusted input contexts such as `github.event.pull_request.title`, `github.event.issue.body`, etc. However, it does not track indirect taint propagation from third-party action outputs (`steps.*.outputs.*`).
+### Additional Detection
 
-This is a fundamental limitation of static analysis — determining whether an action's output is derived from untrusted input requires analyzing the action's internal implementation, which is beyond workflow-level YAML analysis.
+The `known-vulnerable-actions` rule also detects known CVEs in `tj-actions/changed-files@v40` and `@v35` (GHSA-mrrh-fwg8-r2c3, GHSA-mcph-m25j-8j63).
 
-## Future Improvement Ideas
-
-- Build a database of known dangerous action outputs
-- Add a warning rule for `steps.*.outputs.*` usage in `${{ }}` within `run` steps
-
-## Verdict: NOT DETECTED (indirectly detected via known-vulnerable-actions)
+## Verdict: DETECTED
