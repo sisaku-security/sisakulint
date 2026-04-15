@@ -112,6 +112,22 @@ func (t *TaintTracker) initKnownTaintedActions() {
 	t.knownTaintedActions["andstor/file-reader-action"] = []KnownTaintedOutput{
 		{OutputName: "contents", TaintSource: "file content (potentially from artifact)"},
 	}
+
+	// tj-actions/changed-files - exposes PR-controlled filenames as outputs
+	// GHSL-2023-271: attacker creates PR with crafted filenames containing shell metacharacters
+	// All file-list outputs reflect filenames from the PR, making them untrusted input
+	t.knownTaintedActions["tj-actions/changed-files"] = []KnownTaintedOutput{
+		{OutputName: "all_changed_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "modified_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "added_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "deleted_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "renamed_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "all_changed_and_modified_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "all_modified_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "other_changed_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "other_modified_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+		{OutputName: "other_deleted_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
+	}
 }
 
 // AnalyzeStep analyzes a step for $GITHUB_OUTPUT writes with tainted values.
