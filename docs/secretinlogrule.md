@@ -1,18 +1,27 @@
-# Secret In Log Rule
+---
+title: "Secret In Log Rule"
+weight: 1
+# bookFlatSection: false
+# bookToc: true
+# bookHidden: false
+# bookCollapseSection: false
+# bookComments: false
+# bookSearchExclude: false
+---
 
-## Overview
+### Secret In Log Rule Overview
 
 The `secret-in-log` rule detects GitHub Actions workflow steps that print shell-derived secret values to build logs via `echo` or `printf`. GitHub Actions automatically masks the original `secrets.*` values in logs, but **does not mask derived values** produced by shell operations such as `jq`, `sed`, `awk`, `base64`, or command substitution. These derived values appear in plaintext in build logs.
 
-## Rule ID
+### Rule ID
 
 `secret-in-log`
 
-## Severity
+### Severity
 
 - **High**: Shell variable derived from a secret-sourced environment variable is printed via `echo` or `printf` without prior masking.
 
-## Vulnerable Pattern
+### Vulnerable Pattern
 
 ```yaml
 jobs:
@@ -36,7 +45,7 @@ workflow.yaml:9:11: secret-in-log: shell variable 'PRIVATE_KEY' is derived from 
 and printed to logs without masking. Add '::add-mask::' before using it. [secret-in-log]
 ```
 
-## Safe Pattern
+### Safe Pattern
 
 Add an `::add-mask::` command immediately after deriving the value:
 
@@ -54,7 +63,7 @@ jobs:
           echo "GCP Private Key: $PRIVATE_KEY"  # now masked as ***
 ```
 
-## Why This Rule Matters
+### Why This Rule Matters
 
 | Value | Masking Behavior |
 |-------|-----------------|
@@ -63,7 +72,7 @@ jobs:
 
 Derived values flow through standard shell variable assignment and GitHub Actions has no awareness of them. Any `echo`/`printf` of such a variable writes the plaintext value into the publicly-visible build log.
 
-## Detection Logic
+### Detection Logic
 
 The rule performs taint propagation within a single `run` step:
 
@@ -71,7 +80,7 @@ The rule performs taint propagation within a single `run` step:
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
 3. **Sink detection** — `echo` or `printf` calls that reference a tainted variable without a preceding `::add-mask::` for that variable.
 
-## Auto-Fix
+### Auto-Fix
 
 When run with `-fix on`, the rule inserts `echo "::add-mask::$VAR"` at the start of the `run` script for each tainted variable that is printed without masking.
 
@@ -90,19 +99,19 @@ run: |
   echo "key=$KEY"
 ```
 
-## Scope Limitations (MVP)
+### Scope Limitations (MVP)
 
 - **Single-step scope only** — taint does not cross step boundaries or job outputs (`needs.*.outputs.*`); cross-job propagation is a planned follow-up.
 - **`echo` and `printf` only** — commands such as `tee`, `cat`, and `logger` are not yet detected.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up.
 
-## Related Rules
+### Related Rules
 
 - [`unmasked-secret-exposure`](unmaskedsecretexposure.md) — detects derived secrets from `fromJson()` expressions that are not masked.
 - [`secret-exfiltration`](secretexfiltration.md) — detects secrets sent to external services via network commands (`curl`, `wget`, `nc`, etc.).
 - [`secret-exposure`](secretexposure.md) — detects excessive secret exposure via `toJSON(secrets)` or `secrets[dynamic-access]`.
 
-## References
+### References
 
 - [GitHub: Masking a value in a log](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#masking-a-value-in-a-log)
 - [GitHub: Encrypted Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
