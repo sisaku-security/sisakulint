@@ -112,3 +112,72 @@ SAFE=$(date)`,
 		})
 	}
 }
+
+func TestSecretInLog_FindEchoLeaks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		script   string
+		tainted  map[string]string
+		wantHits []struct {
+			varName string
+			command string
+		}
+	}{
+		{
+			name: "echo of tainted var",
+			script: `echo "Key: $PRIVATE_KEY"
+`,
+			tainted: map[string]string{"PRIVATE_KEY": "shellvar:GCP_KEY"},
+			wantHits: []struct {
+				varName string
+				command string
+			}{{"PRIVATE_KEY", "echo"}},
+		},
+		{
+			name: "printf of tainted var",
+			script: `printf "%s\n" "$TOKEN"
+`,
+			tainted: map[string]string{"TOKEN": "secrets.API"},
+			wantHits: []struct {
+				varName string
+				command string
+			}{{"TOKEN", "printf"}},
+		},
+		{
+			name: "echo of untainted var",
+			script: `echo "$MSG"
+`,
+			tainted:  map[string]string{"TOKEN": "secrets.API"},
+			wantHits: nil,
+		},
+		{
+			name: "add-mask suppresses echo",
+			script: `echo "::add-mask::$TOKEN"
+echo "Value: $TOKEN"
+`,
+			tainted:  map[string]string{"TOKEN": "secrets.API"},
+			wantHits: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rule := NewSecretInLogRule()
+			file := parseShellForTest(t, tc.script)
+			runStr := &ast.String{Value: tc.script, Pos: &ast.Position{Line: 1, Col: 1}}
+			got := rule.findEchoLeaks(file, tc.tainted, tc.script, runStr)
+			if len(got) != len(tc.wantHits) {
+				t.Fatalf("found %d leaks, want %d. got=%v", len(got), len(tc.wantHits), got)
+			}
+			for i, want := range tc.wantHits {
+				if got[i].VarName != want.varName || got[i].Command != want.command {
+					t.Errorf("hit[%d]: got {%s,%s}, want {%s,%s}",
+						i, got[i].VarName, got[i].Command, want.varName, want.command)
+				}
+			}
+		})
+	}
+}
