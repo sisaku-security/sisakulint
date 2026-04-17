@@ -304,11 +304,46 @@ func TestSecretInLog_AutoFix_InsertsAddMask(t *testing.T) {
 	}
 
 	got := step.Exec.(*ast.ExecRun).Run.Value
-	if !strings.HasPrefix(got, `echo "::add-mask::$PRIVATE_KEY"`) {
-		t.Errorf("expected add-mask prefix, got: %q", got)
+	// add-mask should be inserted AFTER the assignment, not before
+	if !strings.Contains(got, "PRIVATE_KEY=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"::add-mask::$PRIVATE_KEY\"") {
+		t.Errorf("add-mask should be inserted AFTER the assignment, got: %q", got)
 	}
-	if !strings.Contains(got, original) {
-		t.Errorf("original script should remain, got: %q", got)
+}
+
+func TestSecretInLog_AutoFix_EnvOnlyVar_PrependsAtTop(t *testing.T) {
+	t.Parallel()
+
+	// env-only case: SECRET is directly from secrets.P, no shell assignment
+	original := `echo "$SECRET"`
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"secret": {
+				Name:  &ast.String{Value: "SECRET"},
+				Value: &ast.String{Value: "${{ secrets.P }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if len(rule.AutoFixers()) == 0 {
+		t.Fatal("expected at least one auto-fixer")
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	// For env-only vars (origin "secrets.*"), prepend at top is correct
+	if !strings.HasPrefix(got, `echo "::add-mask::$SECRET"`) {
+		t.Errorf("expected add-mask prepended at top for env-only var, got: %q", got)
 	}
 }
 

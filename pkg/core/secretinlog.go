@@ -295,20 +295,24 @@ func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
 	)
 }
 
-// addAutoFixerForLeak は add-mask 行を run スクリプト冒頭に挿入する auto-fixer を登録する。
+// addAutoFixerForLeak は add-mask 行を run スクリプトに挿入する auto-fixer を登録する。
 func (rule *SecretInLogRule) addAutoFixerForLeak(step *ast.Step, leak echoLeakOccurrence) {
 	fixer := &secretInLogFixer{
 		step:     step,
 		varName:  leak.VarName,
+		origin:   leak.Origin,
 		ruleName: rule.RuleName,
 	}
 	rule.AddAutoFixer(NewStepFixer(step, fixer))
 }
 
-// secretInLogFixer は add-mask 行をスクリプト冒頭に挿入する StepFixer 実装。
+// secretInLogFixer は add-mask 行をスクリプトに挿入する StepFixer 実装。
+// origin が "secrets.*" の場合はスクリプト冒頭に挿入する（env var はスクリプト開始前に設定済み）。
+// origin が "shellvar:*" の場合は対象変数のアサイン直後に挿入する（アサイン前にマスクすると空文字列をマスクしてしまう）。
 type secretInLogFixer struct {
 	step     *ast.Step
 	varName  string
+	origin   string // "secrets.X" or "shellvar:Y"
 	ruleName string
 }
 
@@ -328,6 +332,21 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 	}
 
 	addMask := `echo "::add-mask::$` + f.varName + `"`
+
+	// origin が "shellvar:*" の場合、変数のアサイン直後に add-mask を挿入する。
+	// env var 由来（"secrets.*"）の場合はスクリプト冒頭に挿入する。
+	if strings.HasPrefix(f.origin, "shellvar:") {
+		updated, ok := insertAfterAssignment(script, f.varName, addMask)
+		if ok {
+			execRun.Run.Value = updated
+			if execRun.Run.BaseNode != nil {
+				execRun.Run.BaseNode.Value = updated
+			}
+			return nil
+		}
+		// アサインが見つからない場合はフォールスルーして冒頭挿入する
+	}
+
 	var updated string
 	if strings.HasPrefix(script, "#!") {
 		nl := strings.Index(script, "\n")
@@ -344,6 +363,64 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		execRun.Run.BaseNode.Value = updated
 	}
 	return nil
+}
+
+// insertAfterAssignment はシェルスクリプト script 内で varName への最初のアサインを探し、
+// その行の直後に addMaskLine を挿入した新しいスクリプトを返す。
+// アサインが見つからなかった場合は ("", false) を返す。
+func insertAfterAssignment(script, varName, addMaskLine string) (string, bool) {
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(script), "")
+	if err != nil || file == nil {
+		return "", false
+	}
+
+	// varName への最初のアサインのバイトオフセット（終端）を探す
+	assignEndOffset := -1
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if assignEndOffset >= 0 {
+			return false
+		}
+		assign, ok := node.(*syntax.Assign)
+		if !ok || assign.Name == nil {
+			return true
+		}
+		if assign.Name.Value != varName {
+			return true
+		}
+		assignEndOffset = int(assign.End().Offset())
+		return false
+	})
+	if assignEndOffset < 0 {
+		return "", false
+	}
+
+	// アサイン終端以降で最初の改行を探す
+	rest := script[assignEndOffset:]
+	nlIdx := strings.Index(rest, "\n")
+	if nlIdx < 0 {
+		// 改行がない（スクリプト末尾のアサイン）→ 末尾に追記
+		return script + "\n" + addMaskLine, true
+	}
+
+	// アサイン行の先頭インデントを検出して合わせる
+	insertPos := assignEndOffset + nlIdx + 1 // 改行の直後
+	// アサイン行の先頭インデントを検出する
+	lineStart := strings.LastIndex(script[:assignEndOffset], "\n")
+	var indent string
+	if lineStart >= 0 {
+		line := script[lineStart+1 : assignEndOffset]
+		for _, ch := range line {
+			if ch == ' ' || ch == '\t' {
+				indent += string(ch)
+			} else {
+				break
+			}
+		}
+	}
+
+	updated := script[:insertPos] + indent + addMaskLine + "\n" + script[insertPos:]
+	return updated, true
 }
 
 func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]string {

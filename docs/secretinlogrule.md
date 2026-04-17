@@ -84,7 +84,10 @@ The rule performs taint propagation within a single `run` step:
 
 ### Auto-Fix
 
-When run with `-fix on`, the rule inserts `echo "::add-mask::$VAR"` at the start of the `run` script for each tainted variable that is printed without masking.
+When run with `-fix on`, the rule inserts `echo "::add-mask::$VAR"` into the `run` script.
+
+- For shell-derived variables (e.g., `KEY=$(jq ...)`), the mask line is inserted **immediately after the assignment** so that `$KEY` is non-empty when masked.
+- For direct env-var references (origin `secrets.*`), the mask line is inserted at the **top of the script** because the env var is set before the script starts.
 
 Before:
 ```yaml
@@ -96,8 +99,8 @@ run: |
 After `sisakulint -fix on`:
 ```yaml
 run: |
-  echo "::add-mask::$KEY"
   KEY=$(echo $SECRET_JSON | jq -r '.key')
+  echo "::add-mask::$KEY"
   echo "key=$KEY"
 ```
 
