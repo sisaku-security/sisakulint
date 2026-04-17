@@ -33,9 +33,14 @@ sisakulint's `secret-exfiltration` rule detects secret transmission via network 
 
 The `unmasked-secret-exposure` rule detects unmasked secrets derived from `fromJson()` in GitHub Actions expressions, but does not track shell-level `jq` derivation.
 
-## Future Improvement Ideas
+## Detection Implementation
 
-- Detect `echo $SECRET_VAR` patterns in shell scripts
-- Track `jq`-derived values from secrets environment variables
+The `secret-in-log` rule tracks taint propagation from `${{ secrets.* }}`-sourced
+environment variables through shell variable assignments (including command
+substitutions like `$(jq ...)`) and reports `echo`/`printf` calls that reference
+any tainted variable. The auto-fix inserts `echo "::add-mask::$VAR"` before the
+first use.
 
-## Verdict: NOT DETECTED
+## Verdict: DETECTED
+
+Detected by the `secret-in-log` rule (added in response to Issue #388).
