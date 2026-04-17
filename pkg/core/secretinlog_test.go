@@ -181,3 +181,95 @@ echo "Value: $TOKEN"
 		})
 	}
 }
+
+func TestSecretInLog_VisitJob_Integration(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		envVars    map[string]string
+		runScript  string
+		wantErrors int
+	}{
+		{
+			name:       "jq-derived key leaked via echo",
+			envVars:    map[string]string{"GCP_KEY": "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}"},
+			runScript:  "PRIVATE_KEY=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"key: $PRIVATE_KEY\"",
+			wantErrors: 1,
+		},
+		{
+			name:       "chained assignment leaked via printf",
+			envVars:    map[string]string{"TOKEN": "${{ secrets.API_TOKEN }}"},
+			runScript:  "STEP1=\"$TOKEN\"\nSTEP2=$(echo \"$STEP1\")\nprintf 'val=%s\\n' \"$STEP2\"",
+			wantErrors: 1,
+		},
+		{
+			name:       "direct echo of secret env",
+			envVars:    map[string]string{"SECRET": "${{ secrets.PLAIN }}"},
+			runScript:  "echo \"val=$SECRET\"",
+			wantErrors: 1,
+		},
+		{
+			// goat case11 の元シナリオをそのまま固定化するゴールデンテスト。
+			// script/actions/goat-secret-in-build-log.yml の該当 step と同等。
+			name:    "goat case11 golden: GCP private key via jq",
+			envVars: map[string]string{"GCP_SERVICE_ACCOUNT_KEY": "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}"},
+			runScript: "# Extracting the private key from the GCP service account key\n" +
+				"PRIVATE_KEY=$(echo $GCP_SERVICE_ACCOUNT_KEY | jq -r '.private_key')\n\n" +
+				"# Simulate using the private key\n" +
+				"echo \"Using the private key for some operation\"\n\n" +
+				"# Log the private key (simulating a mistake)\n" +
+				"echo \"GCP Private Key: $PRIVATE_KEY\"",
+			wantErrors: 1,
+		},
+		{
+			name:       "add-mask before use (safe)",
+			envVars:    map[string]string{"GCP_KEY": "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}"},
+			runScript:  "PRIVATE_KEY=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"::add-mask::$PRIVATE_KEY\"\necho \"key: $PRIVATE_KEY\"",
+			wantErrors: 0,
+		},
+		{
+			name:       "unrelated echo (safe)",
+			envVars:    map[string]string{"TOKEN": "${{ secrets.API_TOKEN }}"},
+			runScript:  "MSG=\"hello\"\necho \"$MSG\"",
+			wantErrors: 0,
+		},
+		{
+			name:       "secret used with curl but not echo (safe)",
+			envVars:    map[string]string{"TOKEN": "${{ secrets.API_TOKEN }}"},
+			runScript:  "curl -H \"Authorization: Bearer $TOKEN\" https://api.github.com/user",
+			wantErrors: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewSecretInLogRule()
+
+			envVars := map[string]*ast.EnvVar{}
+			for name, val := range tc.envVars {
+				envVars[strings.ToLower(name)] = &ast.EnvVar{
+					Name:  &ast.String{Value: name},
+					Value: &ast.String{Value: val},
+				}
+			}
+
+			step := &ast.Step{
+				Env: &ast.Env{Vars: envVars},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			job := &ast.Job{Steps: []*ast.Step{step}}
+
+			if err := rule.VisitJobPre(job); err != nil {
+				t.Fatalf("VisitJobPre returned err: %v", err)
+			}
+			if got := len(rule.Errors()); got != tc.wantErrors {
+				t.Errorf("errors = %d, want %d. details=%v", got, tc.wantErrors, rule.Errors())
+			}
+		})
+	}
+}
