@@ -2,6 +2,7 @@ package core
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"mvdan.cc/sh/v3/syntax"
@@ -101,6 +102,119 @@ func (rule *SecretInLogRule) firstTaintedVarIn(word *syntax.Word, tainted map[st
 		return true
 	})
 	return name
+}
+
+// echoLeakOccurrence は検出された echo/printf 出力箇所を表す。
+type echoLeakOccurrence struct {
+	VarName  string
+	Origin   string
+	Position *ast.Position
+	Command  string
+}
+
+// findEchoLeaks は echo/printf の引数に tainted 変数が含まれる箇所を収集する。
+// add-mask 済みの変数はスキップする。
+func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]string, script string, runStr *ast.String) []echoLeakOccurrence {
+	if file == nil {
+		return nil
+	}
+	var leaks []echoLeakOccurrence
+
+	syntax.Walk(file, func(node syntax.Node) bool {
+		call, ok := node.(*syntax.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		cmdName := firstWordLiteral(call.Args[0])
+		if cmdName != "echo" && cmdName != "printf" {
+			return true
+		}
+		for _, arg := range call.Args[1:] {
+			rule.collectLeakedVars(arg, tainted, script, runStr, cmdName, &leaks)
+		}
+		return true
+	})
+	return leaks
+}
+
+// collectLeakedVars は単一の引数内で tainted 変数参照をすべて報告リストに追加する。
+func (rule *SecretInLogRule) collectLeakedVars(
+	arg *syntax.Word,
+	tainted map[string]string,
+	script string,
+	runStr *ast.String,
+	cmdName string,
+	leaks *[]echoLeakOccurrence,
+) {
+	syntax.Walk(arg, func(node syntax.Node) bool {
+		pe, ok := node.(*syntax.ParamExp)
+		if !ok || pe.Param == nil {
+			return true
+		}
+		name := pe.Param.Value
+		origin, ok := tainted[name]
+		if !ok {
+			return true
+		}
+		if hasAddMaskFor(script, name) {
+			return true
+		}
+		pos := offsetToPosition(runStr, script, int(pe.Pos().Offset()))
+		*leaks = append(*leaks, echoLeakOccurrence{
+			VarName:  name,
+			Origin:   origin,
+			Position: pos,
+			Command:  cmdName,
+		})
+		return true
+	})
+}
+
+// firstWordLiteral は Word の先頭リテラル（コマンド名）を取り出す。
+func firstWordLiteral(word *syntax.Word) string {
+	if word == nil || len(word.Parts) == 0 {
+		return ""
+	}
+	if lit, ok := word.Parts[0].(*syntax.Lit); ok {
+		return lit.Value
+	}
+	return ""
+}
+
+// hasAddMaskFor は script 内に該当変数への ::add-mask:: 呼び出しがあれば true。
+// 現状は文字列検索（"::add-mask::$NAME" または "::add-mask::${NAME}"）。
+func hasAddMaskFor(script, varName string) bool {
+	patterns := []string{
+		"::add-mask::$" + varName,
+		"::add-mask::${" + varName + "}",
+	}
+	for _, p := range patterns {
+		if strings.Contains(script, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// offsetToPosition は script 内のバイトオフセットを ast.Position に変換する。
+func offsetToPosition(runStr *ast.String, script string, offset int) *ast.Position {
+	if offset < 0 || offset > len(script) {
+		offset = 0
+	}
+	prefix := script[:offset]
+	line := strings.Count(prefix, "\n")
+	col := offset
+	if lastNL := strings.LastIndex(prefix, "\n"); lastNL >= 0 {
+		col = offset - lastNL - 1
+	}
+	pos := &ast.Position{
+		Line: runStr.Pos.Line + line,
+		Col:  col + 1,
+	}
+	if runStr.Literal {
+		pos.Line++
+	}
+	return pos
 }
 
 func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]string {
