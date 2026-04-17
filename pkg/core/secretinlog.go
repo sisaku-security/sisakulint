@@ -12,14 +12,10 @@ type SecretInLogRule struct {
 	BaseRule
 	workflowEnvSecrets map[string]string // populated in VisitWorkflowPre from workflow-level env:
 	jobEnvSecrets      map[string]string // populated in VisitJobPre from job-level env:
-	// workflowSecretTaintMap はクロスジョブ secret taint 伝播用の将来拡張フック。
-	// MVP では未使用。follow-up issue（クロスジョブ secret 伝播）で *WorkflowSecretTaintMap に
-	// 置換予定。interface{} にしているのは型未導入のため。
-	workflowSecretTaintMap interface{} //nolint:unused
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
-// NOTE: クロスジョブ伝播対応時は NewSecretInLogRuleWithTaintMap を追加し、
+// NOTE: クロスジョブ伝播対応時（follow-up issue #432）は新しいコンストラクタシグネチャを追加し、
 // この関数はそれに nil を渡すラッパへ段階移行する。
 func NewSecretInLogRule() *SecretInLogRule {
 	return &SecretInLogRule{
@@ -189,18 +185,16 @@ func firstWordLiteral(word *syntax.Word) string {
 }
 
 // hasAddMaskFor は script 内に該当変数への ::add-mask:: 呼び出しがあれば true。
-// 現状は文字列検索（"::add-mask::$NAME" または "::add-mask::${NAME}"）。
+// ブレース形式 "${NAME}" は常に "}" で終端されるため単純検索で十分。
+// ベア形式 "$NAME" は識別子境界チェックを行い、"$NAME_SUFFIX" の誤マッチを防ぐ。
 func hasAddMaskFor(script, varName string) bool {
-	patterns := []string{
-		"::add-mask::$" + varName,
-		"::add-mask::${" + varName + "}",
+	// ブレース形式: ::add-mask::${NAME} — 終端が "}" で識別子は終わるため単純検索で OK
+	if strings.Contains(script, "::add-mask::${"+varName+"}") {
+		return true
 	}
-	for _, p := range patterns {
-		if strings.Contains(script, p) {
-			return true
-		}
-	}
-	return false
+	// ベア形式: ::add-mask::$NAME — NAME の直後が識別子文字でないことを確認
+	bareRe := regexp.MustCompile(`::add-mask::\$` + regexp.QuoteMeta(varName) + `($|[^A-Za-z0-9_])`)
+	return bareRe.MatchString(script)
 }
 
 // offsetToPosition は script 内のバイトオフセットを ast.Position に変換する。
@@ -432,15 +426,19 @@ func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]strin
 		if envVar == nil || envVar.Value == nil {
 			continue
 		}
-		m := secretEnvRefRe.FindStringSubmatch(envVar.Value.Value)
-		if len(m) < 2 {
+		all := secretEnvRefRe.FindAllStringSubmatch(envVar.Value.Value, -1)
+		if len(all) == 0 {
 			continue
 		}
 		name := key
 		if envVar.Name != nil && envVar.Name.Value != "" {
 			name = envVar.Name.Value
 		}
-		result[name] = "secrets." + m[1]
+		var origins []string
+		for _, m := range all {
+			origins = append(origins, "secrets."+m[1])
+		}
+		result[name] = strings.Join(origins, ",")
 	}
 	return result
 }

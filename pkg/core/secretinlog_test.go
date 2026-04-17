@@ -422,6 +422,33 @@ func TestSecretInLog_WorkflowLevelEnv(t *testing.T) {
 	}
 }
 
+func TestSecretInLog_HasAddMaskFor_BoundaryBug(t *testing.T) {
+	t.Parallel()
+	script := `echo "::add-mask::$TOKEN_EXTRA"
+echo "$TOKEN"`
+	if hasAddMaskFor(script, "TOKEN") {
+		t.Error("hasAddMaskFor must not match TOKEN when only TOKEN_EXTRA is masked")
+	}
+	if !hasAddMaskFor(script, "TOKEN_EXTRA") {
+		t.Error("hasAddMaskFor must match exact var TOKEN_EXTRA")
+	}
+}
+
+func TestSecretInLog_CollectSecretEnvVars_MultipleSecrets(t *testing.T) {
+	t.Parallel()
+	env := &ast.Env{Vars: map[string]*ast.EnvVar{
+		"combo": {
+			Name:  &ast.String{Value: "COMBO"},
+			Value: &ast.String{Value: "${{ secrets.A }}-${{ secrets.B }}"},
+		},
+	}}
+	rule := NewSecretInLogRule()
+	got := rule.collectSecretEnvVars(env)
+	if got["COMBO"] != "secrets.A,secrets.B" {
+		t.Errorf("expected both secrets in origin, got %q", got["COMBO"])
+	}
+}
+
 func TestSecretInLog_AutoFix_SkipsWhenAlreadyMasked(t *testing.T) {
 	t.Parallel()
 
