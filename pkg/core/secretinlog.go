@@ -114,6 +114,7 @@ type echoLeakOccurrence struct {
 
 // findEchoLeaks は echo/printf の引数に tainted 変数が含まれる箇所を収集する。
 // add-mask 済みの変数はスキップする。
+// コマンド置換（$(...) ）内部の echo/printf はログに露出しないためスキップする。
 func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]string, script string, runStr *ast.String) []echoLeakOccurrence {
 	if file == nil {
 		return nil
@@ -121,6 +122,11 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 	var leaks []echoLeakOccurrence
 
 	syntax.Walk(file, func(node syntax.Node) bool {
+		// コマンド置換の内部は stdout がパイプに接続されるため、
+		// echo/printf の出力はビルドログには現れない。子ノードの探索をスキップする。
+		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
+			return false
+		}
 		call, ok := node.(*syntax.CallExpr)
 		if !ok || len(call.Args) == 0 {
 			return true
@@ -215,6 +221,113 @@ func offsetToPosition(runStr *ast.String, script string, offset int) *ast.Positi
 		pos.Line++
 	}
 	return pos
+}
+
+// VisitJobPre は Job 内の各 Step を走査して secret 漏洩を検出する。
+func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
+	for _, step := range node.Steps {
+		rule.currentStep = step
+		rule.checkStep(step)
+	}
+	return nil
+}
+
+// checkStep は単一 Step の run スクリプトを解析して secret 漏洩を検出する。
+func (rule *SecretInLogRule) checkStep(step *ast.Step) {
+	if step == nil || step.Exec == nil {
+		return
+	}
+	execRun, ok := step.Exec.(*ast.ExecRun)
+	if !ok || execRun.Run == nil {
+		return
+	}
+	script := execRun.Run.Value
+	if script == "" {
+		return
+	}
+
+	initialTainted := rule.collectSecretEnvVars(step.Env)
+	if len(initialTainted) == 0 {
+		return
+	}
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(script), "")
+	if err != nil || file == nil {
+		return // パース失敗時は解析をスキップ（他ルールの管轄）
+	}
+
+	tainted := rule.propagateTaint(file, initialTainted)
+	leaks := rule.findEchoLeaks(file, tainted, script, execRun.Run)
+
+	for _, leak := range leaks {
+		rule.reportLeak(leak)
+		rule.addAutoFixerForLeak(step, leak)
+	}
+}
+
+// reportLeak は echoLeakOccurrence をエラーとして記録する。
+func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
+	rule.Errorf(
+		leak.Position,
+		"secret in log: variable $%s (origin: %s) is printed via '%s' without masking. "+
+			"GitHub Actions only masks direct secrets.* values; values derived via shell expansion or "+
+			"tools like jq are not masked and will appear in plaintext in build logs. "+
+			"Add 'echo \"::add-mask::$%s\"' before any usage, or avoid printing the value. "+
+			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
+		leak.VarName, leak.Origin, leak.Command, leak.VarName,
+	)
+}
+
+// addAutoFixerForLeak は add-mask 行を run スクリプト冒頭に挿入する auto-fixer を登録する。
+func (rule *SecretInLogRule) addAutoFixerForLeak(step *ast.Step, leak echoLeakOccurrence) {
+	fixer := &secretInLogFixer{
+		step:     step,
+		varName:  leak.VarName,
+		ruleName: rule.RuleName,
+	}
+	rule.AddAutoFixer(NewStepFixer(step, fixer))
+}
+
+// secretInLogFixer は add-mask 行をスクリプト冒頭に挿入する StepFixer 実装。
+type secretInLogFixer struct {
+	step     *ast.Step
+	varName  string
+	ruleName string
+}
+
+func (f *secretInLogFixer) RuleNames() string { return f.ruleName }
+
+func (f *secretInLogFixer) FixStep(node *ast.Step) error {
+	if node == nil || node.Exec == nil {
+		return nil
+	}
+	execRun, ok := node.Exec.(*ast.ExecRun)
+	if !ok || execRun.Run == nil {
+		return nil
+	}
+	script := execRun.Run.Value
+	if hasAddMaskFor(script, f.varName) {
+		return nil
+	}
+
+	addMask := `echo "::add-mask::$` + f.varName + `"`
+	var updated string
+	if strings.HasPrefix(script, "#!") {
+		nl := strings.Index(script, "\n")
+		if nl == -1 {
+			updated = script + "\n" + addMask
+		} else {
+			updated = script[:nl] + "\n" + addMask + "\n" + script[nl+1:]
+		}
+	} else {
+		updated = addMask + "\n" + script
+	}
+	execRun.Run.Value = updated
+	if execRun.Run.BaseNode != nil {
+		execRun.Run.BaseNode.Value = updated
+	}
+	return nil
 }
 
 func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]string {
