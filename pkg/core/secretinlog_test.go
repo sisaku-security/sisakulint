@@ -312,6 +312,81 @@ func TestSecretInLog_AutoFix_InsertsAddMask(t *testing.T) {
 	}
 }
 
+func TestSecretInLog_JobLevelEnv(t *testing.T) {
+	t.Parallel()
+
+	// Job-level env: contains the secret ref; step has no env of its own.
+	// The rule should still detect the leak.
+	runScript := "PRIVATE=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"key: $PRIVATE\""
+
+	jobEnvVars := map[string]*ast.EnvVar{
+		"gcp_key": {
+			Name:  &ast.String{Value: "GCP_KEY"},
+			Value: &ast.String{Value: "${{ secrets.GCP }}"},
+		},
+	}
+
+	step := &ast.Step{
+		Env: nil, // step has no env
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	job := &ast.Job{
+		Env:   &ast.Env{Vars: jobEnvVars},
+		Steps: []*ast.Step{step},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre returned err: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("errors = %d, want 1. details=%v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_WorkflowLevelEnv(t *testing.T) {
+	t.Parallel()
+
+	// Workflow-level env: contains the secret ref; job and step have no env.
+	// The rule should still detect the leak.
+	runScript := "PRIVATE=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"key: $PRIVATE\""
+
+	workflowEnvVars := map[string]*ast.EnvVar{
+		"gcp_key": {
+			Name:  &ast.String{Value: "GCP_KEY"},
+			Value: &ast.String{Value: "${{ secrets.GCP }}"},
+		},
+	}
+
+	step := &ast.Step{
+		Env: nil, // step has no env
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	job := &ast.Job{
+		Env:   nil, // job has no env
+		Steps: []*ast.Step{step},
+	}
+	workflow := &ast.Workflow{
+		Env:  &ast.Env{Vars: workflowEnvVars},
+		Jobs: map[string]*ast.Job{"leak": job},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre returned err: %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre returned err: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("errors = %d, want 1. details=%v", got, rule.Errors())
+	}
+}
+
 func TestSecretInLog_AutoFix_SkipsWhenAlreadyMasked(t *testing.T) {
 	t.Parallel()
 

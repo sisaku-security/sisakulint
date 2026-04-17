@@ -10,7 +10,8 @@ import (
 
 type SecretInLogRule struct {
 	BaseRule
-	currentStep *ast.Step
+	workflowEnvSecrets map[string]string // populated in VisitWorkflowPre from workflow-level env:
+	jobEnvSecrets      map[string]string // populated in VisitJobPre from job-level env:
 	// workflowSecretTaintMap はクロスジョブ secret taint 伝播用の将来拡張フック。
 	// MVP では未使用。follow-up issue（クロスジョブ secret 伝播）で *WorkflowSecretTaintMap に
 	// 置換予定。interface{} にしているのは型未導入のため。
@@ -223,10 +224,16 @@ func offsetToPosition(runStr *ast.String, script string, offset int) *ast.Positi
 	return pos
 }
 
+// VisitWorkflowPre はワークフロールートの env: から secret taint 種を収集する。
+func (rule *SecretInLogRule) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.workflowEnvSecrets = rule.collectSecretEnvVars(node.Env)
+	return nil
+}
+
 // VisitJobPre は Job 内の各 Step を走査して secret 漏洩を検出する。
 func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
+	rule.jobEnvSecrets = rule.collectSecretEnvVars(node.Env)
 	for _, step := range node.Steps {
-		rule.currentStep = step
 		rule.checkStep(step)
 	}
 	return nil
@@ -246,7 +253,16 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return
 	}
 
-	initialTainted := rule.collectSecretEnvVars(step.Env)
+	initialTainted := make(map[string]string)
+	for k, v := range rule.workflowEnvSecrets {
+		initialTainted[k] = v
+	}
+	for k, v := range rule.jobEnvSecrets {
+		initialTainted[k] = v
+	}
+	for k, v := range rule.collectSecretEnvVars(step.Env) {
+		initialTainted[k] = v
+	}
 	if len(initialTainted) == 0 {
 		return
 	}
