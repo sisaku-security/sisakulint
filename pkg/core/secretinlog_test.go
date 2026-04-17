@@ -273,3 +273,64 @@ func TestSecretInLog_VisitJob_Integration(t *testing.T) {
 		})
 	}
 }
+
+func TestSecretInLog_AutoFix_InsertsAddMask(t *testing.T) {
+	t.Parallel()
+
+	original := "PRIVATE_KEY=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"key: $PRIVATE_KEY\""
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"gcp_key": {
+				Name:  &ast.String{Value: "GCP_KEY"},
+				Value: &ast.String{Value: "${{ secrets.GCP }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if len(rule.AutoFixers()) == 0 {
+		t.Fatal("expected at least one auto-fixer")
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if !strings.HasPrefix(got, `echo "::add-mask::$PRIVATE_KEY"`) {
+		t.Errorf("expected add-mask prefix, got: %q", got)
+	}
+	if !strings.Contains(got, original) {
+		t.Errorf("original script should remain, got: %q", got)
+	}
+}
+
+func TestSecretInLog_AutoFix_SkipsWhenAlreadyMasked(t *testing.T) {
+	t.Parallel()
+
+	original := "PRIVATE_KEY=$(echo \"$GCP_KEY\" | jq -r '.private_key')\necho \"::add-mask::$PRIVATE_KEY\"\necho \"$PRIVATE_KEY\""
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"gcp_key": {
+				Name:  &ast.String{Value: "GCP_KEY"},
+				Value: &ast.String{Value: "${{ secrets.GCP }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	_ = rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}})
+	if len(rule.Errors()) != 0 {
+		t.Errorf("expected 0 errors (already masked), got %d", len(rule.Errors()))
+	}
+}
