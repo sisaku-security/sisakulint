@@ -112,27 +112,20 @@ func hasAddMaskFor(script, varName string) bool
 
 - [ ] **Step 1: 脆弱サンプルを作成**
 
-`script/actions/secret-in-log-vulnerable.yaml` を以下の内容で作成する（goat-secret-in-build-log.yml を素に、3ケースに拡張）：
+`script/actions/secret-in-log-vulnerable.yaml` を 2 ケースで作成する（jq 派生ケースは既存の `goat-secret-in-build-log.yml` と機能的に重複するため、そちらを external corpus として活用し DRY に保つ）：
 
 ```yaml
 name: Secret In Log (Vulnerable Samples)
+
+# jq による派生 → echo のケースは goat-secret-in-build-log.yml で
+# 別途カバー（Case 11 external verification corpus）。
+# ここでは goat 側で扱っていない 2 ケース（チェーン伝播 / 直接 echo）のみ扱う。
 
 on:
   workflow_dispatch:
 
 jobs:
-  # Case A: jq による派生 → echo（Issue の main motivation）
-  leak-via-jq:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Extract via jq and echo
-        env:
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-        run: |
-          PRIVATE_KEY=$(echo $GCP_SERVICE_ACCOUNT_KEY | jq -r '.private_key')
-          echo "GCP Private Key: $PRIVATE_KEY"
-
-  # Case B: 中間変数を介したチェーン伝播
+  # Case A: 中間変数を介したチェーン伝播
   leak-via-chained-assignment:
     runs-on: ubuntu-latest
     steps:
@@ -144,7 +137,7 @@ jobs:
           STEP2=$(echo "$STEP1")
           printf "Token: %s\n" "$STEP2"
 
-  # Case C: echo で env 変数を直接出力（derivation なし）
+  # Case B: echo で env 変数を直接出力（derivation なし）
   leak-direct-echo:
     runs-on: ubuntu-latest
     steps:
@@ -1141,7 +1134,7 @@ Expected: ビルド成功、全テスト PASS。
 - [ ] **Step 3: 実ファイルで動作確認**
 
 Run: `./sisakulint script/actions/secret-in-log-vulnerable.yaml`
-Expected: 3 ステップ分の `secret-in-log` エラーが出力される。
+Expected: 2 ステップ分の `secret-in-log` エラーが出力される（Case A: `STEP2` を printf / Case B: `SECRET` を echo）。
 
 Run: `./sisakulint script/actions/secret-in-log-safe.yaml`
 Expected: `secret-in-log` エラーは 0 件（他ルールの警告は許容）。
@@ -1478,7 +1471,7 @@ Expected: 上記 2 件が表示される。
   - Approach 1 (shell variable taint tracking) → Task 4-7
   - Approach 3 (add-mask recommendation as auto-fix) → Task 9-10
   - goat workflow (`goat-secret-in-build-log.yml`) の検出 → Task 8（ゴールデンテスト）, Task 11 Step 3（実ファイル）, Task 12（docs 更新で NOT DETECTED → DETECTED に遷移）, Task 15 Step 3（回帰なし確認）
-  - Issue で示された 3 つの検出パターン（jq 経由 / チェーン代入 / 直接 echo）すべて Task 1 / Task 8 でカバー
+  - Issue で示された 3 つの検出パターン（jq 経由 / チェーン代入 / 直接 echo）すべてカバー: jq 派生は `goat-secret-in-build-log.yml`（Task 11 Step 3 + Task 8 ゴールデンテスト）、チェーン代入と直接 echo は `secret-in-log-vulnerable.yaml`（Task 1）
   - クロスジョブ伝播 (#391/#420) / ルール横展開 (#419/#426) / reusable workflow 跨ぎ (#392) → 本プランでは **Scope で明示的に除外**し、Task 16 で follow-up issue として追跡。DI 拡張ポイント（`workflowSecretTaintMap` フィールドと `NewSecretInLogRuleWithTaintMap` への将来リネーム）を Task 3 / Task 11 でコード上にコメントとして残す。
 - [x] **Placeholder scan:** TBD / TODO / "handle edge cases" の記述なし。全コード例は完結した実装。
 - [x] **Type consistency:**
