@@ -27,11 +27,13 @@ A secret value is extracted via `jq`, stored in a shell variable, and then print
 
 ## sisakulint Detection Status
 
-### Why Not Detected
+### Gap in Prior Rules (Historical)
 
-sisakulint's `secret-exfiltration` rule detects secret transmission via network commands (`curl`, `wget`, `nc`, etc.), but does not cover `echo` output to stdout.
+sisakulint's `secret-exfiltration` rule detected secret transmission via network commands (`curl`, `wget`, `nc`, etc.), but did not cover `echo` output to stdout.
 
-The `unmasked-secret-exposure` rule detects unmasked secrets derived from `fromJson()` in GitHub Actions expressions, but does not track shell-level `jq` derivation.
+The `unmasked-secret-exposure` rule detected unmasked secrets derived from `fromJson()` in GitHub Actions expressions, but did not track shell-level `jq` derivation.
+
+The `secret-in-log` rule was added (Issue #388) to close this gap.
 
 ## Detection Implementation
 

@@ -471,3 +471,19 @@ func TestSecretInLog_AutoFix_SkipsWhenAlreadyMasked(t *testing.T) {
 		t.Errorf("expected 0 errors (already masked), got %d", len(rule.Errors()))
 	}
 }
+
+func TestSecretInLog_FixStep_SkipsWhenAlreadyMasked(t *testing.T) {
+	t.Parallel()
+	script := "PRIVATE_KEY=$(jq -r .p <<< \"$KEY\")\necho \"::add-mask::$PRIVATE_KEY\"\necho \"$PRIVATE_KEY\""
+	step := &ast.Step{
+		Exec: &ast.ExecRun{Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}}},
+	}
+	f := &secretInLogFixer{step: step, varName: "PRIVATE_KEY", origin: "shellvar:KEY", ruleName: "secret-in-log"}
+	if err := f.FixStep(step); err != nil {
+		t.Fatalf("FixStep: %v", err)
+	}
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != script {
+		t.Errorf("FixStep should be a no-op when add-mask already present; script changed to %q", got)
+	}
+}
