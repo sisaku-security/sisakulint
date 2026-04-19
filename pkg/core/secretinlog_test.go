@@ -478,7 +478,16 @@ func TestSecretInLog_FixStep_SkipsWhenAlreadyMasked(t *testing.T) {
 	step := &ast.Step{
 		Exec: &ast.ExecRun{Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}}},
 	}
-	f := &secretInLogFixer{step: step, varName: "PRIVATE_KEY", origin: "shellvar:KEY", ruleName: "secret-in-log"}
+	// leakOffset は 3 行目の `$PRIVATE_KEY` sink 位置を指す想定。
+	// 2 行目の add-mask はこのオフセットより前にあるため skip されるべき。
+	sinkIdx := strings.Index(script, "\necho \"$PRIVATE_KEY\"") + 1
+	f := &secretInLogFixer{
+		step:       step,
+		varName:    "PRIVATE_KEY",
+		origin:     "shellvar:KEY",
+		leakOffset: sinkIdx,
+		ruleName:   "secret-in-log",
+	}
 	if err := f.FixStep(step); err != nil {
 		t.Fatalf("FixStep: %v", err)
 	}
@@ -629,6 +638,227 @@ func TestSecretInLog_ThreeLevelEnv_OverrideSameName(t *testing.T) {
 	// メッセージ末尾は step env の secret 名を origin として含むはず（3 階層で最後に merge される）。
 	if !strings.Contains(errs[0].Description, "secrets.STEP_TOKEN") {
 		t.Errorf("expected origin to be overridden by step env (secrets.STEP_TOKEN), got: %s", errs[0].Description)
+	}
+}
+
+// Finding 3: ::add-mask:: が sink より後に置かれているケースは「保護」扱いしない。
+// GitHub Actions の add-mask は発行後のログにしか適用されないため、
+// 先に echo した値はマスクされずに残る。
+func TestSecretInLog_FindEchoLeaks_MaskAfterSinkIsIneffective(t *testing.T) {
+	t.Parallel()
+	// 1 行目の echo でリーク → 2 行目の mask ではもう手遅れ。
+	script := "echo \"$TOKEN\"\necho \"::add-mask::$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("mask-after-sink must not suppress the leak; got %d errors: %v", got, rule.Errors())
+	}
+}
+
+// Finding 3: sink より前にある add-mask は正しく保護とみなす（従来挙動の回帰テスト）。
+func TestSecretInLog_FindEchoLeaks_MaskBeforeSinkIsEffective(t *testing.T) {
+	t.Parallel()
+	script := "echo \"::add-mask::$TOKEN\"\necho \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("mask-before-sink must suppress the leak; got %d errors: %v", got, rule.Errors())
+	}
+}
+
+// Finding 4: `KEY=$(...); echo "$KEY"` のようにアサインと sink が同一行にある複文では
+// insertAfterAssignment は安全に挿入できないため (script, false) を返し、
+// FixStep はスクリプトを書き換えずに警告のみを残す。
+func TestSecretInLog_AutoFix_SameLineSinkIsSafelyNoOp(t *testing.T) {
+	t.Parallel()
+	original := "KEY=$(echo \"$GCP_KEY\" | jq -r '.k'); echo \"$KEY\""
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"gcp_key": {
+				Name:  &ast.String{Value: "GCP_KEY"},
+				Value: &ast.String{Value: "${{ secrets.GCP }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("expected 1 leak for same-line sink, got %d: %v", got, rule.Errors())
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != original {
+		t.Errorf("same-line sink must not be modified by auto-fix (unsafe); got: %q", got)
+	}
+}
+
+// Finding 4: insertAfterAssignment 単体テスト。改行のないスクリプトでは false を返す。
+func TestSecretInLog_InsertAfterAssignment_SameLineReturnsFalse(t *testing.T) {
+	t.Parallel()
+	_, ok := insertAfterAssignment("KEY=$(echo foo); echo \"$KEY\"", "KEY", `echo "::add-mask::$KEY"`)
+	if ok {
+		t.Error("insertAfterAssignment must return false when the assignment has no trailing newline (same-line sink)")
+	}
+}
+
+// Finding 6: `echo "$T" >> "$GITHUB_OUTPUT"` や `> file.txt` など stdout をファイルへ
+// リダイレクトしている echo/printf はビルドログに出ないため検出対象外とする。
+func TestSecretInLog_StdoutRedirectToFile_NotFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "GITHUB_OUTPUT append",
+			runScript: "echo \"secret=$TOKEN\" >> \"$GITHUB_OUTPUT\"",
+		},
+		{
+			name:      "file overwrite",
+			runScript: "echo \"$TOKEN\" > secret.txt",
+		},
+		{
+			name:      "file append",
+			runScript: "echo \"$TOKEN\" >> secret.txt",
+		},
+		{
+			name:      "printf to file",
+			runScript: "printf '%s' \"$TOKEN\" > out.txt",
+		},
+		{
+			name:      "explicit fd1 redirect",
+			runScript: "echo \"$TOKEN\" 1> out.txt",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 0 {
+				t.Errorf("script %q: stdout redirected to file must not leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// Finding 6: `>&2` や `/dev/stderr` は GitHub Actions のビルドログに引き続き出力されるため、
+// redirect による suppress の対象外とする（leak として検出されるべき）。
+func TestSecretInLog_StderrRedirect_StillFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "redirect to /dev/stderr",
+			runScript: "echo \"$TOKEN\" > /dev/stderr",
+		},
+		{
+			name:      "no redirect",
+			runScript: "echo \"$TOKEN\"",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("script %q: stderr must still leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// Finding 6: `printf -v VAR ...` は stdout を出さず指定変数に格納するため検出対象外。
+func TestSecretInLog_PrintfDashV_NotFlagged(t *testing.T) {
+	t.Parallel()
+	script := "printf -v OUT '%s' \"$TOKEN\""
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("printf -v captures to variable and must not leak; got %d errors: %v", got, rule.Errors())
 	}
 }
 
