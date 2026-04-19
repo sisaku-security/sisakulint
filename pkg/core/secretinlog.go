@@ -125,12 +125,18 @@ type echoLeakOccurrence struct {
 	VarName  string
 	Origin   string
 	Position *ast.Position
+	Offset   int // sink のバイトオフセット（script 内での位置。offset-aware な add-mask 判定に使用）
 	Command  string
 }
 
 // findEchoLeaks は echo/printf の引数に tainted 変数が含まれる箇所を収集する。
-// add-mask 済みの変数はスキップする。
-// コマンド置換（$(...) ）内部の echo/printf はログに露出しないためスキップする。
+// 以下のケースはビルドログに出力されないためスキップする:
+//   - コマンド置換 `$(...)` の内部（stdout はパイプに接続）
+//   - stdout をファイルにリダイレクトする Stmt（例: `echo "$X" >> "$GITHUB_OUTPUT"`、`echo "$X" > file.txt`）
+//   - `printf -v VAR` 形式（stdout を出さず変数に格納）
+//
+// ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
+// ビルドログに引き続き表示されるため、スキップ対象から除外する。
 func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]string, script string, runStr *ast.String) []echoLeakOccurrence {
 	if file == nil {
 		return nil
@@ -143,6 +149,10 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
 			return false
 		}
+		// stdout を「ログに出ない先」へリダイレクトしている Stmt は子ノードごとスキップ。
+		if stmt, isStmt := node.(*syntax.Stmt); isStmt && stmtRedirectsStdoutAwayFromLog(stmt) {
+			return false
+		}
 		call, ok := node.(*syntax.CallExpr)
 		if !ok || len(call.Args) == 0 {
 			return true
@@ -151,12 +161,73 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 		if cmdName != "echo" && cmdName != "printf" {
 			return true
 		}
+		// `printf -v VAR ...` は stdout へ出力しない（指定変数に格納する）ためスキップ。
+		if cmdName == "printf" && len(call.Args) >= 2 && firstWordLiteral(call.Args[1]) == "-v" {
+			return true
+		}
 		for _, arg := range call.Args[1:] {
 			rule.collectLeakedVars(arg, tainted, script, runStr, cmdName, &leaks)
 		}
 		return true
 	})
 	return leaks
+}
+
+// stmtRedirectsStdoutAwayFromLog は Stmt の Redirs に stdout をファイルへ送るものが
+// 1 つ以上含まれていれば true を返す。`>&2` (DplOut) や `/dev/stderr` 等の
+// ログに出力される宛先は除外する。
+func stmtRedirectsStdoutAwayFromLog(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	for _, r := range stmt.Redirs {
+		if r == nil {
+			continue
+		}
+		// 対象は stdout への書き込み系オペレータのみ。
+		switch r.Op {
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
+		default:
+			continue
+		}
+		// fd 指定がある場合、stdout (fd1) 以外のリダイレクトは無視。
+		if r.N != nil && r.N.Value != "" && r.N.Value != "1" {
+			continue
+		}
+		// リダイレクト先がログに現れる特殊デバイス／fd の場合は「ログから逸らしていない」と判定。
+		target := wordLiteralValue(r.Word)
+		switch target {
+		case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// wordLiteralValue は Word 全体を可能な限り文字列リテラルとして抽出する。
+// ParamExp や CmdSubst を含む場合はそれらを空文字として無視し、残りを連結する。
+// 厳密なシェル展開ではないが、既知のパス（/dev/stderr 等）検出には十分。
+func wordLiteralValue(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range w.Parts {
+		switch v := p.(type) {
+		case *syntax.Lit:
+			b.WriteString(v.Value)
+		case *syntax.SglQuoted:
+			b.WriteString(v.Value)
+		case *syntax.DblQuoted:
+			for _, dp := range v.Parts {
+				if lit, ok := dp.(*syntax.Lit); ok {
+					b.WriteString(lit.Value)
+				}
+			}
+		}
+	}
+	return b.String()
 }
 
 // collectLeakedVars は単一の引数内で tainted 変数参照をすべて報告リストに追加する。
@@ -178,14 +249,19 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		if !ok {
 			return true
 		}
-		if hasAddMaskFor(script, name) {
+		sinkOffset := int(pe.Pos().Offset())
+		// GitHub Actions の ::add-mask:: は発行後のログ出力にのみ適用されるため、
+		// この sink より後に現れる add-mask は保護にならない。sink 位置より前に
+		// 有効な add-mask が存在する場合のみスキップする。
+		if hasAddMaskBefore(script, name, sinkOffset) {
 			return true
 		}
-		pos := offsetToPosition(runStr, script, int(pe.Pos().Offset()))
+		pos := offsetToPosition(runStr, script, sinkOffset)
 		*leaks = append(*leaks, echoLeakOccurrence{
 			VarName:  name,
 			Origin:   origin,
 			Position: pos,
+			Offset:   sinkOffset,
 			Command:  cmdName,
 		})
 		return true
@@ -206,13 +282,40 @@ func firstWordLiteral(word *syntax.Word) string {
 // hasAddMaskFor は script 内に該当変数への ::add-mask:: 呼び出しがあれば true。
 // ブレース形式 "${NAME}" は常に "}" で終端されるため単純検索で十分。
 // ベア形式 "$NAME" は識別子境界チェックを行い、"$NAME_SUFFIX" の誤マッチを防ぐ。
+// 位置依存チェックを行う場合は hasAddMaskBefore を使用する。
 func hasAddMaskFor(script, varName string) bool {
+	return hasAddMaskBefore(script, varName, -1)
+}
+
+// hasAddMaskBefore は script 内に該当変数への ::add-mask:: 呼び出しがあり、
+// かつその呼び出し位置（バイトオフセット）が beforeOffset より前なら true を返す。
+// beforeOffset に負の値（-1 など）を渡すと位置制約なし（ script 全域を検索）。
+//
+// GitHub Actions の ::add-mask:: ワークフローコマンドは発行 *後* のログ出力にのみ
+// 適用されるため、sink（echo/printf）より後に記述された add-mask は保護にならない。
+// 位置を考慮することで、後続の mask を保護とみなす偽陰性を回避する。
+func hasAddMaskBefore(script, varName string, beforeOffset int) bool {
 	// ブレース形式: ::add-mask::${NAME} — 終端が "}" で識別子は終わるため単純検索で OK
-	if strings.Contains(script, "::add-mask::${"+varName+"}") {
-		return true
+	brace := "::add-mask::${" + varName + "}"
+	for i := 0; i < len(script); {
+		idx := strings.Index(script[i:], brace)
+		if idx < 0 {
+			break
+		}
+		absIdx := i + idx
+		if beforeOffset < 0 || absIdx < beforeOffset {
+			return true
+		}
+		i = absIdx + len(brace)
 	}
 	// ベア形式: ::add-mask::$NAME — NAME の直後が識別子文字でないことを確認
-	return bareAddMaskRegex(varName).MatchString(script)
+	matches := bareAddMaskRegex(varName).FindAllStringIndex(script, -1)
+	for _, m := range matches {
+		if beforeOffset < 0 || m[0] < beforeOffset {
+			return true
+		}
+	}
+	return false
 }
 
 // offsetToPosition は script 内のバイトオフセットを ast.Position に変換する。
@@ -310,10 +413,11 @@ func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
 // addAutoFixerForLeak は add-mask 行を run スクリプトに挿入する auto-fixer を登録する。
 func (rule *SecretInLogRule) addAutoFixerForLeak(step *ast.Step, leak echoLeakOccurrence) {
 	fixer := &secretInLogFixer{
-		step:     step,
-		varName:  leak.VarName,
-		origin:   leak.Origin,
-		ruleName: rule.RuleName,
+		step:       step,
+		varName:    leak.VarName,
+		origin:     leak.Origin,
+		leakOffset: leak.Offset,
+		ruleName:   rule.RuleName,
 	}
 	rule.AddAutoFixer(NewStepFixer(step, fixer))
 }
@@ -322,10 +426,11 @@ func (rule *SecretInLogRule) addAutoFixerForLeak(step *ast.Step, leak echoLeakOc
 // origin が "secrets.*" の場合はスクリプト冒頭に挿入する（env var はスクリプト開始前に設定済み）。
 // origin が "shellvar:*" の場合は対象変数のアサイン直後に挿入する（アサイン前にマスクすると空文字列をマスクしてしまう）。
 type secretInLogFixer struct {
-	step     *ast.Step
-	varName  string
-	origin   string // "secrets.X" or "shellvar:Y"
-	ruleName string
+	step       *ast.Step
+	varName    string
+	origin     string // "secrets.X" or "shellvar:Y"
+	leakOffset int    // sink のバイトオフセット。offset-aware な冪等性判定に使用
+	ruleName   string
 }
 
 func (f *secretInLogFixer) RuleNames() string { return f.ruleName }
@@ -339,7 +444,12 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		return nil
 	}
 	script := execRun.Run.Value
-	if hasAddMaskFor(script, f.varName) {
+	// sink 位置より前に有効な add-mask が既に存在していれば、追加挿入は不要。
+	// leakOffset は元スクリプトにおける sink のオフセット。他の fixer が先に
+	// insertAfterAssignment でスクリプトを書き換えた場合、挿入位置は常に元 sink より
+	// 前（= アサイン直後 < 元 sink）で行われるため、leakOffset 基準でのチェックは
+	// 書き換え後のスクリプトに対しても引き続き正しく機能する。
+	if hasAddMaskBefore(script, f.varName, f.leakOffset) {
 		return nil
 	}
 
@@ -356,7 +466,12 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 			}
 			return nil
 		}
-		// アサインが見つからない場合はフォールスルーして冒頭挿入する
+		// アサインが見つからない／同一行に sink がある等、安全に挿入できない場合は
+		// 冒頭挿入にフォールスルーしない。冒頭に mask を置くとアサイン前に空文字列を
+		// マスクすることになり、「後続の派生値はマスクされない」という本ルールが
+		// 検出した脆弱性を修正できない（むしろ誤った安心感を与える）。
+		// 警告のみ残して no-op とし、手動修正に委ねる。
+		return nil
 	}
 
 	var updated string
@@ -411,8 +526,13 @@ func insertAfterAssignment(script, varName, addMaskLine string) (string, bool) {
 	rest := script[assignEndOffset:]
 	nlIdx := strings.Index(rest, "\n")
 	if nlIdx < 0 {
-		// 改行がない（スクリプト末尾のアサイン）→ 末尾に追記
-		return script + "\n" + addMaskLine, true
+		// アサインの後に改行がない場合：
+		//   - 単一行かつアサインのみ (例: `KEY=$(...)`) → sink が無いので fixer が呼ばれない想定
+		//   - アサインと同一行に別コマンドがある複文 (例: `KEY=$(...); echo "$KEY"`)
+		//     → 同一行の sink 手前へ安全に挿入する位置を AST から特定できないため、
+		//       末尾に append すると sink より後に mask が来て無効な修正となる。
+		// いずれの場合も安全側に倒して「修正不可」を返し、呼び出し側で no-op にする。
+		return "", false
 	}
 
 	// アサイン行の先頭インデントを検出して合わせる
