@@ -82,6 +82,14 @@ The rule performs taint propagation within a single `run` step:
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
 3. **Sink detection** — `echo` or `printf` calls that reference a tainted variable without a preceding `::add-mask::` for that variable. Masks that appear *after* the sink are not considered protective, since GitHub Actions applies masking only to subsequent log output.
 
+#### Non-detection cases (not reported as leaks)
+
+The following patterns are intentionally excluded from detection because their output does not reach the build log:
+
+- **Stdout redirected to a file** — `echo "$TOKEN" >> "$GITHUB_OUTPUT"`, `echo "$TOKEN" > secret.txt`, `echo "$TOKEN" 1> out.txt` etc. (redirects to `/dev/stderr`, `/dev/stdout`, `/dev/tty`, or `/dev/fd/{1,2}` are *not* excluded because they are still shown in the log.)
+- **`printf -v VAR ...`** — captures to a shell variable instead of printing.
+- **Inside command substitutions** — `VAR=$(echo "$SECRET")` does not leak because the inner stdout is captured by `$(...)`.
+
 ### Auto-Fix
 
 When run with `-fix on`, the rule inserts `echo "::add-mask::$VAR"` into the `run` script.
@@ -104,11 +112,16 @@ run: |
   echo "key=$KEY"
 ```
 
+#### Auto-fix safety caveat
+
+If an assignment and a sink share the same physical line as a compound statement (e.g., `KEY=$(...); echo "$KEY"`), the rule cannot safely locate an insertion point between them from the shell AST alone. In that case the rule reports the warning **but leaves the script unchanged**; the user is expected to split the compound onto multiple lines and rerun `-fix on`, or add `::add-mask::` manually.
+
 ### Scope Limitations (MVP)
 
 - **Single-step scope only** — taint does not cross step boundaries or job outputs (`needs.*.outputs.*`); cross-job propagation is a planned follow-up.
 - **`echo` and `printf` only** — commands such as `tee`, `cat`, and `logger` are not yet detected.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up.
+- **Whole-script taint** — taint is currently computed as a set over the entire script, so a sink that syntactically precedes its variable's assignment may still be reported as a leak. Making the analysis order-aware is a planned follow-up (see `sisakulint-a5s`).
 
 ### Related Rules
 
