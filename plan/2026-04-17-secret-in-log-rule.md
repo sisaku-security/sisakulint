@@ -1114,7 +1114,7 @@ git commit -m "test(secret-in-log): cover auto-fix insertion and already-masked 
 
 具体的な置換（Edit tool 想定）：
 
-```
+```text
 old:
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
 		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
@@ -1165,7 +1165,7 @@ git commit -m "feat(secret-in-log): register rule in linter"
 
 以下の old → new 置換：
 
-```
+```text
 old:
 ## Verdict: NOT DETECTED
 new:
@@ -1176,7 +1176,7 @@ Detected by the `secret-in-log` rule (added in response to Issue #388).
 
 また、「Future Improvement Ideas」セクションの内容を現状の実装概要に置き換える：
 
-```
+```text
 old:
 ## Future Improvement Ideas
 
