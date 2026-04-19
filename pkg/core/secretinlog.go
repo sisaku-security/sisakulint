@@ -3,10 +3,29 @@ package core
 import (
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"mvdan.cc/sh/v3/syntax"
 )
+
+// maxTaintIterations は propagateTaint の不動点反復上限。
+// 実用的なシェルスクリプトでは到達しない値だが、悪意ある/自動生成の長大な代入チェーン
+// （例: A=$B; B=$C; ...）に対する DoS 耐性として上限を設ける。
+const maxTaintIterations = 50
+
+// bareAddMaskReCache は "::add-mask::$VAR(境界)" 形式のチェック用正規表現をキャッシュする。
+// hasAddMaskFor は tainted 変数 × echo 引数の回数だけ呼ばれるため、毎回コンパイルは避ける。
+var bareAddMaskReCache sync.Map // map[string]*regexp.Regexp
+
+func bareAddMaskRegex(varName string) *regexp.Regexp {
+	if v, ok := bareAddMaskReCache.Load(varName); ok {
+		return v.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(`::add-mask::\$` + regexp.QuoteMeta(varName) + `($|[^A-Za-z0-9_])`)
+	actual, _ := bareAddMaskReCache.LoadOrStore(varName, re)
+	return actual.(*regexp.Regexp)
+}
 
 type SecretInLogRule struct {
 	BaseRule
@@ -40,7 +59,7 @@ func (rule *SecretInLogRule) propagateTaint(file *syntax.File, initialTainted ma
 		return tainted
 	}
 
-	for {
+	for i := 0; i < maxTaintIterations; i++ {
 		added := false
 		syntax.Walk(file, func(node syntax.Node) bool {
 			assign, ok := node.(*syntax.Assign)
@@ -193,8 +212,7 @@ func hasAddMaskFor(script, varName string) bool {
 		return true
 	}
 	// ベア形式: ::add-mask::$NAME — NAME の直後が識別子文字でないことを確認
-	bareRe := regexp.MustCompile(`::add-mask::\$` + regexp.QuoteMeta(varName) + `($|[^A-Za-z0-9_])`)
-	return bareRe.MatchString(script)
+	return bareAddMaskRegex(varName).MatchString(script)
 }
 
 // offsetToPosition は script 内のバイトオフセットを ast.Position に変換する。
