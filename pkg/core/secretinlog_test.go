@@ -487,3 +487,185 @@ func TestSecretInLog_FixStep_SkipsWhenAlreadyMasked(t *testing.T) {
 		t.Errorf("FixStep should be a no-op when add-mask already present; script changed to %q", got)
 	}
 }
+
+// B3/T1: 複数の tainted 変数が同一 step 内で同時に echo される場合、
+// それぞれのアサイン直後に add-mask が正しく挿入され、hasAddMaskFor による二重挿入防止が機能することを検証する。
+func TestSecretInLog_AutoFix_MultipleVarsSimultaneousLeak(t *testing.T) {
+	t.Parallel()
+
+	original := "A=$(echo \"$SECRET_A\" | base64 -d)\n" +
+		"B=$(echo \"$SECRET_B\" | jq -r '.v')\n" +
+		"echo \"a=$A b=$B\""
+
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"secret_a": {
+				Name:  &ast.String{Value: "SECRET_A"},
+				Value: &ast.String{Value: "${{ secrets.A }}"},
+			},
+			"secret_b": {
+				Name:  &ast.String{Value: "SECRET_B"},
+				Value: &ast.String{Value: "${{ secrets.B }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if got := len(rule.Errors()); got != 2 {
+		t.Fatalf("errors = %d, want 2. details=%v", got, rule.Errors())
+	}
+
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	// A, B それぞれのアサイン直後に add-mask が入るはず。
+	if !strings.Contains(got, "A=$(echo \"$SECRET_A\" | base64 -d)\necho \"::add-mask::$A\"") {
+		t.Errorf("expected add-mask for $A placed after its assignment, got:\n%s", got)
+	}
+	if !strings.Contains(got, "B=$(echo \"$SECRET_B\" | jq -r '.v')\necho \"::add-mask::$B\"") {
+		t.Errorf("expected add-mask for $B placed after its assignment, got:\n%s", got)
+	}
+
+	// Fix 適用後に再度走査し、二重挿入ループや残留 leak が無いことを確認する。
+	postRule := NewSecretInLogRule()
+	postStep := &ast.Step{
+		Env:  step.Env,
+		Exec: &ast.ExecRun{Run: &ast.String{Value: got, Pos: &ast.Position{Line: 1, Col: 1}}},
+	}
+	if err := postRule.VisitJobPre(&ast.Job{Steps: []*ast.Step{postStep}}); err != nil {
+		t.Fatalf("post VisitJobPre: %v", err)
+	}
+	if n := len(postRule.Errors()); n != 0 {
+		t.Errorf("after fix, expected 0 leaks remaining, got %d: %v", n, postRule.Errors())
+	}
+	// 変数 A と B の add-mask 行がちょうど 1 回ずつであることを確認（二重挿入ではない）。
+	if c := strings.Count(got, "::add-mask::$A\""); c != 1 {
+		t.Errorf("expected exactly 1 add-mask for $A, got %d", c)
+	}
+	if c := strings.Count(got, "::add-mask::$B\""); c != 1 {
+		t.Errorf("expected exactly 1 add-mask for $B, got %d", c)
+	}
+}
+
+// T2: printf のフォーマット文字列そのものに tainted 変数が入るケースを検出できるか検証。
+func TestSecretInLog_Printf_FormatStringLeak(t *testing.T) {
+	t.Parallel()
+
+	// フォーマット文字列 ("$TOKEN") 内で tainted 変数が展開される。
+	script := "printf \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("printf with tainted format string should leak once, got %d: %v", got, rule.Errors())
+	}
+}
+
+// T3: workflow / job / step の 3 階層 env で同じ変数名 TOKEN が異なる secret を指すケース。
+// step env が最後に merge されるため、step env の origin で上書きされる仕様を確定化する。
+func TestSecretInLog_ThreeLevelEnv_OverrideSameName(t *testing.T) {
+	t.Parallel()
+
+	script := "echo \"$TOKEN\""
+
+	mkEnv := func(secretName string) *ast.Env {
+		return &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets." + secretName + " }}"},
+			},
+		}}
+	}
+
+	step := &ast.Step{
+		Env: mkEnv("STEP_TOKEN"),
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	job := &ast.Job{
+		Env:   mkEnv("JOB_TOKEN"),
+		Steps: []*ast.Step{step},
+	}
+	workflow := &ast.Workflow{
+		Env:  mkEnv("WF_TOKEN"),
+		Jobs: map[string]*ast.Job{"leak": job},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	errs := rule.Errors()
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 leak, got %d: %v", len(errs), errs)
+	}
+	// メッセージ末尾は step env の secret 名を origin として含むはず（3 階層で最後に merge される）。
+	if !strings.Contains(errs[0].Description, "secrets.STEP_TOKEN") {
+		t.Errorf("expected origin to be overridden by step env (secrets.STEP_TOKEN), got: %s", errs[0].Description)
+	}
+}
+
+// T4: shebang のみで他の行がないスクリプトに対する auto-fix 挙動の確認。
+// shellvar 経路は対象アサインが無いため fallthrough し、shebang 直後（2 行目）に add-mask が入る。
+func TestSecretInLog_AutoFix_ShebangOnlyScript(t *testing.T) {
+	t.Parallel()
+
+	// shebang 直後に tainted 環境変数を echo する最小ケース。
+	// TOKEN は env 由来 (origin: secrets.API) なので、shellvar 経路を通らず冒頭挿入パスに入る。
+	// shebang がある場合は shebang の直後（= 2 行目）に add-mask が挿入される。
+	original := "#!/usr/bin/env bash\necho \"$TOKEN\""
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: original, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	want := "#!/usr/bin/env bash\necho \"::add-mask::$TOKEN\"\necho \"$TOKEN\""
+	if got != want {
+		t.Errorf("shebang-only auto-fix: got %q, want %q", got, want)
+	}
+}
