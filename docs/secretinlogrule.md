@@ -9,7 +9,7 @@ weight: 1
 # bookSearchExclude: false
 ---
 
-### Secret In Log Rule Overview
+## Secret In Log Rule Overview
 
 The `secret-in-log` rule detects GitHub Actions workflow steps that print shell-derived secret values to build logs via `echo` or `printf`. GitHub Actions automatically masks the original `secrets.*` values in logs, but **does not mask derived values** produced by shell operations such as `jq`, `sed`, `awk`, `base64`, or command substitution. These derived values appear in plaintext in build logs.
 
@@ -40,7 +40,7 @@ GitHub Actions masks `${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}` but has no knowled
 
 **Detection Output:**
 
-```
+```text
 workflow.yaml:29:24: secret in log: variable $PRIVATE_KEY (origin: shellvar:GCP_SERVICE_ACCOUNT_KEY) is printed via 'echo' without masking.
 GitHub Actions only masks direct secrets.* values; values derived via shell expansion or tools like jq are not masked and will appear in plaintext in build logs.
 Add 'echo "::add-mask::$PRIVATE_KEY"' before any usage, or avoid printing the value.
@@ -78,9 +78,9 @@ Derived values flow through standard shell variable assignment and GitHub Action
 
 The rule performs taint propagation within a single `run` step:
 
-1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` (step-level or job-level `env`).
+1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all three scopes are merged, with step-level entries overriding the outer scopes on name conflict).
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
-3. **Sink detection** — `echo` or `printf` calls that reference a tainted variable without a preceding `::add-mask::` for that variable.
+3. **Sink detection** — `echo` or `printf` calls that reference a tainted variable without a preceding `::add-mask::` for that variable. Masks that appear *after* the sink are not considered protective, since GitHub Actions applies masking only to subsequent log output.
 
 ### Auto-Fix
 
