@@ -27,15 +27,22 @@ A secret value is extracted via `jq`, stored in a shell variable, and then print
 
 ## sisakulint Detection Status
 
-### Why Not Detected
+### Gap in Prior Rules (Historical)
 
-sisakulint's `secret-exfiltration` rule detects secret transmission via network commands (`curl`, `wget`, `nc`, etc.), but does not cover `echo` output to stdout.
+sisakulint's `secret-exfiltration` rule detected secret transmission via network commands (`curl`, `wget`, `nc`, etc.), but did not cover `echo` output to stdout.
 
-The `unmasked-secret-exposure` rule detects unmasked secrets derived from `fromJson()` in GitHub Actions expressions, but does not track shell-level `jq` derivation.
+The `unmasked-secret-exposure` rule detected unmasked secrets derived from `fromJson()` in GitHub Actions expressions, but did not track shell-level `jq` derivation.
 
-## Future Improvement Ideas
+The `secret-in-log` rule was added (Issue #388) to close this gap.
 
-- Detect `echo $SECRET_VAR` patterns in shell scripts
-- Track `jq`-derived values from secrets environment variables
+## Detection Implementation
 
-## Verdict: NOT DETECTED
+The `secret-in-log` rule tracks taint propagation from `${{ secrets.* }}`-sourced
+environment variables through shell variable assignments (including command
+substitutions like `$(jq ...)`) and reports `echo`/`printf` calls that reference
+any tainted variable. The auto-fix inserts `echo "::add-mask::$VAR"` before the
+first use.
+
+## Verdict: DETECTED
+
+Detected by the `secret-in-log` rule (added in response to Issue #388).

@@ -40,6 +40,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `ai-action-unsafe-sandbox-safe.yaml` | Safe AI action sandbox configuration (`safety-strategy: drop-sudo`) |
 | `ai-action-execution-order-vulnerable.yaml` | AI action followed by additional steps (compromised state risk) |
 | `ai-action-execution-order-safe.yaml` | AI action as the last step in the job (recommended pattern) |
+| `secret-in-log-vulnerable.yaml` | Secrets leaked to build logs via `echo`/`printf` of shell variables derived from secret-sourced environment variables (chained assignment, direct echo patterns) |
+| `secret-in-log-safe.yaml` | Safe counterparts using `::add-mask::` before printing derived variables, unrelated echo, and no-echo (curl-only) patterns |
 
 ### Usage
 

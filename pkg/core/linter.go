@@ -555,6 +555,7 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		NewUnpinnedImagesRule(),                                       // Detects container images not pinned by SHA256 digest
 		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
+		NewSecretInLogRule(),                                          // Detects secret values printed to build logs via echo/printf of derived shell vars (single-step scope; cross-job follow-up tracked separately)
 		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations

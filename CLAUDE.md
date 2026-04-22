@@ -169,6 +169,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **ArgumentInjectionMediumRule** - Detects argument injection in command-line args with normal triggers (auto-fix supported)
 - **RequestForgeryCriticalRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with privileged triggers (auto-fix supported)
 - **RequestForgeryMediumRule** - Detects SSRF vulnerabilities when untrusted input is used in network requests with normal triggers (auto-fix supported)
+- **SecretInLogRule** - Detects secret values printed to build logs via `echo`/`printf` of shell variables derived from secret-sourced environment variables (e.g., `jq`-derived values) (auto-fix supported)
 - **CacheBloatRule** - Detects cache bloat risk with actions/cache/restore and actions/cache/save without proper conditions (auto-fix supported)
 - **AIActionUnrestrictedTriggerRule** - Detects AI agent actions (claude-code-action, etc.) configured with `allowed_non_write_users: "*"` allowing any GitHub user to trigger AI execution (Clinejection attack pattern)
 - **AIActionExcessiveToolsRule** - Detects AI agent actions with dangerous tools (Bash/Write/Edit) enabled in workflows triggered by untrusted users (issues, issue_comment, discussion) (Clinejection attack pattern)
@@ -301,6 +302,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 - **ArgumentInjectionRule** (`argumentinjection.go`) - Moves untrusted input to environment variables and adds `--` end-of-options marker
 - **RequestForgeryRule** (`requestforgery.go`) - Moves untrusted input to environment variables for network commands
 - **CacheBloatRule** (`cachebloatrule.go`) - Adds `if: github.event_name != 'push'` to restore and `if: github.event_name == 'push'` to save steps
+- **SecretInLogRule** (`secretinlog.go`) - Inserts `echo "::add-mask::$VAR"` before any usage of tainted shell variables
 
 ## Recent Security Enhancements
 
