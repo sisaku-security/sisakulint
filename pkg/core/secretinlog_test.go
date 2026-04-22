@@ -894,6 +894,87 @@ func TestSecretInLog_StderrRedirect_StillFlagged(t *testing.T) {
 	}
 }
 
+// Issue #436: sink 拡張 — tee / cat / dd / here-string / heredoc / >&2 を追加検出対象にする。
+func TestSecretInLog_SinkExpansion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		runScript  string
+		wantErrors int
+	}{
+		// >&2 (DplOut) — stderr はログに出力されるため検出対象。
+		{
+			name:       "echo redirect to stderr via DplOut",
+			runScript:  "echo \"$TOKEN\" >&2",
+			wantErrors: 1,
+		},
+		{
+			name:       "printf redirect to stderr via DplOut",
+			runScript:  "printf '%s' \"$TOKEN\" >&2",
+			wantErrors: 1,
+		},
+		// here-string — cat/tee/dd が受け取り stdout に出すため検出対象。
+		{
+			name:       "cat with here-string",
+			runScript:  "cat <<< \"$TOKEN\"",
+			wantErrors: 1,
+		},
+		{
+			name:       "tee with here-string to /dev/stderr",
+			runScript:  "tee /dev/stderr <<< \"$TOKEN\"",
+			wantErrors: 1,
+		},
+		{
+			name:       "dd with here-string",
+			runScript:  "dd <<< \"$TOKEN\"",
+			wantErrors: 1,
+		},
+		// heredoc — 本文内で taint 変数参照がある場合は stdout に出るため検出対象。
+		{
+			name:       "cat with heredoc referencing tainted var",
+			runScript:  "cat <<EOF\nkey=$TOKEN\nEOF",
+			wantErrors: 1,
+		},
+		// 安全: stdout をファイルに逸らしている場合は検出しない。
+		{
+			name:       "cat here-string with stdout redirected to file",
+			runScript:  "cat <<< \"$TOKEN\" > out.txt",
+			wantErrors: 0,
+		},
+		{
+			name:       "tee with here-string into file only (goes to stdout too, still flagged)",
+			runScript:  "tee file.txt <<< \"$TOKEN\"",
+			wantErrors: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != tc.wantErrors {
+				t.Errorf("script %q: got %d errors, want %d. details=%v",
+					tc.runScript, got, tc.wantErrors, rule.Errors())
+			}
+		})
+	}
+}
+
 // Finding 6: `printf -v VAR ...` は stdout を出さず指定変数に格納するため検出対象外。
 func TestSecretInLog_PrintfDashV_NotFlagged(t *testing.T) {
 	t.Parallel()

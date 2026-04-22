@@ -156,9 +156,15 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
 			return false
 		}
-		// stdout を「ログに出ない先」へリダイレクトしている Stmt は子ノードごとスキップ。
-		if stmt, isStmt := node.(*syntax.Stmt); isStmt && stmtRedirectsStdoutAwayFromLog(stmt) {
-			return false
+		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
+			// stdout を「ログに出ない先」へリダイレクトしている Stmt は子ノードごとスキップ。
+			if stmtRedirectsStdoutAwayFromLog(stmt) {
+				return false
+			}
+			// cat / tee / dd の here-string (<<<) や heredoc (<<) を経由した
+			// 漏洩は Stmt の Redirs 側に taint があるため、ここで検査する。
+			rule.collectRedirectSinkLeaks(stmt, tainted, script, runStr, &leaks)
+			return true
 		}
 		call, ok := node.(*syntax.CallExpr)
 		if !ok || len(call.Args) == 0 {
@@ -178,6 +184,61 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 		return true
 	})
 	return leaks
+}
+
+// collectRedirectSinkLeaks は cat / tee / dd のように stdin をそのまま stdout に
+// 出力するコマンドに対し、here-string (<<<) や heredoc (<<) で渡される本文内の
+// tainted 変数参照を漏洩として収集する。
+//
+// 例:
+//
+//	cat <<< "$TOKEN"
+//	tee /dev/stderr <<< "$TOKEN"
+//	cat <<EOF
+//	key=$TOKEN
+//	EOF
+//
+// stdout をファイルにリダイレクトしている場合は呼び出し元の
+// stmtRedirectsStdoutAwayFromLog で既に除外済み。tee のように常に stdout へも書く
+// コマンドは file 引数があっても引き続きログに出るため flag する。
+func (rule *SecretInLogRule) collectRedirectSinkLeaks(
+	stmt *syntax.Stmt,
+	tainted map[string]taintEntry,
+	script string,
+	runStr *ast.String,
+	leaks *[]echoLeakOccurrence,
+) {
+	if stmt == nil || stmt.Cmd == nil {
+		return
+	}
+	call, ok := stmt.Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return
+	}
+	cmdName := firstWordLiteral(call.Args[0])
+	switch cmdName {
+	case "cat", "tee", "dd":
+		// proceed
+	default:
+		return
+	}
+	for _, r := range stmt.Redirs {
+		if r == nil {
+			continue
+		}
+		switch r.Op {
+		case syntax.WordHdoc:
+			// here-string: コマンド <<< word — Word に taint があればログに出る
+			if r.Word != nil {
+				rule.collectLeakedVars(r.Word, tainted, script, runStr, cmdName, leaks)
+			}
+		case syntax.Hdoc, syntax.DashHdoc:
+			// heredoc: コマンド << EOF ... EOF — 本文は Hdoc に格納される
+			if r.Hdoc != nil {
+				rule.collectLeakedVars(r.Hdoc, tainted, script, runStr, cmdName, leaks)
+			}
+		}
+	}
 }
 
 // stmtRedirectsStdoutAwayFromLog は Stmt の Redirs に stdout をファイルへ送るものが

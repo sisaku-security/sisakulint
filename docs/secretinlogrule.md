@@ -80,7 +80,11 @@ The rule performs taint propagation within a single `run` step:
 
 1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all three scopes are merged, with step-level entries overriding the outer scopes on name conflict).
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
-3. **Sink detection** — `echo` or `printf` calls that reference a tainted variable without a preceding `::add-mask::` for that variable. Masks that appear *after* the sink are not considered protective, since GitHub Actions applies masking only to subsequent log output.
+3. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
+   - `echo` / `printf` with a tainted argument
+   - `cat` / `tee` / `dd` receiving tainted data via here-string (`<<<`) or heredoc (`<<EOF ... EOF`)
+
+   Masks that appear *after* the sink are not considered protective, since GitHub Actions applies masking only to subsequent log output.
 
 #### Non-detection cases (not reported as leaks)
 
@@ -118,10 +122,9 @@ If an assignment and a sink share the same physical line as a compound statement
 
 ### Scope Limitations (MVP)
 
-- **Single-step scope only** — taint does not cross step boundaries or job outputs (`needs.*.outputs.*`); cross-job propagation is a planned follow-up.
-- **`echo` and `printf` only** — commands such as `tee`, `cat`, and `logger` are not yet detected.
-- **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up.
-- **Whole-script taint** — taint is currently computed as a set over the entire script, so a sink that syntactically precedes its variable's assignment may still be reported as a leak. Making the analysis order-aware is a planned follow-up (see `sisakulint-a5s`).
+- **Single-step scope only** — taint does not cross step boundaries or job outputs (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432 / #437).
+- **`logger` and pipe-consuming commands not yet covered** — `logger`, `xargs`, and similar sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream source if it is `echo`/`printf`, but the downstream command is not individually analyzed.
+- **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up (see #433).
 
 ### Related Rules
 
