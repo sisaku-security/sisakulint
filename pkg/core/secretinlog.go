@@ -34,6 +34,11 @@ type SecretInLogRule struct {
 	BaseRule
 	workflowEnvSecrets map[string]string // populated in VisitWorkflowPre from workflow-level env:
 	jobEnvSecrets      map[string]string // populated in VisitJobPre from job-level env:
+	// crossStepEnv は同一 Job 内で前 step が `$GITHUB_ENV` 経由で書き出した tainted な
+	// 環境変数を、後続 step の初期 taint source として引き継ぐためのマップ。
+	// VisitJobPre の冒頭でリセットされ、各 step 処理後に $GITHUB_ENV 書き込みから
+	// 追加される。クロスジョブ伝播は範囲外（follow-up issue）。
+	crossStepEnv map[string]string
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
@@ -419,8 +424,11 @@ func (rule *SecretInLogRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 // VisitJobPre は Job 内の各 Step を走査して secret 漏洩を検出する。
+// Job 開始時に crossStepEnv をリセットし、ステップを順次処理することで
+// 前 step の `$GITHUB_ENV` 書き込みを後続 step の taint source として引き継ぐ。
 func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
 	rule.jobEnvSecrets = rule.collectSecretEnvVars(node.Env)
+	rule.crossStepEnv = make(map[string]string)
 	for _, step := range node.Steps {
 		rule.checkStep(step)
 	}
@@ -448,6 +456,11 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	for k, v := range rule.jobEnvSecrets {
 		initialTainted[k] = v
 	}
+	// crossStepEnv（前 step の $GITHUB_ENV 経由で伝播した taint）を merge。
+	// step-level env より前に入れ、同名の場合は step-level が勝つようにする。
+	for k, v := range rule.crossStepEnv {
+		initialTainted[k] = v
+	}
 	for k, v := range rule.collectSecretEnvVars(step.Env) {
 		initialTainted[k] = v
 	}
@@ -467,6 +480,12 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	for _, leak := range leaks {
 		rule.reportLeak(leak)
 		rule.addAutoFixerForLeak(step, leak)
+	}
+
+	// この step の $GITHUB_ENV 書き込みから tainted な env var を抽出し、
+	// 後続 step の crossStepEnv に伝播させる。
+	for name, origin := range rule.collectGitHubEnvTaintWrites(file, tainted, script) {
+		rule.crossStepEnv[name] = origin
 	}
 }
 
@@ -626,6 +645,238 @@ func insertAfterAssignment(script, varName, addMaskLine string) (string, bool) {
 
 	updated := script[:insertPos] + indent + addMaskLine + "\n" + script[insertPos:]
 	return updated, true
+}
+
+// envAssignRe は `NAME=...` 形式の行先頭マッチ（heredoc 内 1 行用）。
+var envAssignRe = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_]*)=`)
+
+// envAssignPrefixRe は Lit の先頭から NAME= 部分を切り出す（heredoc 以外、echo/printf 引数用）。
+var envAssignPrefixRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)=`)
+
+// shellVarRefCache は 変数名 → `$NAME` / `${NAME}` の境界つき検出用 Regexp のキャッシュ。
+var shellVarRefCache sync.Map // map[string]*regexp.Regexp
+
+func shellVarRefRegex(varName string) *regexp.Regexp {
+	if v, ok := shellVarRefCache.Load(varName); ok {
+		return v.(*regexp.Regexp)
+	}
+	// $NAME（識別子境界）または ${NAME}（閉じブレース必須）
+	re := regexp.MustCompile(`\$\{` + regexp.QuoteMeta(varName) + `\}|\$` + regexp.QuoteMeta(varName) + `($|[^A-Za-z0-9_])`)
+	actual, _ := shellVarRefCache.LoadOrStore(varName, re)
+	return actual.(*regexp.Regexp)
+}
+
+// containsShellVarRef は文字列中に `$NAME` または `${NAME}` 形式で varName が参照されていれば true。
+func containsShellVarRef(s, varName string) bool {
+	return shellVarRefRegex(varName).MatchString(s)
+}
+
+// wordIsEnvVarRef は Word が単一の env 変数参照（$NAME / ${NAME} / "$NAME" / "${NAME}"）の場合に
+// その変数名を返し、それ以外は "" を返す。`$GITHUB_ENV` のリダイレクト先判定に使用する。
+func wordIsEnvVarRef(w *syntax.Word) string {
+	if w == nil || len(w.Parts) != 1 {
+		return ""
+	}
+	switch p := w.Parts[0].(type) {
+	case *syntax.ParamExp:
+		if p.Param != nil {
+			return p.Param.Value
+		}
+	case *syntax.DblQuoted:
+		if len(p.Parts) != 1 {
+			return ""
+		}
+		if pe, ok := p.Parts[0].(*syntax.ParamExp); ok && pe.Param != nil {
+			return pe.Param.Value
+		}
+	}
+	return ""
+}
+
+// stmtRedirectsToGitHubEnv は Stmt の Redirs に `> $GITHUB_ENV` / `>> $GITHUB_ENV` 系が
+// 含まれていれば true。書き込み先の Word が $GITHUB_ENV の参照であるかを AST で判定する。
+func stmtRedirectsToGitHubEnv(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	for _, r := range stmt.Redirs {
+		if r == nil {
+			continue
+		}
+		switch r.Op {
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
+		default:
+			continue
+		}
+		if r.N != nil && r.N.Value != "" && r.N.Value != "1" {
+			continue
+		}
+		if wordIsEnvVarRef(r.Word) == "GITHUB_ENV" {
+			return true
+		}
+	}
+	return false
+}
+
+// firstNameEqualsPrefix は Word の先頭 Lit 部分から `NAME=` 形式の NAME を取り出す。
+// 形式に一致しなければ "" を返す。DblQuoted / SglQuoted 内の先頭 Lit も対象とする。
+func firstNameEqualsPrefix(word *syntax.Word) string {
+	if word == nil || len(word.Parts) == 0 {
+		return ""
+	}
+	var s string
+	switch p := word.Parts[0].(type) {
+	case *syntax.Lit:
+		s = p.Value
+	case *syntax.DblQuoted:
+		if len(p.Parts) > 0 {
+			if lit, ok := p.Parts[0].(*syntax.Lit); ok {
+				s = lit.Value
+			}
+		}
+	case *syntax.SglQuoted:
+		s = p.Value
+	}
+	m := envAssignPrefixRe.FindStringSubmatch(s)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// collectGitHubEnvTaintWrites は `>> $GITHUB_ENV` / `> $GITHUB_ENV` へ書き込む statement を
+// 検索し、その中で tainted なシェル変数を参照して構築された `NAME=...` の NAME を抽出し、
+// `NAME -> origin` のマップを返す。対象コマンドは echo / printf / cat（heredoc）。
+//
+// 戻り値は後続 step の crossStepEnv に merge される。origin は後続 step での
+// 漏洩メッセージに表示される識別子（`secrets.X` or `shellvar:Y`）。
+func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
+	file *syntax.File,
+	tainted map[string]taintEntry,
+	script string,
+) map[string]string {
+	result := make(map[string]string)
+	if file == nil {
+		return result
+	}
+	syntax.Walk(file, func(node syntax.Node) bool {
+		stmt, ok := node.(*syntax.Stmt)
+		if !ok {
+			return true
+		}
+		if !stmtRedirectsToGitHubEnv(stmt) {
+			return true
+		}
+		call, ok := stmt.Cmd.(*syntax.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		cmdName := firstWordLiteral(call.Args[0])
+		switch cmdName {
+		case "echo", "printf":
+			rule.collectEchoEnvWrites(call, tainted, result)
+		case "cat":
+			rule.collectHeredocEnvWrites(stmt, tainted, script, result)
+		}
+		return true
+	})
+	return result
+}
+
+// collectEchoEnvWrites は `echo "NAME=$VAL" >> $GITHUB_ENV` 形式の引数から
+// NAME と origin を抽出して result に追加する。
+//
+// MVP: 第 1 引数の先頭 Lit から NAME を取り出し、全引数を走査して最初に見つかった
+// tainted 変数の origin を引き継ぐ。複数 NAME=... が 1 行に並ぶケース（GitHub Actions が
+// スペース含みの値として解釈するため実質 1 assignment）は第 1 引数の NAME のみを記録する。
+func (rule *SecretInLogRule) collectEchoEnvWrites(
+	call *syntax.CallExpr,
+	tainted map[string]taintEntry,
+	result map[string]string,
+) {
+	if len(call.Args) < 2 {
+		return
+	}
+	name := firstNameEqualsPrefix(call.Args[1])
+	if name == "" {
+		return
+	}
+	var firstVar string
+	for _, arg := range call.Args[1:] {
+		if v := rule.firstTaintedVarIn(arg, tainted); v != "" {
+			firstVar = v
+			break
+		}
+	}
+	if firstVar == "" {
+		return
+	}
+	// origin は「起点の secret 名」を保持する。tainted[firstVar].origin は
+	// 既に "secrets.X" または "shellvar:Y" の形を持つため、そのまま引き継ぐ。
+	result[name] = tainted[firstVar].origin
+}
+
+// collectHeredocEnvWrites は `cat <<EOF >> $GITHUB_ENV ... EOF` 形式の heredoc 本文を
+// 行単位で走査し、`NAME=...` 行のうち `...` 内で tainted 変数が参照されているものを
+// result に追加する。heredoc 本文の取得は script のバイトオフセットから行う。
+func (rule *SecretInLogRule) collectHeredocEnvWrites(
+	stmt *syntax.Stmt,
+	tainted map[string]taintEntry,
+	script string,
+	result map[string]string,
+) {
+	for _, r := range stmt.Redirs {
+		if r == nil {
+			continue
+		}
+		if r.Op != syntax.Hdoc && r.Op != syntax.DashHdoc {
+			continue
+		}
+		if r.Hdoc == nil {
+			continue
+		}
+		start := int(r.Hdoc.Pos().Offset())
+		end := int(r.Hdoc.End().Offset())
+		if start < 0 || end > len(script) || start >= end {
+			continue
+		}
+		body := script[start:end]
+		// 変数名の走査順を決定的にしたいので、tainted のキーを sort する意味は薄い
+		// （「いずれかの tainted 参照があれば 1 件記録」が仕様のため任意で良い）。
+		// ただし map iteration の非決定性でテストが不安定にならないよう、
+		// 明示的に tainted 集合からの探索順は body 上で「最初に現れた $REF」優先にする。
+		for _, line := range strings.Split(body, "\n") {
+			m := envAssignRe.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			name := m[1]
+			origin := rule.firstTaintedRefOrigin(line, tainted)
+			if origin == "" {
+				continue
+			}
+			result[name] = origin
+		}
+	}
+}
+
+// firstTaintedRefOrigin は行内に現れる最初の tainted 変数参照の origin を返す。
+// 現れる位置（バイトオフセット）が最小のものを選ぶことで map iteration の
+// 非決定性を回避する。
+func (rule *SecretInLogRule) firstTaintedRefOrigin(line string, tainted map[string]taintEntry) string {
+	minPos := -1
+	var origin string
+	for name, entry := range tainted {
+		loc := shellVarRefRegex(name).FindStringIndex(line)
+		if loc == nil {
+			continue
+		}
+		if minPos < 0 || loc[0] < minPos {
+			minPos = loc[0]
+			origin = entry.origin
+		}
+	}
+	return origin
 }
 
 func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]string {
