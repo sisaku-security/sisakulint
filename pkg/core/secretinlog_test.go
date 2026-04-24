@@ -1036,3 +1036,310 @@ func TestSecretInLog_AutoFix_ShebangOnlyScript(t *testing.T) {
 		t.Errorf("shebang-only auto-fix: got %q, want %q", got, want)
 	}
 }
+
+// Issue #437: cross-step taint — $GITHUB_ENV 経由で前 step からの taint を後続 step が引き継ぐ。
+// 以降のテストは "前 step で tainted な値を $GITHUB_ENV に書き込み、後続 step で echo する"
+// ケースが検出されることを保証するためのもの。
+
+// mkRunStepForTest は env/run を受け取って最小の *ast.Step を組み立てるテストヘルパ。
+// envVars の key は小文字化された map key（ast 仕様どおり）、Name.Value に実際の env var 名を入れる。
+func mkRunStepForTest(t *testing.T, envVars map[string]string, script string) *ast.Step {
+	t.Helper()
+	var env *ast.Env
+	if len(envVars) > 0 {
+		vars := map[string]*ast.EnvVar{}
+		for name, val := range envVars {
+			vars[strings.ToLower(name)] = &ast.EnvVar{
+				Name:  &ast.String{Value: name},
+				Value: &ast.String{Value: val},
+			}
+		}
+		env = &ast.Env{Vars: vars}
+	}
+	return &ast.Step{
+		Env: env,
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+}
+
+func TestSecretInLog_CrossStep_BasicEnvWrite(t *testing.T) {
+	t.Parallel()
+
+	// step1: tainted な derived 値を $GITHUB_ENV へ書き込む
+	// step2: 引き継がれた env var $TOKEN を echo → leak として検出されるべき
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.key')\necho \"TOKEN=$DERIVED\" >> $GITHUB_ENV",
+	)
+	step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 cross-step leak, got %d: %v", got, rule.Errors())
+	}
+	// 検出メッセージは後続 step 側の sink 位置に対して出るはず。
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "TOKEN") {
+		t.Errorf("leak message should mention $TOKEN, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossStep_QuotedGithubEnvVariants(t *testing.T) {
+	t.Parallel()
+
+	// `$GITHUB_ENV` の書き方ブレ (`"$GITHUB_ENV"`, `${GITHUB_ENV}`) に対応する。
+	cases := []struct {
+		name   string
+		script string
+	}{
+		{name: "quoted", script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho \"TOKEN=$DERIVED\" >> \"$GITHUB_ENV\""},
+		{name: "braced", script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho \"TOKEN=$DERIVED\" >> ${GITHUB_ENV}"},
+		{name: "quoted-braced", script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho \"TOKEN=$DERIVED\" >> \"${GITHUB_ENV}\""},
+		{name: "overwrite single >", script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho \"TOKEN=$DERIVED\" > $GITHUB_ENV"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step1 := mkRunStepForTest(t,
+				map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+				tc.script,
+			)
+			step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+			job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(job); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("%s: expected 1 cross-step leak, got %d: %v", tc.name, got, rule.Errors())
+			}
+		})
+	}
+}
+
+func TestSecretInLog_CrossStep_HeredocEnvWrite(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\ncat <<EOF >> $GITHUB_ENV\nTOKEN=$DERIVED\nEOF",
+	)
+	step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("heredoc cross-step: expected 1 leak, got %d: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_EnvWriteWithoutTaintIsIgnored(t *testing.T) {
+	t.Parallel()
+
+	// $GITHUB_ENV に書き込んでいるが値が tainted でないため、後続 step の echo は leak ではない。
+	step1 := mkRunStepForTest(t, nil,
+		"VALUE=\"hello\"\necho \"GREETING=$VALUE\" >> $GITHUB_ENV",
+	)
+	step2 := mkRunStepForTest(t, nil, "echo \"$GREETING\"")
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("non-tainted env write must not propagate; got %d errors: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_ChainedSteps(t *testing.T) {
+	t.Parallel()
+
+	// step1 で TOKEN に書き出し、step2 でさらに DERIVED2 を作り $GITHUB_ENV へ、step3 で echo。
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"TOKEN=$D\" >> $GITHUB_ENV",
+	)
+	step2 := mkRunStepForTest(t, nil,
+		"D2=\"$TOKEN-suffix\"\necho \"TOKEN2=$D2\" >> $GITHUB_ENV",
+	)
+	step3 := mkRunStepForTest(t, nil, "echo \"$TOKEN2\"")
+	job := &ast.Job{Steps: []*ast.Step{step1, step2, step3}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	// step3 で $TOKEN2 が leak 1 件として検出されるはず。
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("chained cross-step: expected 1 leak on step3, got %d: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_TaintDoesNotCrossJob(t *testing.T) {
+	t.Parallel()
+
+	// job A で $GITHUB_ENV に書き込まれた taint は job B には伝播しない。
+	// （実装上は VisitJobPre 呼び出しごとに crossStepEnv がリセットされる前提）。
+	stepA := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"TOKEN=$D\" >> $GITHUB_ENV",
+	)
+	stepB := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+	jobA := &ast.Job{Steps: []*ast.Step{stepA}}
+	jobB := &ast.Job{Steps: []*ast.Step{stepB}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(jobA); err != nil {
+		t.Fatalf("VisitJobPre(A): %v", err)
+	}
+	if err := rule.VisitJobPre(jobB); err != nil {
+		t.Fatalf("VisitJobPre(B): %v", err)
+	}
+	// jobB 側では未知変数なので leak は発生しないはず。
+	// jobA 側は $GITHUB_ENV への書き込みのみで echo sink は無いので leak 0。
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("cross-job propagation must not happen; got %d leaks: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_GithubOutputDoesNotPropagate(t *testing.T) {
+	t.Parallel()
+
+	// $GITHUB_OUTPUT は後続 step の env var にはならないため、cross-step taint の対象外。
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("GITHUB_OUTPUT write must not propagate as env taint; got %d: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_StepEnvOverridesCrossStep(t *testing.T) {
+	t.Parallel()
+
+	// step1 で TOKEN=tainted を GITHUB_ENV に書く。
+	// step2 は step-level env で TOKEN を untrusted ではない値に上書きする想定なので、
+	// step2 の origin は step env 側が使われる。ここでは step2 env 自身も secrets 参照を含むため
+	// leak は発生するが、origin が step env 側の secret 名であることを確認する。
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.UPSTREAM }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"TOKEN=$D\" >> $GITHUB_ENV",
+	)
+	step2 := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ secrets.STEP_LEVEL }}"},
+		"echo \"$TOKEN\"",
+	)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	errs := rule.Errors()
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 leak in step2, got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Description, "secrets.STEP_LEVEL") {
+		t.Errorf("expected step-env origin (secrets.STEP_LEVEL) to win over cross-step origin, got: %s", errs[0].Description)
+	}
+}
+
+// tee / dd の heredoc 経由で $GITHUB_ENV に書き込むケースでも cross-step 伝播する。
+func TestSecretInLog_CrossStep_TeeHeredocEnvWrite(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		script string
+	}{
+		{
+			name:   "tee heredoc with append redirect",
+			script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\ntee <<EOF >> $GITHUB_ENV\nTOKEN=$DERIVED\nEOF",
+		},
+		{
+			name:   "dd heredoc with append redirect",
+			script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\ndd <<EOF >> $GITHUB_ENV\nTOKEN=$DERIVED\nEOF",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step1 := mkRunStepForTest(t,
+				map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+				tc.script,
+			)
+			step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+			job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(job); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("%s: expected 1 cross-step leak via %s heredoc, got %d: %v", tc.name, tc.name, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// echo の短いオプション (`-n`, `-e`, `-E`) が先頭にある場合でも cross-step 伝播を検出する。
+// printf のフォーマット指定子 (`%s\n`) 先頭も対象。
+func TestSecretInLog_CrossStep_LeadingOptionBeforeNameEquals(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		script string
+	}{
+		{
+			name:   "echo -n",
+			script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho -n \"TOKEN=$DERIVED\" >> $GITHUB_ENV",
+		},
+		{
+			name:   "echo -e",
+			script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho -e \"TOKEN=$DERIVED\" >> $GITHUB_ENV",
+		},
+		{
+			name:   "echo -nE combined",
+			script: "DERIVED=$(echo \"$SECRET_JSON\" | jq -r '.k')\necho -nE \"TOKEN=$DERIVED\" >> $GITHUB_ENV",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step1 := mkRunStepForTest(t,
+				map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+				tc.script,
+			)
+			step2 := mkRunStepForTest(t, nil, "echo \"$TOKEN\"")
+			job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(job); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("%s: expected 1 cross-step leak, got %d: %v", tc.name, got, rule.Errors())
+			}
+		})
+	}
+}

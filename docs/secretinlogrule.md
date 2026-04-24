@@ -76,11 +76,13 @@ Derived values flow through standard shell variable assignment and GitHub Action
 
 ### Detection Logic
 
-The rule performs taint propagation within a single `run` step:
+The rule performs taint propagation within a single `run` step, and additionally propagates
+taint across steps that belong to the same job via `$GITHUB_ENV`:
 
-1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all three scopes are merged, with step-level entries overriding the outer scopes on name conflict).
+1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all four scopes — workflow / job / cross-step / step — are merged, with step-level entries overriding the others on name conflict).
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
-3. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
+3. **Cross-step propagation via `$GITHUB_ENV`** — if a tainted shell variable is written to `$GITHUB_ENV` (via `echo "NAME=$VAR" >> $GITHUB_ENV`, `echo "NAME=$VAR" > $GITHUB_ENV`, or `cat <<EOF >> $GITHUB_ENV ... EOF`), the environment variable `NAME` becomes tainted for subsequent steps in the same job. Cross-*job* propagation (`needs.*.outputs.*`) and reusable-workflow propagation are separate follow-up items.
+4. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
    - `echo` / `printf` with a tainted argument
    - `cat` / `tee` / `dd` receiving tainted data via here-string (`<<<`) or heredoc (`<<EOF ... EOF`)
 
@@ -120,9 +122,31 @@ run: |
 
 If an assignment and a sink share the same physical line as a compound statement (e.g., `KEY=$(...); echo "$KEY"`), the rule cannot safely locate an insertion point between them from the shell AST alone. In that case the rule reports the warning **but leaves the script unchanged**; the user is expected to split the compound onto multiple lines and rerun `-fix on`, or add `::add-mask::` manually.
 
+### Cross-step propagation example
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+    steps:
+      - name: Derive and export via GITHUB_ENV
+        run: |
+          DERIVED=$(echo "$GCP_SERVICE_ACCOUNT_KEY" | jq -r '.access_token')
+          echo "TOKEN=$DERIVED" >> $GITHUB_ENV
+      - name: Leak propagated token
+        run: |
+          echo "got token: $TOKEN"   # flagged (origin: shellvar:GCP_SERVICE_ACCOUNT_KEY)
+```
+
+The first step's derivation (`DERIVED`) is tainted, and writing `TOKEN=$DERIVED` to `$GITHUB_ENV`
+marks `TOKEN` as a tainted environment variable for the next step. The next step's `echo "$TOKEN"`
+is therefore flagged even though neither the step nor the job declares `TOKEN` in `env:`.
+
 ### Scope Limitations (MVP)
 
-- **Single-step scope only** — taint does not cross step boundaries or job outputs (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432 / #437).
+- **Same-job scope only** — cross-step taint is tracked within a single job via `$GITHUB_ENV`. Taint does not cross *job* boundaries (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432).
 - **`logger` and pipe-consuming commands not yet covered** — `logger`, `xargs`, and similar sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream source if it is `echo`/`printf`, but the downstream command is not individually analyzed.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up (see #433).
 
