@@ -103,4 +103,4 @@ prev step の script
 - [x] Task 3 (REFACTOR)
 - [x] Task 4 (docs/example)
 - [x] Task 5 (CLAUDE.md)
-- [ ] Task 6 (lint/test/commit)
+- [x] Task 6 (lint/test/commit)
