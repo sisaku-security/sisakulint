@@ -666,11 +666,6 @@ func shellVarRefRegex(varName string) *regexp.Regexp {
 	return actual.(*regexp.Regexp)
 }
 
-// containsShellVarRef は文字列中に `$NAME` または `${NAME}` 形式で varName が参照されていれば true。
-func containsShellVarRef(s, varName string) bool {
-	return shellVarRefRegex(varName).MatchString(s)
-}
-
 // wordIsEnvVarRef は Word が単一の env 変数参照（$NAME / ${NAME} / "$NAME" / "${NAME}"）の場合に
 // その変数名を返し、それ以外は "" を返す。`$GITHUB_ENV` のリダイレクト先判定に使用する。
 func wordIsEnvVarRef(w *syntax.Word) string {
@@ -775,7 +770,11 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 		switch cmdName {
 		case "echo", "printf":
 			rule.collectEchoEnvWrites(call, tainted, result)
-		case "cat":
+		case "cat", "tee", "dd":
+			// heredoc 経由で `>> $GITHUB_ENV` に流し込むパターン。
+			// tee/dd も stdin を受け取って stdout（もしくは file 引数）に流すので
+			// `cmd <<EOF >> $GITHUB_ENV ... EOF` 形式で taint を書き込みうる。
+			// sink 検出側 (collectRedirectSinkLeaks) との対称性を保つ。
 			rule.collectHeredocEnvWrites(stmt, tainted, script, result)
 		}
 		return true
@@ -786,9 +785,12 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 // collectEchoEnvWrites は `echo "NAME=$VAL" >> $GITHUB_ENV` 形式の引数から
 // NAME と origin を抽出して result に追加する。
 //
-// MVP: 第 1 引数の先頭 Lit から NAME を取り出し、全引数を走査して最初に見つかった
-// tainted 変数の origin を引き継ぐ。複数 NAME=... が 1 行に並ぶケース（GitHub Actions が
-// スペース含みの値として解釈するため実質 1 assignment）は第 1 引数の NAME のみを記録する。
+// 先頭が `-n`/`-e`/`-E` などの echo オプションまたは `printf` のフォーマット指定子
+// (`%s\n` 等) で始まる場合はそれらをスキップし、最初に `NAME=` 形式と一致する Word
+// を NAME 候補として扱う。
+//
+// 複数 NAME=... が 1 行に並ぶケース（GitHub Actions がスペース含みの値として解釈する
+// ため実質 1 assignment）は最初に一致した NAME のみを記録する。
 func (rule *SecretInLogRule) collectEchoEnvWrites(
 	call *syntax.CallExpr,
 	tainted map[string]taintEntry,
@@ -797,12 +799,32 @@ func (rule *SecretInLogRule) collectEchoEnvWrites(
 	if len(call.Args) < 2 {
 		return
 	}
-	name := firstNameEqualsPrefix(call.Args[1])
-	if name == "" {
+	nameArgIdx := -1
+	var name string
+	for i := 1; i < len(call.Args); i++ {
+		lit := firstWordLiteral(call.Args[i])
+		// `-` 単独 (stdin 指定) は NAME= にはなり得ないが、スキップせずに探索を進める。
+		if strings.HasPrefix(lit, "-") && lit != "-" {
+			// 短いオプション群 (`-n`, `-e`, `-nE` 等) または long option を飛ばして次へ。
+			continue
+		}
+		if n := firstNameEqualsPrefix(call.Args[i]); n != "" {
+			name = n
+			nameArgIdx = i
+			break
+		}
+		// printf のフォーマット指定子 (`%s\n` など) は Lit としてリテラル値を持つ。
+		// NAME= 形式でなければ次の引数で NAME= を探す。
+		if strings.Contains(lit, "%") {
+			continue
+		}
+		// それ以外の Lit (例: `--`) は option 終端とみなし、次の arg を NAME 候補にする。
+	}
+	if name == "" || nameArgIdx < 0 {
 		return
 	}
 	var firstVar string
-	for _, arg := range call.Args[1:] {
+	for _, arg := range call.Args[nameArgIdx:] {
 		if v := rule.firstTaintedVarIn(arg, tainted); v != "" {
 			firstVar = v
 			break
