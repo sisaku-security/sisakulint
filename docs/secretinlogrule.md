@@ -79,8 +79,8 @@ Derived values flow through standard shell variable assignment and GitHub Action
 The rule performs taint propagation within a single `run` step, and additionally propagates
 taint across steps that belong to the same job via `$GITHUB_ENV`:
 
-1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all four scopes — workflow / job / cross-step / step — are merged, with step-level entries overriding the others on name conflict).
-2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`).
+1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all four scopes — workflow / job / cross-step / step — are merged, with step-level entries overriding the others on name conflict; cross-step entries propagated from previous steps are also overridden by step-level `env:` on the same name).
+2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`). Propagation is **order-aware**: a single forward pass records the byte offset of each assignment, and sinks that appear *before* the assignment are not flagged (avoids false positives on `a=1; echo $a; a=$SECRET`). Environment-sourced variables are treated as set before the script begins (offset `-1`) and always considered valid.
 3. **Cross-step propagation via `$GITHUB_ENV`** — if a tainted shell variable is written to `$GITHUB_ENV` (via `echo "NAME=$VAR" >> $GITHUB_ENV`, `echo "NAME=$VAR" > $GITHUB_ENV`, or `cat <<EOF >> $GITHUB_ENV ... EOF`), the environment variable `NAME` becomes tainted for subsequent steps in the same job. Cross-*job* propagation (`needs.*.outputs.*`) and reusable-workflow propagation are separate follow-up items.
 4. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
    - `echo` / `printf` with a tainted argument
@@ -90,11 +90,28 @@ taint across steps that belong to the same job via `$GITHUB_ENV`:
 
 #### Non-detection cases (not reported as leaks)
 
-The following patterns are intentionally excluded from detection because their output does not reach the build log:
+The following patterns are intentionally excluded from detection because their output does not reach *the current step's* build log directly:
 
-- **Stdout redirected to a file** — `echo "$TOKEN" >> "$GITHUB_OUTPUT"`, `echo "$TOKEN" > secret.txt`, `echo "$TOKEN" 1> out.txt` etc. (redirects to `/dev/stderr`, `/dev/stdout`, `/dev/tty`, or `/dev/fd/{1,2}` are *not* excluded because they are still shown in the log.)
+- **Stdout redirected to a file** — `echo "$TOKEN" > secret.txt`, `echo "$TOKEN" 1> out.txt` etc. Redirects to `/dev/stderr`, `/dev/stdout`, `/dev/tty`, or `/dev/fd/{1,2}` are *not* excluded because they are still shown in the log.
+- **Stdout redirected to `$GITHUB_OUTPUT` / `$GITHUB_STEP_SUMMARY`** — the current step's log does not receive the value, so no warning is raised for the redirect itself.
+  - However **the value is not gone**: writes to `$GITHUB_OUTPUT` become `steps.<id>.outputs.<name>` and will leak if a subsequent step does `run: echo ${{ steps.x.outputs.TOKEN }}`, and writes to `$GITHUB_STEP_SUMMARY` are rendered in the job summary UI. Downstream template-expression leaks and summary-UI leaks are **out of scope** for this rule and are not tracked.
 - **`printf -v VAR ...`** — captures to a shell variable instead of printing.
 - **Inside command substitutions** — `VAR=$(echo "$SECRET")` does not leak because the inner stdout is captured by `$(...)`.
+
+#### Patterns the rule does not analyze at all (known blind spots)
+
+These are real leakage paths that this rule does **not** currently detect. They are listed here so users do not assume a clean report means "no secret ever reaches a log":
+
+- **Shell trace mode (`set -x` / `set -o xtrace` / `PS4`)** — when trace is enabled, bash prints every expanded command to stderr, which goes to the build log. Any command referencing a tainted variable leaks under trace mode. The rule only looks at `echo` / `printf` / `cat` / `tee` / `dd`, so trace-mode leaks are not flagged.
+- **File-based cross-step leakage (non-`$GITHUB_ENV`)** — `echo "$VAL" > /tmp/x` in one step followed by `cat /tmp/x` in another step. Taint is not tracked across the filesystem, and `cat file` (without heredoc / here-string) is not treated as a sink.
+- **Downstream use of `steps.<id>.outputs.*`** — see the `$GITHUB_OUTPUT` note above. The rule does not follow template-expression references between steps.
+- **Composite actions and JavaScript/Docker actions (`uses:`)** — only `run:` scripts in the caller workflow are analyzed. A vulnerable `echo` inside an external action's internals is invisible to this rule.
+- **`eval` / `bash -c '...'` / `trap '...' ERR|EXIT` / shell functions** — sinks embedded inside a string argument to `eval` or `bash -c`, or inside `trap` handler bodies, are not parsed as `CallExpr` nodes and are therefore not recognized. Shell functions called with tainted arguments are likewise not inlined.
+- **Process substitution `>(cmd)` / `<(cmd)`** — sink detection does not descend into process substitutions.
+- **Environment-dumping commands** — `env`, `printenv`, `declare -p`, `set` (with no args), `export -p`, and similar commands print every environment variable (including tainted derived values written to `$GITHUB_ENV`) but are not sinks in this rule.
+- **Indirect expansion / arrays** — `${!VAR}` indirect expansion resolves a variable name stored in another variable, and array element reads (`${arr[i]}`) are not followed back to the array's source assignment. Taint on these forms can be missed.
+- **Pipeline downstream commands** — for `cmd1 | cmd2`, only `cmd1` is analyzed as a possible sink (when it is `echo` / `printf`). `cmd2` is not individually inspected.
+- **`logger`, `xargs`, `systemd-cat`, `wall`, and other log-emitting sinks** — not yet in the sink list.
 
 ### Auto-Fix
 
@@ -149,6 +166,9 @@ is therefore flagged even though neither the step nor the job declares `TOKEN` i
 - **Same-job scope only** — cross-step taint is tracked within a single job via `$GITHUB_ENV`. Taint does not cross *job* boundaries (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432).
 - **`logger` and pipe-consuming commands not yet covered** — `logger`, `xargs`, and similar sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream source if it is `echo`/`printf`, but the downstream command is not individually analyzed.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up (see #433).
+- **Composite / JS / Docker action internals are not parsed** — only `run:` blocks in the analyzed workflow are inspected. Leaks inside a `uses:`-referenced action are invisible.
+- **Shell trace mode, `eval` / `bash -c` strings, `trap` handlers, process substitution, env-dumping commands, and indirect expansion are not modeled** — see "Patterns the rule does not analyze at all" above.
+- **`$GITHUB_OUTPUT` downstream references are not tracked** — writes to `$GITHUB_OUTPUT` are excluded as non-sinks for the current step, but subsequent steps that expand `${{ steps.<id>.outputs.* }}` and print the result are not analyzed.
 
 ### Related Rules
 
