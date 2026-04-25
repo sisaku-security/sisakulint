@@ -21,8 +21,11 @@ import (
 const taintPlaceholderPrefix = "_SISAKULINT_E_"
 
 var (
-	// taintGhExprPattern matches `${{ expr }}` (no nested `}`).
-	taintGhExprPattern = regexp.MustCompile(`\$\{\{\s*([^}]+?)\s*\}\}`)
+	// taintGhExprPattern matches `${{ expr }}`. Uses `[\s\S]+?` (non-greedy
+	// across any character including `}`) so expressions with nested braces
+	// like `format('{0}', github.head_ref)` are captured in full instead of
+	// being truncated at the first `}`.
+	taintGhExprPattern = regexp.MustCompile(`\$\{\{\s*([\s\S]+?)\s*\}\}`)
 	// taintPlaceholderPattern matches placeholders inserted by sanitizeForShellParse.
 	taintPlaceholderPattern = regexp.MustCompile(`_SISAKULINT_E_\d+_`)
 )
@@ -360,9 +363,9 @@ func (t *TaintTracker) populateTaintedVarsFromEnv(env *ast.Env) {
 		varName := envVar.Name.Value
 		value := envVar.Value.Value
 
-		// Find all ${{ }} expressions in the env var value
-		exprPattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
-		matches := exprPattern.FindAllStringSubmatch(value, -1)
+		// Find all ${{ }} expressions in the env var value (uses [\s\S]+?
+		// so expressions with nested `}` like `format('{0}', x)` are captured).
+		matches := taintGhExprPattern.FindAllStringSubmatch(value, -1)
 
 		var collected []string
 		for _, match := range matches {
@@ -478,9 +481,9 @@ func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprM
 func (t *TaintTracker) extractUntrustedSources(value string) []string {
 	var sources []string
 
-	// Find all ${{ }} expressions
-	exprPattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
-	matches := exprPattern.FindAllStringSubmatch(value, -1)
+	// Find all ${{ }} expressions (shared regex handles nested `}` like
+	// `format('{0}', x)`).
+	matches := taintGhExprPattern.FindAllStringSubmatch(value, -1)
 
 	for _, match := range matches {
 		if len(match) < 2 {
