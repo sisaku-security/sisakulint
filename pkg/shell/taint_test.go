@@ -121,3 +121,43 @@ func TestWalkAssignments(t *testing.T) {
 		})
 	}
 }
+
+func TestWordReferencesEntry(t *testing.T) {
+	t.Parallel()
+
+	tainted := map[string]Entry{
+		"X": {Sources: []string{"secrets.X"}, Offset: -1},
+		"Y": {Sources: []string{"secrets.Y"}, Offset: -1},
+	}
+
+	cases := []struct {
+		name      string
+		script    string
+		wantName  string
+		wantFound bool
+	}{
+		{"plain_param", `Z=$X`, "X", true},
+		{"braced_param", `Z=${X}`, "X", true},
+		{"quoted_param", `Z="$X"`, "X", true},
+		{"quoted_braced", `Z="${X}"`, "X", true},
+		{"not_referenced", `Z=literal`, "", false},
+		{"first_match_X", `Z="prefix$X-suffix$Y"`, "X", true},
+		{"first_match_Y", `Z="$Y$X"`, "Y", true},
+		{"untracked_var", `Z="$UNTRACKED"`, "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			assigns := WalkAssignments(file)
+			if len(assigns) != 1 || assigns[0].Value == nil {
+				t.Fatalf("unexpected assigns: %+v", assigns)
+			}
+			gotName, gotFound := WordReferencesEntry(assigns[0].Value, tainted)
+			if gotName != tc.wantName || gotFound != tc.wantFound {
+				t.Errorf("got (%q, %v), want (%q, %v)", gotName, gotFound, tc.wantName, tc.wantFound)
+			}
+		})
+	}
+}

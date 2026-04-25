@@ -133,6 +133,38 @@ func WalkAssignments(file *syntax.File) []AssignmentInfo {
 	return result
 }
 
+// WordReferencesEntry は word 内の ParamExp を walk し、tainted 集合に
+// 含まれる最初の変数名を (name, true) として返す。見つからなければ ("", false)。
+//
+// 対象: $X / ${X} / "$X" / "${X}"
+// 非対象: $$ / $1 / $@ / $? などの special parameters
+func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, bool) {
+	if word == nil {
+		return "", false
+	}
+	var (
+		foundName string
+		found     bool
+	)
+	syntax.Walk(word, func(node syntax.Node) bool {
+		if found {
+			return false
+		}
+		pe, ok := node.(*syntax.ParamExp)
+		if !ok || pe.Param == nil {
+			return true
+		}
+		name := pe.Param.Value
+		if _, ok := tainted[name]; ok {
+			foundName = name
+			found = true
+			return false
+		}
+		return true
+	})
+	return foundName, found
+}
+
 func keywordFor(variant string) AssignKeyword {
 	switch variant {
 	case "export":
