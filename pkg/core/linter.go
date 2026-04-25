@@ -596,6 +596,25 @@ func isDependabotConfigFile(filePath string) bool {
 		strings.HasSuffix(normalized, ".github/dependabot.yaml")
 }
 
+// isCompositeActionFile checks if the given content is a composite action file.
+// Composite actions (e.g. .github/workflows/my-action/action.yml) have a top-level
+// "runs:" key, which is absent from workflow files. Applying workflow-level validation
+// to these files produces false positives about missing "on" and "jobs" keys.
+func isCompositeActionFile(content []byte) bool {
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// A top-level "runs:" key (no leading whitespace) is the definitive
+		// indicator of a composite/JavaScript/Docker action file.
+		if strings.HasPrefix(line, "runs:") || line == "runs:" {
+			return true
+		}
+	}
+	return false
+}
+
 func (l *Linter) validate(
 	filePath string,
 	content []byte,
@@ -614,6 +633,20 @@ func (l *Linter) validate(
 		l.log("validating dependabot config...", filePath)
 		// For dependabot files, skip workflow schema validation
 		// These files are only used by DependabotGitHubActionsRule
+		return &ValidateResult{
+			FilePath:       filePath,
+			Source:         content,
+			ParsedWorkflow: nil,
+			Errors:         nil,
+			AutoFixers:     nil,
+		}, nil
+	}
+
+	// Check if this is a composite action file (e.g. .github/workflows/my-action/action.yml).
+	// Composite actions use "runs:" at the top level instead of "on:"/"jobs:", so applying
+	// workflow-level validation produces false positives.
+	if isCompositeActionFile(content) {
+		l.log("skipping composite action file (not a workflow)...", filePath)
 		return &ValidateResult{
 			FilePath:       filePath,
 			Source:         content,
