@@ -161,3 +161,139 @@ func TestWordReferencesEntry(t *testing.T) {
 		})
 	}
 }
+
+func TestPropagateTaint(t *testing.T) {
+	t.Parallel()
+
+	envEntry := func(src string) Entry {
+		return Entry{Sources: []string{src}, Offset: -1}
+	}
+
+	cases := []struct {
+		name        string
+		script      string
+		initial     map[string]Entry
+		wantNames   []string
+		wantSources map[string][]string
+	}{
+		{
+			name:      "empty_initial",
+			script:    `Y=$X`,
+			initial:   map[string]Entry{},
+			wantNames: []string{},
+		},
+		{
+			name:      "direct_propagation",
+			script:    `Y=$X`,
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X", "Y"},
+			wantSources: map[string][]string{
+				"Y": {"shellvar:X"},
+			},
+		},
+		{
+			name:      "concatenation_multiple_sources",
+			script:    `Z="$A$B"`,
+			initial:   map[string]Entry{"A": envEntry("secrets.A"), "B": envEntry("secrets.B")},
+			wantNames: []string{"A", "B", "Z"},
+		},
+		{
+			name:      "no_propagation_if_not_referenced",
+			script:    `Z=literal`,
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X"},
+		},
+		{
+			name:      "comment_line_not_propagated",
+			script:    "# Y=$X\nZ=$X",
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X", "Z"},
+		},
+		{
+			name:      "heredoc_body_not_propagated",
+			script:    "cat <<EOF\nY=$X\nEOF\nZ=$X",
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X", "Z"},
+		},
+		{
+			name:      "one_liner_two_assigns",
+			script:    `A=$X; B=$X`,
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X", "A", "B"},
+		},
+		{
+			name:      "subshell_flat_namespace",
+			script:    `(Y=$X)`,
+			initial:   map[string]Entry{"X": envEntry("secrets.X")},
+			wantNames: []string{"X", "Y"},
+		},
+		{
+			name:   "first_taint_preserved_on_reassign",
+			script: "Y=$X\nY=$Z\n",
+			initial: map[string]Entry{
+				"X": envEntry("secrets.X"),
+				"Z": envEntry("secrets.Z"),
+			},
+			wantNames: []string{"X", "Z", "Y"},
+			wantSources: map[string][]string{
+				"Y": {"shellvar:X"},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			got := PropagateTaint(file, tc.initial)
+
+			for _, name := range tc.wantNames {
+				if _, ok := got[name]; !ok {
+					t.Errorf("expected tainted var %q not found in result; got=%+v", name, got)
+				}
+			}
+
+			for name, wantSrcs := range tc.wantSources {
+				gotSrcs := got[name].Sources
+				if len(gotSrcs) != len(wantSrcs) {
+					t.Errorf("var %q sources len: got %d, want %d (got=%v, want=%v)",
+						name, len(gotSrcs), len(wantSrcs), gotSrcs, wantSrcs)
+					continue
+				}
+				for i := range wantSrcs {
+					if gotSrcs[i] != wantSrcs[i] {
+						t.Errorf("var %q sources[%d]: got %q, want %q",
+							name, i, gotSrcs[i], wantSrcs[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestPropagateTaint_OrderAware(t *testing.T) {
+	t.Parallel()
+
+	script := `Y=$X`
+	initial := map[string]Entry{"X": {Sources: []string{"secrets.X"}, Offset: -1}}
+	file := parseScript(t, script)
+	got := PropagateTaint(file, initial)
+
+	if got["X"].Offset != -1 {
+		t.Errorf("X should keep Offset=-1, got %d", got["X"].Offset)
+	}
+	if got["Y"].Offset < 0 {
+		t.Errorf("Y should have positive Offset (script body), got %d", got["Y"].Offset)
+	}
+}
+
+func TestPropagateTaint_ReturnsNewMap(t *testing.T) {
+	t.Parallel()
+
+	initial := map[string]Entry{"X": {Sources: []string{"secrets.X"}, Offset: -1}}
+	file := parseScript(t, `Y=$X`)
+	PropagateTaint(file, initial)
+	if _, hasY := initial["Y"]; hasY {
+		t.Errorf("PropagateTaint must not mutate initial; got %+v", initial)
+	}
+}

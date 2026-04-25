@@ -5,6 +5,8 @@
 package shell
 
 import (
+	"maps"
+
 	"mvdan.cc/sh/v3/syntax"
 )
 
@@ -163,6 +165,60 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 		return true
 	})
 	return foundName, found
+}
+
+// PropagateTaint は initial を seed として AST を順方向 1 パス walk し、
+// 代入の RHS が tainted な変数を参照していれば LHS を tainted に追加する。
+//
+// セマンティクス:
+//   - 既に tainted な変数への再代入は origin/Offset を上書きしない（最初の taint を保持）
+//   - LHS 名は AST 順序で処理される（forward dataflow）
+//   - 代入の RHS が tainted を参照しない場合は LHS に何もしない（"untaint" はしない）
+//   - スコープは無視（subshell/function 内も親と同じ namespace ← #447 で対応）
+//
+// 戻り値は initial を変更せず新しい map を返す。
+func PropagateTaint(file *syntax.File, initial map[string]Entry) map[string]Entry {
+	result := make(map[string]Entry, len(initial))
+	maps.Copy(result, initial)
+	if file == nil {
+		return result
+	}
+
+	for _, a := range WalkAssignments(file) {
+		if _, already := result[a.Name]; already {
+			continue
+		}
+		if a.Value == nil {
+			continue
+		}
+		refName, found := WordReferencesEntry(a.Value, result)
+		if !found {
+			continue
+		}
+		result[a.Name] = Entry{
+			Sources: dedupAppend(nil, "shellvar:"+refName),
+			Offset:  a.Offset,
+		}
+	}
+	return result
+}
+
+// dedupAppend は順序保持で重複なしの append。
+// 既存 pkg/core/taint.go の deduplicateStrings と同等。
+func dedupAppend(dst []string, items ...string) []string {
+	seen := make(map[string]struct{}, len(dst)+len(items))
+	for _, s := range dst {
+		seen[s] = struct{}{}
+	}
+	out := dst
+	for _, s := range items {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 func keywordFor(variant string) AssignKeyword {
