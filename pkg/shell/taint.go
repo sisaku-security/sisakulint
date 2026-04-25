@@ -197,7 +197,7 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) map[string]Entr
 			continue
 		}
 		result[a.Name] = Entry{
-			Sources: dedupAppend(nil, "shellvar:"+refName),
+			Sources: []string{"shellvar:" + refName},
 			Offset:  a.Offset,
 		}
 	}
@@ -341,7 +341,16 @@ type heredocKV struct {
 }
 
 // extractHeredocAssignments は heredoc body Word から行ごとに NAME=VALUE を抽出する。
-// Word.Lit を取り出して行分割し、`NAME=value` パターンの行のみ返す。
+// Word.Parts のうち *syntax.Lit のみを連結して行分割し、`NAME=value` パターンの
+// 行のみ返す。
+//
+// 制限: ParamExp / CmdSubst / 算術展開などの非 Lit パーツは連結されないため、
+// 例えば `KEY=$VAR` のような heredoc 行は value 部分が空文字になる。
+// 呼び出し側 (例: pkg/core/taint.go の recordRedirWrite) はこの制限に依存し、
+// ValueWord が nil の場合は文字列全体に対する正規表現で `$VAR` を検出する
+// フォールバックを行っている。展開を含む複雑な heredoc では false negative が
+// 出得るので、callers は「value 文字列に展開済みの内容が入っている」前提を
+// 置いてはいけない。
 func extractHeredocAssignments(hdoc *syntax.Word) []heredocKV {
 	if hdoc == nil {
 		return nil

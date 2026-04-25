@@ -192,10 +192,17 @@ func TestPropagateTaint(t *testing.T) {
 			},
 		},
 		{
+			// Locks in current behavior: WordReferencesEntry returns the
+			// FIRST tainted name in the RHS, so Z.Sources only carries the
+			// shellvar marker for A. If/when PropagateTaint is enhanced to
+			// merge all referenced sources, update this expectation.
 			name:      "concatenation_multiple_sources",
 			script:    `Z="$A$B"`,
 			initial:   map[string]Entry{"A": envEntry("secrets.A"), "B": envEntry("secrets.B")},
 			wantNames: []string{"A", "B", "Z"},
+			wantSources: map[string][]string{
+				"Z": {"shellvar:A"},
+			},
 		},
 		{
 			name:      "no_propagation_if_not_referenced",
