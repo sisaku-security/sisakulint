@@ -456,7 +456,7 @@ func TestIsValidShellName(t *testing.T) {
 
 func TestFirstNameEqualsArg_Variants(t *testing.T) {
 	t.Parallel()
-	// printf format spec is skipped, options are skipped, then NAME=value matches.
+	// option args are skipped; NAME=fmt with %... pulls value from the next arg.
 	cases := []struct {
 		name     string
 		script   string
@@ -464,7 +464,7 @@ func TestFirstNameEqualsArg_Variants(t *testing.T) {
 		wantOK   bool
 	}{
 		{"option_skipped", `echo -n FOO=bar`, "FOO", true},
-		{"format_skipped", `printf "%s\n" KEY=val`, "KEY", true},
+		{"printf_format_uses_next_arg", `printf "KEY=%s\n" "val"`, "KEY", true},
 		{"single_dash_kept", `echo - FOO=bar`, "FOO", true},
 		{"no_eq", `echo plain`, "", false},
 		{"invalid_name", `echo 1bad=val`, "", false},
@@ -489,6 +489,25 @@ func TestFirstNameEqualsArg_Variants(t *testing.T) {
 	}
 	if _, _, _, ok := firstNameEqualsArg(nil); ok {
 		t.Error("nil call should return false")
+	}
+}
+
+func TestWalkRedirectWrites_PrintfFormat(t *testing.T) {
+	t.Parallel()
+	// printf 'name=%s\n' "$VAR" >> $GITHUB_OUTPUT — name comes from format arg,
+	// value Word comes from the second arg ($VAR).
+	file := parseScript(t, `printf 'head_ref_branch=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"`)
+	got := WalkRedirectWrites(file, "GITHUB_OUTPUT")
+	if len(got) != 1 {
+		t.Fatalf("got %d, want 1: %+v", len(got), got)
+	}
+	if got[0].Name != "head_ref_branch" {
+		t.Errorf("Name: got %q, want head_ref_branch", got[0].Name)
+	}
+	tainted := map[string]Entry{"HEAD_REF": {Sources: []string{"github.head_ref"}, Offset: -1}}
+	name, ok := WordReferencesEntry(got[0].ValueWord, tainted)
+	if !ok || name != "HEAD_REF" {
+		t.Errorf("ValueWord should reference HEAD_REF; got name=%q ok=%v", name, ok)
 	}
 }
 

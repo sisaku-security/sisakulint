@@ -400,9 +400,6 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 		if strings.HasPrefix(lit, "-") && lit != "-" {
 			continue
 		}
-		if strings.Contains(lit, "%") {
-			continue
-		}
 		idx := strings.Index(lit, "=")
 		if idx <= 0 {
 			continue
@@ -411,8 +408,22 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 		if !isValidShellName(name) {
 			continue
 		}
-		valueStr := lit[idx+1:]
-		return name, arg, valueStr, true
+		afterEq := lit[idx+1:]
+		// printf-style format string: `name=%s\n`. The actual value lives in a
+		// subsequent argument. Treat the next arg as the ValueWord and
+		// concatenate its literal text as the value-text-for-source-detection.
+		if strings.Contains(afterEq, "%") {
+			if i+1 >= len(call.Args) {
+				continue
+			}
+			valueWord := call.Args[i+1]
+			var sb strings.Builder
+			for j := i + 1; j < len(call.Args); j++ {
+				sb.WriteString(wordLitPrefix(call.Args[j]))
+			}
+			return name, valueWord, sb.String(), true
+		}
+		return name, arg, afterEq, true
 	}
 	return "", nil, "", false
 }
