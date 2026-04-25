@@ -264,16 +264,21 @@ func (t *TaintTracker) seedTaintFromExpressions(file *syntax.File, exprMap map[s
 }
 
 // assignmentValueText concatenates literal segments of a Word for placeholder
-// detection. ParamExp / CmdSubst boundaries are walked through (placeholders
-// only appear inside Lit parts).
+// detection. Both *syntax.Lit and *syntax.SglQuoted contribute their text
+// (single-quoted strings expose their content via SglQuoted.Value, not via
+// child Lit nodes, so a Lit-only walk would miss `X='${{ ... }}'`).
+// ParamExp / CmdSubst boundaries are walked through.
 func assignmentValueText(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
 	var sb strings.Builder
 	syntax.Walk(w, func(n syntax.Node) bool {
-		if lit, ok := n.(*syntax.Lit); ok {
-			sb.WriteString(lit.Value)
+		switch x := n.(type) {
+		case *syntax.Lit:
+			sb.WriteString(x.Value)
+		case *syntax.SglQuoted:
+			sb.WriteString(x.Value)
 		}
 		return true
 	})
