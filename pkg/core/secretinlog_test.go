@@ -1307,7 +1307,10 @@ func TestSecretInLog_OneLinerMultipleAssignments(t *testing.T) {
 
 func TestSecretInLog_LineContinuationDoesNotBreakDetection(t *testing.T) {
 	t.Parallel()
-	errs := runBPatternStep(t, "URL=\"$TOKEN\" \\\n   suffix\necho \"$URL\"")
+	// The backslash continuation must live INSIDE the quoted assignment value
+	// so the assignment itself spans two lines (rather than scoping URL to a
+	// following command's environment via the `VAR=val command` form).
+	errs := runBPatternStep(t, "URL=\"$TOKEN \\\n   suffix\"\necho \"$URL\"")
 	if len(errs) == 0 {
 		t.Errorf("expected leak detection on $URL from line-continued assignment, got 0 errors")
 	}
