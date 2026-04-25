@@ -297,3 +297,111 @@ func TestPropagateTaint_ReturnsNewMap(t *testing.T) {
 		t.Errorf("PropagateTaint must not mutate initial; got %+v", initial)
 	}
 }
+
+func TestWalkRedirectWrites(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		script    string
+		target    string
+		wantCount int
+		wantNames []string
+		wantHd    []bool
+	}{
+		{
+			name:      "echo_to_output",
+			script:    `echo "name=value" >> $GITHUB_OUTPUT`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 1,
+			wantNames: []string{"name"},
+			wantHd:    []bool{false},
+		},
+		{
+			name:      "echo_quoted_target",
+			script:    `echo "name=value" >> "$GITHUB_OUTPUT"`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 1,
+			wantNames: []string{"name"},
+			wantHd:    []bool{false},
+		},
+		{
+			name:      "echo_braced_target",
+			script:    `echo "name=value" >> "${GITHUB_OUTPUT}"`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 1,
+			wantNames: []string{"name"},
+			wantHd:    []bool{false},
+		},
+		{
+			name:      "echo_single_redirect",
+			script:    `echo "name=value" > $GITHUB_OUTPUT`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 1,
+			wantNames: []string{"name"},
+		},
+		{
+			name:      "different_target",
+			script:    `echo "name=value" >> $GITHUB_ENV`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 0,
+		},
+		{
+			name:      "no_redirect",
+			script:    `echo "name=value"`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 0,
+		},
+		{
+			name:      "target_with_prefix",
+			script:    `echo "name=value" >> "$BASE/$GITHUB_OUTPUT"`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 0,
+		},
+		{
+			name: "heredoc_to_output",
+			script: `cat <<EOF >> $GITHUB_OUTPUT
+key1=value1
+key2=value2
+EOF`,
+			target:    "GITHUB_OUTPUT",
+			wantCount: 2,
+			wantNames: []string{"key1", "key2"},
+			wantHd:    []bool{true, true},
+		},
+		{
+			name:      "heredoc_strip_tabs",
+			script:    "cat <<-EOF >> $GITHUB_OUTPUT\n\tk=v\n\tEOF",
+			target:    "GITHUB_OUTPUT",
+			wantCount: 1,
+			wantNames: []string{"k"},
+			wantHd:    []bool{true},
+		},
+		{
+			name:      "github_env_target",
+			script:    `echo "FOO=bar" >> $GITHUB_ENV`,
+			target:    "GITHUB_ENV",
+			wantCount: 1,
+			wantNames: []string{"FOO"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			got := WalkRedirectWrites(file, tc.target)
+			if len(got) != tc.wantCount {
+				t.Fatalf("count: got %d, want %d (got=%+v)", len(got), tc.wantCount, got)
+			}
+			for i := range tc.wantNames {
+				if got[i].Name != tc.wantNames[i] {
+					t.Errorf("[%d] Name: got %q, want %q", i, got[i].Name, tc.wantNames[i])
+				}
+				if i < len(tc.wantHd) && got[i].IsHeredoc != tc.wantHd[i] {
+					t.Errorf("[%d] IsHeredoc: got %v, want %v", i, got[i].IsHeredoc, tc.wantHd[i])
+				}
+			}
+		})
+	}
+}
