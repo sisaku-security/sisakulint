@@ -22,10 +22,10 @@ func TestWalkAssignments(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name          string
-		script        string
-		expected      []AssignmentInfo // Offset は無視（後続テストで検証）
-		expectNilVal  []bool           // true の位置は Value が nil であることを期待する
+		name         string
+		script       string
+		expected     []AssignmentInfo // Offset は無視（後続テストで検証）
+		expectNilVal []bool           // true の位置は Value が nil であることを期待する
 	}{
 		{
 			name:   "simple_assignment",
@@ -403,5 +403,197 @@ EOF`,
 				}
 			}
 		})
+	}
+}
+
+func TestEntryFirst(t *testing.T) {
+	t.Parallel()
+	if got := (Entry{}).First(); got != "" {
+		t.Errorf("empty Sources: got %q, want \"\"", got)
+	}
+	if got := (Entry{Sources: []string{"a", "b"}}).First(); got != "a" {
+		t.Errorf("got %q, want \"a\"", got)
+	}
+}
+
+func TestKeywordFor(t *testing.T) {
+	t.Parallel()
+	cases := map[string]AssignKeyword{
+		"export":   AssignExport,
+		"local":    AssignLocal,
+		"readonly": AssignReadonly,
+		"declare":  AssignDeclare,
+		"typeset":  AssignDeclare,
+		"unknown":  AssignNone,
+	}
+	for variant, want := range cases {
+		if got := keywordFor(variant); got != want {
+			t.Errorf("keywordFor(%q): got %v, want %v", variant, got, want)
+		}
+	}
+}
+
+func TestIsValidShellName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"", false},
+		{"X", true},
+		{"_X", true},
+		{"X1", true},
+		{"1X", false},
+		{"X-Y", false},
+		{"X.Y", false},
+	}
+	for _, tc := range cases {
+		if got := isValidShellName(tc.name); got != tc.want {
+			t.Errorf("isValidShellName(%q): got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestFirstNameEqualsArg_Variants(t *testing.T) {
+	t.Parallel()
+	// printf format spec is skipped, options are skipped, then NAME=value matches.
+	cases := []struct {
+		name     string
+		script   string
+		wantName string
+		wantOK   bool
+	}{
+		{"option_skipped", `echo -n FOO=bar`, "FOO", true},
+		{"format_skipped", `printf "%s\n" KEY=val`, "KEY", true},
+		{"single_dash_kept", `echo - FOO=bar`, "FOO", true},
+		{"no_eq", `echo plain`, "", false},
+		{"invalid_name", `echo 1bad=val`, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			var call *syntax.CallExpr
+			syntax.Walk(file, func(n syntax.Node) bool {
+				if c, ok := n.(*syntax.CallExpr); ok && call == nil {
+					call = c
+					return false
+				}
+				return true
+			})
+			gotName, _, _, gotOK := firstNameEqualsArg(call)
+			if gotName != tc.wantName || gotOK != tc.wantOK {
+				t.Errorf("got (%q, %v), want (%q, %v)", gotName, gotOK, tc.wantName, tc.wantOK)
+			}
+		})
+	}
+	if _, _, _, ok := firstNameEqualsArg(nil); ok {
+		t.Error("nil call should return false")
+	}
+}
+
+func TestWordLitPrefix_Mixed(t *testing.T) {
+	t.Parallel()
+	// Mix Lit + SglQuoted + DblQuoted, then a ParamExp which truncates.
+	file := parseScript(t, `echo abc'def'"ghi"$X`)
+	call := file.Stmts[0].Cmd.(*syntax.CallExpr)
+	got := wordLitPrefix(call.Args[1])
+	if got != "abcdefghi" {
+		t.Errorf("got %q, want %q", got, "abcdefghi")
+	}
+	if got := wordLitPrefix(nil); got != "" {
+		t.Errorf("nil word: got %q", got)
+	}
+}
+
+func TestRedirTargetMatches_Edge(t *testing.T) {
+	t.Parallel()
+	// Multiple parts (compound) → false
+	file := parseScript(t, `echo x >> "$BASE/$GITHUB_OUTPUT"`)
+	stmt := file.Stmts[0]
+	w := stmt.Redirs[0].Word
+	if redirTargetMatches(w, "GITHUB_OUTPUT") {
+		t.Error("compound target should not match")
+	}
+	// Lit-only target (no expansion) should not match
+	file = parseScript(t, `echo x >> /tmp/out`)
+	w = file.Stmts[0].Redirs[0].Word
+	if redirTargetMatches(w, "GITHUB_OUTPUT") {
+		t.Error("literal path should not match")
+	}
+	// nil/empty
+	if redirTargetMatches(nil, "X") {
+		t.Error("nil word should not match")
+	}
+	if redirTargetMatches(&syntax.Word{}, "X") {
+		t.Error("empty parts should not match")
+	}
+}
+
+func TestPropagateTaint_NilFile(t *testing.T) {
+	t.Parallel()
+	initial := map[string]Entry{"X": {Sources: []string{"s"}, Offset: -1}}
+	got := PropagateTaint(nil, initial)
+	if _, ok := got["X"]; !ok {
+		t.Error("initial entry must be preserved with nil file")
+	}
+}
+
+func TestWalkAssignments_NilFile(t *testing.T) {
+	t.Parallel()
+	if got := WalkAssignments(nil); got != nil {
+		t.Errorf("nil file should return nil, got %+v", got)
+	}
+}
+
+func TestWalkRedirectWrites_NilFile(t *testing.T) {
+	t.Parallel()
+	if got := WalkRedirectWrites(nil, "X"); got != nil {
+		t.Errorf("nil file should return nil, got %+v", got)
+	}
+}
+
+func TestExtractHeredocAssignments_NilAndEdge(t *testing.T) {
+	t.Parallel()
+	if got := extractHeredocAssignments(nil); got != nil {
+		t.Errorf("nil hdoc should return nil, got %+v", got)
+	}
+	// Heredoc with comment-only / empty / no-eq lines should be filtered.
+	file := parseScript(t, "cat <<EOF >> $GITHUB_OUTPUT\n# comment\n\nplain\n=novar\nFOO=bar\nEOF")
+	stmt := file.Stmts[0]
+	var hdoc *syntax.Word
+	for _, r := range stmt.Redirs {
+		if r.Hdoc != nil {
+			hdoc = r.Hdoc
+			break
+		}
+	}
+	got := extractHeredocAssignments(hdoc)
+	if len(got) != 1 || got[0].name != "FOO" {
+		t.Errorf("got %+v, want one FOO entry", got)
+	}
+}
+
+func TestDblQuotedTargetMatches_NonParam(t *testing.T) {
+	t.Parallel()
+	// "$(echo X)" — DblQuoted contains CmdSubst, not ParamExp → false
+	file := parseScript(t, `echo x >> "$(echo Y)"`)
+	w := file.Stmts[0].Redirs[0].Word
+	if redirTargetMatches(w, "GITHUB_OUTPUT") {
+		t.Error("DblQuoted with CmdSubst should not match")
+	}
+}
+
+func TestDedupAppend(t *testing.T) {
+	t.Parallel()
+	got := dedupAppend([]string{"a"}, "b", "a", "c", "b")
+	want := []string{"a", "b", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("len: got %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("[%d] got %q, want %q", i, got[i], want[i])
+		}
 	}
 }

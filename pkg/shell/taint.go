@@ -114,7 +114,7 @@ func WalkAssignments(file *syntax.File) []AssignmentInfo {
 				result = append(result, AssignmentInfo{
 					Name:    a.Name.Value,
 					Value:   a.Value,
-					Offset:  int(a.Pos().Offset()),
+					Offset:  int(a.Pos().Offset()), //nolint:gosec // file offsets fit in int
 					Keyword: kw,
 				})
 			}
@@ -127,7 +127,7 @@ func WalkAssignments(file *syntax.File) []AssignmentInfo {
 			result = append(result, AssignmentInfo{
 				Name:    assign.Name.Value,
 				Value:   assign.Value,
-				Offset:  int(assign.Pos().Offset()),
+				Offset:  int(assign.Pos().Offset()), //nolint:gosec // file offsets fit in int
 				Keyword: AssignNone,
 			})
 		}
@@ -271,7 +271,7 @@ func WalkRedirectWrites(file *syntax.File, target string) []RedirWrite {
 					Name:      kv.name,
 					Value:     kv.value,
 					Stmt:      stmt,
-					Offset:    int(matchedRedir.Pos().Offset()),
+					Offset:    int(matchedRedir.Pos().Offset()), //nolint:gosec // file offsets fit in int
 					IsHeredoc: true,
 				})
 			}
@@ -290,7 +290,7 @@ func WalkRedirectWrites(file *syntax.File, target string) []RedirWrite {
 			Value:     valueStr,
 			ValueWord: valueWord,
 			Stmt:      stmt,
-			Offset:    int(matchedRedir.Pos().Offset()),
+			Offset:    int(matchedRedir.Pos().Offset()), //nolint:gosec // file offsets fit in int
 			IsHeredoc: false,
 		})
 		return true
@@ -352,7 +352,7 @@ func extractHeredocAssignments(hdoc *syntax.Word) []heredocKV {
 			sb.WriteString(lit.Value)
 		}
 	}
-	var out []heredocKV
+	out := make([]heredocKV, 0, 4)
 	for line := range strings.SplitSeq(sb.String(), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -377,10 +377,10 @@ func isValidShellName(s string) bool {
 		return false
 	}
 	for i, r := range s {
-		if i == 0 && !(r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+		if i == 0 && r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
 			return false
 		}
-		if !(r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+		if r != '_' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
 			return false
 		}
 	}
