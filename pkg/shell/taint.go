@@ -391,9 +391,13 @@ func isValidShellName(s string) bool {
 // (name, valueWord, valueStr, true) を返す。
 // echo の `-n` `-e` 等のオプション、printf のフォーマット指定子はスキップする。
 func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bool) {
-	if call == nil {
+	if call == nil || len(call.Args) == 0 {
 		return "", nil, "", false
 	}
+	// Only treat `%` in the NAME=... arg as a printf format specifier when the
+	// command itself is `printf`; otherwise commands like `echo "PERCENT=50%"`
+	// would be mis-handled (the value `50%` contains `%` but is not a format).
+	isPrintf := wordLitPrefix(call.Args[0]) == "printf"
 	for i := 1; i < len(call.Args); i++ {
 		arg := call.Args[i]
 		lit := wordLitPrefix(arg)
@@ -412,7 +416,7 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 		// printf-style format string: `name=%s\n`. The actual value lives in a
 		// subsequent argument. Treat the next arg as the ValueWord and
 		// concatenate its literal text as the value-text-for-source-detection.
-		if strings.Contains(afterEq, "%") {
+		if isPrintf && strings.Contains(afterEq, "%") {
 			if i+1 >= len(call.Args) {
 				continue
 			}

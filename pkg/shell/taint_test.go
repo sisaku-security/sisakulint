@@ -468,6 +468,11 @@ func TestFirstNameEqualsArg_Variants(t *testing.T) {
 		{"single_dash_kept", `echo - FOO=bar`, "FOO", true},
 		{"no_eq", `echo plain`, "", false},
 		{"invalid_name", `echo 1bad=val`, "", false},
+		// `%` inside an echo arg must NOT trigger the printf next-arg branch;
+		// `PERCENT=50%` is a single NAME=value pair where the value happens to
+		// contain `%`. Regression for the echo-misclassified-as-printf bug.
+		{"echo_value_contains_percent", `echo "PERCENT=50%"`, "PERCENT", true},
+		{"echo_with_extra_arg_percent", `echo "PERCENT=50%" extra`, "PERCENT", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
