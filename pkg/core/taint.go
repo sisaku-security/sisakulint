@@ -1,12 +1,49 @@
 package core
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
+	"mvdan.cc/sh/v3/syntax"
+
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
+
+// taintPlaceholderPrefix is the prefix used to substitute GitHub Actions
+// `${{ ... }}` expressions in shell scripts before bash parsing. The bash
+// parser cannot accept `${{` as a parameter expansion, so each occurrence is
+// replaced with a unique placeholder identifier (e.g. _SISAKULINT_E_0_) of
+// arbitrary length. We record the placeholder→expression mapping so that
+// callers can recover the original expression when extracting taint sources.
+const taintPlaceholderPrefix = "_SISAKULINT_E_"
+
+var (
+	// taintGhExprPattern matches `${{ expr }}` (no nested `}`).
+	taintGhExprPattern = regexp.MustCompile(`\$\{\{\s*([^}]+?)\s*\}\}`)
+	// taintPlaceholderPattern matches placeholders inserted by sanitizeForShellParse.
+	taintPlaceholderPattern = regexp.MustCompile(`_SISAKULINT_E_\d+_`)
+)
+
+// sanitizeForShellParse replaces `${{ expr }}` with a unique placeholder so
+// the bash parser accepts the script. Returns the sanitized script plus a
+// placeholder→expression map for source recovery.
+func sanitizeForShellParse(script string) (string, map[string]string) {
+	exprMap := make(map[string]string)
+	counter := 0
+	sanitized := taintGhExprPattern.ReplaceAllStringFunc(script, func(m string) string {
+		sub := taintGhExprPattern.FindStringSubmatch(m)
+		ph := fmt.Sprintf("%s%d_", taintPlaceholderPrefix, counter)
+		counter++
+		if len(sub) >= 2 {
+			exprMap[ph] = strings.TrimSpace(sub[1])
+		}
+		return ph
+	})
+	return sanitized, exprMap
+}
 
 // TaintTracker tracks taint propagation through step outputs.
 // Phase 1 focuses on tracking $GITHUB_OUTPUT writes with untrusted inputs.
@@ -36,9 +73,10 @@ type TaintTracker struct {
 	// Example: {"get-ref": {"ref": ["github.head_ref"]}}
 	taintedOutputs map[string]map[string][]string
 
-	// taintedVars tracks variables in the current script that hold tainted values
-	// Used for intra-step variable propagation
-	taintedVars map[string][]string
+	// taintedVars tracks variables in the current script that hold tainted values.
+	// shell.Entry holds Sources (taint origins) and Offset (position-aware byte offset).
+	// Used for intra-step variable propagation.
+	taintedVars map[string]shell.Entry
 
 	// knownTaintedActions maps action patterns to their tainted outputs
 	// Phase 3: Used to infer taint from known action behaviors
@@ -55,7 +93,7 @@ type KnownTaintedOutput struct {
 func NewTaintTracker() *TaintTracker {
 	tracker := &TaintTracker{
 		taintedOutputs:      make(map[string]map[string][]string),
-		taintedVars:         make(map[string][]string),
+		taintedVars:         make(map[string]shell.Entry),
 		knownTaintedActions: make(map[string][]KnownTaintedOutput),
 	}
 
@@ -161,17 +199,105 @@ func (t *TaintTracker) AnalyzeStep(step *ast.Step) {
 		return
 	}
 
-	script := run.Run.Value
-
 	// Reset tainted vars for this step
-	t.taintedVars = make(map[string][]string)
+	t.taintedVars = make(map[string]shell.Entry)
 
 	// Phase 2: Pre-populate tainted vars from env section
 	// If env vars reference tainted step outputs, those vars are also tainted
 	t.populateTaintedVarsFromEnv(step.Env)
 
-	// Analyze script for tainted variable assignments and GITHUB_OUTPUT writes
-	t.analyzeScript(stepID, script)
+	// Parse script once and dispatch to AST-based helpers (Issue #446).
+	// Bash cannot natively parse `${{ ... }}`, so substitute placeholders that
+	// preserve detectability while remaining valid bash literals.
+	sanitized, exprMap := sanitizeForShellParse(run.Run.Value)
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return
+	}
+
+	// Seed taintedVars from `${{ untrusted }}` and `${{ steps.X.outputs.Y }}`
+	// found directly in assignment values. PropagateTaint then propagates
+	// these across shell-variable references.
+	t.seedTaintFromExpressions(file, exprMap)
+
+	// Forward dataflow with order-aware Offset
+	t.taintedVars = shell.PropagateTaint(file, t.taintedVars)
+
+	// shell.PropagateTaint marks derived variables with "shellvar:X" chain
+	// markers; taint.go callers expect transitive source lists for richer
+	// reporting (e.g. trace back to "github.event.issue.title"). Expand the
+	// markers in place. Bounded passes guard against pathological chains.
+	expandShellvarMarkers(t.taintedVars)
+
+	// GITHUB_OUTPUT writes
+	for _, w := range shell.WalkRedirectWrites(file, "GITHUB_OUTPUT") {
+		t.recordRedirWrite(stepID, w, exprMap)
+	}
+}
+
+// seedTaintFromExpressions seeds taintedVars by inspecting each shell
+// assignment for embedded `${{ ... }}` expressions (substituted to
+// placeholders during sanitization). This preserves the legacy regex-era
+// behavior of detecting direct expression injection like `URL="${{ ... }}"`.
+func (t *TaintTracker) seedTaintFromExpressions(file *syntax.File, exprMap map[string]string) {
+	for _, a := range shell.WalkAssignments(file) {
+		if a.Value == nil {
+			continue
+		}
+		// wordLitPrefix-equivalent: collect Lit parts to capture placeholder text.
+		valueText := assignmentValueText(a.Value)
+		sources := t.collectExpressionSources(valueText, exprMap)
+		if len(sources) == 0 {
+			continue
+		}
+		existing := t.taintedVars[a.Name]
+		existing.Sources = mergeUnique(existing.Sources, sources)
+		if existing.Offset == 0 {
+			existing.Offset = a.Offset
+		}
+		t.taintedVars[a.Name] = existing
+	}
+}
+
+// assignmentValueText concatenates literal segments of a Word for placeholder
+// detection. ParamExp / CmdSubst boundaries are walked through (placeholders
+// only appear inside Lit parts).
+func assignmentValueText(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var sb strings.Builder
+	syntax.Walk(w, func(n syntax.Node) bool {
+		if lit, ok := n.(*syntax.Lit); ok {
+			sb.WriteString(lit.Value)
+		}
+		return true
+	})
+	return sb.String()
+}
+
+// collectExpressionSources extracts taint sources from a string containing
+// either raw `${{ }}` (defensive) or sanitized placeholders.
+func (t *TaintTracker) collectExpressionSources(value string, exprMap map[string]string) []string {
+	if value == "" {
+		return nil
+	}
+	var sources []string
+	sources = append(sources, t.extractUntrustedSources(value)...)
+	for _, ph := range taintPlaceholderPattern.FindAllString(value, -1) {
+		expr, ok := exprMap[ph]
+		if !ok {
+			continue
+		}
+		if tainted, srcs := t.IsTaintedExpr(expr); tainted {
+			sources = append(sources, srcs...)
+		}
+		if t.isUntrustedExpression(expr) {
+			sources = append(sources, expr)
+		}
+	}
+	return sources
 }
 
 // analyzeActionStep checks if an action step uses a known tainted action.
@@ -238,208 +364,113 @@ func (t *TaintTracker) populateTaintedVarsFromEnv(env *ast.Env) {
 		exprPattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
 		matches := exprPattern.FindAllStringSubmatch(value, -1)
 
+		var collected []string
 		for _, match := range matches {
 			if len(match) < 2 {
 				continue
 			}
 			exprContent := strings.TrimSpace(match[1])
 
-			// Check if this expression references a tainted step output
+			// Propagate taint via tainted step output references.
 			if tainted, sources := t.IsTaintedExpr(exprContent); tainted {
-				// Propagate taint: the env var is now tainted via the step output
-				t.taintedVars[varName] = append(t.taintedVars[varName], sources...)
+				collected = append(collected, sources...)
 			}
 
-			// Also check for direct untrusted expressions
+			// Direct untrusted expression contributes its own source.
 			if t.isUntrustedExpression(exprContent) {
-				t.taintedVars[varName] = append(t.taintedVars[varName], exprContent)
+				collected = append(collected, exprContent)
 			}
 		}
+		if len(collected) == 0 {
+			continue
+		}
+		// env-derived taint has Offset=-1 (precedes any script position).
+		existing := t.taintedVars[varName]
+		existing.Sources = mergeUnique(existing.Sources, collected)
+		existing.Offset = -1
+		t.taintedVars[varName] = existing
 	}
 }
 
-// analyzeScript parses the script and tracks taint propagation.
-func (t *TaintTracker) analyzeScript(stepID, script string) {
-	// First pass: find variable assignments with untrusted expressions
-	t.findTaintedVariableAssignments(script)
-
-	// Second pass: find $GITHUB_OUTPUT writes
-	t.findGitHubOutputWrites(stepID, script)
-}
-
-// findTaintedVariableAssignments finds shell variable assignments that contain untrusted input.
-// Example: VAR="${{ github.event.issue.title }}"
-// Also handles: export VAR=..., local VAR=..., readonly VAR=...
-// Also propagates taint from referenced variables: VAR=$INPUT (where INPUT is tainted)
-func (t *TaintTracker) findTaintedVariableAssignments(script string) {
-	// Pattern: VAR=value or VAR="value" or VAR='value'
-	// Also handles optional keyword prefixes: export, local, readonly
-	// We look for assignments that contain ${{ }} expressions or references to tainted variables
-	varAssignPattern := regexp.MustCompile(`(?m)^\s*(?:(?:export|local|readonly)\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$`)
-
-	matches := varAssignPattern.FindAllStringSubmatch(script, -1)
-	for _, match := range matches {
-		if len(match) < 3 {
-			continue
-		}
-		varName := match[1]
-		value := match[2]
-
-		var taintSources []string
-
-		// Check if value contains direct untrusted expressions
-		untrustedSources := t.extractUntrustedSources(value)
-		taintSources = append(taintSources, untrustedSources...)
-
-		// Check if value references other tainted variables
-		// Handle both $VAR and ${VAR} forms
-		varRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
-		varMatches := varRefPattern.FindAllStringSubmatch(value, -1)
-		for _, varMatch := range varMatches {
-			if len(varMatch) >= 2 {
-				referencedVar := varMatch[1]
-				if sources, exists := t.taintedVars[referencedVar]; exists {
-					// Propagate taint from referenced variable
-					taintSources = append(taintSources, sources...)
+// expandShellvarMarkers replaces `shellvar:X` markers in each entry's Sources
+// with X's transitive sources, iterating up to maxPasses to handle chains.
+func expandShellvarMarkers(tainted map[string]shell.Entry) {
+	const maxPasses = 16
+	for pass := 0; pass < maxPasses; pass++ {
+		changed := false
+		for name, entry := range tainted {
+			expanded := make([]string, 0, len(entry.Sources))
+			anyExpanded := false
+			for _, src := range entry.Sources {
+				if ref, ok := strings.CutPrefix(src, "shellvar:"); ok && ref != name {
+					if upstream, exists := tainted[ref]; exists {
+						expanded = mergeUnique(expanded, upstream.Sources)
+						anyExpanded = true
+						continue
+					}
 				}
+				expanded = append(expanded, src)
+			}
+			if anyExpanded {
+				entry.Sources = expanded
+				tainted[name] = entry
+				changed = true
 			}
 		}
-
-		// Deduplicate taint sources
-		if len(taintSources) > 0 {
-			t.taintedVars[varName] = deduplicateStrings(taintSources)
+		if !changed {
+			return
 		}
 	}
 }
 
-// deduplicateStrings removes duplicate strings from a slice while preserving order.
-func deduplicateStrings(input []string) []string {
-	seen := make(map[string]bool)
-	result := make([]string, 0, len(input))
-	for _, s := range input {
-		if !seen[s] {
-			seen[s] = true
-			result = append(result, s)
-		}
+// mergeUnique は順序保持で重複なしの merge。
+func mergeUnique(dst, src []string) []string {
+	seen := make(map[string]struct{}, len(dst)+len(src))
+	for _, s := range dst {
+		seen[s] = struct{}{}
 	}
-	return result
+	out := dst
+	for _, s := range src {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
-// findGitHubOutputWrites finds writes to $GITHUB_OUTPUT and tracks which outputs become tainted.
-func (t *TaintTracker) findGitHubOutputWrites(stepID, script string) {
-	// Pattern 1: echo "name=value" >> $GITHUB_OUTPUT
-	echoPattern := regexp.MustCompile(`echo\s+["']?([^=\s]+)=([^"'\n]+)["']?\s*>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
+// recordRedirWrite は WalkRedirectWrites の結果をもとに taintedOutputs に記録する。
+// VALUE 内に直接 untrusted 式（プレースホルダ経由を含む）があるか、または
+// tainted 変数を参照していれば、その output を tainted として登録する。
+func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprMap map[string]string) {
+	sources := t.collectExpressionSources(w.Value, exprMap)
 
-	// Pattern 2: printf pattern - printf "name=%s" "$VAR" >> $GITHUB_OUTPUT
-	printfPattern := regexp.MustCompile(`printf\s+["']([^=]+)=.*?["'].*?>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
-
-	// Process echo patterns
-	echoMatches := echoPattern.FindAllStringSubmatch(script, -1)
-	for _, match := range echoMatches {
-		if len(match) >= 3 {
-			outputName := strings.TrimSpace(match[1])
-			value := match[2]
-			t.checkAndRecordTaint(stepID, outputName, value)
+	// VALUE 内の $VAR 参照を tainted vars と照合
+	if w.ValueWord != nil {
+		if name, ok := shell.WordReferencesEntry(w.ValueWord, t.taintedVars); ok {
+			sources = mergeUnique(sources, t.taintedVars[name].Sources)
 		}
-	}
-
-	// Process heredoc patterns manually (Go regexp doesn't support backreferences)
-	t.processHeredocPatterns(stepID, script)
-
-	// Process printf patterns (simplified - just detect the output name)
-	printfMatches := printfPattern.FindAllStringSubmatch(script, -1)
-	for _, match := range printfMatches {
-		if len(match) >= 2 {
-			outputName := strings.TrimSpace(match[1])
-			// For printf, we need to check the full line for tainted variables
-			fullLine := match[0]
-			t.checkAndRecordTaint(stepID, outputName, fullLine)
-		}
-	}
-}
-
-// processHeredocPatterns manually parses heredoc patterns since Go regexp doesn't support backreferences.
-// Example: cat <<EOF >> $GITHUB_OUTPUT
-//
-//	name=value
-//
-// EOF
-func (t *TaintTracker) processHeredocPatterns(stepID, script string) {
-	// Find heredoc start pattern
-	heredocStartPattern := regexp.MustCompile(`cat\s+<<['"]?(\w+)['"]?\s*>>\s*"?\$\{?GITHUB_OUTPUT\}?"?`)
-	matches := heredocStartPattern.FindAllStringSubmatchIndex(script, -1)
-
-	for _, match := range matches {
-		if len(match) < 4 {
-			continue
-		}
-
-		// Extract delimiter
-		delimiter := script[match[2]:match[3]]
-
-		// Find content after the heredoc start (after newline)
-		startPos := match[1]
-		remaining := script[startPos:]
-
-		// Find the first newline
-		newlineIdx := strings.Index(remaining, "\n")
-		if newlineIdx == -1 {
-			continue
-		}
-
-		contentStart := newlineIdx + 1
-		contentRemaining := remaining[contentStart:]
-
-		// Find the closing delimiter (must be on its own line)
-		endPattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(delimiter) + `\s*$`)
-		endMatch := endPattern.FindStringIndex(contentRemaining)
-		if endMatch == nil {
-			continue
-		}
-
-		// Extract heredoc content
-		content := contentRemaining[:endMatch[0]]
-
-		// Parse lines inside heredoc
-		lines := strings.Split(content, "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if idx := strings.Index(line, "="); idx > 0 {
-				outputName := strings.TrimSpace(line[:idx])
-				value := line[idx+1:]
-				t.checkAndRecordTaint(stepID, outputName, value)
+	} else {
+		// heredoc 等で ValueWord が無い場合は文字列ベースで $VAR を検出
+		varRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+		for _, m := range varRefPattern.FindAllStringSubmatch(w.Value, -1) {
+			if len(m) < 2 {
+				continue
 			}
-		}
-	}
-}
-
-// checkAndRecordTaint checks if a value contains tainted data and records it.
-func (t *TaintTracker) checkAndRecordTaint(stepID, outputName, value string) {
-	var taintSources []string
-
-	// Check for direct untrusted expressions in value
-	directSources := t.extractUntrustedSources(value)
-	taintSources = append(taintSources, directSources...)
-
-	// Check for tainted variable references in value
-	varRefPattern := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
-	varMatches := varRefPattern.FindAllStringSubmatch(value, -1)
-	for _, match := range varMatches {
-		if len(match) >= 2 {
-			varName := match[1]
-			if sources, exists := t.taintedVars[varName]; exists {
-				taintSources = append(taintSources, sources...)
+			if entry, ok := t.taintedVars[m[1]]; ok {
+				sources = mergeUnique(sources, entry.Sources)
 			}
 		}
 	}
 
-	// Record taint if any sources found
-	if len(taintSources) > 0 {
-		if t.taintedOutputs[stepID] == nil {
-			t.taintedOutputs[stepID] = make(map[string][]string)
-		}
-		t.taintedOutputs[stepID][outputName] = taintSources
+	if len(sources) == 0 {
+		return
 	}
+	if t.taintedOutputs[stepID] == nil {
+		t.taintedOutputs[stepID] = make(map[string][]string)
+	}
+	t.taintedOutputs[stepID][w.Name] = sources
 }
 
 // extractUntrustedSources extracts untrusted expression paths from a string.
