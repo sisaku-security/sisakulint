@@ -6,6 +6,7 @@ package shell
 
 import (
 	"maps"
+	"path"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -406,7 +407,9 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 	// Only treat `%` in the NAME=... arg as a printf format specifier when the
 	// command itself is `printf`; otherwise commands like `echo "PERCENT=50%"`
 	// would be mis-handled (the value `50%` contains `%` but is not a format).
-	isPrintf := wordLitPrefix(call.Args[0]) == "printf"
+	// Use path.Base so absolute invocations like /usr/bin/printf are still
+	// recognized as printf.
+	isPrintf := path.Base(wordLitPrefix(call.Args[0])) == "printf"
 	for i := 1; i < len(call.Args); i++ {
 		arg := call.Args[i]
 		lit := wordLitPrefix(arg)

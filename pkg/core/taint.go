@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -419,7 +420,11 @@ func expandShellvarMarkers(tainted map[string]shell.Entry) {
 				}
 				expanded = append(expanded, src)
 			}
-			if anyExpanded {
+			// Only update / mark changed when the expanded slice differs from the
+			// existing Sources. Without this, mutual references (A->B, B->A)
+			// would keep `anyExpanded` true on every pass even after content
+			// stabilizes, forcing the loop to run all maxPasses iterations.
+			if anyExpanded && !slices.Equal(expanded, entry.Sources) {
 				entry.Sources = expanded
 				tainted[name] = entry
 				changed = true
