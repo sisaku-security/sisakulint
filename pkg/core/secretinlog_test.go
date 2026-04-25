@@ -1343,3 +1343,67 @@ func TestSecretInLog_CrossStep_LeadingOptionBeforeNameEquals(t *testing.T) {
 		})
 	}
 }
+
+// runBPatternStep は #446 リグレッションテスト共通のセットアップ。
+// step.Env に TOKEN: ${{ secrets.GCP_KEY }} を設定し、与えられた script を実行する
+// 単一ステップの Job を VisitJobPre する。
+func runBPatternStep(t *testing.T, script string) []*LintingError {
+	t.Helper()
+	rule := NewSecretInLogRule()
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"TOKEN": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.GCP_KEY }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	return rule.Errors()
+}
+
+func TestSecretInLog_CommentLineNotFalseDetected(t *testing.T) {
+	t.Parallel()
+	errs := runBPatternStep(t, `# X="$TOKEN"
+echo "no leak"`)
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors (comment is not real assignment), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestSecretInLog_HeredocBodyNotFalseDetected(t *testing.T) {
+	t.Parallel()
+	// true <<EOF discards the body (true is not a cat/tee/dd sink). If
+	// propagateTaint mistakenly treated `X=$TOKEN` inside the heredoc body as
+	// a real assignment (regex-era FP), then the subsequent `echo "$X"` would
+	// be flagged as a leak. With AST-based parsing, X is never assigned, so
+	// no leak should be reported.
+	errs := runBPatternStep(t, `true <<EOF
+X=$TOKEN
+EOF
+echo "$X"`)
+	if len(errs) != 0 {
+		t.Errorf("expected 0 errors (heredoc body is not assignment), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestSecretInLog_OneLinerMultipleAssignments(t *testing.T) {
+	t.Parallel()
+	errs := runBPatternStep(t, `X=1; Y="$TOKEN"; echo "$Y"`)
+	if len(errs) == 0 {
+		t.Errorf("expected leak detection on $Y from one-liner assignment, got 0 errors")
+	}
+}
+
+func TestSecretInLog_LineContinuationDoesNotBreakDetection(t *testing.T) {
+	t.Parallel()
+	errs := runBPatternStep(t, "URL=\"$TOKEN\" \\\n   suffix\necho \"$URL\"")
+	if len(errs) == 0 {
+		t.Errorf("expected leak detection on $URL from line-continued assignment, got 0 errors")
+	}
+}
