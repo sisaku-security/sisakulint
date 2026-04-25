@@ -79,4 +79,71 @@ type RedirWrite struct {
 	IsHeredoc bool
 }
 
-// 関数本体は後続タスクで実装する。
+// WalkAssignments は file 内の全代入文を出現順に返す。
+//
+// 含まれる:
+//   - 単純代入 X=Y
+//   - 一行複数代入 X=Y; Z=W （順序保持）
+//   - DeclClause 経由の代入 export X=Y / local X=Y / readonly X=Y / declare X=Y / typeset X=Y
+//   - 値なし宣言 local X （Value=nil）
+//
+// 含まれない:
+//   - heredoc body 内の `=` 行（HeredocBody は Word なので Assign ではない）
+//   - コメント行（パーサが除外する）
+//   - 算術代入 ((X=1)) （AST 上 Assign ではない）
+func WalkAssignments(file *syntax.File) []AssignmentInfo {
+	if file == nil {
+		return nil
+	}
+	var result []AssignmentInfo
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if node == nil {
+			return false
+		}
+		// DeclClause は子の Assigns を自前で展開し、children には潜らない。
+		// (潜ると同じ Assign が AssignNone でも記録され二重カウントになる)
+		if decl, ok := node.(*syntax.DeclClause); ok {
+			kw := keywordFor(decl.Variant.Value)
+			for _, a := range decl.Args {
+				if a == nil || a.Name == nil {
+					continue
+				}
+				result = append(result, AssignmentInfo{
+					Name:    a.Name.Value,
+					Value:   a.Value,
+					Offset:  int(a.Pos().Offset()),
+					Keyword: kw,
+				})
+			}
+			return false
+		}
+		if assign, ok := node.(*syntax.Assign); ok {
+			if assign.Name == nil {
+				return true
+			}
+			result = append(result, AssignmentInfo{
+				Name:    assign.Name.Value,
+				Value:   assign.Value,
+				Offset:  int(assign.Pos().Offset()),
+				Keyword: AssignNone,
+			})
+		}
+		return true
+	})
+	return result
+}
+
+func keywordFor(variant string) AssignKeyword {
+	switch variant {
+	case "export":
+		return AssignExport
+	case "local":
+		return AssignLocal
+	case "readonly":
+		return AssignReadonly
+	case "declare", "typeset":
+		return AssignDeclare
+	default:
+		return AssignNone
+	}
+}
