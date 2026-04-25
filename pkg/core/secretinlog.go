@@ -5,17 +5,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"mvdan.cc/sh/v3/syntax"
-)
 
-// taintEntry は taint 伝播で追跡される変数エントリ。
-// offset は変数が taint された時点のスクリプト内バイトオフセット。
-// env 変数（スクリプト開始前に設定済み）は -1 を使用し、常にあらゆる sink より前と扱う。
-type taintEntry struct {
-	origin string // "secrets.X" or "shellvar:Y"
-	offset int    // -1 for env vars, >=0 for shell variable assignments
-}
+	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
+)
 
 // bareAddMaskReCache は "::add-mask::$VAR(境界)" 形式のチェック用正規表現をキャッシュする。
 // hasAddMaskFor は tainted 変数 × echo 引数の回数だけ呼ばれるため、毎回コンパイルは避ける。
@@ -57,81 +51,6 @@ func NewSecretInLogRule() *SecretInLogRule {
 
 var secretEnvRefRe = regexp.MustCompile(`\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
-// propagateTaint は初期 taint 集合からスクリプトを前向きに一回走査し、
-// シェル変数の taint 伝播を order-aware に計算する。
-//
-// アサインが sink より後に現れる場合は FP となるため、各エントリに
-// アサイン位置オフセットを記録し findEchoLeaks での判定に使用する。
-// env 変数はスクリプト開始前に設定済みなので offset=-1（常に有効）。
-func (rule *SecretInLogRule) propagateTaint(file *syntax.File, initialTainted map[string]string) map[string]taintEntry {
-	tainted := make(map[string]taintEntry, len(initialTainted))
-	for k, v := range initialTainted {
-		tainted[k] = taintEntry{origin: v, offset: -1}
-	}
-	if file == nil {
-		return tainted
-	}
-
-	// 単一前向きパス: source 順に走査するため固定点反復は不要。
-	// アサイン時点で既に tainted な変数を参照していれば LHS も taint する。
-	syntax.Walk(file, func(node syntax.Node) bool {
-		assign, ok := node.(*syntax.Assign)
-		if !ok || assign.Name == nil {
-			return true
-		}
-		lhs := assign.Name.Value
-		if _, already := tainted[lhs]; already {
-			return true
-		}
-		if assign.Value == nil {
-			return true
-		}
-		if rule.wordReferencesTainted(assign.Value, tainted) {
-			assignOffset := int(assign.Pos().Offset())
-			tainted[lhs] = taintEntry{
-				origin: "shellvar:" + rule.firstTaintedVarIn(assign.Value, tainted),
-				offset: assignOffset,
-			}
-		}
-		return true
-	})
-	return tainted
-}
-
-// wordReferencesTainted は Word 内で tainted 集合に属する変数が参照されていれば true。
-func (rule *SecretInLogRule) wordReferencesTainted(word *syntax.Word, tainted map[string]taintEntry) bool {
-	var found bool
-	syntax.Walk(word, func(node syntax.Node) bool {
-		pe, ok := node.(*syntax.ParamExp)
-		if !ok || pe.Param == nil {
-			return true
-		}
-		if _, t := tainted[pe.Param.Value]; t {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
-}
-
-// firstTaintedVarIn は Word 内で最初に見つかった tainted 変数名を返す（メッセージ用）。
-func (rule *SecretInLogRule) firstTaintedVarIn(word *syntax.Word, tainted map[string]taintEntry) string {
-	var name string
-	syntax.Walk(word, func(node syntax.Node) bool {
-		pe, ok := node.(*syntax.ParamExp)
-		if !ok || pe.Param == nil {
-			return true
-		}
-		if _, t := tainted[pe.Param.Value]; t {
-			name = pe.Param.Value
-			return false
-		}
-		return true
-	})
-	return name
-}
-
 // echoLeakOccurrence は検出された echo/printf 出力箇所を表す。
 type echoLeakOccurrence struct {
 	VarName  string
@@ -149,7 +68,7 @@ type echoLeakOccurrence struct {
 //
 // ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
 // ビルドログに引き続き表示されるため、スキップ対象から除外する。
-func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]taintEntry, script string, runStr *ast.String) []echoLeakOccurrence {
+func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]shell.Entry, script string, runStr *ast.String) []echoLeakOccurrence {
 	if file == nil {
 		return nil
 	}
@@ -208,7 +127,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 // コマンドは file 引数があっても引き続きログに出るため flag する。
 func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 	stmt *syntax.Stmt,
-	tainted map[string]taintEntry,
+	tainted map[string]shell.Entry,
 	script string,
 	runStr *ast.String,
 	leaks *[]echoLeakOccurrence,
@@ -306,7 +225,7 @@ func wordLiteralValue(w *syntax.Word) string {
 // collectLeakedVars は単一の引数内で tainted 変数参照をすべて報告リストに追加する。
 func (rule *SecretInLogRule) collectLeakedVars(
 	arg *syntax.Word,
-	tainted map[string]taintEntry,
+	tainted map[string]shell.Entry,
 	script string,
 	runStr *ast.String,
 	cmdName string,
@@ -324,8 +243,8 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		}
 		sinkOffset := int(pe.Pos().Offset())
 		// Order-aware チェック: アサインが sink より後に現れる場合は FP なのでスキップ。
-		// offset=-1 の env 変数はスクリプト開始前に設定済みなので常に有効（< 任意の sinkOffset）。
-		if entry.offset >= 0 && entry.offset >= sinkOffset {
+		// Offset=-1 の env 変数はスクリプト開始前に設定済みなので常に有効（< 任意の sinkOffset）。
+		if entry.Offset >= 0 && entry.Offset >= sinkOffset {
 			return true
 		}
 		// GitHub Actions の ::add-mask:: は発行後のログ出力にのみ適用されるため、
@@ -337,7 +256,7 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		pos := offsetToPosition(runStr, script, sinkOffset)
 		*leaks = append(*leaks, echoLeakOccurrence{
 			VarName:  name,
-			Origin:   entry.origin,
+			Origin:   entry.First(),
 			Position: pos,
 			Offset:   sinkOffset,
 			Command:  cmdName,
@@ -449,20 +368,22 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return
 	}
 
-	initialTainted := make(map[string]string)
+	// 初期 taint 集合を構築: workflow env, job env, crossStepEnv, step env の順で merge。
+	// 後から merge されるものが同名キーを上書きする（step env が最優先）。
+	initialTainted := make(map[string]shell.Entry)
 	for k, v := range rule.workflowEnvSecrets {
-		initialTainted[k] = v
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
 	for k, v := range rule.jobEnvSecrets {
-		initialTainted[k] = v
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
 	// crossStepEnv（前 step の $GITHUB_ENV 経由で伝播した taint）を merge。
 	// step-level env より前に入れ、同名の場合は step-level が勝つようにする。
 	for k, v := range rule.crossStepEnv {
-		initialTainted[k] = v
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
 	for k, v := range rule.collectSecretEnvVars(step.Env) {
-		initialTainted[k] = v
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
 	if len(initialTainted) == 0 {
 		return
@@ -474,7 +395,7 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return // パース失敗時は解析をスキップ（他ルールの管轄）
 	}
 
-	tainted := rule.propagateTaint(file, initialTainted)
+	tainted := shell.PropagateTaint(file, initialTainted)
 	leaks := rule.findEchoLeaks(file, tainted, script, execRun.Run)
 
 	for _, leak := range leaks {
@@ -747,7 +668,7 @@ func firstNameEqualsPrefix(word *syntax.Word) string {
 // 漏洩メッセージに表示される識別子（`secrets.X` or `shellvar:Y`）。
 func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 	file *syntax.File,
-	tainted map[string]taintEntry,
+	tainted map[string]shell.Entry,
 	script string,
 ) map[string]string {
 	result := make(map[string]string)
@@ -793,7 +714,7 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 // ため実質 1 assignment）は最初に一致した NAME のみを記録する。
 func (rule *SecretInLogRule) collectEchoEnvWrites(
 	call *syntax.CallExpr,
-	tainted map[string]taintEntry,
+	tainted map[string]shell.Entry,
 	result map[string]string,
 ) {
 	if len(call.Args) < 2 {
@@ -825,7 +746,7 @@ func (rule *SecretInLogRule) collectEchoEnvWrites(
 	}
 	var firstVar string
 	for _, arg := range call.Args[nameArgIdx:] {
-		if v := rule.firstTaintedVarIn(arg, tainted); v != "" {
+		if v, ok := shell.WordReferencesEntry(arg, tainted); ok {
 			firstVar = v
 			break
 		}
@@ -833,9 +754,9 @@ func (rule *SecretInLogRule) collectEchoEnvWrites(
 	if firstVar == "" {
 		return
 	}
-	// origin は「起点の secret 名」を保持する。tainted[firstVar].origin は
+	// origin は「起点の secret 名」を保持する。tainted[firstVar].First() は
 	// 既に "secrets.X" または "shellvar:Y" の形を持つため、そのまま引き継ぐ。
-	result[name] = tainted[firstVar].origin
+	result[name] = tainted[firstVar].First()
 }
 
 // collectHeredocEnvWrites は `cat <<EOF >> $GITHUB_ENV ... EOF` 形式の heredoc 本文を
@@ -843,7 +764,7 @@ func (rule *SecretInLogRule) collectEchoEnvWrites(
 // result に追加する。heredoc 本文の取得は script のバイトオフセットから行う。
 func (rule *SecretInLogRule) collectHeredocEnvWrites(
 	stmt *syntax.Stmt,
-	tainted map[string]taintEntry,
+	tainted map[string]shell.Entry,
 	script string,
 	result map[string]string,
 ) {
@@ -885,7 +806,7 @@ func (rule *SecretInLogRule) collectHeredocEnvWrites(
 // firstTaintedRefOrigin は行内に現れる最初の tainted 変数参照の origin を返す。
 // 現れる位置（バイトオフセット）が最小のものを選ぶことで map iteration の
 // 非決定性を回避する。
-func (rule *SecretInLogRule) firstTaintedRefOrigin(line string, tainted map[string]taintEntry) string {
+func (rule *SecretInLogRule) firstTaintedRefOrigin(line string, tainted map[string]shell.Entry) string {
 	minPos := -1
 	var origin string
 	for name, entry := range tainted {
@@ -895,7 +816,7 @@ func (rule *SecretInLogRule) firstTaintedRefOrigin(line string, tainted map[stri
 		}
 		if minPos < 0 || loc[0] < minPos {
 			minPos = loc[0]
-			origin = entry.origin
+			origin = entry.First()
 		}
 	}
 	return origin

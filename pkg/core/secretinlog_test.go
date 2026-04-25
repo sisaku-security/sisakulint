@@ -4,8 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"mvdan.cc/sh/v3/syntax"
+
+	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 func TestNewSecretInLogRule(t *testing.T) {
@@ -57,110 +59,13 @@ func parseShellForTest(t *testing.T, script string) *syntax.File {
 	return file
 }
 
-func TestSecretInLog_PropagateTaint(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		script   string
-		initial  map[string]string
-		expected map[string]bool // 期待される tainted 変数名
-	}{
-		{
-			name: "command substitution with jq",
-			script: `PRIVATE_KEY=$(echo "$GCP_KEY" | jq -r '.private_key')
-echo "$PRIVATE_KEY"`,
-			initial:  map[string]string{"GCP_KEY": "secrets.GCP"},
-			expected: map[string]bool{"GCP_KEY": true, "PRIVATE_KEY": true},
-		},
-		{
-			name: "chained assignment",
-			script: `STEP1="$TOKEN"
-STEP2=$(echo "$STEP1")`,
-			initial:  map[string]string{"TOKEN": "secrets.T"},
-			expected: map[string]bool{"TOKEN": true, "STEP1": true, "STEP2": true},
-		},
-		{
-			name: "untainted variables stay untainted",
-			script: `MSG="hello"
-SAFE=$(date)`,
-			initial:  map[string]string{"TOKEN": "secrets.T"},
-			expected: map[string]bool{"TOKEN": true},
-		},
-		{
-			name:     "assignment from untainted source does not taint",
-			script:   `NOT_TAINTED=$(ls /tmp)`,
-			initial:  map[string]string{"TOKEN": "secrets.T"},
-			expected: map[string]bool{"TOKEN": true},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			rule := NewSecretInLogRule()
-			file := parseShellForTest(t, tc.script)
-			got := rule.propagateTaint(file, tc.initial)
-			if len(got) != len(tc.expected) {
-				t.Fatalf("tainted set size = %d (%v), want %d (%v)", len(got), got, len(tc.expected), tc.expected)
-			}
-			for name := range tc.expected {
-				if _, ok := got[name]; !ok {
-					t.Errorf("expected %q to be tainted, was not. got=%v", name, got)
-				}
-			}
-		})
-	}
-}
-
-func TestSecretInLog_OrderAwareTaint(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		script   string
-		initial  map[string]string
-		expected map[string]bool // 期待される tainted 変数名
-	}{
-		{
-			name:     "forward assignment taints correctly",
-			script:   "A=$SECRET\nB=$A",
-			initial:  map[string]string{"SECRET": "secrets.X"},
-			expected: map[string]bool{"SECRET": true, "A": true, "B": true},
-		},
-		{
-			name:     "backward assignment does not taint",
-			script:   "B=$A\nA=$SECRET",
-			initial:  map[string]string{"SECRET": "secrets.X"},
-			expected: map[string]bool{"SECRET": true, "A": true},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			rule := NewSecretInLogRule()
-			file := parseShellForTest(t, tc.script)
-			got := rule.propagateTaint(file, tc.initial)
-			if len(got) != len(tc.expected) {
-				t.Fatalf("tainted set size = %d (%v), want %d (%v)", len(got), got, len(tc.expected), tc.expected)
-			}
-			for name := range tc.expected {
-				if _, ok := got[name]; !ok {
-					t.Errorf("expected %q to be tainted, was not. got=%v", name, got)
-				}
-			}
-		})
-	}
-}
-
 func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name     string
 		script   string
-		tainted  map[string]taintEntry
+		tainted  map[string]shell.Entry
 		wantHits []struct {
 			varName string
 			command string
@@ -170,7 +75,7 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			name: "echo of tainted var",
 			script: `echo "Key: $PRIVATE_KEY"
 `,
-			tainted: map[string]taintEntry{"PRIVATE_KEY": {origin: "shellvar:GCP_KEY", offset: -1}},
+			tainted: map[string]shell.Entry{"PRIVATE_KEY": {Sources: []string{"shellvar:GCP_KEY"}, Offset: -1}},
 			wantHits: []struct {
 				varName string
 				command string
@@ -180,7 +85,7 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			name: "printf of tainted var",
 			script: `printf "%s\n" "$TOKEN"
 `,
-			tainted: map[string]taintEntry{"TOKEN": {origin: "secrets.API", offset: -1}},
+			tainted: map[string]shell.Entry{"TOKEN": {Sources: []string{"secrets.API"}, Offset: -1}},
 			wantHits: []struct {
 				varName string
 				command string
@@ -190,7 +95,7 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			name: "echo of untainted var",
 			script: `echo "$MSG"
 `,
-			tainted:  map[string]taintEntry{"TOKEN": {origin: "secrets.API", offset: -1}},
+			tainted:  map[string]shell.Entry{"TOKEN": {Sources: []string{"secrets.API"}, Offset: -1}},
 			wantHits: nil,
 		},
 		{
@@ -198,7 +103,7 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			script: `echo "::add-mask::$TOKEN"
 echo "Value: $TOKEN"
 `,
-			tainted:  map[string]taintEntry{"TOKEN": {origin: "secrets.API", offset: -1}},
+			tainted:  map[string]shell.Entry{"TOKEN": {Sources: []string{"secrets.API"}, Offset: -1}},
 			wantHits: nil,
 		},
 	}
