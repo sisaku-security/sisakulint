@@ -2272,12 +2272,57 @@ gh pr view --web
 
 ## 完了条件チェックリスト（spec Section 10 の DoD）
 
-- [ ] `pkg/shell/taint.go` 新設、godoc 完備
-- [ ] `pkg/shell/taint_test.go` 新設、カバレッジ 90% 以上
-- [ ] `pkg/core/taint.go` から regex ベースの `findTaintedVariableAssignments` / `findGitHubOutputWrites` / `processHeredocPatterns` を**削除**
-- [ ] `pkg/core/secretinlog.go` から `propagateTaint` / `wordReferencesTainted` / `firstTaintedVarIn` / `taintEntry` を**削除**
-- [ ] 既存テスト全件 pass（変更を加えたテストはレビューコメントで明示）
-- [ ] B-pattern の新規テスト 4件 + secretinlog 同等 が pass
-- [ ] `golangci-lint run --fix` でエラーゼロ
-- [ ] `script/actions/` リグレッション diff が「想定された FP 削減」のみ
-- [ ] PR 作成済み
+- [x] `pkg/shell/taint.go` 新設、godoc 完備
+- [x] `pkg/shell/taint_test.go` 新設、カバレッジ 90% 以上 (per-function 90%+; パッケージ全体は parser.go を含むため 80.8%)
+- [x] `pkg/core/taint.go` から regex ベースの `findTaintedVariableAssignments` / `findGitHubOutputWrites` / `processHeredocPatterns` を**削除**
+- [x] `pkg/core/secretinlog.go` から `propagateTaint` / `wordReferencesTainted` / `firstTaintedVarIn` / `taintEntry` を**削除**
+- [x] 既存テスト全件 pass
+- [x] B-pattern の新規テスト 4件 + secretinlog 同等 4件が pass
+- [x] `golangci-lint run` で `pkg/shell/...` 0 issues（`pkg/core` は環境上 lint v2.4.0 が go1.26 source で panic — 既存問題、本変更と無関係）
+- [x] `script/actions/` リグレッション diff: 完全一致（`printf 'name=%s\n' "$VAR"` 形式の検出を追加対応した結果）
+- [x] PR 作成済み — https://github.com/sisaku-security/sisakulint/pull/450
+
+---
+
+## Outcome / Plan からの逸脱記録
+
+実装中に発見した plan の不正確さや前提抜けを以下に記録する。次回以降の同種計画への学びとして残す。
+
+### 1. `decl.Args` (not `decl.Assigns`)
+
+`mvdan.cc/sh/v3/syntax.DeclClause` の代入リストフィールドは `Args` であり、plan が記載していた `Assigns` は存在しない。Task 2 実装時に subagent が godoc で発見し修正。
+
+### 2. `${{ ... }}` は bash パーサで syntax error になる
+
+Plan は shell パーサで GitHub Actions スクリプトを直接 parse できる前提だったが、`${{` は bash の `${X}` parameter expansion 規則と衝突し常に "invalid parameter name" エラーで parse 失敗する。これは Task 8 実装時に判明。
+
+**対応**: `pkg/core/taint.go` に `sanitizeForShellParse(script) → (sanitized, exprMap)` を新設。`${{ EXPR }}` を `_SISAKULINT_E_<i>_` 形式の placeholder に置換し、AST 抽出後に `exprMap` で原式を復元する。`pkg/shell/taint.go` 側はスクリプトのソース文字列に依存しない pure 関数として保ち、preprocessing は GitHub Actions 文脈を持つ `pkg/core/taint.go` に閉じた。
+
+`secretinlog.go` は taint source を YAML の `env:` から取るためこのサニタイズは不要（既存の `syntax.Parse` をそのまま継続）。
+
+### 3. `shellvar:X` 連鎖の transitive 展開
+
+`shell.PropagateTaint` は派生変数に `Sources: ["shellvar:X"]` の chain marker を入れるが、taint.go の既存 caller / テストは `INPUT2 = INPUT` で `INPUT2.Sources` に元の `github.event.issue.title` まで遡及することを期待していた（旧 regex 実装のセマンティクス）。
+
+**対応**: `pkg/core/taint.go` に `expandShellvarMarkers(map[string]shell.Entry)` を追加。bounded fixed-point (max 16 passes) で `shellvar:X` を `X.Sources` に置換し、循環は最大反復数で打ち切る。`shell.PropagateTaint` 自体の semantics は変更せず（secretinlog はそのまま使う）、taint.go 側で post-process する。
+
+### 4. printf format pattern の検出漏れ
+
+Task 14 リグレッション diff で `printf 'head_ref_branch=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"` 形式の output 書き込み 2 箇所 (`script/actions/advisory/GHSA-gq52-6phf-x2r6-*.yaml`) が新実装で検出されなくなった。`firstNameEqualsArg` が「format string に `%` を含む arg はスキップ」していたため、`name=%s\n` で start する arg が無視されていた。
+
+**対応**: `firstNameEqualsArg` を拡張し、`name=...%...` 形式の arg は `name` を取り出し、value は `call.Args[i+1]` 以降から取るよう修正。`shell.WalkRedirectWrites` のテストにも `TestWalkRedirectWrites_PrintfFormat` を追加。
+
+### 5. heredoc body サンプルテストの sink 衝突
+
+Task 10 の `TestSecretInLog_HeredocBodyNotFalseDetected` は plan サンプルが `cat <<EOF\nX=$TOKEN\nEOF` を使っていたが、`cat` は secretinlog で sink として扱われるため heredoc 本文に `$TOKEN` を含めた時点で正しく leak 検出される（誤検出ではない）。
+
+**対応**: heredoc wrapper を sink でない `true <<EOF` に変更。「heredoc 本文中の `X=$TOKEN` を assignment と誤認しないこと」を後続 `echo "$X"` の非検出で確認するスタイルに改変。
+
+### 6. lint 環境問題（本変更とは無関係）
+
+ローカル `golangci-lint v2.4.0` (go1.25 build) が pkg/core 内に go1.26 を要求するファイルを含むため panic。`pkg/shell` だけは clean に lint 通る。CI 環境では問題ないと想定（main branch でも同状態）。
+
+### 7. Sandbox 制約: `-race` テスト
+
+ローカル sandbox 環境で `-race` を付けると `runtime/race: package testmain: cannot find package` エラーになる。sandbox 解除で全 PASS。これは harness 制約で、CI には影響しない。
+

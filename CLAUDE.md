@@ -115,6 +115,12 @@ See `docs/RULES_GUIDE.md` for detailed guide.
 Use AST/Tokenizer instead of string-based parsing:
 - **Expressions**: `pkg/expressions` (`AnalyzeExpressionSyntax`, `NewTokenizer`)
 - **Shell**: `pkg/shell` with `mvdan.cc/sh/v3/syntax` (`NewShellParser`, `FindVarUsageAsCommandArg`)
+- **Taint analysis** (#446): `pkg/shell/taint.go` provides shared, state-less primitives reused by `TaintTracker` (code-injection chain) and `SecretInLogRule`:
+  - `shell.Entry` — taint origin (`Sources`) plus byte `Offset` for order-aware FP suppression
+  - `shell.PropagateTaint(file, initial)` — single forward pass; derived vars get `shellvar:X` chain markers
+  - `shell.WalkAssignments(file)` / `shell.WordReferencesEntry(word, tainted)` — AST-aware lookups (treats heredoc bodies and comments correctly)
+  - `shell.WalkRedirectWrites(file, target)` — collects `>> $TARGET` writes (echo / printf format / heredoc, including `printf 'name=%s\n' "$VAR"` form)
+  - GitHub Actions `${{ ... }}` substitutions are not valid bash syntax. `pkg/core/taint.go` sanitizes them via `sanitizeForShellParse` (length-non-preserving placeholder + `exprMap`) before parsing. `secretinlog.go` does not need this because its taint sources come from the YAML `env:` section, not script literals.
 
 ## Implemented Rules
 
