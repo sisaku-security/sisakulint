@@ -60,8 +60,7 @@ func (m *WorkflowTaintMap) setJobOutputTaint(jobID, outputName string, sources [
 		m.jobOutputTaints[jobID] = make(map[string][]string)
 	}
 
-	merged := append(m.jobOutputTaints[jobID][outputName], sources...)
-	m.jobOutputTaints[jobID][outputName] = deduplicateStrings(merged)
+	m.jobOutputTaints[jobID][outputName] = mergeUnique(m.jobOutputTaints[jobID][outputName], sources)
 }
 
 // IsTaintedNeedsOutput checks if needs.jobID.outputs.outputName carries taint.

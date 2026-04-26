@@ -868,3 +868,75 @@ func TestTaintTracker_VariableAssignmentWithKeywordPrefix(t *testing.T) {
 		})
 	}
 }
+
+// B-pattern: regex から AST に切り替えると自然に修正される FP/FN のテスト。
+// これらは Issue #446 のリファクタで GREEN になることを期待する。
+
+func makeBPatternRunStep(id, script string) *ast.Step {
+	return &ast.Step{
+		ID: &ast.String{Value: id},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: script},
+		},
+	}
+}
+
+func isBPatternVarTainted(tracker *TaintTracker, name string) bool {
+	_, ok := tracker.taintedVars[name]
+	return ok
+}
+
+func TestTaintTracker_CommentLineNotMisdetected(t *testing.T) {
+	t.Parallel()
+	step := makeBPatternRunStep("test-step", `
+# X="${{ github.event.issue.body }}"
+echo "no leak"
+`)
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+	if isBPatternVarTainted(tracker, "X") {
+		t.Errorf("X must not be tainted (comment-only assignment)")
+	}
+}
+
+func TestTaintTracker_HeredocBodyNotMisdetected(t *testing.T) {
+	t.Parallel()
+	step := makeBPatternRunStep("test-step", `
+cat <<EOF
+X=${{ github.event.issue.body }}
+EOF
+`)
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+	if isBPatternVarTainted(tracker, "X") {
+		t.Errorf("X must not be tainted (heredoc body content is not executed assignment)")
+	}
+}
+
+func TestTaintTracker_OneLinerMultipleAssignments(t *testing.T) {
+	t.Parallel()
+	step := makeBPatternRunStep("test-step", `
+X=1; Y="${{ github.event.issue.title }}"
+echo "y=$Y" >> $GITHUB_OUTPUT
+`)
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+
+	tainted, sources := tracker.IsTaintedExpr("steps.test-step.outputs.y")
+	if !tainted {
+		t.Fatalf("output y must be tainted via Y derived from issue.title")
+	}
+	if len(sources) == 0 {
+		t.Errorf("expected at least 1 source, got %v", sources)
+	}
+}
+
+func TestTaintTracker_LineContinuation(t *testing.T) {
+	t.Parallel()
+	step := makeBPatternRunStep("test-step", "URL=\"${{ github.head_ref }}\" \\\n   FOO=bar\n")
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+	if !isBPatternVarTainted(tracker, "URL") {
+		t.Errorf("URL must be tainted via head_ref")
+	}
+}
