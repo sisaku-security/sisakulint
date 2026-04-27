@@ -1138,3 +1138,51 @@ func TestTaintTracker_RedirWriteInSubshell(t *testing.T) {
 		t.Errorf("output sources should reference github.event.issue.body, got %v", srcs)
 	}
 }
+
+// TestTaintTracker_RedirWriteInFunctionBody は #448 関数引数経由 taint が
+// $GITHUB_OUTPUT 書き込み経路に正しく流れることを検証する。
+//
+// 関数本体内の `echo "x=$1" >> $GITHUB_OUTPUT` は、call-site の untrusted
+// 引数 taint を通じて taintedOutputs に記録されるべき。
+//
+// call-site arg として shellvar (TITLE) を使用する (Approach 1: shellvar 経由):
+//   - TITLE="${{ github.event.issue.title }}" が seed として直接セット
+//   - foo "$TITLE" が call-site で TITLE を arg として渡す → binding["1"] = shellvar:TITLE
+//   - 関数本体内 echo "x=$1" >> $GITHUB_OUTPUT で $1 が tainted と判定
+//   - expandShellvarMarkers が shellvar:1 → shellvar:TITLE → github.event.issue.title と展開
+func TestTaintTracker_RedirWriteInFunctionBody(t *testing.T) {
+	t.Parallel()
+
+	step := makeBPatternRunStep("step1", `TITLE="${{ github.event.issue.title }}"
+foo() { echo "x=$1" >> $GITHUB_OUTPUT; }
+foo "$TITLE"`)
+
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+
+	outputs := tracker.GetTaintedOutputs()
+	stepOutputs, ok := outputs["step1"]
+	if !ok {
+		t.Fatalf("taintedOutputs[step1] missing; got: %v", outputs)
+	}
+	srcs, ok := stepOutputs["x"]
+	if !ok {
+		keys := make([]string, 0, len(stepOutputs))
+		for k := range stepOutputs {
+			keys = append(keys, k)
+		}
+		t.Fatalf("taintedOutputs[step1][x] missing; got keys %v", keys)
+	}
+	foundOrigin := false
+	for _, s := range srcs {
+		if s == "github.event.issue.title" {
+			foundOrigin = true
+		}
+		if strings.HasPrefix(s, "shellvar:") {
+			t.Errorf("unresolved shellvar marker survived expansion: %q (sources=%v)", s, srcs)
+		}
+	}
+	if !foundOrigin {
+		t.Errorf("taintedOutputs[step1][x] = %v; want to contain %q", srcs, "github.event.issue.title")
+	}
+}
