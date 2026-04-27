@@ -7,6 +7,7 @@ package shell
 import (
 	"maps"
 	"path"
+	"strconv"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -706,4 +707,42 @@ func callCommandName(call *syntax.CallExpr) string {
 		return ""
 	}
 	return wordLitPrefix(call.Args[0])
+}
+
+// buildArgBinding は CallExpr の args から call-site の taint state を抽出し、
+// 関数本体内の $1 / $2 / ... / $@ / $* に対応する binding map を返す。
+//
+// セマンティクス (#448):
+//   - tainted な shell var を参照する arg のみを binding に登録 (untainted arg は skip)
+//   - binding["1"], ["2"], ... には Sources = ["shellvar:UPSTREAM_NAME"] (processAssign と同形式)
+//   - binding["@"] / ["*"] には全 tainted args の Sources を union (chain そのまま)
+//   - すべて Offset = -1 (env-like、body 内 sink から見て常に "before" 扱い)
+//
+// $@ / $* は「いずれかが tainted なら tainted」(issue 案明記)。
+//
+// visible は call-site の現在 frame で見える tainted vars (= currentFrame.visible())。
+func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string]Entry {
+	binding := make(map[string]Entry)
+	if call == nil || len(call.Args) <= 1 {
+		return binding
+	}
+	var atSources []string
+	for i, arg := range call.Args[1:] {
+		upstream, ok := WordReferencesEntry(arg, visible)
+		if !ok {
+			continue
+		}
+		binding[strconv.Itoa(i+1)] = Entry{
+			Sources: []string{"shellvar:" + upstream},
+			Offset:  -1,
+		}
+		if e, ok := visible[upstream]; ok {
+			atSources = mergeSources(atSources, e.Sources)
+		}
+	}
+	if len(atSources) > 0 {
+		binding["@"] = Entry{Sources: atSources, Offset: -1}
+		binding["*"] = binding["@"]
+	}
+	return binding
 }
