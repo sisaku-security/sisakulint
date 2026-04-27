@@ -817,6 +817,43 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "function_declare_local_by_default",
+			script:  `foo() { declare X="$T"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"}, // 関数内 declare はデフォルト local
+			},
+		},
+		{
+			name:    "function_declare_g_simplified_A_ignored",
+			script:  `foo() { declare -g X="$T"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				// 簡略案 A: 関数内の non-local 代入 (declare -g 含む) は親に漏らさない
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"},
+			},
+		},
+		{
+			name:    "function_export_simplified_A_ignored",
+			script:  `foo() { export X="$T"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"},
+			},
+		},
+		{
+			name:    "function_readonly_simplified_A_ignored",
+			script:  `foo() { readonly X="$T"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -982,6 +1019,82 @@ func TestScopedTaint_At(t *testing.T) {
 			t.Errorf("function body cmd visible should contain X (local), got %v", keysOf(visible))
 		}
 	})
+
+	t.Run("function_body_inner_sees_root_via_chain", func(t *testing.T) {
+		t.Parallel()
+		// 関数内で local 宣言なしで親スコープの T を参照
+		// → bash dynamic scoping の lookup chain が効くことを確認
+		file := parseScript(t, `foo() { cmd "$T"; }; foo`)
+		initial := map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+
+		var cmdStmt *syntax.Stmt
+		syntax.Walk(file, func(n syntax.Node) bool {
+			fd, ok := n.(*syntax.FuncDecl)
+			if !ok || fd.Body == nil {
+				return true
+			}
+			body, ok := fd.Body.Cmd.(*syntax.Block)
+			if !ok {
+				return true
+			}
+			if len(body.Stmts) >= 1 {
+				cmdStmt = body.Stmts[0]
+			}
+			return false
+		})
+		if cmdStmt == nil {
+			t.Fatal("function body cmd stmt not found")
+		}
+		visible := result.At(cmdStmt)
+		if _, ok := visible["T"]; !ok {
+			t.Errorf("function body cmd visible should contain T (via parent chain), got %v", keysOf(visible))
+		}
+	})
+}
+
+// TestDeclHasGlobalFlag は declHasGlobalFlag が mvdan/sh の DeclClause 表現
+// (フラグは Name=nil, Value=Word{Lit{"-g"}} の Assign) を正しく解釈することを検証する。
+// FuncDecl 内で frame が pop されるため end-to-end テストでは差が出ないが、
+// この関数自体の AST inspection ロジックを lock-in するために単体で検証する。
+func TestDeclHasGlobalFlag(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		script string
+		want   bool
+	}{
+		{name: "no_flag", script: `declare X="$T"`, want: false},
+		{name: "g_flag", script: `declare -g X="$T"`, want: true},
+		{name: "gA_bundle", script: `declare -gA X="$T"`, want: true},
+		{name: "Ag_bundle", script: `declare -Ag X="$T"`, want: true},
+		{name: "A_only", script: `declare -A X="$T"`, want: false},
+		{name: "r_only", script: `declare -r X="$T"`, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			var got bool
+			var found bool
+			syntax.Walk(file, func(n syntax.Node) bool {
+				if d, ok := n.(*syntax.DeclClause); ok {
+					got = declHasGlobalFlag(d)
+					found = true
+					return false
+				}
+				return true
+			})
+			if !found {
+				t.Fatal("DeclClause not found in script")
+			}
+			if got != tc.want {
+				t.Errorf("declHasGlobalFlag(%q) = %v; want %v", tc.script, got, tc.want)
+			}
+		})
+	}
 }
 
 // keysOf is a test helper that returns sorted keys of a map for debug output.

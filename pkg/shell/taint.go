@@ -341,7 +341,7 @@ func processAssign(current *scopeFrame, a *syntax.Assign, kw AssignKeyword) {
 	if a == nil || a.Name == nil {
 		return
 	}
-	_ = kw // Task 5/6/7 で `local` / `declare -g` の振り分けに利用予定
+	_ = kw // kw は processDeclClause で参照済み。processAssign 自体は kw を使わない (将来の拡張用に残す)
 	name := a.Name.Value
 	if _, already := current.local[name]; already {
 		return
@@ -360,26 +360,54 @@ func processAssign(current *scopeFrame, a *syntax.Assign, kw AssignKeyword) {
 	}
 }
 
-// processDeclClause は DeclClause (export X=Y / local X=Y / readonly X=Y / declare X=Y) を処理する。
+// processDeclClause は DeclClause を処理する。
 // セマンティクス (#447):
-//   - local: 常に current frame に書く (FuncDecl 内なら本体ローカル、root なら root ※bash エラーだが解析許容)
-//   - declare (装飾なし): FuncDecl 内なら current frame、それ以外なら current frame に書く (Task 5 で declare -g 対応)
-//   - export / readonly: FuncDecl 内では簡略案 A により無視 (親に漏らさない)、それ以外なら current frame に書く
+//   - local: 常に current frame に書く
+//   - declare / typeset (装飾なし): current frame に書く (FuncDecl 内なら本体ローカル)
+//   - declare -g (グローバル指定): FuncDecl 内では簡略案 A により無視
+//   - export / readonly: FuncDecl 内では簡略案 A により無視、それ以外なら current frame に書く
 func processDeclClause(current *scopeFrame, decl *syntax.DeclClause) {
 	if decl == nil {
 		return
 	}
 	kw := keywordFor(decl.Variant.Value)
 
-	// FuncDecl 内で export / readonly は簡略案 A により無視 (親に漏らさない)
-	if current.kind == scopeFunc && (kw == AssignExport || kw == AssignReadonly) {
-		return
+	if current.kind == scopeFunc {
+		// FuncDecl 内で export / readonly は簡略案 A により無視
+		if kw == AssignExport || kw == AssignReadonly {
+			return
+		}
+		// declare -g も簡略案 A により無視
+		if kw == AssignDeclare && declHasGlobalFlag(decl) {
+			return
+		}
 	}
-	// declare -g の判定は Task 5 で追加。本 Task では declare は current frame に書く
 
 	for _, a := range decl.Args {
 		processAssign(current, a, kw)
 	}
+}
+
+// declHasGlobalFlag は DeclClause に -g (global) フラグが付いているか判定する。
+//
+// mvdan/sh では `declare -g X="$T"` のフラグは `*syntax.Assign{Name: nil,
+// Value: Word{Parts: [Lit{Value: "-g"}]}}` として表現される (Name は代入の
+// 左辺名なので、フラグでは nil)。代入 args は Name != nil 側にある。
+// したがって Name == nil かつ Value Word の先頭 Lit が `-` で始まり 'g' を
+// 含むものを探す。これで `-g` / `-gA` / `-Ag` 等を正しく検出できる
+// (bash semantics: 単一のフラグ束に 'g' が含まれていれば global)。
+func declHasGlobalFlag(decl *syntax.DeclClause) bool {
+	for _, a := range decl.Args {
+		if a == nil || a.Name != nil {
+			// Name != nil は代入 (X=v) なのでフラグではない
+			continue
+		}
+		flag := wordLitPrefix(a.Value)
+		if strings.HasPrefix(flag, "-") && strings.ContainsRune(flag, 'g') {
+			return true
+		}
+	}
+	return false
 }
 
 // dedupAppend は順序保持で重複なしの append。
