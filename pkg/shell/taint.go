@@ -697,3 +697,13 @@ func mergeSources(dst, src []string) []string {
 	}
 	return out
 }
+
+// callCommandName は CallExpr の第1引数を literal command name として返す。
+// 第1引数が変数経由 ($cmd 等) の場合は空文字を返す → funcTable 未登録扱いで
+// 静的解決スキップとなる。
+func callCommandName(call *syntax.CallExpr) string {
+	if call == nil || len(call.Args) == 0 {
+		return ""
+	}
+	return wordLitPrefix(call.Args[0])
+}
