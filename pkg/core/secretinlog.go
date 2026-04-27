@@ -257,6 +257,20 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		if hasAddMaskBefore(script, name, sinkOffset) {
 			return true
 		}
+		// positional ($1, $2, ...) は autofix が upstream var (例: TOKEN) を
+		// マスクするため (#448 resolveMaskTarget と対称)、upstream 名のマスクも
+		// 検出抑制対象にする。これにより autofix 後の再走で警告が再発しない。
+		if isPositional(name) {
+			for _, src := range entry.Sources {
+				upstream, ok := strings.CutPrefix(src, "shellvar:")
+				if !ok || upstream == "" {
+					continue
+				}
+				if hasAddMaskBefore(script, upstream, sinkOffset) {
+					return true
+				}
+			}
+		}
 		pos := offsetToPosition(runStr, script, sinkOffset)
 		*leaks = append(*leaks, echoLeakOccurrence{
 			VarName:  name,

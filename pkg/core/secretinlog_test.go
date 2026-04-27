@@ -1586,6 +1586,75 @@ func TestSecretInLog_AtArg_DetectsLeakNoAutofix(t *testing.T) {
 	}
 }
 
+// TestSecretInLog_PositionalArg_AutofixIdempotent は #448 で autofix 適用後の
+// スクリプトに対して再度 rule を走らせると警告が再発しないことを確認する。
+// (Task 13 の resolveMaskTarget と Task 15 直前のフィックスで、autofix が
+// upstream 変数 (TOKEN) をマスクするので、検出抑制も同じ upstream 名を見て
+// idempotent になる必要がある。)
+func TestSecretInLog_PositionalArg_AutofixIdempotent(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	// First pass: detect the leak.
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected initial leak detection; got 0 errors")
+	}
+
+	// Apply autofixers.
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	fixedScript := exec.Run.Value
+
+	// Confirm the autofix actually inserted the upstream mask (sanity check).
+	if !strings.Contains(fixedScript, `echo "::add-mask::$TOKEN"`) {
+		t.Fatalf("autofix did not insert expected mask; got script:\n%s", fixedScript)
+	}
+
+	// Second pass: re-run rule on the autofixed step — must produce 0 secret-in-log warnings.
+	step2 := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: fixedScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule2 := NewSecretInLogRule()
+	if err := rule2.VisitJobPre(&ast.Job{Steps: []*ast.Step{step2}}); err != nil {
+		t.Fatalf("second VisitJobPre: %v", err)
+	}
+	if len(rule2.Errors()) != 0 {
+		t.Errorf("after autofix, secret-in-log should be silent; got errors: %v", rule2.Errors())
+	}
+}
+
 // TestSecretInLog_FunctionLocalChainsThroughArg は関数本体内で local X="$1" 経由の
 // 派生変数の echo が leak 検出され、origin chain が upstream まで遡ることを確認する。
 func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {
