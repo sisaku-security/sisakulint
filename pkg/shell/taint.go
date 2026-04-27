@@ -252,8 +252,16 @@ func (f *scopeFrame) visible() map[string]Entry {
 //     - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
 //       親 visible を snapshot copy して隔離。内部代入は親に漏れない
 //     - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
-//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は本 issue の
-//       簡略案 A により親に漏らさない (#448 で改善予定)
+//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は #447 の
+//       簡略案 A により親に漏らさない
+//   - 関数引数経由 taint 伝播 (#448):
+//     - FuncDecl 出現時には body を walk せず関数テーブル (funcTable) に登録のみ
+//     - CallExpr 検出時に call-site の args の taint state を tainted["1"]/["2"]/.../["@"]/["*"]
+//       として inject した上で body を walk (lazy walk)
+//     - 複数 call-site から同じ body stmt が walk された場合、visibleAt[stmt] は
+//       Sources を保守的 union (FP 寄り)
+//     - 再帰呼び出しは visited[name] で depth=1 制限 (固定点反復はしない)
+//     - forward reference (定義前 call) は 1-pass walk で自然に未登録扱い → bash 一致
 //
 // 戻り値は initial を変更せず新しい *ScopedTaint を返す。
 func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
