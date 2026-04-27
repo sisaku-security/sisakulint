@@ -746,3 +746,32 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
 	}
 	return binding
 }
+
+// recordVisibleAt は currentFrame.visible() を visibleAt[stmt] に書き込む。
+// 同じ stmt に対する再記録 (= 別 call-site から同じ関数 body を再 walk) は
+// 既存値と Sources を保守的に union してマージする (#448 複数 call-site 対応)。
+//
+// Offset は早い (小さい) 値を保持。-1 (env-like) は常に勝つ。
+func recordVisibleAt(result *ScopedTaint, stmt *syntax.Stmt, visible map[string]Entry) {
+	if result == nil || stmt == nil {
+		return
+	}
+	existing, ok := result.visibleAt[stmt]
+	if !ok {
+		result.visibleAt[stmt] = maps.Clone(visible)
+		return
+	}
+	for name, entry := range visible {
+		cur, has := existing[name]
+		if !has {
+			existing[name] = entry
+			continue
+		}
+		cur.Sources = mergeSources(cur.Sources, entry.Sources)
+		// 早い (小さい) offset を保持。-1 は env-like で常勝
+		if entry.Offset < 0 || (cur.Offset >= 0 && entry.Offset < cur.Offset) {
+			cur.Offset = entry.Offset
+		}
+		existing[name] = cur
+	}
+}
