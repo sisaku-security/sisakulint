@@ -1089,3 +1089,52 @@ echo "out=$X" >> $GITHUB_OUTPUT`},
 		t.Errorf("taint should still trace to github.event.issue.title, got: %v", sources)
 	}
 }
+
+// TestTaintTracker_RedirWriteInSubshell は subshell 内の `>> $GITHUB_OUTPUT`
+// 書き込みで scope-aware な per-stmt visible map が参照されることを検証する (#447)。
+//
+// このテストは shell-var 経由の派生 taint で discriminating を担保する:
+//   - 親スコープで U="${{ ... }}" を seed (parent frame に taint)
+//   - subshell で T="$U" を実行 → T は subshell frame でのみ tainted
+//   - subshell 内の `>> $GITHUB_OUTPUT` で T を参照
+//
+// 親スコープの Final には T は escape しない (subshell scope で消える)。
+// 旧実装の recordRedirWrite は Final を見て T を tainted と認識できず
+// output 'out' が tainted として登録されない。
+// 新実装は per-stmt visible map (subshell frame で T tainted) を参照し、
+// 'out' を tainted として正しく検出する。
+func TestTaintTracker_RedirWriteInSubshell(t *testing.T) {
+	t.Parallel()
+
+	step := makeBPatternRunStep("leak", `U="${{ github.event.issue.body }}"
+( T="$U"; echo "out=$T" >> $GITHUB_OUTPUT )`)
+
+	tracker := NewTaintTracker()
+	tracker.AnalyzeStep(step)
+
+	outputs := tracker.GetTaintedOutputs()
+	stepOutputs, ok := outputs["leak"]
+	if !ok {
+		t.Fatalf("step %q should have tainted outputs, got %v", "leak", outputs)
+	}
+	srcs, ok := stepOutputs["out"]
+	if !ok {
+		keys := make([]string, 0, len(stepOutputs))
+		for k := range stepOutputs {
+			keys = append(keys, k)
+		}
+		t.Fatalf("output %q should be tainted, got keys %v", "out", keys)
+	}
+	foundOrigin := false
+	for _, s := range srcs {
+		if strings.Contains(s, "github.event.issue.body") {
+			foundOrigin = true
+		}
+		if strings.HasPrefix(s, "shellvar:") {
+			t.Errorf("unresolved shellvar marker survived expansion: %q (sources=%v)", s, srcs)
+		}
+	}
+	if !foundOrigin {
+		t.Errorf("output sources should reference github.event.issue.body, got %v", srcs)
+	}
+}

@@ -1,0 +1,18 @@
+# このワークフローは sisakulint の TaintTracker シェルスコープ対応 (#447) の
+# False Negative 修正を示すデモ。
+#
+# 関数本体内で local 宣言された SECRET_LOCAL を echo するパターンは、scope-aware
+# な secret-in-log ルールが leak として検出する。
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          SECRET: ${{ secrets.GH_TOKEN }}
+        run: |
+          leak() {
+            local SECRET_LOCAL="$SECRET"
+            echo "$SECRET_LOCAL"
+          }
+          leak

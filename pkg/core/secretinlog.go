@@ -68,11 +68,14 @@ type echoLeakOccurrence struct {
 //
 // ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
 // ビルドログに引き続き表示されるため、スキップ対象から除外する。
-func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string]shell.Entry, script string, runStr *ast.String) []echoLeakOccurrence {
+func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.ScopedTaint, script string, runStr *ast.String) []echoLeakOccurrence {
 	if file == nil {
 		return nil
 	}
 	var leaks []echoLeakOccurrence
+	// currentVisible は最後に visit した *syntax.Stmt の visible map。
+	// 内側の CallExpr などは同じ stmt スコープにいるため、これを使って lookup する。
+	var currentVisible map[string]shell.Entry
 
 	syntax.Walk(file, func(node syntax.Node) bool {
 		// コマンド置換の内部は stdout がパイプに接続されるため、
@@ -85,9 +88,10 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 			if stmtRedirectsStdoutAwayFromLog(stmt) {
 				return false
 			}
+			currentVisible = scoped.At(stmt)
 			// cat / tee / dd の here-string (<<<) や heredoc (<<) を経由した
 			// 漏洩は Stmt の Redirs 側に taint があるため、ここで検査する。
-			rule.collectRedirectSinkLeaks(stmt, tainted, script, runStr, &leaks)
+			rule.collectRedirectSinkLeaks(stmt, currentVisible, script, runStr, &leaks)
 			return true
 		}
 		call, ok := node.(*syntax.CallExpr)
@@ -103,7 +107,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, tainted map[string
 			return true
 		}
 		for _, arg := range call.Args[1:] {
-			rule.collectLeakedVars(arg, tainted, script, runStr, cmdName, &leaks)
+			rule.collectLeakedVars(arg, currentVisible, script, runStr, cmdName, &leaks)
 		}
 		return true
 	})
@@ -395,8 +399,8 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return // パース失敗時は解析をスキップ（他ルールの管轄）
 	}
 
-	tainted := shell.PropagateTaint(file, initialTainted)
-	leaks := rule.findEchoLeaks(file, tainted, script, execRun.Run)
+	scoped := shell.PropagateTaint(file, initialTainted)
+	leaks := rule.findEchoLeaks(file, scoped, script, execRun.Run)
 
 	for _, leak := range leaks {
 		rule.reportLeak(leak)
@@ -405,7 +409,9 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 
 	// この step の $GITHUB_ENV 書き込みから tainted な env var を抽出し、
 	// 後続 step の crossStepEnv に伝播させる。
-	for name, origin := range rule.collectGitHubEnvTaintWrites(file, tainted, script) {
+	// shellvar:X マーカーは autofix が変数アサイン直後への ::add-mask:: 挿入
+	// 判定に使うため、ここでは展開せずそのまま流す (spec §5.2)。
+	for name, origin := range rule.collectGitHubEnvTaintWrites(file, scoped, script) {
 		rule.crossStepEnv[name] = origin
 	}
 }
@@ -668,7 +674,7 @@ func firstNameEqualsPrefix(word *syntax.Word) string {
 // 漏洩メッセージに表示される識別子（`secrets.X` or `shellvar:Y`）。
 func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 	file *syntax.File,
-	tainted map[string]shell.Entry,
+	scoped *shell.ScopedTaint,
 	script string,
 ) map[string]string {
 	result := make(map[string]string)
@@ -687,16 +693,17 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 		if !ok || len(call.Args) == 0 {
 			return true
 		}
+		visible := scoped.At(stmt)
 		cmdName := firstWordLiteral(call.Args[0])
 		switch cmdName {
 		case "echo", "printf":
-			rule.collectEchoEnvWrites(call, tainted, result)
+			rule.collectEchoEnvWrites(call, visible, result)
 		case "cat", "tee", "dd":
 			// heredoc 経由で `>> $GITHUB_ENV` に流し込むパターン。
 			// tee/dd も stdin を受け取って stdout（もしくは file 引数）に流すので
 			// `cmd <<EOF >> $GITHUB_ENV ... EOF` 形式で taint を書き込みうる。
 			// sink 検出側 (collectRedirectSinkLeaks) との対称性を保つ。
-			rule.collectHeredocEnvWrites(stmt, tainted, script, result)
+			rule.collectHeredocEnvWrites(stmt, visible, script, result)
 		}
 		return true
 	})

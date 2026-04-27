@@ -114,7 +114,11 @@ echo "Value: $TOKEN"
 			rule := NewSecretInLogRule()
 			file := parseShellForTest(t, tc.script)
 			runStr := &ast.String{Value: tc.script, Pos: &ast.Position{Line: 1, Col: 1}}
-			got := rule.findEchoLeaks(file, tc.tainted, tc.script, runStr)
+			// findEchoLeaks は scope-aware に *shell.ScopedTaint を受ける。
+			// テスト用 seed (tc.tainted) を初期 taint として PropagateTaint で
+			// スコープ付き taint set を構築する。
+			scoped := shell.PropagateTaint(file, tc.tainted)
+			got := rule.findEchoLeaks(file, scoped, tc.script, runStr)
 			if len(got) != len(tc.wantHits) {
 				t.Fatalf("found %d leaks, want %d. got=%v", len(got), len(tc.wantHits), got)
 			}
@@ -232,6 +236,69 @@ func TestSecretInLog_VisitJob_Integration(t *testing.T) {
 				t.Errorf("errors = %d, want %d. details=%v", got, tc.wantErrors, rule.Errors())
 			}
 		})
+	}
+}
+
+// TestSecretInLog_FunctionLocalScope_DetectsLeak は関数本体内で local 宣言された
+// 変数を echo すると leak として検出されることを検証する (#447 FN 修正)。
+func TestSecretInLog_FunctionLocalScope_DetectsLeak(t *testing.T) {
+	t.Parallel()
+
+	rule := NewSecretInLogRule()
+
+	envVars := map[string]*ast.EnvVar{
+		"secret": {
+			Name:  &ast.String{Value: "SECRET"},
+			Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+		},
+	}
+	step := &ast.Step{
+		Env: &ast.Env{Vars: envVars},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `leak() {
+  local SECRET_LOCAL="$SECRET"
+  echo "$SECRET_LOCAL"
+}
+leak`, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got == 0 {
+		t.Fatalf("expected leak detection for SECRET_LOCAL inside function body, got 0 errors")
+	}
+}
+
+// TestSecretInLog_SubshellLocalAssignment_NotLeakedInParent は subshell 内の
+// 上書きが親スコープの sink 検出に影響しないことを検証する (#447 FP/FN 防止)。
+func TestSecretInLog_SubshellLocalAssignment_NotLeakedInParent(t *testing.T) {
+	t.Parallel()
+
+	rule := NewSecretInLogRule()
+
+	envVars := map[string]*ast.EnvVar{
+		"secret": {
+			Name:  &ast.String{Value: "SECRET"},
+			Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+		},
+	}
+	step := &ast.Step{
+		Env: &ast.Env{Vars: envVars},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `( SECRET="dummy" )
+echo "$SECRET"`, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got == 0 {
+		t.Fatalf("expected leak detection for parent SECRET (subshell override should not affect parent)")
 	}
 }
 

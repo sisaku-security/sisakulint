@@ -40,6 +40,36 @@ func (e Entry) First() string {
 	return e.Sources[0]
 }
 
+// ScopedTaint は scope-aware な taint propagation の結果。
+//
+// Final はスクリプト末尾時点で親スコープから見える tainted vars。
+// 旧 PropagateTaint の戻り値と同じ形。cross-step 伝播 (taint.go の
+// $GITHUB_OUTPUT 記録、secretinlog.go の crossStepEnv 構築) で使う。
+//
+// visibleAt は AST 内の各 *syntax.Stmt 入口時点で「そのスコープから
+// 見える tainted vars の union」を保持。sink 検出で「この位置でこの
+// 変数は tainted か?」のクエリに使う。直接アクセスせず At() を経由する。
+type ScopedTaint struct {
+	Final     map[string]Entry
+	visibleAt map[*syntax.Stmt]map[string]Entry
+}
+
+// At は stmt の入口時点で見えている tainted set を返す。
+// stmt が nil または visibleAt に未登録の場合は Final を返す
+// (root scope sink のフォールバック)。
+func (s *ScopedTaint) At(stmt *syntax.Stmt) map[string]Entry {
+	if s == nil {
+		return nil
+	}
+	if stmt == nil {
+		return s.Final
+	}
+	if v, ok := s.visibleAt[stmt]; ok {
+		return v
+	}
+	return s.Final
+}
+
 // AssignKeyword は代入文に付随する宣言キーワード。
 type AssignKeyword int
 
@@ -169,58 +199,214 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 	return foundName, found
 }
 
+// scopeKind は scope frame の種別。
+type scopeKind int
+
+const (
+	scopeRoot     scopeKind = iota // スクリプトルート
+	scopeFunc                      // FuncDecl 本体
+	scopeSubshell                  // ( ... )
+	scopeCmdSubst                  // $(...)
+)
+
+// scopeFrame は scope-aware walker のスタック要素。
+//
+// local はこの frame で局所宣言された tainted vars。
+// parent は lookup chain (function 用) または nil (root)。
+// subshell/cmdsubst frame は entry 時に親の visible を local に snapshot copy
+// しているため、parent chain は使わない (kind の判定で分岐する)。
+type scopeFrame struct {
+	parent *scopeFrame
+	local  map[string]Entry
+	kind   scopeKind
+}
+
+// visible はこの frame から見える tainted vars の union を返す。
+// FuncDecl 本体: 自 frame.local + parent.visible() (再帰 chain)
+// Subshell/CmdSubst: 自 frame.local のみ (entry 時 snapshot 済み)
+// Root: 自 frame.local のみ
+func (f *scopeFrame) visible() map[string]Entry {
+	out := maps.Clone(f.local)
+	if out == nil {
+		out = make(map[string]Entry)
+	}
+	if f.kind == scopeFunc && f.parent != nil {
+		for k, v := range f.parent.visible() {
+			if _, ok := out[k]; !ok {
+				out[k] = v
+			}
+		}
+	}
+	return out
+}
+
 // PropagateTaint は initial を seed として AST を順方向 1 パス walk し、
-// 代入の RHS が tainted な変数を参照していれば LHS を tainted に追加する。
+// scope-aware に taint を伝播する。
 //
 // セマンティクス:
 //   - 既に tainted な変数への再代入は origin/Offset を上書きしない（最初の taint を保持）
 //   - LHS 名は AST 順序で処理される（forward dataflow）
 //   - 代入の RHS が tainted を参照しない場合は LHS に何もしない（"untaint" はしない）
-//   - スコープは無視（subshell/function 内も親と同じ namespace ← #447 で対応）
+//   - スコープ:
+//     - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
+//       親 visible を snapshot copy して隔離。内部代入は親に漏れない
+//     - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
+//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は本 issue の
+//       簡略案 A により親に漏らさない (#448 で改善予定)
 //
-// 戻り値は initial を変更せず新しい map を返す。
-func PropagateTaint(file *syntax.File, initial map[string]Entry) map[string]Entry {
-	result := make(map[string]Entry, len(initial))
-	maps.Copy(result, initial)
+// 戻り値は initial を変更せず新しい *ScopedTaint を返す。
+func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
+	result := &ScopedTaint{
+		Final:     make(map[string]Entry, len(initial)),
+		visibleAt: make(map[*syntax.Stmt]map[string]Entry),
+	}
+	maps.Copy(result.Final, initial)
 	if file == nil {
 		return result
 	}
 
-	for _, a := range WalkAssignments(file) {
-		if _, already := result[a.Name]; already {
-			continue
-		}
-		if a.Value == nil {
-			continue
-		}
-		refName, found := WordReferencesEntry(a.Value, result)
-		if !found {
-			continue
-		}
-		result[a.Name] = Entry{
-			Sources: []string{"shellvar:" + refName},
-			Offset:  a.Offset,
-		}
+	root := &scopeFrame{kind: scopeRoot, local: maps.Clone(initial)}
+	if root.local == nil {
+		root.local = make(map[string]Entry)
 	}
+	current := root
+	syntax.Walk(file, makeWalkFn(&current, result))
+
+	// Final は root frame の最終状態 (subshell/funcdecl frame は pop 済み)
+	maps.Copy(result.Final, root.local)
 	return result
 }
 
-// dedupAppend は順序保持で重複なしの append。
-// 既存 pkg/core/taint.go の deduplicateStrings と同等。
-func dedupAppend(dst []string, items ...string) []string {
-	seen := make(map[string]struct{}, len(dst)+len(items))
-	for _, s := range dst {
-		seen[s] = struct{}{}
+// makeWalkFn は scope frame stack を維持しつつ walk するクロージャを返す。
+// `current` は現在の frame を指す pointer-to-pointer で、subshell/funcdecl 入退場時に
+// 書き換える。
+func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) bool {
+	return func(node syntax.Node) bool {
+		if node == nil {
+			return false
+		}
+		switch n := node.(type) {
+		case *syntax.Subshell:
+			child := &scopeFrame{kind: scopeSubshell, parent: *current, local: maps.Clone((*current).visible())}
+			*current = child
+			for _, stmt := range n.Stmts {
+				syntax.Walk(stmt, makeWalkFn(current, result))
+			}
+			*current = (*current).parent
+			return false
+		case *syntax.CmdSubst:
+			child := &scopeFrame{kind: scopeCmdSubst, parent: *current, local: maps.Clone((*current).visible())}
+			*current = child
+			for _, stmt := range n.Stmts {
+				syntax.Walk(stmt, makeWalkFn(current, result))
+			}
+			*current = (*current).parent
+			return false
+		case *syntax.FuncDecl:
+			if n.Body == nil {
+				return false
+			}
+			child := &scopeFrame{kind: scopeFunc, parent: *current, local: make(map[string]Entry)}
+			prev := *current
+			*current = child
+			syntax.Walk(n.Body, makeWalkFn(current, result))
+			*current = prev
+			return false
+		case *syntax.Stmt:
+			// 各 Stmt 入口で visibleAt を記録
+			result.visibleAt[n] = (*current).visible()
+			return true
+		case *syntax.DeclClause:
+			processDeclClause(*current, n)
+			// RHS Words (Args.Value) を別途 walk して、入れ子の Subshell / CmdSubst が
+			// scope frame を push し、内側 Stmt が visibleAt を記録できるようにする。
+			// Args.Name は Lit のみで taint semantics を持たないので skip。
+			for _, a := range n.Args {
+				if a.Value != nil {
+					syntax.Walk(a.Value, makeWalkFn(current, result))
+				}
+			}
+			return false
+		case *syntax.Assign:
+			processAssign(*current, n)
+			return true
+		}
+		return true
 	}
-	out := dst
-	for _, s := range items {
-		if _, ok := seen[s]; ok {
+}
+
+// processAssign は単純代入 X=Y を current frame に書き込む。
+// 既に tainted な変数の上書きはしない (最初の taint を保持)。
+func processAssign(current *scopeFrame, a *syntax.Assign) {
+	if a == nil || a.Name == nil {
+		return
+	}
+	name := a.Name.Value
+	if _, already := current.local[name]; already {
+		return
+	}
+	if a.Value == nil {
+		return
+	}
+	visible := current.visible()
+	refName, found := WordReferencesEntry(a.Value, visible)
+	if !found {
+		return
+	}
+	current.local[name] = Entry{
+		Sources: []string{"shellvar:" + refName},
+		Offset:  int(a.Pos().Offset()), //nolint:gosec // file offsets fit in int
+	}
+}
+
+// processDeclClause は DeclClause を処理する。
+// セマンティクス (#447):
+//   - local: 常に current frame に書く
+//   - declare / typeset (装飾なし): current frame に書く (FuncDecl 内なら本体ローカル)
+//   - declare -g (グローバル指定): FuncDecl 内では簡略案 A により無視
+//   - export / readonly: FuncDecl 内では簡略案 A により無視、それ以外なら current frame に書く
+func processDeclClause(current *scopeFrame, decl *syntax.DeclClause) {
+	if decl == nil {
+		return
+	}
+	kw := keywordFor(decl.Variant.Value)
+
+	if current.kind == scopeFunc {
+		// FuncDecl 内で export / readonly は簡略案 A により無視
+		if kw == AssignExport || kw == AssignReadonly {
+			return
+		}
+		// declare -g も簡略案 A により無視
+		if kw == AssignDeclare && declHasGlobalFlag(decl) {
+			return
+		}
+	}
+
+	for _, a := range decl.Args {
+		processAssign(current, a)
+	}
+}
+
+// declHasGlobalFlag は DeclClause に -g (global) フラグが付いているか判定する。
+//
+// mvdan/sh では `declare -g X="$T"` のフラグは `*syntax.Assign{Name: nil,
+// Value: Word{Parts: [Lit{Value: "-g"}]}}` として表現される (Name は代入の
+// 左辺名なので、フラグでは nil)。代入 args は Name != nil 側にある。
+// したがって Name == nil かつ Value Word の先頭 Lit が `-` で始まり 'g' を
+// 含むものを探す。これで `-g` / `-gA` / `-Ag` 等を正しく検出できる
+// (bash semantics: 単一のフラグ束に 'g' が含まれていれば global)。
+func declHasGlobalFlag(decl *syntax.DeclClause) bool {
+	for _, a := range decl.Args {
+		if a == nil || a.Name != nil {
+			// Name != nil は代入 (X=v) なのでフラグではない
 			continue
 		}
-		seen[s] = struct{}{}
-		out = append(out, s)
+		flag := wordLitPrefix(a.Value)
+		if strings.HasPrefix(flag, "-") && strings.ContainsRune(flag, 'g') {
+			return true
+		}
 	}
-	return out
+	return false
 }
 
 // WalkRedirectWrites は `>> $TARGET` または `> $TARGET` リダイレクトを持つ Stmt を探し、

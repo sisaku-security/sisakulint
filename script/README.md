@@ -42,6 +42,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `ai-action-execution-order-safe.yaml` | AI action as the last step in the job (recommended pattern) |
 | `secret-in-log-vulnerable.yaml` | Secrets leaked to build logs via `echo`/`printf` of shell variables derived from secret-sourced environment variables (chained assignment, direct echo patterns) |
 | `secret-in-log-safe.yaml` | Safe counterparts using `::add-mask::` before printing derived variables, unrelated echo, and no-echo (curl-only) patterns |
+| `taint-scope-fp-safe.yaml` | TaintTracker scope-aware (#447): subshell 内の変数上書きが親スコープに漏れないことを示す |
+| `taint-scope-fn-vulnerable.yaml` | TaintTracker scope-aware (#447): 関数本体内 local 変数の secret-in-log 検出を示す |
 
 ### Usage
 
