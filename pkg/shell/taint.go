@@ -317,8 +317,9 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint, funcTable map[string]
 			funcTable[n.Name.Value] = n
 			return false
 		case *syntax.Stmt:
-			// 各 Stmt 入口で visibleAt を記録
-			result.visibleAt[n] = (*current).visible()
+			// 各 Stmt 入口で visibleAt を記録 (複数 call-site から walk された場合は
+			// 保守的 union — recordVisibleAt が既存と merge する)。
+			recordVisibleAt(result, n, (*current).visible())
 			return true
 		case *syntax.DeclClause:
 			processDeclClause(*current, n)

@@ -1160,6 +1160,19 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "multi_call_union",
+			script:  `foo() { echo "$1"; }; foo "$T"; foo "safe"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// 第二の call (foo "safe") では本来 untainted だが、保守的 union で
+					// 第一の call (foo "$T") の binding が visible に残る。
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
