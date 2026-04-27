@@ -796,6 +796,27 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 				finalAbsent: []string{"X"},
 			},
 		},
+		{
+			name:    "function_local_isolated",
+			script:  `foo() { local X="$T"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"}, // 関数内の local X は親に漏れない
+			},
+		},
+		{
+			name:    "root_local_treated_as_root_assign",
+			script:  `local X="$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				// root scope の local は bash 実行時エラーだが、解析では root に書く (FN 抑制)
+				finalHas: map[string]string{
+					"T": "secrets.GH",
+					"X": "shellvar:T",
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -927,6 +948,38 @@ func TestScopedTaint_At(t *testing.T) {
 		var s *ScopedTaint
 		if got := s.At(nil); got != nil {
 			t.Errorf("nil ScopedTaint.At should return nil, got %v", got)
+		}
+	})
+
+	t.Run("function_body_inner_sees_local", func(t *testing.T) {
+		t.Parallel()
+		file := parseScript(t, `foo() { local X="$T"; cmd "$X"; }; foo`)
+		initial := map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+
+		// 関数本体内の `cmd "$X"` Stmt を取り出す
+		var cmdStmt *syntax.Stmt
+		syntax.Walk(file, func(n syntax.Node) bool {
+			fd, ok := n.(*syntax.FuncDecl)
+			if !ok || fd.Body == nil {
+				return true
+			}
+			body, ok := fd.Body.Cmd.(*syntax.Block)
+			if !ok {
+				return true
+			}
+			// body.Stmts: [0]=local X=, [1]=cmd "$X"
+			if len(body.Stmts) >= 2 {
+				cmdStmt = body.Stmts[1]
+			}
+			return false
+		})
+		if cmdStmt == nil {
+			t.Fatal("function body cmd stmt not found")
+		}
+		visible := result.At(cmdStmt)
+		if _, ok := visible["X"]; !ok {
+			t.Errorf("function body cmd visible should contain X (local), got %v", keysOf(visible))
 		}
 	})
 }

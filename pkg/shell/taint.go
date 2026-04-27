@@ -303,7 +303,14 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			*current = (*current).parent
 			return false
 		case *syntax.FuncDecl:
-			// 関数本体の処理は Task 4 で実装
+			if n.Body == nil {
+				return false
+			}
+			child := &scopeFrame{kind: scopeFunc, parent: *current, local: make(map[string]Entry)}
+			prev := *current
+			*current = child
+			syntax.Walk(n.Body, makeWalkFn(current, result))
+			*current = prev
 			return false
 		case *syntax.Stmt:
 			// 各 Stmt 入口で visibleAt を記録
@@ -354,13 +361,22 @@ func processAssign(current *scopeFrame, a *syntax.Assign, kw AssignKeyword) {
 }
 
 // processDeclClause は DeclClause (export X=Y / local X=Y / readonly X=Y / declare X=Y) を処理する。
-// keyword に応じた scope target は Task 6/7 で実装。本 Task では全部 current frame に書く
-// (Subshell/CmdSubst では結果同じ、FuncDecl 内は Task 5/6/7 で再分岐する)。
+// セマンティクス (#447):
+//   - local: 常に current frame に書く (FuncDecl 内なら本体ローカル、root なら root ※bash エラーだが解析許容)
+//   - declare (装飾なし): FuncDecl 内なら current frame、それ以外なら current frame に書く (Task 5 で declare -g 対応)
+//   - export / readonly: FuncDecl 内では簡略案 A により無視 (親に漏らさない)、それ以外なら current frame に書く
 func processDeclClause(current *scopeFrame, decl *syntax.DeclClause) {
 	if decl == nil {
 		return
 	}
 	kw := keywordFor(decl.Variant.Value)
+
+	// FuncDecl 内で export / readonly は簡略案 A により無視 (親に漏らさない)
+	if current.kind == scopeFunc && (kw == AssignExport || kw == AssignReadonly) {
+		return
+	}
+	// declare -g の判定は Task 5 で追加。本 Task では declare は current frame に書く
+
 	for _, a := range decl.Args {
 		processAssign(current, a, kw)
 	}
