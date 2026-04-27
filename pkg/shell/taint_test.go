@@ -767,11 +767,12 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 			},
 		},
 		{
-			// CmdSubst `$(X="leaked"; echo "$X")` 内の X 代入は親 (root) に
-			// 漏れない。R は cmdsubst RHS なので tainted にもならない (内側で
-			// $T を参照していないため)。後続の `cmd "$X"` も X が undefined。
+			// CmdSubst `$(X="$T"; echo "$X")` 内で X は $T を参照して tainted
+			// になるが、その代入は親 (root) に漏れない。X が cmdsubst-local で
+			// あることを示す discriminating ケース: flat walker なら X が root
+			// に漏れて finalAbsent が失敗する。後続の `cmd "$X"` も X 未定義。
 			name:    "cmdsubst_isolation",
-			script:  `R=$(X="leaked"; echo "$X"); cmd "$X"`,
+			script:  `R=$(X="$T"; echo "$X"); cmd "$X"`,
 			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
 			want: want{
 				finalHas: map[string]string{
