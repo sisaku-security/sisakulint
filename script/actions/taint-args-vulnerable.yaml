@@ -1,0 +1,17 @@
+on: pull_request_target
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          TOKEN=$(echo "$GH_TOKEN" | jq -r '.token')
+          leak() {
+            echo "received: $1"
+          }
+          leak "$TOKEN"
