@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -234,11 +235,19 @@ func (t *TaintTracker) AnalyzeStep(step *ast.Step) {
 	// markers; taint.go callers expect transitive source lists for richer
 	// reporting (e.g. trace back to "github.event.issue.title"). Expand the
 	// markers in place. Bounded passes guard against pathological chains.
-	// (NOTE: scope-aware per-stmt expansion is added in Task 10)
 
-	// GITHUB_OUTPUT writes
+	// GITHUB_OUTPUT writes — scope-aware per-stmt visible map で recordRedirWrite。
+	// scoped.At(stmt) は subshell / func body 内の代入も正しく可視化する。
+	// shellvar:X マーカーは cross-step 伝播される taintedOutputs に残せないので、
+	// per-stmt のクローンを expandShellvarMarkers してから渡す。
 	for _, w := range shell.WalkRedirectWrites(file, "GITHUB_OUTPUT") {
-		t.recordRedirWrite(stepID, w, exprMap)
+		visible := scoped.At(w.Stmt)
+		expanded := maps.Clone(visible)
+		if expanded == nil {
+			expanded = make(map[string]shell.Entry)
+		}
+		expandShellvarMarkers(expanded)
+		t.recordRedirWrite(stepID, w, exprMap, expanded)
 	}
 }
 
@@ -457,14 +466,16 @@ func mergeUnique(dst, src []string) []string {
 
 // recordRedirWrite は WalkRedirectWrites の結果をもとに taintedOutputs に記録する。
 // VALUE 内に直接 untrusted 式（プレースホルダ経由を含む）があるか、または
-// tainted 変数を参照していれば、その output を tainted として登録する。
-func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprMap map[string]string) {
+// visible 内の tainted 変数を参照していれば、その output を tainted として登録する。
+//
+// visible は scope-aware な per-stmt visible map (caller で展開済み)。
+func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprMap map[string]string, visible map[string]shell.Entry) {
 	sources := t.collectExpressionSources(w.Value, exprMap)
 
-	// VALUE 内の $VAR 参照を tainted vars と照合
+	// VALUE 内の $VAR 参照を visible と照合
 	if w.ValueWord != nil {
-		if name, ok := shell.WordReferencesEntry(w.ValueWord, t.taintedVars); ok {
-			sources = mergeUnique(sources, t.taintedVars[name].Sources)
+		if name, ok := shell.WordReferencesEntry(w.ValueWord, visible); ok {
+			sources = mergeUnique(sources, visible[name].Sources)
 		}
 	} else {
 		// heredoc 等で ValueWord が無い場合は文字列ベースで $VAR を検出
@@ -473,7 +484,7 @@ func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprM
 			if len(m) < 2 {
 				continue
 			}
-			if entry, ok := t.taintedVars[m[1]]; ok {
+			if entry, ok := visible[m[1]]; ok {
 				sources = mergeUnique(sources, entry.Sources)
 			}
 		}
