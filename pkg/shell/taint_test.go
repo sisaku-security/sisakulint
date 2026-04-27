@@ -854,6 +854,36 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 				finalAbsent: []string{"X"},
 			},
 		},
+		{
+			name:    "subshell_with_funcdecl_inside",
+			script:  `( foo() { local X="$T"; }; foo )`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"},
+			},
+		},
+		{
+			name:    "function_with_subshell_inside",
+			script:  `foo() { local X="$T"; ( cmd "$X" ); }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas:    map[string]string{"T": "secrets.GH"},
+				finalAbsent: []string{"X"},
+			},
+		},
+		{
+			name:    "regression_no_scope_constructs",
+			script:  `X="$T"; Y="$X"; cmd "$Y"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T": "secrets.GH",
+					"X": "shellvar:T",
+					"Y": "shellvar:X",
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -985,6 +1015,18 @@ func TestScopedTaint_At(t *testing.T) {
 		var s *ScopedTaint
 		if got := s.At(nil); got != nil {
 			t.Errorf("nil ScopedTaint.At should return nil, got %v", got)
+		}
+	})
+
+	t.Run("nil_file", func(t *testing.T) {
+		t.Parallel()
+		initial := map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}}
+		result := PropagateTaint(nil, initial)
+		if result == nil {
+			t.Fatal("PropagateTaint(nil, ...) should return non-nil ScopedTaint")
+		}
+		if _, ok := result.Final["T"]; !ok {
+			t.Errorf("Final should contain initial T, got %v", keysOf(result.Final))
 		}
 	})
 
