@@ -199,6 +199,47 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 	return foundName, found
 }
 
+// scopeKind は scope frame の種別。
+type scopeKind int
+
+const (
+	scopeRoot     scopeKind = iota // スクリプトルート
+	scopeFunc                      // FuncDecl 本体
+	scopeSubshell                  // ( ... )
+	scopeCmdSubst                  // $(...)
+)
+
+// scopeFrame は scope-aware walker のスタック要素。
+//
+// local はこの frame で局所宣言された tainted vars。
+// parent は lookup chain (function 用) または nil (root)。
+// subshell/cmdsubst frame は entry 時に親の visible を local に snapshot copy
+// しているため、parent chain は使わない (kind の判定で分岐する)。
+type scopeFrame struct {
+	parent *scopeFrame
+	local  map[string]Entry
+	kind   scopeKind
+}
+
+// visible はこの frame から見える tainted vars の union を返す。
+// FuncDecl 本体: 自 frame.local + parent.visible() (再帰 chain)
+// Subshell/CmdSubst: 自 frame.local のみ (entry 時 snapshot 済み)
+// Root: 自 frame.local のみ
+func (f *scopeFrame) visible() map[string]Entry {
+	out := maps.Clone(f.local)
+	if out == nil {
+		out = make(map[string]Entry)
+	}
+	if f.kind == scopeFunc && f.parent != nil {
+		for k, v := range f.parent.visible() {
+			if _, ok := out[k]; !ok {
+				out[k] = v
+			}
+		}
+	}
+	return out
+}
+
 // PropagateTaint は initial を seed として AST を順方向 1 パス walk し、
 // scope-aware に taint を伝播する。
 //
@@ -224,25 +265,97 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
 		return result
 	}
 
-	// 暫定実装: 旧フラット動作で Final を埋める。
-	// Task 2 以降でスコープ対応に置き換える。
-	for _, a := range WalkAssignments(file) {
-		if _, already := result.Final[a.Name]; already {
-			continue
-		}
-		if a.Value == nil {
-			continue
-		}
-		refName, found := WordReferencesEntry(a.Value, result.Final)
-		if !found {
-			continue
-		}
-		result.Final[a.Name] = Entry{
-			Sources: []string{"shellvar:" + refName},
-			Offset:  a.Offset,
-		}
+	root := &scopeFrame{kind: scopeRoot, local: maps.Clone(initial)}
+	if root.local == nil {
+		root.local = make(map[string]Entry)
 	}
+	current := root
+	syntax.Walk(file, makeWalkFn(&current, result))
+
+	// Final は root frame の最終状態 (subshell/funcdecl frame は pop 済み)
+	maps.Copy(result.Final, root.local)
 	return result
+}
+
+// makeWalkFn は scope frame stack を維持しつつ walk するクロージャを返す。
+// `current` は現在の frame を指す pointer-to-pointer で、subshell/funcdecl 入退場時に
+// 書き換える。
+func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) bool {
+	return func(node syntax.Node) bool {
+		if node == nil {
+			return false
+		}
+		switch n := node.(type) {
+		case *syntax.Subshell:
+			child := &scopeFrame{kind: scopeSubshell, parent: *current, local: maps.Clone((*current).visible())}
+			*current = child
+			for _, stmt := range n.Stmts {
+				syntax.Walk(stmt, makeWalkFn(current, result))
+			}
+			*current = (*current).parent
+			return false
+		case *syntax.CmdSubst:
+			child := &scopeFrame{kind: scopeCmdSubst, parent: *current, local: maps.Clone((*current).visible())}
+			*current = child
+			for _, stmt := range n.Stmts {
+				syntax.Walk(stmt, makeWalkFn(current, result))
+			}
+			*current = (*current).parent
+			return false
+		case *syntax.FuncDecl:
+			// 関数本体の処理は Task 4 で実装
+			return false
+		case *syntax.Stmt:
+			// 各 Stmt 入口で visibleAt を記録
+			result.visibleAt[n] = (*current).visible()
+			return true
+		case *syntax.DeclClause:
+			processDeclClause(*current, n)
+			return false // children は処理済み (二重カウント防止)
+		case *syntax.Assign:
+			processAssign(*current, n, AssignNone)
+			return true
+		}
+		return true
+	}
+}
+
+// processAssign は単純代入 X=Y を current frame に書き込む。
+// 既に tainted な変数の上書きはしない (最初の taint を保持)。
+func processAssign(current *scopeFrame, a *syntax.Assign, kw AssignKeyword) {
+	if a == nil || a.Name == nil {
+		return
+	}
+	_ = kw // Task 5/6/7 で `local` / `declare -g` の振り分けに利用予定
+	name := a.Name.Value
+	if _, already := current.local[name]; already {
+		return
+	}
+	if a.Value == nil {
+		return
+	}
+	visible := current.visible()
+	refName, found := WordReferencesEntry(a.Value, visible)
+	if !found {
+		return
+	}
+	current.local[name] = Entry{
+		Sources: []string{"shellvar:" + refName},
+		Offset:  int(a.Pos().Offset()), //nolint:gosec // file offsets fit in int
+	}
+}
+
+// processDeclClause は DeclClause (export X=Y / local X=Y / readonly X=Y / declare X=Y) を処理する。
+// keyword に応じた scope target は Task 6/7 で実装。本 Task では全部 current frame に書く
+// (Subshell/CmdSubst では結果同じ、FuncDecl 内は Task 5/6/7 で再分岐する)。
+func processDeclClause(current *scopeFrame, decl *syntax.DeclClause) {
+	if decl == nil {
+		return
+	}
+	kw := keywordFor(decl.Variant.Value)
+	for _, a := range decl.Args {
+		processAssign(current, a, kw)
+	}
 }
 
 // dedupAppend は順序保持で重複なしの append。

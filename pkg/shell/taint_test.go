@@ -229,10 +229,13 @@ func TestPropagateTaint(t *testing.T) {
 			wantNames: []string{"X", "A", "B"},
 		},
 		{
-			name:      "subshell_flat_namespace",
+			// Subshell `( Y=$X )` 内の代入は親に漏れない (Task 2 で scope 隔離)。
+			// Y は subshell frame ローカルに留まるため Final には現れない。
+			// より詳細な scope 検証は TestPropagateTaint_Scoped を参照。
+			name:      "subshell_isolation",
 			script:    `(Y=$X)`,
 			initial:   map[string]Entry{"X": envEntry("secrets.X")},
-			wantNames: []string{"X", "Y"},
+			wantNames: []string{"X"},
 		},
 		{
 			name:   "first_taint_preserved_on_reassign",
@@ -698,5 +701,60 @@ func TestDedupAppend(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("[%d] got %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+// TestPropagateTaint_Scoped は scope-aware な PropagateTaint の挙動を検証する。
+func TestPropagateTaint_Scoped(t *testing.T) {
+	t.Parallel()
+
+	type want struct {
+		// finalHas は Final に含まれるべき変数名 → Sources の最初の値
+		finalHas map[string]string
+		// finalAbsent は Final に含まれてはいけない変数名
+		finalAbsent []string
+	}
+
+	cases := []struct {
+		name    string
+		script  string
+		initial map[string]Entry
+		want    want
+	}{
+		{
+			name:    "subshell_isolation_fp_suppressed",
+			script:  `X="$T"; ( X="safe"; cmd "$X" )`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				// 親 X は T 経由で tainted (subshell 内の X="safe" は親に漏れない)
+				finalHas: map[string]string{
+					"T": "github.event.issue.body",
+					"X": "shellvar:T",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			result := PropagateTaint(file, tc.initial)
+			for name, wantOrigin := range tc.want.finalHas {
+				entry, ok := result.Final[name]
+				if !ok {
+					t.Errorf("Final[%q] missing; want origin %q", name, wantOrigin)
+					continue
+				}
+				if entry.First() != wantOrigin {
+					t.Errorf("Final[%q].First() = %q; want %q", name, entry.First(), wantOrigin)
+				}
+			}
+			for _, name := range tc.want.finalAbsent {
+				if _, ok := result.Final[name]; ok {
+					t.Errorf("Final[%q] should be absent", name)
+				}
+			}
+		})
 	}
 }
