@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -751,6 +752,49 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 				finalAbsent: []string{"Y"},
 			},
 		},
+		{
+			// Subshell `( cmd "$X" )` は親の tainted snapshot を持って入るため
+			// 親の X (T 経由で tainted) が subshell 内でも見える。X の代入は
+			// subshell の外で起きており Final にも残る。
+			name:    "subshell_inner_sees_parent_tainted",
+			script:  `X="$T"; ( cmd "$X" )`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T": "github.event.issue.body",
+					"X": "shellvar:T",
+				},
+			},
+		},
+		{
+			// CmdSubst `$(X="leaked"; echo "$X")` 内の X 代入は親 (root) に
+			// 漏れない。R は cmdsubst RHS なので tainted にもならない (内側で
+			// $T を参照していないため)。後続の `cmd "$X"` も X が undefined。
+			name:    "cmdsubst_isolation",
+			script:  `R=$(X="leaked"; echo "$X"); cmd "$X"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T": "github.event.issue.body",
+				},
+				finalAbsent: []string{"X"},
+			},
+		},
+		{
+			// 入れ子 subshell `( X="$T"; ( cmd "$X" ) )` の外側 subshell 内で
+			// 代入された X は最外殻 (root) の Final には漏れない。内側 subshell
+			// は外側 subshell の snapshot を引き継ぐので X が見えるが、これは
+			// scope 内の話で Final には影響しない。
+			name:    "nested_subshell",
+			script:  `( X="$T"; ( cmd "$X" ) )`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T": "github.event.issue.body",
+				},
+				finalAbsent: []string{"X"},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -821,6 +865,69 @@ func TestScopedTaint_At(t *testing.T) {
 			t.Errorf("assign stmt should have T in visibleAt (snapshotted from parent), got %v", keysOf(visibleAtAssign))
 		}
 	})
+
+	t.Run("subshell_inner_stmt_sees_parent_tainted", func(t *testing.T) {
+		t.Parallel()
+		file := parseScript(t, `X="$T"; ( cmd "$X" )`)
+		initial := map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+
+		var innerStmt *syntax.Stmt
+		syntax.Walk(file, func(n syntax.Node) bool {
+			if sub, ok := n.(*syntax.Subshell); ok {
+				if len(sub.Stmts) > 0 {
+					innerStmt = sub.Stmts[0]
+				}
+				return false
+			}
+			return true
+		})
+		if innerStmt == nil {
+			t.Fatal("inner subshell stmt not found")
+		}
+		visible := result.At(innerStmt)
+		if _, ok := visible["T"]; !ok {
+			t.Errorf("inner subshell visible should contain T, got %v", keysOf(visible))
+		}
+		if _, ok := visible["X"]; !ok {
+			t.Errorf("inner subshell visible should contain X (snapshotted from parent), got %v", keysOf(visible))
+		}
+	})
+
+	t.Run("at_nil_returns_final", func(t *testing.T) {
+		t.Parallel()
+		file := parseScript(t, `X=v`)
+		initial := map[string]Entry{"T": {Sources: []string{"x"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+		got := result.At(nil)
+		if _, ok := got["T"]; !ok {
+			t.Errorf("At(nil) should fall back to Final, got %v", keysOf(got))
+		}
+	})
+
+	t.Run("at_unknown_stmt_returns_final", func(t *testing.T) {
+		t.Parallel()
+		file := parseScript(t, `X=v`)
+		other := parseScript(t, `Y=z`)
+		initial := map[string]Entry{"T": {Sources: []string{"x"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+		var otherStmt *syntax.Stmt
+		if len(other.Stmts) > 0 {
+			otherStmt = other.Stmts[0]
+		}
+		got := result.At(otherStmt)
+		if _, ok := got["T"]; !ok {
+			t.Errorf("At(unknown stmt) should fall back to Final, got %v", keysOf(got))
+		}
+	})
+
+	t.Run("nil_scoped_returns_nil", func(t *testing.T) {
+		t.Parallel()
+		var s *ScopedTaint
+		if got := s.At(nil); got != nil {
+			t.Errorf("nil ScopedTaint.At should return nil, got %v", got)
+		}
+	})
 }
 
 // keysOf is a test helper that returns sorted keys of a map for debug output.
@@ -829,5 +936,6 @@ func keysOf(m map[string]Entry) []string {
 	for k := range m {
 		out = append(out, k)
 	}
+	sort.Strings(out)
 	return out
 }
