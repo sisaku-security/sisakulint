@@ -121,6 +121,8 @@ Use AST/Tokenizer instead of string-based parsing:
   - `shell.WalkAssignments(file)` / `shell.WordReferencesEntry(word, tainted)` — AST-aware lookups (treats heredoc bodies and comments correctly)
   - `shell.WalkRedirectWrites(file, target)` — collects `>> $TARGET` writes (echo / printf format / heredoc, including `printf 'name=%s\n' "$VAR"` form)
   - GitHub Actions `${{ ... }}` substitutions are not valid bash syntax. `pkg/core/taint.go` sanitizes them via `sanitizeForShellParse` (length-non-preserving placeholder + `exprMap`) before parsing. `secretinlog.go` does not need this because its taint sources come from the YAML `env:` section, not script literals.
+- **Scope-aware propagation (#447)**: `shell.PropagateTaint` は scope frame stack ベースで walk し、`*syntax.Subshell` / `*syntax.CmdSubst` は entry 時に親 visible を snapshot copy して隔離、`*syntax.FuncDecl` 本体は parent への lookup chain で bash dynamic scoping を近似 (`local` / 装飾なし `declare` は本体ローカル、その他は簡略案 A により親に漏らさない)。戻り値は `*shell.ScopedTaint` で、`Final` (script 末尾の親スコープ) と `At(stmt)` (per-stmt visible) を持つ。`taint.go` は per-stmt 展開で `recordRedirWrite` に渡す。`secretinlog.go` は `shellvar:X` マーカーを autofix のため raw 保持する (展開しない)
+  - **Known limitation**: `seedTaintFromExpressions` (in `pkg/core/taint.go`) is NOT scope-aware — direct `${{ untrusted }}` assignment inside a subshell will still seed `t.taintedVars`/`Final` regardless of scope. Scope-awareness applies fully to shell-variable derivation paths (`X="$Y"`) but seed leaks via the direct expression path remain. Tracked as follow-up.
 
 ## Implemented Rules
 
