@@ -1655,6 +1655,41 @@ func TestSecretInLog_PositionalArg_AutofixIdempotent(t *testing.T) {
 	}
 }
 
+// TestSecretInLog_PositionalArg_SuggestionUsesUpstreamVar は #448 review I-2 の
+// 回帰防止: positional ($1) のリーク診断メッセージが "::add-mask::$UPSTREAM" を
+// 推奨し、"::add-mask::$1" を推奨しないことを確認する (autofix と整合)。
+func TestSecretInLog_PositionalArg_SuggestionUsesUpstreamVar(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("got %d errors; want 1", len(rule.Errors()))
+	}
+	msg := rule.Errors()[0].Description
+	if !strings.Contains(msg, `"::add-mask::$TOKEN"`) {
+		t.Errorf("message should suggest masking upstream $TOKEN, got: %q", msg)
+	}
+	if strings.Contains(msg, `"::add-mask::$1"`) {
+		t.Errorf("message should NOT suggest masking $1 (positional); got: %q", msg)
+	}
+}
+
 // TestSecretInLog_FunctionLocalChainsThroughArg は関数本体内で local X="$1" 経由の
 // 派生変数の echo が leak 検出され、origin chain が upstream まで遡ることを確認する。
 func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {

@@ -568,6 +568,7 @@ jobs:
 | 項目 | 影響 | 方針 |
 |---|---|---|
 | **funcTable がスコープ非分離 (グローバル)** | subshell 内で定義された関数を外側から呼び出すケースで bash 実挙動 (subshell 内定義は外で undefined) と乖離。CallExpr が funcTable に hit するため body walk が走り、本来発生しない taint propagation が記録される (FP 寄り) | known limitation。実用上ほぼ発生せず影響軽微。完全対応は scope-bound funcTable の追加が必要 (別 issue 候補) |
+| **Uncalled function body の sink 未検出** | `foo() { local X="$T"; echo "$X"; }` (foo が呼ばれない) の内部派生 sink は lazy walk により未検出。pre-#448 (eager walk) では検出されていた | known limitation。bash 実挙動 (uncalled function は実行されない → log にも漏れない) と一致するため defensible。eager walk への巻き戻しはしない方針 |
 | **複数 call-site の visibleAt union が保守的 (= FP 寄り)** | `foo "$T"; foo "safe"` で body 内 `echo "$1"` は両 call-site の binding union で tainted 扱いされ、第二の "safe" 呼び出しでは実際は untainted | issue 案明記の保守的方針。FP は「関数の振る舞いが call-site によって taint 状態を変える」設計 (一般にコードスメル) 限定で、実害軽微 |
 | **`set -- a b c` / `shift` による positional 書き換え未対応** | 関数本体内で positional を再バインドするコード (`shift; echo "$1"` 等) は本 issue でカバーしない | known limitation。bash の動的 reassignment 解析は別 issue 候補 |
 | **関数の non-local 副作用 (簡略案 A 維持)** | `foo() { GLOBAL="$T"; }; foo; echo "$GLOBAL"` で親の GLOBAL が untracked (FN) | #447 の判断を継続。完全対応は副作用伝播の正しい semantics 設計が必要 (epic #445 配下の follow-up) |

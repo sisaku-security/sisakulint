@@ -262,6 +262,11 @@ func (f *scopeFrame) visible() map[string]Entry {
 //       Sources を保守的 union (FP 寄り)
 //     - 再帰呼び出しは visited[name] で depth=1 制限 (固定点反復はしない)
 //     - forward reference (定義前 call) は 1-pass walk で自然に未登録扱い → bash 一致
+//     - 関数定義のみで一度も呼び出されない (uncalled) function body は walk されない。
+//       例えば `foo() { local X="$T"; echo "$X"; }` (foo が一度も呼ばれない) の
+//       内部派生 sink は検出されない。これは bash 実挙動に近づける選択 (uncalled
+//       function は実行されないため log にも漏れない)。eager walk への巻き戻しは
+//       しない方針。
 //
 // 戻り値は initial を変更せず新しい *ScopedTaint を返す。
 func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {

@@ -431,15 +431,32 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 }
 
 // reportLeak は echoLeakOccurrence をエラーとして記録する。
+// 診断メッセージの suggestion 部分は resolveMaskTarget を使って決定する (#448 review I-2):
+//   - positional ($1) かつ upstream shellvar が分かる場合は upstream var (TOKEN) をマスクするよう提案
+//   - 通常 var の場合はその var を直接マスクするよう提案
+//   - $@ / $* の場合は単一変数マスクが不可能なため回避を提案
 func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
+	var suggestion string
+	target, ok := resolveMaskTarget(leak.VarName, leak.Origin)
+	switch {
+	case ok && target != leak.VarName:
+		// Positional ($1) backed by shellvar:UPSTREAM — recommend masking upstream.
+		suggestion = "Add 'echo \"::add-mask::$" + target + "\"' before $" + target +
+			" is used (or before the function is called), or avoid printing the value."
+	case ok:
+		// Ordinary var name — recommend masking it directly.
+		suggestion = "Add 'echo \"::add-mask::$" + target + "\"' before any usage, or avoid printing the value."
+	default:
+		// $@ / $* or positional without shellvar upstream — single-var mask isn't possible.
+		suggestion = "Avoid printing this value, or restructure to mask the upstream variables before passing them to the function."
+	}
 	rule.Errorf(
 		leak.Position,
 		"secret in log: variable $%s (origin: %s) is printed via '%s' without masking. "+
 			"GitHub Actions only masks direct secrets.* values; values derived via shell expansion or "+
-			"tools like jq are not masked and will appear in plaintext in build logs. "+
-			"Add 'echo \"::add-mask::$%s\"' before any usage, or avoid printing the value. "+
+			"tools like jq are not masked and will appear in plaintext in build logs. %s "+
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
-		leak.VarName, leak.Origin, leak.Command, leak.VarName,
+		leak.VarName, leak.Origin, leak.Command, suggestion,
 	)
 }
 
