@@ -270,7 +270,9 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
 		root.local = make(map[string]Entry)
 	}
 	current := root
-	syntax.Walk(file, makeWalkFn(&current, result))
+	funcTable := make(map[string]*syntax.FuncDecl)
+	visited := make(map[string]int)
+	syntax.Walk(file, makeWalkFn(&current, result, funcTable, visited))
 
 	// Final は root frame の最終状態 (subshell/funcdecl frame は pop 済み)
 	maps.Copy(result.Final, root.local)
@@ -280,7 +282,10 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
 // makeWalkFn は scope frame stack を維持しつつ walk するクロージャを返す。
 // `current` は現在の frame を指す pointer-to-pointer で、subshell/funcdecl 入退場時に
 // 書き換える。
-func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) bool {
+//
+// funcTable は関数登録テーブル (#448 lazy walk)。CallExpr 解決で参照する。
+// visited は再帰展開ガード (#448 lazy walk)。同一関数の再入を防ぐ。
+func makeWalkFn(current **scopeFrame, result *ScopedTaint, funcTable map[string]*syntax.FuncDecl, visited map[string]int) func(syntax.Node) bool {
 	return func(node syntax.Node) bool {
 		if node == nil {
 			return false
@@ -290,7 +295,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			child := &scopeFrame{kind: scopeSubshell, parent: *current, local: maps.Clone((*current).visible())}
 			*current = child
 			for _, stmt := range n.Stmts {
-				syntax.Walk(stmt, makeWalkFn(current, result))
+				syntax.Walk(stmt, makeWalkFn(current, result, funcTable, visited))
 			}
 			*current = (*current).parent
 			return false
@@ -298,7 +303,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			child := &scopeFrame{kind: scopeCmdSubst, parent: *current, local: maps.Clone((*current).visible())}
 			*current = child
 			for _, stmt := range n.Stmts {
-				syntax.Walk(stmt, makeWalkFn(current, result))
+				syntax.Walk(stmt, makeWalkFn(current, result, funcTable, visited))
 			}
 			*current = (*current).parent
 			return false
@@ -309,7 +314,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			child := &scopeFrame{kind: scopeFunc, parent: *current, local: make(map[string]Entry)}
 			prev := *current
 			*current = child
-			syntax.Walk(n.Body, makeWalkFn(current, result))
+			syntax.Walk(n.Body, makeWalkFn(current, result, funcTable, visited))
 			*current = prev
 			return false
 		case *syntax.Stmt:
@@ -323,7 +328,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			// Args.Name は Lit のみで taint semantics を持たないので skip。
 			for _, a := range n.Args {
 				if a.Value != nil {
-					syntax.Walk(a.Value, makeWalkFn(current, result))
+					syntax.Walk(a.Value, makeWalkFn(current, result, funcTable, visited))
 				}
 			}
 			return false
