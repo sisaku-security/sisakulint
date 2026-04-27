@@ -1,0 +1,15 @@
+# このワークフローは sisakulint の TaintTracker シェルスコープ対応 (#447) の
+# False Positive 抑制を示すデモ。
+#
+# ( ... ) サブシェル内での変数上書きは親スコープに漏れない (bash 仕様)。
+# scoped TaintTracker はこれを正しく区別し、subshell 内の curl は "sanitized"
+# のみを参照、親の curl は依然として tainted な BODY を参照していると判定する。
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          BODY="${{ github.event.pull_request.body }}"
+          ( BODY="sanitized"; curl "https://api.example.com?q=$BODY" )
+          curl "https://api.example.com?q=$BODY"
