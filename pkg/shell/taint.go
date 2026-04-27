@@ -675,3 +675,25 @@ func keywordFor(variant string) AssignKeyword {
 		return AssignNone
 	}
 }
+
+// mergeSources は順序保持で重複なしの slice merge。
+// 後続タスクの buildArgBinding / recordVisibleAt から呼び出す内部ヘルパ。
+// pkg/core/taint.go::mergeUnique と同等のロジック (cyclic import 回避のため複製)。
+func mergeSources(dst, src []string) []string {
+	if len(src) == 0 {
+		return dst
+	}
+	seen := make(map[string]struct{}, len(dst)+len(src))
+	for _, s := range dst {
+		seen[s] = struct{}{}
+	}
+	out := dst
+	for _, s := range src {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
