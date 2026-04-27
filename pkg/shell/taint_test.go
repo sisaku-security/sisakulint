@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -1214,6 +1215,39 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 				},
 			},
 		},
+		{
+			// forward ref: 1番目の foo 呼び出しは funcTable 未登録のためスキップ。
+			// 2番目の foo() 定義は登録のみ。Final に外乱なし。
+			name:    "forward_reference_unresolved",
+			script:  `foo "$T"; foo() { echo "$1"; }`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			// 直接再帰: 外側 foo "$T" で body walk、内側 foo "$1" は visited[foo]=1 で skip。
+			// echo "$1" stmt の visibleAt には binding["1"] = shellvar:T が残る。
+			name:    "direct_recursion_depth1",
+			script:  `foo() { foo "$1"; echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			// 相互再帰: foo→bar→foo (2回目は skip)。各関数 1 回 walk。
+			// (assertion は外乱なしのみ確認、深い stmt 検証は省略)
+			name:    "mutual_recursion",
+			script:  `foo() { bar; }; bar() { foo; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -1283,6 +1317,35 @@ func findStmtBySubstr(t *testing.T, file *syntax.File, script, substr string) *s
 		return true
 	})
 	return found
+}
+
+// TestPropagateTaint_FunctionArgs_RecursionGuardDecrement は visited[name] が body walk
+// 完了で正しく decrement され、連続する兄弟 call-site それぞれで body が walk されることを確認する。
+// (もし visited が decrement されないと 2 回目の foo "$U" が skip される)
+func TestPropagateTaint_FunctionArgs_RecursionGuardDecrement(t *testing.T) {
+	t.Parallel()
+	script := `foo() { echo "$1"; }; foo "$T"; foo "$U"`
+	initial := map[string]Entry{
+		"T": {Sources: []string{"github.event.issue.title"}, Offset: -1},
+		"U": {Sources: []string{"github.event.issue.body"}, Offset: -1},
+	}
+	file := parseScript(t, script)
+	result := PropagateTaint(file, initial)
+
+	stmt := findStmtBySubstr(t, file, script, `echo "$1"`)
+	if stmt == nil {
+		t.Fatal("echo stmt not found")
+	}
+	visible := result.At(stmt)
+	entry, ok := visible["1"]
+	if !ok {
+		t.Fatalf("visibleAt[echo][1] missing")
+	}
+	// Sources は T と U の両 origin を union (順序保持)
+	wantSources := []string{"shellvar:T", "shellvar:U"}
+	if !slices.Equal(entry.Sources, wantSources) {
+		t.Errorf("visibleAt[echo][1].Sources = %v; want %v", entry.Sources, wantSources)
+	}
 }
 
 // keysOf is a test helper that returns sorted keys of a map for debug output.
