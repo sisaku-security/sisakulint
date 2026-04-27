@@ -309,14 +309,12 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint, funcTable map[string]
 			*current = (*current).parent
 			return false
 		case *syntax.FuncDecl:
-			if n.Body == nil {
+			if n.Body == nil || n.Name == nil {
 				return false
 			}
-			child := &scopeFrame{kind: scopeFunc, parent: *current, local: make(map[string]Entry)}
-			prev := *current
-			*current = child
-			syntax.Walk(n.Body, makeWalkFn(current, result, funcTable, visited))
-			*current = prev
+			// body は walk しない。テーブル登録のみ (#448 lazy walk)。
+			// 後勝ち = bash 仕様 (関数の再定義は最後の定義が有効)。
+			funcTable[n.Name.Value] = n
 			return false
 		case *syntax.Stmt:
 			// 各 Stmt 入口で visibleAt を記録
@@ -333,6 +331,27 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint, funcTable map[string]
 				}
 			}
 			return false
+		case *syntax.CallExpr:
+			name := callCommandName(n)
+			if name == "" {
+				return true // 動的 dispatch / 引数なし → 子ノード walk のみ
+			}
+			decl, ok := funcTable[name]
+			if !ok {
+				return true // funcTable 未登録 (forward ref or 外部コマンド) → 通常 walk
+			}
+			if visited[name] >= 1 {
+				return true // 再帰展開 depth=1 で打ち切り (#448)
+			}
+			binding := buildArgBinding(n, (*current).visible())
+			child := &scopeFrame{kind: scopeFunc, parent: *current, local: binding}
+			prev := *current
+			*current = child
+			visited[name]++
+			syntax.Walk(decl.Body, makeWalkFn(current, result, funcTable, visited))
+			visited[name]--
+			*current = prev
+			return true
 		case *syntax.Assign:
 			processAssign(*current, n)
 			return true

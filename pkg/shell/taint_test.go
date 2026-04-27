@@ -1125,6 +1125,112 @@ func TestDeclHasGlobalFlag(t *testing.T) {
 	}
 }
 
+// TestPropagateTaint_FunctionArgs は #448 関数引数経由 taint 伝播の挙動を検証する。
+// lazy walk: FuncDecl 出現時には body を walk せず、CallExpr 検出時に call-site
+// の args の taint state を tainted["1"]/.../[ "@"]/["*"] として inject する。
+func TestPropagateTaint_FunctionArgs(t *testing.T) {
+	t.Parallel()
+
+	type stmtVisibleAssertion struct {
+		stmtSubstr  string // stmt のテキスト中に含まれるべき部分文字列
+		varName     string // visible に含まれるべき変数名
+		originFirst string // visible[varName].First() の期待値
+	}
+
+	type want struct {
+		finalHas       map[string]string
+		finalAbsent    []string
+		stmtVisibleHas []stmtVisibleAssertion
+	}
+
+	cases := []struct {
+		name    string
+		script  string
+		initial map[string]Entry
+		want    want
+	}{
+		{
+			name:    "single_call_simple",
+			script:  `foo() { echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			result := PropagateTaint(file, tc.initial)
+			for name, wantOrigin := range tc.want.finalHas {
+				entry, ok := result.Final[name]
+				if !ok {
+					t.Errorf("Final[%q] missing; want origin %q", name, wantOrigin)
+					continue
+				}
+				if entry.First() != wantOrigin {
+					t.Errorf("Final[%q].First() = %q; want %q", name, entry.First(), wantOrigin)
+				}
+			}
+			for _, name := range tc.want.finalAbsent {
+				if _, ok := result.Final[name]; ok {
+					t.Errorf("Final[%q] should be absent", name)
+				}
+			}
+			for _, assertion := range tc.want.stmtVisibleHas {
+				stmt := findStmtBySubstr(t, file, tc.script, assertion.stmtSubstr)
+				if stmt == nil {
+					t.Errorf("stmt with substr %q not found", assertion.stmtSubstr)
+					continue
+				}
+				visible := result.At(stmt)
+				entry, ok := visible[assertion.varName]
+				if !ok {
+					t.Errorf("visibleAt(%q)[%q] missing; want origin %q", assertion.stmtSubstr, assertion.varName, assertion.originFirst)
+					continue
+				}
+				if entry.First() != assertion.originFirst {
+					t.Errorf("visibleAt(%q)[%q].First() = %q; want %q", assertion.stmtSubstr, assertion.varName, entry.First(), assertion.originFirst)
+				}
+			}
+		})
+	}
+}
+
+// findStmtBySubstr は file 内で「script[stmt.Pos():stmt.End()] が substr を含む」
+// 最小スパンの Stmt を返す（同スパンの場合は DFS 順で最初のものを採用）。
+// 見つからなければ nil。後続 #448 テストでも使う。
+func findStmtBySubstr(t *testing.T, file *syntax.File, script, substr string) *syntax.Stmt {
+	t.Helper()
+	var found *syntax.Stmt
+	var foundSpan int
+	syntax.Walk(file, func(node syntax.Node) bool {
+		stmt, ok := node.(*syntax.Stmt)
+		if !ok {
+			return true
+		}
+		start := int(stmt.Pos().Offset())
+		end := int(stmt.End().Offset())
+		if start < 0 || end > len(script) || start >= end {
+			return true
+		}
+		span := end - start
+		if strings.Contains(script[start:end], substr) {
+			if found == nil || span < foundSpan {
+				found = stmt
+				foundSpan = span
+			}
+		}
+		return true
+	})
+	return found
+}
+
 // keysOf is a test helper that returns sorted keys of a map for debug output.
 func keysOf(m map[string]Entry) []string {
 	out := make([]string, 0, len(m))
