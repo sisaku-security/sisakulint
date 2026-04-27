@@ -1248,6 +1248,90 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 				finalHas: map[string]string{"T": "secrets.GH"},
 			},
 		},
+		{
+			name:    "unused_function_definition",
+			script:  `foo() { echo "$T"; }`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			name:    "empty_args_call",
+			script:  `foo() { echo "$1"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				// $1 は binding 未登録 (引数なし call) → visibleAt の "1" は無いはず
+			},
+		},
+		{
+			name:    "local_assigns_from_arg",
+			script:  `foo() { local X="$1"; echo "$X"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$X"`, varName: "X", originFirst: "shellvar:1"},
+					// 親 chain で "1" も見えるはず
+					{stmtSubstr: `echo "$X"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "nested_function_calls",
+			script:  `outer() { inner "$1"; }; inner() { echo "$1"; }; outer "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// inner の echo body 内で "1" は outer's $1 を参照する chain
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:1"},
+				},
+			},
+		},
+		{
+			name:    "composite_word_arg",
+			script:  `foo() { echo "$1"; }; foo "prefix-$T-suffix"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "non_function_callexpr_unaffected",
+			script:  `echo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			name:    "redefined_function_winner_takes",
+			script:  `foo() { echo "first"; }; foo() { echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// 後勝ち: 2 番目の body の echo "$1" stmt の visibleAt に "1" がある
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "dynamic_dispatch_unresolved",
+			script:  `cmd="$T"; $cmd "arg"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T":   "secrets.GH",
+					"cmd": "shellvar:T",
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -1345,6 +1429,22 @@ func TestPropagateTaint_FunctionArgs_RecursionGuardDecrement(t *testing.T) {
 	wantSources := []string{"shellvar:T", "shellvar:U"}
 	if !slices.Equal(entry.Sources, wantSources) {
 		t.Errorf("visibleAt[echo][1].Sources = %v; want %v", entry.Sources, wantSources)
+	}
+}
+
+// TestPropagateTaint_FunctionArgs_NilFile は file=nil 入力に対する defensive 動作を検証する。
+func TestPropagateTaint_FunctionArgs_NilFile(t *testing.T) {
+	t.Parallel()
+	initial := map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}}
+	result := PropagateTaint(nil, initial)
+	if result == nil {
+		t.Fatal("PropagateTaint(nil, ...) returned nil; want non-nil ScopedTaint")
+	}
+	entry, ok := result.Final["T"]
+	if !ok {
+		t.Errorf("Final[T] missing")
+	} else if entry.First() != "secrets.GH" {
+		t.Errorf("Final[T].First() = %q; want %q", entry.First(), "secrets.GH")
 	}
 }
 
