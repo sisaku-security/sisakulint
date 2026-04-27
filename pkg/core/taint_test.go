@@ -1,7 +1,10 @@
 package core
 
 import (
+	"strings"
 	"testing"
+
+	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
@@ -938,5 +941,151 @@ func TestTaintTracker_LineContinuation(t *testing.T) {
 	tracker.AnalyzeStep(step)
 	if !isBPatternVarTainted(tracker, "URL") {
 		t.Errorf("URL must be tainted via head_ref")
+	}
+}
+
+// parseAssignWord は `X=...` 形式のスクリプトを bash として parse し、
+// X の代入の右辺 *syntax.Word を返す。assignmentValueText / expandShellvarMarkers
+// 等の非公開ヘルパへの直接ユニットテストで使う。
+func parseAssignWord(t *testing.T, src string) *syntax.Word {
+	t.Helper()
+	p := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	f, err := p.Parse(strings.NewReader(src), "")
+	if err != nil {
+		t.Fatalf("parse %q failed: %v", src, err)
+	}
+	if len(f.Stmts) == 0 {
+		t.Fatalf("no statements parsed for %q", src)
+	}
+	ce, ok := f.Stmts[0].Cmd.(*syntax.CallExpr)
+	if !ok || len(ce.Assigns) == 0 {
+		t.Fatalf("no assignment parsed for %q", src)
+	}
+	return ce.Assigns[0].Value
+}
+
+// TestAssignmentValueText_SglQuoted は assignmentValueText が
+// *syntax.SglQuoted の Value も連結することを直接 assert する。
+// SglQuoted ケースが脱落すると `X='${{ ... }}'` の placeholder が
+// 拾えなくなり、以後の taint 検出が落ちる。
+func TestAssignmentValueText_SglQuoted(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		script string
+		want   string
+	}{
+		{
+			name:   "lit_only",
+			script: `X=hello`,
+			want:   "hello",
+		},
+		{
+			name:   "single_quoted_with_placeholder",
+			// SglQuoted.Value がそのまま戻り値に含まれること。
+			// SglQuoted ケースが無いと "" になる。
+			script: `X='${{ github.event.issue.title }}'`,
+			want:   `${{ github.event.issue.title }}`,
+		},
+		{
+			name:   "double_quoted_lit_inside",
+			script: `X="abc"`,
+			want:   "abc",
+		},
+		{
+			name:   "mixed_lit_and_sglquoted",
+			script: `X=pre'inner'post`,
+			want:   "preinnerpost",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			w := parseAssignWord(t, tc.script)
+			got := assignmentValueText(w)
+			if got != tc.want {
+				t.Errorf("assignmentValueText(%q) = %q, want %q", tc.script, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestTaintTracker_ExpandShellvarMarkers_DepthThree は
+// A → B → C → D の 3 段以上 chain でも transitive に taint source が
+// 解決され、`shellvar:` マーカーが Sources に残らないことを assert する。
+func TestTaintTracker_ExpandShellvarMarkers_DepthThree(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+	step := &ast.Step{
+		ID: &ast.String{Value: "depth3"},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `A="${{ github.event.issue.title }}"
+B="$A"
+C="$B"
+D="$C"
+echo "out=$D" >> $GITHUB_OUTPUT`},
+		},
+	}
+	tracker.AnalyzeStep(step)
+
+	outputs, ok := tracker.taintedOutputs["depth3"]
+	if !ok {
+		t.Fatal("step depth3 should produce tainted outputs")
+	}
+	sources, ok := outputs["out"]
+	if !ok {
+		t.Fatalf("output 'out' should be tainted via depth-3 chain, got outputs=%+v", outputs)
+	}
+	foundOrigin := false
+	for _, s := range sources {
+		if s == "github.event.issue.title" {
+			foundOrigin = true
+		}
+		if strings.HasPrefix(s, "shellvar:") {
+			t.Errorf("unresolved shellvar marker survived expansion: %q (sources=%v)", s, sources)
+		}
+	}
+	if !foundOrigin {
+		t.Errorf("taint should trace back to github.event.issue.title via A->B->C->D, got: %v", sources)
+	}
+}
+
+// TestTaintTracker_ExpandShellvarMarkers_SelfReference は
+// `X=$X` 形式の自己参照で `shellvar:X` マーカーが Sources に
+// 残らず、かつ maxPasses 内で安定停止することを保証する。
+func TestTaintTracker_ExpandShellvarMarkers_SelfReference(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+	step := &ast.Step{
+		ID: &ast.String{Value: "self-ref"},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: `X="${{ github.event.issue.title }}"
+X="$X"
+echo "out=$X" >> $GITHUB_OUTPUT`},
+		},
+	}
+	tracker.AnalyzeStep(step)
+
+	outputs, ok := tracker.taintedOutputs["self-ref"]
+	if !ok {
+		t.Fatal("step self-ref should produce tainted outputs")
+	}
+	sources, ok := outputs["out"]
+	if !ok {
+		t.Fatalf("output 'out' should remain tainted across self-assign, got outputs=%+v", outputs)
+	}
+	foundOrigin := false
+	for _, s := range sources {
+		if s == "shellvar:X" {
+			t.Errorf("self-reference shellvar:X must not survive expansion, got: %v", sources)
+		}
+		if s == "github.event.issue.title" {
+			foundOrigin = true
+		}
+	}
+	if !foundOrigin {
+		t.Errorf("taint should still trace to github.event.issue.title, got: %v", sources)
 	}
 }

@@ -1315,3 +1315,74 @@ func TestSecretInLog_LineContinuationDoesNotBreakDetection(t *testing.T) {
 		t.Errorf("expected leak detection on $URL from line-continued assignment, got 0 errors")
 	}
 }
+
+// TestOffsetToPosition_ColumnValue は offsetToPosition の Line/Col 計算と
+// Literal block 補正、out-of-range フォールバックを直接 assert する。
+//
+// script のオフセット境界:
+//   "echo $TOKEN\n  echo $SECRET\n"
+//        ^5             ^19
+//   - line 1: `echo $TOKEN` (offset 0..10), '\n' at 11
+//   - line 2: `  echo $SECRET` (offset 12..25), '\n' at 26
+func TestOffsetToPosition_ColumnValue(t *testing.T) {
+	t.Parallel()
+
+	const script = "echo $TOKEN\n  echo $SECRET\n"
+	tokenDollar := strings.Index(script, "$TOKEN")   // expect 5
+	secretDollar := strings.Index(script, "$SECRET") // expect 19
+	if tokenDollar != 5 || secretDollar != 19 {
+		t.Fatalf("setup error: tokenDollar=%d, secretDollar=%d", tokenDollar, secretDollar)
+	}
+
+	type want struct {
+		Line int
+		Col  int
+	}
+	cases := []struct {
+		name   string
+		runStr *ast.String
+		offset int
+		want   want
+	}{
+		{
+			name:   "first_line_no_literal",
+			runStr: &ast.String{Pos: &ast.Position{Line: 10, Col: 0}, Literal: false},
+			offset: tokenDollar,
+			want:   want{Line: 10, Col: 6}, // col = 5 + 1
+		},
+		{
+			name:   "second_line_no_literal",
+			runStr: &ast.String{Pos: &ast.Position{Line: 10, Col: 0}, Literal: false},
+			offset: secretDollar,
+			want:   want{Line: 11, Col: 8}, // 19 - 11 - 1 = 7, +1 = 8
+		},
+		{
+			name:   "second_line_literal_block",
+			runStr: &ast.String{Pos: &ast.Position{Line: 10, Col: 0}, Literal: true},
+			offset: secretDollar,
+			want:   want{Line: 12, Col: 8}, // Literal => Line += 1
+		},
+		{
+			name:   "negative_offset_clamped_to_zero",
+			runStr: &ast.String{Pos: &ast.Position{Line: 10, Col: 0}, Literal: false},
+			offset: -1,
+			want:   want{Line: 10, Col: 1}, // forced to 0, col = 0 + 1
+		},
+		{
+			name:   "out_of_range_offset_clamped_to_zero",
+			runStr: &ast.String{Pos: &ast.Position{Line: 10, Col: 0}, Literal: false},
+			offset: len(script) + 5,
+			want:   want{Line: 10, Col: 1},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := offsetToPosition(tc.runStr, script, tc.offset)
+			if got.Line != tc.want.Line || got.Col != tc.want.Col {
+				t.Errorf("got Line=%d Col=%d, want Line=%d Col=%d",
+					got.Line, got.Col, tc.want.Line, tc.want.Col)
+			}
+		})
+	}
+}

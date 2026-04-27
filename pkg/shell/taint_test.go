@@ -615,6 +615,78 @@ func TestDblQuotedTargetMatches_NonParam(t *testing.T) {
 	}
 }
 
+// TestDblQuotedTargetMatches_Compound は内側 Parts が複合の場合
+// （`"$GITHUB_OUTPUT/$X"` のように target ParamExp が先頭にあっても）
+// false が返ることを assert する。`len(dq.Parts) != 1` ガードを
+// 取り除く mutation を kill するため、先頭が target ParamExp である
+// compound を必ず含める。
+func TestDblQuotedTargetMatches_Compound(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		script string
+	}{
+		{
+			name: "param_lit_param",
+			// DblQuoted Parts = [ParamExp(GITHUB_OUTPUT), Lit(/), ParamExp(X)]
+			script: `echo x >> "$GITHUB_OUTPUT/$X"`,
+		},
+		{
+			name: "param_then_lit_suffix",
+			// DblQuoted Parts = [ParamExp(GITHUB_OUTPUT), Lit(suffix)]
+			script: `echo x >> "${GITHUB_OUTPUT}suffix"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			w := file.Stmts[0].Redirs[0].Word
+			if len(w.Parts) != 1 {
+				t.Fatalf("expected single-part outer Word, got %d parts", len(w.Parts))
+			}
+			dq, ok := w.Parts[0].(*syntax.DblQuoted)
+			if !ok {
+				t.Fatalf("expected DblQuoted, got %T", w.Parts[0])
+			}
+			if len(dq.Parts) <= 1 {
+				t.Fatalf("setup error: DblQuoted should be compound (>=2 parts), got %d", len(dq.Parts))
+			}
+			if dblQuotedTargetMatches(dq, "GITHUB_OUTPUT") {
+				t.Errorf("compound DblQuoted (parts=%d) must not match target", len(dq.Parts))
+			}
+		})
+	}
+}
+
+// TestExtractHeredocAssignments_CommentLine は heredoc 本文の
+// `# K=V` 形式コメント行を assignment として誤抽出しないことを assert する。
+// 既存 NilAndEdge テストは `# comment`（=を含まない）形式のため、
+// `#` ガードを取り除いても通ってしまい mutation が survive する。
+func TestExtractHeredocAssignments_CommentLine(t *testing.T) {
+	t.Parallel()
+	src := "cat <<EOF >> $GITHUB_OUTPUT\n# K=ignored\n  # leading_ws=ignored\nNAME=value\nEOF"
+	file := parseScript(t, src)
+	stmt := file.Stmts[0]
+	var hdoc *syntax.Word
+	for _, r := range stmt.Redirs {
+		if r.Hdoc != nil {
+			hdoc = r.Hdoc
+			break
+		}
+	}
+	if hdoc == nil {
+		t.Fatal("heredoc body not found")
+	}
+	got := extractHeredocAssignments(hdoc)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry (NAME=value only), got %d: %+v", len(got), got)
+	}
+	if got[0].name != "NAME" || got[0].value != "value" {
+		t.Errorf("got %+v, want {name:NAME, value:value}", got[0])
+	}
+}
+
 func TestDedupAppend(t *testing.T) {
 	t.Parallel()
 	got := dedupAppend([]string{"a"}, "b", "a", "c", "b")
