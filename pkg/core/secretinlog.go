@@ -463,21 +463,30 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		return nil
 	}
 	script := execRun.Run.Value
+
+	maskTarget, ok := resolveMaskTarget(f.varName, f.origin)
+	if !ok {
+		// $@ / $* のリーク、または origin が shellvar:* でない positional →
+		// 確実な single-var ターゲットが取れないため autofix は no-op。
+		// lint diag 自体は既に出ているので、手動修正に委ねる。
+		return nil
+	}
+
 	// sink 位置より前に有効な add-mask が既に存在していれば、追加挿入は不要。
 	// leakOffset は元スクリプトにおける sink のオフセット。他の fixer が先に
 	// insertAfterAssignment でスクリプトを書き換えた場合、挿入位置は常に元 sink より
 	// 前（= アサイン直後 < 元 sink）で行われるため、leakOffset 基準でのチェックは
 	// 書き換え後のスクリプトに対しても引き続き正しく機能する。
-	if hasAddMaskBefore(script, f.varName, f.leakOffset) {
+	if hasAddMaskBefore(script, maskTarget, f.leakOffset) {
 		return nil
 	}
 
-	addMask := `echo "::add-mask::$` + f.varName + `"`
+	addMask := `echo "::add-mask::$` + maskTarget + `"`
 
 	// origin が "shellvar:*" の場合、変数のアサイン直後に add-mask を挿入する。
 	// env var 由来（"secrets.*"）の場合はスクリプト冒頭に挿入する。
 	if strings.HasPrefix(f.origin, "shellvar:") {
-		updated, ok := insertAfterAssignment(script, f.varName, addMask)
+		updated, ok := insertAfterAssignment(script, maskTarget, addMask)
 		if ok {
 			execRun.Run.Value = updated
 			if execRun.Run.BaseNode != nil {
@@ -509,6 +518,41 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		execRun.Run.BaseNode.Value = updated
 	}
 	return nil
+}
+
+// resolveMaskTarget は autofix のマスク対象変数名を決定する。
+//
+// セマンティクス (#448):
+//   - varName が positional ($1, $2, ...): origin が "shellvar:UPSTREAM" の場合は
+//     UPSTREAM を返す (immediate upstream var をマスク対象にする)。
+//     origin が shellvar:* でない (env var 由来 secrets.X 等) なら ("", false) を返す
+//     → autofix no-op
+//   - varName が "@" / "*": 確実な single-var ターゲットが取れないので ("", false) → autofix no-op
+//   - 通常 var: そのまま返す (現状互換)
+func resolveMaskTarget(varName, origin string) (string, bool) {
+	if varName == "@" || varName == "*" {
+		return "", false
+	}
+	if !isPositional(varName) {
+		return varName, true
+	}
+	if upstream, ok := strings.CutPrefix(origin, "shellvar:"); ok && upstream != "" {
+		return upstream, true
+	}
+	return "", false
+}
+
+// isPositional は s が positional parameter ($1, $2, ...) を表す数値文字列か判定する。
+func isPositional(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // insertAfterAssignment はシェルスクリプト script 内で varName への最初のアサインを探し、

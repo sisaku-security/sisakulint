@@ -1453,3 +1453,85 @@ func TestOffsetToPosition_ColumnValue(t *testing.T) {
 		})
 	}
 }
+
+// TestSecretInLog_PositionalArgFromShellVar_DetectsLeak は #448 で関数引数経由
+// の secret 漏洩 (echo "$1") が検出されることを確認する。
+func TestSecretInLog_PositionalArgFromShellVar_DetectsLeak(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	errs := rule.Errors()
+	if len(errs) != 1 {
+		t.Fatalf("got %d errors; want 1; errors: %v", len(errs), errs)
+	}
+	msg := errs[0].Description
+	if !strings.Contains(msg, "$1") {
+		t.Errorf("error message %q should mention positional arg $1", msg)
+	}
+	if !strings.Contains(msg, "shellvar:TOKEN") {
+		t.Errorf("error message %q should mention origin shellvar:TOKEN", msg)
+	}
+}
+
+// TestSecretInLog_PositionalArgFromShellVar_AutofixMasksUpstream は
+// positional 引数 ($1) のリークに対して autofix が **upstream 変数 (TOKEN) を
+// マスクする** ことを検証する (positional の "$1" を直接マスクしない)。
+func TestSecretInLog_PositionalArgFromShellVar_AutofixMasksUpstream(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	got := exec.Run.Value
+	wantInsert := `echo "::add-mask::$TOKEN"`
+	if !strings.Contains(got, wantInsert) {
+		t.Errorf("script after autofix does not contain %q; got:\n%s", wantInsert, got)
+	}
+	tokenLineIdx := strings.Index(got, "TOKEN=$(")
+	maskLineIdx := strings.Index(got, wantInsert)
+	if tokenLineIdx < 0 || maskLineIdx < 0 || maskLineIdx <= tokenLineIdx {
+		t.Errorf("expected mask to be inserted after TOKEN= line; got:\n%s", got)
+	}
+	// positional "$1" を直接マスクする誤った insert がないこと
+	if strings.Contains(got, `echo "::add-mask::$1"`) {
+		t.Errorf("script should NOT contain '::add-mask::$1' (positional); got:\n%s", got)
+	}
+}
