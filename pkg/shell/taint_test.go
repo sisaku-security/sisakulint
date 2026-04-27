@@ -733,6 +733,24 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "declclause_rhs_cmdsubst_isolated",
+			script:  `local X=$(Y="$T"; echo "$Y")`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T": "github.event.issue.body",
+					// X は cmdsubst を含む Word を RHS とする代入で、現状の
+					// WordReferencesEntry は Word 内の全 ParamExp を deep walk
+					// するため cmdsubst 内側の "$T" を捕捉して X を tainted に
+					// する (cmdsubst の出力が本当に X に流れる場合と過剰に
+					// マッチするが、現状の挙動を lock-in しておく)。
+					"X": "shellvar:T",
+				},
+				// Y は cmdsubst 内の代入なので親 (root) には漏れない。
+				finalAbsent: []string{"Y"},
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -757,4 +775,59 @@ func TestPropagateTaint_Scoped(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestScopedTaint_At は visibleAt の per-Stmt snapshot を検証する。
+// Task 3 で更にケースを追加予定。
+func TestScopedTaint_At(t *testing.T) {
+	t.Parallel()
+
+	t.Run("declclause_rhs_cmdsubst_inner_stmt_records_visibleAt", func(t *testing.T) {
+		t.Parallel()
+		// local X=$(Y="$T"; echo "$Y")
+		// cmdsubst 内の 2 番目の Stmt (echo "$Y") の入口時点で Y が visible
+		// であることを確認する。Y は cmdsubst frame ローカルなので Final
+		// には含まれず、もし visibleAt が記録されていなければ At() の
+		// Final フォールバックにより Y が見えない。
+		// (本テストは fix 前の defect — DeclClause RHS の cmdsubst が walk
+		//  されず inner stmt の visibleAt が空になる — を検出する)
+		file := parseScript(t, `local X=$(Y="$T"; echo "$Y")`)
+		initial := map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}}
+		result := PropagateTaint(file, initial)
+
+		var innerStmts []*syntax.Stmt
+		syntax.Walk(file, func(n syntax.Node) bool {
+			if cs, ok := n.(*syntax.CmdSubst); ok {
+				innerStmts = cs.Stmts
+				return false
+			}
+			return true
+		})
+		if len(innerStmts) < 2 {
+			t.Fatalf("expected >=2 inner cmdsubst stmts, got %d", len(innerStmts))
+		}
+		// 2 番目の Stmt (echo "$Y") の入口で Y が visible なら fix が効いている。
+		visibleAtEcho := result.At(innerStmts[1])
+		if _, ok := visibleAtEcho["Y"]; !ok {
+			t.Errorf("echo stmt should have Y in visibleAt (cmdsubst frame), got %v", keysOf(visibleAtEcho))
+		}
+		// Final には Y が含まれない (cmdsubst スコープが pop された結果)。
+		if _, ok := result.Final["Y"]; ok {
+			t.Errorf("Final should NOT have Y (cmdsubst-local), got %v", keysOf(result.Final))
+		}
+		// 1 番目の Stmt (Y="$T") の入口でも T は visible (親から snapshot)。
+		visibleAtAssign := result.At(innerStmts[0])
+		if _, ok := visibleAtAssign["T"]; !ok {
+			t.Errorf("assign stmt should have T in visibleAt (snapshotted from parent), got %v", keysOf(visibleAtAssign))
+		}
+	})
+}
+
+// keysOf is a test helper that returns sorted keys of a map for debug output.
+func keysOf(m map[string]Entry) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

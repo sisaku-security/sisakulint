@@ -311,7 +311,15 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			return true
 		case *syntax.DeclClause:
 			processDeclClause(*current, n)
-			return false // children は処理済み (二重カウント防止)
+			// RHS Words (Args.Value) を別途 walk して、入れ子の Subshell / CmdSubst が
+			// scope frame を push し、内側 Stmt が visibleAt を記録できるようにする。
+			// Args.Name は Lit のみで taint semantics を持たないので skip。
+			for _, a := range n.Args {
+				if a.Value != nil {
+					syntax.Walk(a.Value, makeWalkFn(current, result))
+				}
+			}
+			return false
 		case *syntax.Assign:
 			processAssign(*current, n, AssignNone)
 			return true
