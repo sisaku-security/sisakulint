@@ -1535,3 +1535,85 @@ func TestSecretInLog_PositionalArgFromShellVar_AutofixMasksUpstream(t *testing.T
 		t.Errorf("script should NOT contain '::add-mask::$1' (positional); got:\n%s", got)
 	}
 }
+
+// TestSecretInLog_AtArg_DetectsLeakNoAutofix は echo "$@" の漏洩が検出され、
+// かつ autofix は no-op (script 不変) であることを確認する。
+func TestSecretInLog_AtArg_DetectsLeakNoAutofix(t *testing.T) {
+	t.Parallel()
+
+	runScript := "leak() { echo \"$@\"; }\nleak \"$T1\" \"$T2\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"t1": {
+				Name:  &ast.String{Value: "T1"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+			"t2": {
+				Name:  &ast.String{Value: "T2"},
+				Value: &ast.String{Value: "${{ secrets.AWS_KEY }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	errs := rule.Errors()
+	if len(errs) == 0 {
+		t.Fatal("expected at least 1 leak error for echo \"$@\"; got 0")
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	scriptBefore := exec.Run.Value
+
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	scriptAfter := exec.Run.Value
+
+	if scriptBefore != scriptAfter {
+		t.Errorf("autofix should be no-op for $@ leak; before:\n%s\nafter:\n%s", scriptBefore, scriptAfter)
+	}
+}
+
+// TestSecretInLog_FunctionLocalChainsThroughArg は関数本体内で local X="$1" 経由の
+// 派生変数の echo が leak 検出され、origin chain が upstream まで遡ることを確認する。
+func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { local X=\"$1\"; echo \"$X\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	errs := rule.Errors()
+	if len(errs) == 0 {
+		t.Fatal("expected leak detection for echo \"$X\" inside function body; got 0")
+	}
+	msg := errs[0].Description
+	if !strings.Contains(msg, "$X") {
+		t.Errorf("error message %q should mention $X", msg)
+	}
+}
