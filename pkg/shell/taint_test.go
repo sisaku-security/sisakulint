@@ -1173,6 +1173,47 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:    "mixed_args_partial_taint",
+			script:  `foo() { cmd "$1" "$2"; }; foo "$T" "safe"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `cmd "$1" "$2"`, varName: "1", originFirst: "shellvar:T"},
+					{stmtSubstr: `cmd "$1" "$2"`, varName: "@", originFirst: "github.event.issue.body"},
+				},
+			},
+		},
+		{
+			name:   "at_arg_either_tainted",
+			script: `foo() { cmd "$@"; }; foo "$T1" "$T2"`,
+			initial: map[string]Entry{
+				"T1": {Sources: []string{"github.event.issue.title"}, Offset: -1},
+				"T2": {Sources: []string{"github.event.issue.body"}, Offset: -1},
+			},
+			want: want{
+				finalHas: map[string]string{
+					"T1": "github.event.issue.title",
+					"T2": "github.event.issue.body",
+				},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// "@" の Sources は両 args の Sources を union (順序保持)
+					{stmtSubstr: `cmd "$@"`, varName: "@", originFirst: "github.event.issue.title"},
+				},
+			},
+		},
+		{
+			name:    "star_alias_of_at",
+			script:  `foo() { cmd "$*"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `cmd "$*"`, varName: "*", originFirst: "secrets.GH"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
