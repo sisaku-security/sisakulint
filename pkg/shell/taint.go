@@ -40,6 +40,36 @@ func (e Entry) First() string {
 	return e.Sources[0]
 }
 
+// ScopedTaint は scope-aware な taint propagation の結果。
+//
+// Final はスクリプト末尾時点で親スコープから見える tainted vars。
+// 旧 PropagateTaint の戻り値と同じ形。cross-step 伝播 (taint.go の
+// $GITHUB_OUTPUT 記録、secretinlog.go の crossStepEnv 構築) で使う。
+//
+// visibleAt は AST 内の各 *syntax.Stmt 入口時点で「そのスコープから
+// 見える tainted vars の union」を保持。sink 検出で「この位置でこの
+// 変数は tainted か?」のクエリに使う。直接アクセスせず At() を経由する。
+type ScopedTaint struct {
+	Final     map[string]Entry
+	visibleAt map[*syntax.Stmt]map[string]Entry
+}
+
+// At は stmt の入口時点で見えている tainted set を返す。
+// stmt が nil または visibleAt に未登録の場合は Final を返す
+// (root scope sink のフォールバック)。
+func (s *ScopedTaint) At(stmt *syntax.Stmt) map[string]Entry {
+	if s == nil {
+		return nil
+	}
+	if stmt == nil {
+		return s.Final
+	}
+	if v, ok := s.visibleAt[stmt]; ok {
+		return v
+	}
+	return s.Final
+}
+
 // AssignKeyword は代入文に付随する宣言キーワード。
 type AssignKeyword int
 
@@ -170,34 +200,44 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 }
 
 // PropagateTaint は initial を seed として AST を順方向 1 パス walk し、
-// 代入の RHS が tainted な変数を参照していれば LHS を tainted に追加する。
+// scope-aware に taint を伝播する。
 //
 // セマンティクス:
 //   - 既に tainted な変数への再代入は origin/Offset を上書きしない（最初の taint を保持）
 //   - LHS 名は AST 順序で処理される（forward dataflow）
 //   - 代入の RHS が tainted を参照しない場合は LHS に何もしない（"untaint" はしない）
-//   - スコープは無視（subshell/function 内も親と同じ namespace ← #447 で対応）
+//   - スコープ:
+//     - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
+//       親 visible を snapshot copy して隔離。内部代入は親に漏れない
+//     - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
+//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は本 issue の
+//       簡略案 A により親に漏らさない (#448 で改善予定)
 //
-// 戻り値は initial を変更せず新しい map を返す。
-func PropagateTaint(file *syntax.File, initial map[string]Entry) map[string]Entry {
-	result := make(map[string]Entry, len(initial))
-	maps.Copy(result, initial)
+// 戻り値は initial を変更せず新しい *ScopedTaint を返す。
+func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
+	result := &ScopedTaint{
+		Final:     make(map[string]Entry, len(initial)),
+		visibleAt: make(map[*syntax.Stmt]map[string]Entry),
+	}
+	maps.Copy(result.Final, initial)
 	if file == nil {
 		return result
 	}
 
+	// 暫定実装: 旧フラット動作で Final を埋める。
+	// Task 2 以降でスコープ対応に置き換える。
 	for _, a := range WalkAssignments(file) {
-		if _, already := result[a.Name]; already {
+		if _, already := result.Final[a.Name]; already {
 			continue
 		}
 		if a.Value == nil {
 			continue
 		}
-		refName, found := WordReferencesEntry(a.Value, result)
+		refName, found := WordReferencesEntry(a.Value, result.Final)
 		if !found {
 			continue
 		}
-		result[a.Name] = Entry{
+		result.Final[a.Name] = Entry{
 			Sources: []string{"shellvar:" + refName},
 			Offset:  a.Offset,
 		}

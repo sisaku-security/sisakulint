@@ -395,7 +395,8 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return // パース失敗時は解析をスキップ（他ルールの管轄）
 	}
 
-	tainted := shell.PropagateTaint(file, initialTainted)
+	scoped := shell.PropagateTaint(file, initialTainted)
+	tainted := scoped.Final
 	leaks := rule.findEchoLeaks(file, tainted, script, execRun.Run)
 
 	for _, leak := range leaks {

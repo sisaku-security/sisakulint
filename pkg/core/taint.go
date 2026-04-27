@@ -226,13 +226,15 @@ func (t *TaintTracker) AnalyzeStep(step *ast.Step) {
 	t.seedTaintFromExpressions(file, exprMap)
 
 	// Forward dataflow with order-aware Offset
-	t.taintedVars = shell.PropagateTaint(file, t.taintedVars)
+	scoped := shell.PropagateTaint(file, t.taintedVars)
+	t.taintedVars = scoped.Final
+	expandShellvarMarkers(t.taintedVars)
 
 	// shell.PropagateTaint marks derived variables with "shellvar:X" chain
 	// markers; taint.go callers expect transitive source lists for richer
 	// reporting (e.g. trace back to "github.event.issue.title"). Expand the
 	// markers in place. Bounded passes guard against pathological chains.
-	expandShellvarMarkers(t.taintedVars)
+	// (NOTE: scope-aware per-stmt expansion is added in Task 10)
 
 	// GITHUB_OUTPUT writes
 	for _, w := range shell.WalkRedirectWrites(file, "GITHUB_OUTPUT") {

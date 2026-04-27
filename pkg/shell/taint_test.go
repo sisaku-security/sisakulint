@@ -252,7 +252,7 @@ func TestPropagateTaint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			file := parseScript(t, tc.script)
-			got := PropagateTaint(file, tc.initial)
+			got := PropagateTaint(file, tc.initial).Final
 
 			for _, name := range tc.wantNames {
 				if _, ok := got[name]; !ok {
@@ -284,7 +284,7 @@ func TestPropagateTaint_OrderAware(t *testing.T) {
 	script := `Y=$X`
 	initial := map[string]Entry{"X": {Sources: []string{"secrets.X"}, Offset: -1}}
 	file := parseScript(t, script)
-	got := PropagateTaint(file, initial)
+	got := PropagateTaint(file, initial).Final
 
 	if got["X"].Offset != -1 {
 		t.Errorf("X should keep Offset=-1, got %d", got["X"].Offset)
@@ -564,7 +564,7 @@ func TestRedirTargetMatches_Edge(t *testing.T) {
 func TestPropagateTaint_NilFile(t *testing.T) {
 	t.Parallel()
 	initial := map[string]Entry{"X": {Sources: []string{"s"}, Offset: -1}}
-	got := PropagateTaint(nil, initial)
+	got := PropagateTaint(nil, initial).Final
 	if _, ok := got["X"]; !ok {
 		t.Error("initial entry must be preserved with nil file")
 	}
