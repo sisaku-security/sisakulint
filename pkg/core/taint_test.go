@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -1184,5 +1185,34 @@ foo "$TITLE"`)
 	}
 	if !foundOrigin {
 		t.Errorf("taintedOutputs[step1][x] = %v; want to contain %q", srcs, "github.event.issue.title")
+	}
+}
+
+// TestTaintTracker_FunctionArg_ChainExpansion は #448 で関数引数経由 taint が
+// shellvar chain を経て origin まで遡って展開されることを検証する。
+// 仕様書 §7.2 の 2 ケース目。
+//
+// chain: shellvar:1 → shellvar:TITLE → github.event.issue.title
+func TestTaintTracker_FunctionArg_ChainExpansion(t *testing.T) {
+	t.Parallel()
+	tracker := NewTaintTracker()
+
+	step := makeBPatternRunStep("step1", `TITLE="${{ github.event.issue.title }}"
+foo() { echo "y=$1" >> $GITHUB_OUTPUT; }
+foo "$TITLE"`)
+
+	tracker.AnalyzeStep(step)
+
+	outputs := tracker.GetTaintedOutputs()
+	step1Out, ok := outputs["step1"]
+	if !ok {
+		t.Fatalf("taintedOutputs[step1] missing; got: %v", outputs)
+	}
+	ySources, ok := step1Out["y"]
+	if !ok {
+		t.Fatalf("taintedOutputs[step1][y] missing; got: %v", step1Out)
+	}
+	if !slices.Contains(ySources, "github.event.issue.title") {
+		t.Errorf("taintedOutputs[step1][y] = %v; want to contain %q", ySources, "github.event.issue.title")
 	}
 }
