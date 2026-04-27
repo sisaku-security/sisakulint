@@ -691,20 +691,6 @@ func TestExtractHeredocAssignments_CommentLine(t *testing.T) {
 	}
 }
 
-func TestDedupAppend(t *testing.T) {
-	t.Parallel()
-	got := dedupAppend([]string{"a"}, "b", "a", "c", "b")
-	want := []string{"a", "b", "c"}
-	if len(got) != len(want) {
-		t.Fatalf("len: got %d, want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("[%d] got %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
 // TestPropagateTaint_Scoped は scope-aware な PropagateTaint の挙動を検証する。
 func TestPropagateTaint_Scoped(t *testing.T) {
 	t.Parallel()

@@ -328,7 +328,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			}
 			return false
 		case *syntax.Assign:
-			processAssign(*current, n, AssignNone)
+			processAssign(*current, n)
 			return true
 		}
 		return true
@@ -337,11 +337,10 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 
 // processAssign は単純代入 X=Y を current frame に書き込む。
 // 既に tainted な変数の上書きはしない (最初の taint を保持)。
-func processAssign(current *scopeFrame, a *syntax.Assign, kw AssignKeyword) {
+func processAssign(current *scopeFrame, a *syntax.Assign) {
 	if a == nil || a.Name == nil {
 		return
 	}
-	_ = kw // kw は processDeclClause で参照済み。processAssign 自体は kw を使わない (将来の拡張用に残す)
 	name := a.Name.Value
 	if _, already := current.local[name]; already {
 		return
@@ -384,7 +383,7 @@ func processDeclClause(current *scopeFrame, decl *syntax.DeclClause) {
 	}
 
 	for _, a := range decl.Args {
-		processAssign(current, a, kw)
+		processAssign(current, a)
 	}
 }
 
@@ -408,24 +407,6 @@ func declHasGlobalFlag(decl *syntax.DeclClause) bool {
 		}
 	}
 	return false
-}
-
-// dedupAppend は順序保持で重複なしの append。
-// 既存 pkg/core/taint.go の deduplicateStrings と同等。
-func dedupAppend(dst []string, items ...string) []string {
-	seen := make(map[string]struct{}, len(dst)+len(items))
-	for _, s := range dst {
-		seen[s] = struct{}{}
-	}
-	out := dst
-	for _, s := range items {
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
 }
 
 // WalkRedirectWrites は `>> $TARGET` または `> $TARGET` リダイレクトを持つ Stmt を探し、
