@@ -7,6 +7,7 @@ package shell
 import (
 	"maps"
 	"path"
+	"strconv"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -199,6 +200,35 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 	return foundName, found
 }
 
+// WordReferencesEntries は word 内の ParamExp を walk し、tainted 集合に
+// 含まれる全ての変数名を重複なしで返す。見つからなければ nil。
+// buildArgBinding で複数 tainted 変数を含む composite word (例: "$T1-$T2") を
+// 正しく処理するために使用する。
+func WordReferencesEntries(word *syntax.Word, tainted map[string]Entry) []string {
+	if word == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var names []string
+	syntax.Walk(word, func(node syntax.Node) bool {
+		pe, ok := node.(*syntax.ParamExp)
+		if !ok || pe.Param == nil {
+			return true
+		}
+		name := pe.Param.Value
+		if _, ok := tainted[name]; !ok {
+			return true
+		}
+		if _, dup := seen[name]; dup {
+			return true
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+		return true
+	})
+	return names
+}
+
 // scopeKind は scope frame の種別。
 type scopeKind int
 
@@ -248,11 +278,24 @@ func (f *scopeFrame) visible() map[string]Entry {
 //   - LHS 名は AST 順序で処理される（forward dataflow）
 //   - 代入の RHS が tainted を参照しない場合は LHS に何もしない（"untaint" はしない）
 //   - スコープ:
-//     - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
-//       親 visible を snapshot copy して隔離。内部代入は親に漏れない
-//     - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
-//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は本 issue の
-//       簡略案 A により親に漏らさない (#448 で改善予定)
+//   - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
+//     親 visible を snapshot copy して隔離。内部代入は親に漏れない
+//   - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
+//     近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は #447 の
+//     簡略案 A により親に漏らさない
+//   - 関数引数経由 taint 伝播 (#448):
+//   - FuncDecl 出現時には body を walk せず関数テーブル (funcTable) に登録のみ
+//   - CallExpr 検出時に call-site の args の taint state を tainted["1"]/["2"]/.../["@"]/["*"]
+//     として inject した上で body を walk (lazy walk)
+//   - 複数 call-site から同じ body stmt が walk された場合、visibleAt[stmt] は
+//     Sources を保守的 union (FP 寄り)
+//   - 再帰呼び出しは visited[name] で depth=1 制限 (固定点反復はしない)
+//   - forward reference (定義前 call) は 1-pass walk で自然に未登録扱い → bash 一致
+//   - 関数定義のみで一度も呼び出されない (uncalled) function body は walk されない。
+//     例えば `foo() { local X="$T"; echo "$X"; }` (foo が一度も呼ばれない) の
+//     内部派生 sink は検出されない。これは bash 実挙動に近づける選択 (uncalled
+//     function は実行されないため log にも漏れない)。eager walk への巻き戻しは
+//     しない方針。
 //
 // 戻り値は initial を変更せず新しい *ScopedTaint を返す。
 func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
@@ -270,7 +313,9 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
 		root.local = make(map[string]Entry)
 	}
 	current := root
-	syntax.Walk(file, makeWalkFn(&current, result))
+	funcTable := make(map[string]*syntax.FuncDecl)
+	visited := make(map[string]int)
+	syntax.Walk(file, makeWalkFn(&current, result, funcTable, visited))
 
 	// Final は root frame の最終状態 (subshell/funcdecl frame は pop 済み)
 	maps.Copy(result.Final, root.local)
@@ -280,7 +325,10 @@ func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
 // makeWalkFn は scope frame stack を維持しつつ walk するクロージャを返す。
 // `current` は現在の frame を指す pointer-to-pointer で、subshell/funcdecl 入退場時に
 // 書き換える。
-func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) bool {
+//
+// funcTable は関数登録テーブル (#448 lazy walk)。CallExpr 解決で参照する。
+// visited は再帰展開ガード (#448 lazy walk)。同一関数の再入を防ぐ。
+func makeWalkFn(current **scopeFrame, result *ScopedTaint, funcTable map[string]*syntax.FuncDecl, visited map[string]int) func(syntax.Node) bool {
 	return func(node syntax.Node) bool {
 		if node == nil {
 			return false
@@ -290,7 +338,7 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			child := &scopeFrame{kind: scopeSubshell, parent: *current, local: maps.Clone((*current).visible())}
 			*current = child
 			for _, stmt := range n.Stmts {
-				syntax.Walk(stmt, makeWalkFn(current, result))
+				syntax.Walk(stmt, makeWalkFn(current, result, funcTable, visited))
 			}
 			*current = (*current).parent
 			return false
@@ -298,23 +346,22 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			child := &scopeFrame{kind: scopeCmdSubst, parent: *current, local: maps.Clone((*current).visible())}
 			*current = child
 			for _, stmt := range n.Stmts {
-				syntax.Walk(stmt, makeWalkFn(current, result))
+				syntax.Walk(stmt, makeWalkFn(current, result, funcTable, visited))
 			}
 			*current = (*current).parent
 			return false
 		case *syntax.FuncDecl:
-			if n.Body == nil {
+			if n.Body == nil || n.Name == nil {
 				return false
 			}
-			child := &scopeFrame{kind: scopeFunc, parent: *current, local: make(map[string]Entry)}
-			prev := *current
-			*current = child
-			syntax.Walk(n.Body, makeWalkFn(current, result))
-			*current = prev
+			// body は walk しない。テーブル登録のみ (#448 lazy walk)。
+			// 後勝ち = bash 仕様 (関数の再定義は最後の定義が有効)。
+			funcTable[n.Name.Value] = n
 			return false
 		case *syntax.Stmt:
-			// 各 Stmt 入口で visibleAt を記録
-			result.visibleAt[n] = (*current).visible()
+			// 各 Stmt 入口で visibleAt を記録 (複数 call-site から walk された場合は
+			// 保守的 union — recordVisibleAt が既存と merge する)。
+			recordVisibleAt(result, n, (*current).visible())
 			return true
 		case *syntax.DeclClause:
 			processDeclClause(*current, n)
@@ -323,10 +370,31 @@ func makeWalkFn(current **scopeFrame, result *ScopedTaint) func(syntax.Node) boo
 			// Args.Name は Lit のみで taint semantics を持たないので skip。
 			for _, a := range n.Args {
 				if a.Value != nil {
-					syntax.Walk(a.Value, makeWalkFn(current, result))
+					syntax.Walk(a.Value, makeWalkFn(current, result, funcTable, visited))
 				}
 			}
 			return false
+		case *syntax.CallExpr:
+			name := callCommandName(n)
+			if name == "" {
+				return true // 動的 dispatch / 引数なし → 子ノード walk のみ
+			}
+			decl, ok := funcTable[name]
+			if !ok {
+				return true // funcTable 未登録 (forward ref or 外部コマンド) → 通常 walk
+			}
+			if visited[name] >= 1 {
+				return true // 再帰展開 depth=1 で打ち切り (#448)
+			}
+			binding := buildArgBinding(n, (*current).visible())
+			child := &scopeFrame{kind: scopeFunc, parent: *current, local: binding}
+			prev := *current
+			*current = child
+			visited[name]++
+			syntax.Walk(decl.Body, makeWalkFn(current, result, funcTable, visited))
+			visited[name]--
+			*current = prev
+			return true
 		case *syntax.Assign:
 			processAssign(*current, n)
 			return true
@@ -668,5 +736,108 @@ func keywordFor(variant string) AssignKeyword {
 		return AssignDeclare
 	default:
 		return AssignNone
+	}
+}
+
+// mergeSources は順序保持で重複なしの slice merge。
+// 後続タスクの buildArgBinding / recordVisibleAt から呼び出す内部ヘルパ。
+// pkg/core/taint.go::mergeUnique と同等のロジック (cyclic import 回避のため複製)。
+func mergeSources(dst, src []string) []string {
+	if len(src) == 0 {
+		return dst
+	}
+	seen := make(map[string]struct{}, len(dst)+len(src))
+	for _, s := range dst {
+		seen[s] = struct{}{}
+	}
+	out := dst
+	for _, s := range src {
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+// callCommandName は CallExpr の第1引数を literal command name として返す。
+// 第1引数が変数経由 ($cmd 等) の場合は空文字を返す → funcTable 未登録扱いで
+// 静的解決スキップとなる。
+func callCommandName(call *syntax.CallExpr) string {
+	if call == nil || len(call.Args) == 0 {
+		return ""
+	}
+	return wordLitPrefix(call.Args[0])
+}
+
+// buildArgBinding は CallExpr の args から call-site の taint state を抽出し、
+// 関数本体内の $1 / $2 / ... / $@ / $* に対応する binding map を返す。
+//
+// セマンティクス (#448):
+//   - tainted な shell var を参照する arg のみを binding に登録 (untainted arg は skip)
+//   - binding["1"], ["2"], ... には Sources = ["shellvar:UPSTREAM_NAME"] (processAssign と同形式)
+//   - binding["@"] / ["*"] には全 tainted args の Sources を union (chain そのまま)
+//   - すべて Offset = -1 (env-like、body 内 sink から見て常に "before" 扱い)
+//
+// $@ / $* は「いずれかが tainted なら tainted」(issue 案明記)。
+//
+// visible は call-site の現在 frame で見える tainted vars (= currentFrame.visible())。
+func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string]Entry {
+	binding := make(map[string]Entry)
+	if call == nil || len(call.Args) <= 1 {
+		return binding
+	}
+	var atSources []string
+	for i, arg := range call.Args[1:] {
+		upstreams := WordReferencesEntries(arg, visible)
+		if len(upstreams) == 0 {
+			continue
+		}
+		var argSources []string
+		for _, u := range upstreams {
+			argSources = mergeSources(argSources, []string{"shellvar:" + u})
+			if e, ok := visible[u]; ok {
+				atSources = mergeSources(atSources, e.Sources)
+			}
+		}
+		binding[strconv.Itoa(i+1)] = Entry{
+			Sources: argSources,
+			Offset:  -1,
+		}
+	}
+	if len(atSources) > 0 {
+		binding["@"] = Entry{Sources: atSources, Offset: -1}
+		binding["*"] = binding["@"]
+	}
+	return binding
+}
+
+// recordVisibleAt は currentFrame.visible() を visibleAt[stmt] に書き込む。
+// 同じ stmt に対する再記録 (= 別 call-site から同じ関数 body を再 walk) は
+// 既存値と Sources を保守的に union してマージする (#448 複数 call-site 対応)。
+//
+// Offset は早い (小さい) 値を保持。-1 (env-like) は常に勝つ。
+func recordVisibleAt(result *ScopedTaint, stmt *syntax.Stmt, visible map[string]Entry) {
+	if result == nil || stmt == nil {
+		return
+	}
+	existing, ok := result.visibleAt[stmt]
+	if !ok {
+		result.visibleAt[stmt] = maps.Clone(visible)
+		return
+	}
+	for name, entry := range visible {
+		cur, has := existing[name]
+		if !has {
+			existing[name] = entry
+			continue
+		}
+		cur.Sources = mergeSources(cur.Sources, entry.Sources)
+		// 早い (小さい) offset を保持。-1 は env-like で常勝
+		if entry.Offset < 0 || (cur.Offset >= 0 && entry.Offset < cur.Offset) {
+			cur.Offset = entry.Offset
+		}
+		existing[name] = cur
 	}
 }

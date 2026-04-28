@@ -1453,3 +1453,352 @@ func TestOffsetToPosition_ColumnValue(t *testing.T) {
 		})
 	}
 }
+
+// TestSecretInLog_PositionalArgFromShellVar_DetectsLeak は #448 で関数引数経由
+// の secret 漏洩 (echo "$1") が検出されることを確認する。
+func TestSecretInLog_PositionalArgFromShellVar_DetectsLeak(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	errs := rule.Errors()
+	if len(errs) != 1 {
+		t.Fatalf("got %d errors; want 1; errors: %v", len(errs), errs)
+	}
+	msg := errs[0].Description
+	if !strings.Contains(msg, "$1") {
+		t.Errorf("error message %q should mention positional arg $1", msg)
+	}
+	if !strings.Contains(msg, "shellvar:TOKEN") {
+		t.Errorf("error message %q should mention origin shellvar:TOKEN", msg)
+	}
+}
+
+// TestSecretInLog_PositionalArgFromShellVar_AutofixMasksUpstream は
+// positional 引数 ($1) のリークに対して autofix が **upstream 変数 (TOKEN) を
+// マスクする** ことを検証する (positional の "$1" を直接マスクしない)。
+func TestSecretInLog_PositionalArgFromShellVar_AutofixMasksUpstream(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	got := exec.Run.Value
+	wantInsert := `echo "::add-mask::$TOKEN"`
+	if !strings.Contains(got, wantInsert) {
+		t.Errorf("script after autofix does not contain %q; got:\n%s", wantInsert, got)
+	}
+	tokenLineIdx := strings.Index(got, "TOKEN=$(")
+	maskLineIdx := strings.Index(got, wantInsert)
+	if tokenLineIdx < 0 || maskLineIdx < 0 || maskLineIdx <= tokenLineIdx {
+		t.Errorf("expected mask to be inserted after TOKEN= line; got:\n%s", got)
+	}
+	// positional "$1" を直接マスクする誤った insert がないこと
+	if strings.Contains(got, `echo "::add-mask::$1"`) {
+		t.Errorf("script should NOT contain '::add-mask::$1' (positional); got:\n%s", got)
+	}
+}
+
+// TestSecretInLog_AtArg_DetectsLeakNoAutofix は echo "$@" の漏洩が検出され、
+// かつ autofix は no-op (script 不変) であることを確認する。
+func TestSecretInLog_AtArg_DetectsLeakNoAutofix(t *testing.T) {
+	t.Parallel()
+
+	runScript := "leak() { echo \"$@\"; }\nleak \"$T1\" \"$T2\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"t1": {
+				Name:  &ast.String{Value: "T1"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+			"t2": {
+				Name:  &ast.String{Value: "T2"},
+				Value: &ast.String{Value: "${{ secrets.AWS_KEY }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	errs := rule.Errors()
+	if len(errs) == 0 {
+		t.Fatal("expected at least 1 leak error for echo \"$@\"; got 0")
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	scriptBefore := exec.Run.Value
+
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	scriptAfter := exec.Run.Value
+
+	if scriptBefore != scriptAfter {
+		t.Errorf("autofix should be no-op for $@ leak; before:\n%s\nafter:\n%s", scriptBefore, scriptAfter)
+	}
+}
+
+// TestSecretInLog_PositionalArg_AutofixIdempotent は #448 で autofix 適用後の
+// スクリプトに対して再度 rule を走らせると警告が再発しないことを確認する。
+// (Task 13 の resolveMaskTarget と Task 15 直前のフィックスで、autofix が
+// upstream 変数 (TOKEN) をマスクするので、検出抑制も同じ upstream 名を見て
+// idempotent になる必要がある。)
+func TestSecretInLog_PositionalArg_AutofixIdempotent(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	// First pass: detect the leak.
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected initial leak detection; got 0 errors")
+	}
+
+	// Apply autofixers.
+	for _, f := range rule.AutoFixers() {
+		if err := f.Fix(); err != nil {
+			t.Fatalf("Fix: %v", err)
+		}
+	}
+
+	exec, ok := step.Exec.(*ast.ExecRun)
+	if !ok || exec.Run == nil {
+		t.Fatal("step.Exec is not ExecRun")
+	}
+	fixedScript := exec.Run.Value
+
+	// Confirm the autofix actually inserted the upstream mask (sanity check).
+	if !strings.Contains(fixedScript, `echo "::add-mask::$TOKEN"`) {
+		t.Fatalf("autofix did not insert expected mask; got script:\n%s", fixedScript)
+	}
+
+	// Second pass: re-run rule on the autofixed step — must produce 0 secret-in-log warnings.
+	step2 := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: fixedScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule2 := NewSecretInLogRule()
+	if err := rule2.VisitJobPre(&ast.Job{Steps: []*ast.Step{step2}}); err != nil {
+		t.Fatalf("second VisitJobPre: %v", err)
+	}
+	if len(rule2.Errors()) != 0 {
+		t.Errorf("after autofix, secret-in-log should be silent; got errors: %v", rule2.Errors())
+	}
+}
+
+// TestSecretInLog_PositionalArg_SuggestionUsesUpstreamVar は #448 review I-2 の
+// 回帰防止: positional ($1) のリーク診断メッセージが "::add-mask::$UPSTREAM" を
+// 推奨し、"::add-mask::$1" を推奨しないことを確認する (autofix と整合)。
+func TestSecretInLog_PositionalArg_SuggestionUsesUpstreamVar(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { echo \"$1\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("got %d errors; want 1", len(rule.Errors()))
+	}
+	msg := rule.Errors()[0].Description
+	if !strings.Contains(msg, `"::add-mask::$TOKEN"`) {
+		t.Errorf("message should suggest masking upstream $TOKEN, got: %q", msg)
+	}
+	if strings.Contains(msg, `"::add-mask::$1"`) {
+		t.Errorf("message should NOT suggest masking $1 (positional); got: %q", msg)
+	}
+}
+
+func TestResolveMaskTarget(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		varName  string
+		origin   string
+		wantName string
+		wantOK   bool
+	}{
+		{"normal_var", "TOKEN", "shellvar:KEY", "TOKEN", true},
+		{"at_param", "@", "shellvar:X", "", false},
+		{"star_param", "*", "shellvar:X", "", false},
+		{"positional_with_upstream", "1", "shellvar:TOKEN", "TOKEN", true},
+		{"positional_no_shellvar", "1", "secrets.X", "", false},
+		{"positional_empty_shellvar", "1", "shellvar:", "", false},
+		{"positional_chain_to_at", "1", "shellvar:@", "", false},
+		{"positional_chain_to_star", "1", "shellvar:*", "", false},
+		{"nested_shellvar_prefix", "1", "shellvar:shellvar:TOKEN", "TOKEN", true},
+		{"positional_intermediate_stops", "1", "shellvar:2", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := resolveMaskTarget(tc.varName, tc.origin)
+			if got != tc.wantName || ok != tc.wantOK {
+				t.Errorf("resolveMaskTarget(%q, %q) = (%q, %v), want (%q, %v)",
+					tc.varName, tc.origin, got, ok, tc.wantName, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestSecretInLog_PositionalSuppression_RequiresAllUpstreamsMasked(t *testing.T) {
+	t.Parallel()
+
+	// $1 receives a composite word "$TOKEN-$KEY" so it has two upstream sources.
+	// Only TOKEN is masked via ::add-mask::. Because KEY is NOT masked,
+	// the positional leak through $1 must NOT be suppressed.
+	runScript := `TOKEN=$(echo "$SECRET_A" | jq -r '.t')
+KEY=$(echo "$SECRET_B" | jq -r '.k')
+echo "::add-mask::$TOKEN"
+leak() { echo "$1"; }
+leak "${TOKEN}-${KEY}"
+`
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"secret_a": {
+				Name:  &ast.String{Value: "SECRET_A"},
+				Value: &ast.String{Value: "${{ secrets.A }}"},
+			},
+			"secret_b": {
+				Name:  &ast.String{Value: "SECRET_B"},
+				Value: &ast.String{Value: "${{ secrets.B }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	// $1 is backed by both TOKEN and KEY. TOKEN is masked but KEY is not,
+	// so the positional $1 leak must be reported (not suppressed).
+	errs := rule.Errors()
+	foundPositionalLeak := false
+	for _, e := range errs {
+		if strings.Contains(e.Description, "variable $1") {
+			foundPositionalLeak = true
+		}
+	}
+	if !foundPositionalLeak {
+		t.Errorf("expected positional $1 leak to be reported because KEY upstream is not masked; got errors: %v", errs)
+	}
+}
+
+// TestSecretInLog_FunctionLocalChainsThroughArg は関数本体内で local X="$1" 経由の
+// 派生変数の echo が leak 検出され、origin chain が upstream まで遡ることを確認する。
+func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {
+	t.Parallel()
+
+	runScript := "TOKEN=$(echo \"$KEY\" | jq -r '.token')\nleak() { local X=\"$1\"; echo \"$X\"; }\nleak \"$TOKEN\"\n"
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "KEY"},
+				Value: &ast.String{Value: "${{ secrets.GH_TOKEN }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	errs := rule.Errors()
+	if len(errs) == 0 {
+		t.Fatal("expected leak detection for echo \"$X\" inside function body; got 0")
+	}
+	msg := errs[0].Description
+	if !strings.Contains(msg, "$X") {
+		t.Errorf("error message %q should mention $X", msg)
+	}
+}

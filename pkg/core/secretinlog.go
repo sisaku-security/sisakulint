@@ -257,6 +257,28 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		if hasAddMaskBefore(script, name, sinkOffset) {
 			return true
 		}
+		// positional ($1, $2, ...) は autofix が upstream var (例: TOKEN) を
+		// マスクするため (#448 resolveMaskTarget と対称)、upstream 名のマスクも
+		// 検出抑制対象にする。これにより autofix 後の再走で警告が再発しない。
+		// 全ての shellvar upstream が masked の場合のみ抑制する。
+		if isPositional(name) {
+			foundUpstream := false
+			allMasked := true
+			for _, src := range entry.Sources {
+				upstream, ok := strings.CutPrefix(src, "shellvar:")
+				if !ok || upstream == "" {
+					continue
+				}
+				foundUpstream = true
+				if !hasAddMaskBefore(script, upstream, sinkOffset) {
+					allMasked = false
+					break
+				}
+			}
+			if foundUpstream && allMasked {
+				return true
+			}
+		}
 		pos := offsetToPosition(runStr, script, sinkOffset)
 		*leaks = append(*leaks, echoLeakOccurrence{
 			VarName:  name,
@@ -417,15 +439,32 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 }
 
 // reportLeak は echoLeakOccurrence をエラーとして記録する。
+// 診断メッセージの suggestion 部分は resolveMaskTarget を使って決定する (#448 review I-2):
+//   - positional ($1) かつ upstream shellvar が分かる場合は upstream var (TOKEN) をマスクするよう提案
+//   - 通常 var の場合はその var を直接マスクするよう提案
+//   - $@ / $* の場合は単一変数マスクが不可能なため回避を提案
 func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
+	var suggestion string
+	target, ok := resolveMaskTarget(leak.VarName, leak.Origin)
+	switch {
+	case ok && target != leak.VarName:
+		// Positional ($1) backed by shellvar:UPSTREAM — recommend masking upstream.
+		suggestion = "Add 'echo \"::add-mask::$" + target + "\"' before $" + target +
+			" is used (or before the function is called), or avoid printing the value."
+	case ok:
+		// Ordinary var name — recommend masking it directly.
+		suggestion = "Add 'echo \"::add-mask::$" + target + "\"' before any usage, or avoid printing the value."
+	default:
+		// $@ / $* or positional without shellvar upstream — single-var mask isn't possible.
+		suggestion = "Avoid printing this value, or restructure to mask the upstream variables before passing them to the function."
+	}
 	rule.Errorf(
 		leak.Position,
 		"secret in log: variable $%s (origin: %s) is printed via '%s' without masking. "+
 			"GitHub Actions only masks direct secrets.* values; values derived via shell expansion or "+
-			"tools like jq are not masked and will appear in plaintext in build logs. "+
-			"Add 'echo \"::add-mask::$%s\"' before any usage, or avoid printing the value. "+
+			"tools like jq are not masked and will appear in plaintext in build logs. %s "+
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
-		leak.VarName, leak.Origin, leak.Command, leak.VarName,
+		leak.VarName, leak.Origin, leak.Command, suggestion,
 	)
 }
 
@@ -463,21 +502,30 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		return nil
 	}
 	script := execRun.Run.Value
+
+	maskTarget, ok := resolveMaskTarget(f.varName, f.origin)
+	if !ok {
+		// $@ / $* のリーク、または origin が shellvar:* でない positional →
+		// 確実な single-var ターゲットが取れないため autofix は no-op。
+		// lint diag 自体は既に出ているので、手動修正に委ねる。
+		return nil
+	}
+
 	// sink 位置より前に有効な add-mask が既に存在していれば、追加挿入は不要。
 	// leakOffset は元スクリプトにおける sink のオフセット。他の fixer が先に
 	// insertAfterAssignment でスクリプトを書き換えた場合、挿入位置は常に元 sink より
 	// 前（= アサイン直後 < 元 sink）で行われるため、leakOffset 基準でのチェックは
 	// 書き換え後のスクリプトに対しても引き続き正しく機能する。
-	if hasAddMaskBefore(script, f.varName, f.leakOffset) {
+	if hasAddMaskBefore(script, maskTarget, f.leakOffset) {
 		return nil
 	}
 
-	addMask := `echo "::add-mask::$` + f.varName + `"`
+	addMask := `echo "::add-mask::$` + maskTarget + `"`
 
 	// origin が "shellvar:*" の場合、変数のアサイン直後に add-mask を挿入する。
 	// env var 由来（"secrets.*"）の場合はスクリプト冒頭に挿入する。
 	if strings.HasPrefix(f.origin, "shellvar:") {
-		updated, ok := insertAfterAssignment(script, f.varName, addMask)
+		updated, ok := insertAfterAssignment(script, maskTarget, addMask)
 		if ok {
 			execRun.Run.Value = updated
 			if execRun.Run.BaseNode != nil {
@@ -509,6 +557,54 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 		execRun.Run.BaseNode.Value = updated
 	}
 	return nil
+}
+
+// resolveMaskTarget は autofix のマスク対象変数名を決定する。
+//
+// セマンティクス (#448):
+//   - varName が positional ($1, $2, ...): origin の "shellvar:" prefix を
+//     反復的に unwrap し、最終的な concrete 変数名を返す。
+//     chain 途中で "@" / "*" / 空文字列 / positional 以外の非 shellvar に到達したら
+//     それぞれ適切に処理する。
+//   - varName が "@" / "*": 確実な single-var ターゲットが取れないので ("", false) → autofix no-op
+//   - 通常 var: そのまま返す (現状互換)
+func resolveMaskTarget(varName, origin string) (string, bool) {
+	if varName == "@" || varName == "*" {
+		return "", false
+	}
+	if !isPositional(varName) {
+		return varName, true
+	}
+	// "shellvar:" prefix を反復的に剥がし、concrete 変数名に到達するまで辿る。
+	// 例: "shellvar:shellvar:TOKEN" → "shellvar:TOKEN" → "TOKEN"
+	// 例: "shellvar:1" → "1" (positional, shellvar: なし → no-op)
+	cur := origin
+	for {
+		after, ok := strings.CutPrefix(cur, "shellvar:")
+		if !ok || after == "" {
+			return "", false
+		}
+		if after == "@" || after == "*" {
+			return "", false
+		}
+		if !isPositional(after) && !strings.HasPrefix(after, "shellvar:") {
+			return after, true
+		}
+		cur = after
+	}
+}
+
+// isPositional は s が positional parameter ($1, $2, ...) を表す数値文字列か判定する。
+func isPositional(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // insertAfterAssignment はシェルスクリプト script 内で varName への最初のアサインを探し、

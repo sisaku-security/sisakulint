@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -158,6 +159,48 @@ func TestWordReferencesEntry(t *testing.T) {
 			gotName, gotFound := WordReferencesEntry(assigns[0].Value, tainted)
 			if gotName != tc.wantName || gotFound != tc.wantFound {
 				t.Errorf("got (%q, %v), want (%q, %v)", gotName, gotFound, tc.wantName, tc.wantFound)
+			}
+		})
+	}
+}
+
+func TestWordReferencesEntries(t *testing.T) {
+	t.Parallel()
+
+	tainted := map[string]Entry{
+		"X": {Sources: []string{"secrets.X"}, Offset: -1},
+		"Y": {Sources: []string{"secrets.Y"}, Offset: -1},
+	}
+
+	cases := []struct {
+		name      string
+		script    string
+		wantNames []string
+	}{
+		{"single_ref", `Z="$X"`, []string{"X"}},
+		{"two_refs", `Z="$X-$Y"`, []string{"X", "Y"}},
+		{"duplicate_ref", `Z="$X$X"`, []string{"X"}},
+		{"no_ref", `Z=literal`, nil},
+		{"untracked_only", `Z="$UNTRACKED"`, nil},
+		{"mixed_tracked_untracked", `Z="$UNTRACKED-$Y"`, []string{"Y"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			assigns := WalkAssignments(file)
+			if len(assigns) != 1 || assigns[0].Value == nil {
+				t.Fatalf("unexpected assigns: %+v", assigns)
+			}
+			got := WordReferencesEntries(assigns[0].Value, tainted)
+			if len(got) != len(tc.wantNames) {
+				t.Fatalf("got %v, want %v", got, tc.wantNames)
+			}
+			for i, name := range tc.wantNames {
+				if got[i] != name {
+					t.Errorf("index %d: got %q, want %q", i, got[i], name)
+				}
 			}
 		})
 	}
@@ -1122,6 +1165,345 @@ func TestDeclHasGlobalFlag(t *testing.T) {
 				t.Errorf("declHasGlobalFlag(%q) = %v; want %v", tc.script, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestPropagateTaint_FunctionArgs は #448 関数引数経由 taint 伝播の挙動を検証する。
+// lazy walk: FuncDecl 出現時には body を walk せず、CallExpr 検出時に call-site
+// の args の taint state を tainted["1"]/.../[ "@"]/["*"] として inject する。
+func TestPropagateTaint_FunctionArgs(t *testing.T) {
+	t.Parallel()
+
+	type stmtVisibleAssertion struct {
+		stmtSubstr     string   // stmt のテキスト中に含まれるべき部分文字列
+		varName        string   // visible に含まれるべき変数名
+		originFirst    string   // visible[varName].First() の期待値
+		sourcesContain []string // Sources に含まれるべき値 (nil なら検査しない)
+	}
+
+	type want struct {
+		finalHas       map[string]string
+		finalAbsent    []string
+		stmtVisibleHas []stmtVisibleAssertion
+	}
+
+	cases := []struct {
+		name    string
+		script  string
+		initial map[string]Entry
+		want    want
+	}{
+		{
+			name:    "single_call_simple",
+			script:  `foo() { echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "multi_call_union",
+			script:  `foo() { echo "$1"; }; foo "$T"; foo "safe"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// 第二の call (foo "safe") では本来 untainted だが、保守的 union で
+					// 第一の call (foo "$T") の binding が visible に残る。
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "mixed_args_partial_taint",
+			script:  `foo() { cmd "$1" "$2"; }; foo "$T" "safe"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `cmd "$1" "$2"`, varName: "1", originFirst: "shellvar:T"},
+					{stmtSubstr: `cmd "$1" "$2"`, varName: "@", originFirst: "github.event.issue.body"},
+				},
+			},
+		},
+		{
+			name:   "at_arg_either_tainted",
+			script: `foo() { cmd "$@"; }; foo "$T1" "$T2"`,
+			initial: map[string]Entry{
+				"T1": {Sources: []string{"github.event.issue.title"}, Offset: -1},
+				"T2": {Sources: []string{"github.event.issue.body"}, Offset: -1},
+			},
+			want: want{
+				finalHas: map[string]string{
+					"T1": "github.event.issue.title",
+					"T2": "github.event.issue.body",
+				},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// "@" の Sources は両 args の Sources を union (順序保持)
+					{stmtSubstr: `cmd "$@"`, varName: "@", originFirst: "github.event.issue.title"},
+				},
+			},
+		},
+		{
+			name:    "star_alias_of_at",
+			script:  `foo() { cmd "$*"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `cmd "$*"`, varName: "*", originFirst: "secrets.GH"},
+				},
+			},
+		},
+		{
+			// forward ref: 1番目の foo 呼び出しは funcTable 未登録のためスキップ。
+			// 2番目の foo() 定義は登録のみ。Final に外乱なし。
+			name:    "forward_reference_unresolved",
+			script:  `foo "$T"; foo() { echo "$1"; }`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			// 直接再帰: 外側 foo "$T" で body walk、内側 foo "$1" は visited[foo]=1 で skip。
+			// echo "$1" stmt の visibleAt には binding["1"] = shellvar:T が残る。
+			name:    "direct_recursion_depth1",
+			script:  `foo() { foo "$1"; echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			// 相互再帰: foo→bar→foo (2回目は skip)。各関数 1 回 walk。
+			// (assertion は外乱なしのみ確認、深い stmt 検証は省略)
+			name:    "mutual_recursion",
+			script:  `foo() { bar; }; bar() { foo; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			name:    "unused_function_definition",
+			script:  `foo() { echo "$T"; }`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			name:    "empty_args_call",
+			script:  `foo() { echo "$1"; }; foo`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				// $1 は binding 未登録 (引数なし call) → visibleAt の "1" は無いはず
+			},
+		},
+		{
+			name:    "local_assigns_from_arg",
+			script:  `foo() { local X="$1"; echo "$X"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$X"`, varName: "X", originFirst: "shellvar:1"},
+					// 親 chain で "1" も見えるはず
+					{stmtSubstr: `echo "$X"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "nested_function_calls",
+			script:  `outer() { inner "$1"; }; inner() { echo "$1"; }; outer "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// inner の echo body 内で "1" は outer's $1 を参照する chain
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:1"},
+				},
+			},
+		},
+		{
+			name:    "composite_word_arg",
+			script:  `foo() { echo "$1"; }; foo "prefix-$T-suffix"`,
+			initial: map[string]Entry{"T": {Sources: []string{"github.event.issue.body"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "github.event.issue.body"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "multi_var_composite_word_arg",
+			script:  `foo() { echo "$1"; }; foo "$T1-$T2"`,
+			initial: map[string]Entry{"T1": {Sources: []string{"secrets.A"}, Offset: -1}, "T2": {Sources: []string{"secrets.B"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T1": "secrets.A", "T2": "secrets.B"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T1", sourcesContain: []string{"shellvar:T1", "shellvar:T2"}},
+				},
+			},
+		},
+		{
+			name:    "non_function_callexpr_unaffected",
+			script:  `echo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+			},
+		},
+		{
+			name:    "redefined_function_winner_takes",
+			script:  `foo() { echo "first"; }; foo() { echo "$1"; }; foo "$T"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T": "secrets.GH"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					// 後勝ち: 2 番目の body の echo "$1" stmt の visibleAt に "1" がある
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T"},
+				},
+			},
+		},
+		{
+			name:    "dynamic_dispatch_unresolved",
+			script:  `cmd="$T"; $cmd "arg"`,
+			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{
+					"T":   "secrets.GH",
+					"cmd": "shellvar:T",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			result := PropagateTaint(file, tc.initial)
+			for name, wantOrigin := range tc.want.finalHas {
+				entry, ok := result.Final[name]
+				if !ok {
+					t.Errorf("Final[%q] missing; want origin %q", name, wantOrigin)
+					continue
+				}
+				if entry.First() != wantOrigin {
+					t.Errorf("Final[%q].First() = %q; want %q", name, entry.First(), wantOrigin)
+				}
+			}
+			for _, name := range tc.want.finalAbsent {
+				if _, ok := result.Final[name]; ok {
+					t.Errorf("Final[%q] should be absent", name)
+				}
+			}
+			for _, assertion := range tc.want.stmtVisibleHas {
+				stmt := findStmtBySubstr(t, file, tc.script, assertion.stmtSubstr)
+				if stmt == nil {
+					t.Errorf("stmt with substr %q not found", assertion.stmtSubstr)
+					continue
+				}
+				visible := result.At(stmt)
+				entry, ok := visible[assertion.varName]
+				if !ok {
+					t.Errorf("visibleAt(%q)[%q] missing; want origin %q", assertion.stmtSubstr, assertion.varName, assertion.originFirst)
+					continue
+				}
+				if entry.First() != assertion.originFirst {
+					t.Errorf("visibleAt(%q)[%q].First() = %q; want %q", assertion.stmtSubstr, assertion.varName, entry.First(), assertion.originFirst)
+				}
+				for _, wantSrc := range assertion.sourcesContain {
+					if !slices.Contains(entry.Sources, wantSrc) {
+						t.Errorf("visibleAt(%q)[%q].Sources = %v; want to contain %q", assertion.stmtSubstr, assertion.varName, entry.Sources, wantSrc)
+					}
+				}
+			}
+		})
+	}
+}
+
+// findStmtBySubstr は file 内で「script[stmt.Pos():stmt.End()] が substr を含む」
+// 最小スパンの Stmt を返す（同スパンの場合は DFS 順で最初のものを採用）。
+// 見つからなければ nil。後続 #448 テストでも使う。
+func findStmtBySubstr(t *testing.T, file *syntax.File, script, substr string) *syntax.Stmt {
+	t.Helper()
+	var found *syntax.Stmt
+	var foundSpan int
+	syntax.Walk(file, func(node syntax.Node) bool {
+		stmt, ok := node.(*syntax.Stmt)
+		if !ok {
+			return true
+		}
+		start := int(stmt.Pos().Offset())
+		end := int(stmt.End().Offset())
+		if start < 0 || end > len(script) || start >= end {
+			return true
+		}
+		span := end - start
+		if strings.Contains(script[start:end], substr) {
+			if found == nil || span < foundSpan {
+				found = stmt
+				foundSpan = span
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// TestPropagateTaint_FunctionArgs_RecursionGuardDecrement は visited[name] が body walk
+// 完了で正しく decrement され、連続する兄弟 call-site それぞれで body が walk されることを確認する。
+// (もし visited が decrement されないと 2 回目の foo "$U" が skip される)
+func TestPropagateTaint_FunctionArgs_RecursionGuardDecrement(t *testing.T) {
+	t.Parallel()
+	script := `foo() { echo "$1"; }; foo "$T"; foo "$U"`
+	initial := map[string]Entry{
+		"T": {Sources: []string{"github.event.issue.title"}, Offset: -1},
+		"U": {Sources: []string{"github.event.issue.body"}, Offset: -1},
+	}
+	file := parseScript(t, script)
+	result := PropagateTaint(file, initial)
+
+	stmt := findStmtBySubstr(t, file, script, `echo "$1"`)
+	if stmt == nil {
+		t.Fatal("echo stmt not found")
+	}
+	visible := result.At(stmt)
+	entry, ok := visible["1"]
+	if !ok {
+		t.Fatalf("visibleAt[echo][1] missing")
+	}
+	// Sources は T と U の両 origin を union (順序保持)
+	wantSources := []string{"shellvar:T", "shellvar:U"}
+	if !slices.Equal(entry.Sources, wantSources) {
+		t.Errorf("visibleAt[echo][1].Sources = %v; want %v", entry.Sources, wantSources)
+	}
+}
+
+// TestPropagateTaint_FunctionArgs_NilFile は file=nil 入力に対する defensive 動作を検証する。
+func TestPropagateTaint_FunctionArgs_NilFile(t *testing.T) {
+	t.Parallel()
+	initial := map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}}
+	result := PropagateTaint(nil, initial)
+	if result == nil {
+		t.Fatal("PropagateTaint(nil, ...) returned nil; want non-nil ScopedTaint")
+	}
+	entry, ok := result.Final["T"]
+	if !ok {
+		t.Errorf("Final[T] missing")
+	} else if entry.First() != "secrets.GH" {
+		t.Errorf("Final[T].First() = %q; want %q", entry.First(), "secrets.GH")
 	}
 }
 
