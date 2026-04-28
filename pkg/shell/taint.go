@@ -200,6 +200,35 @@ func WordReferencesEntry(word *syntax.Word, tainted map[string]Entry) (string, b
 	return foundName, found
 }
 
+// WordReferencesEntries は word 内の ParamExp を walk し、tainted 集合に
+// 含まれる全ての変数名を重複なしで返す。見つからなければ nil。
+// buildArgBinding で複数 tainted 変数を含む composite word (例: "$T1-$T2") を
+// 正しく処理するために使用する。
+func WordReferencesEntries(word *syntax.Word, tainted map[string]Entry) []string {
+	if word == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var names []string
+	syntax.Walk(word, func(node syntax.Node) bool {
+		pe, ok := node.(*syntax.ParamExp)
+		if !ok || pe.Param == nil {
+			return true
+		}
+		name := pe.Param.Value
+		if _, ok := tainted[name]; !ok {
+			return true
+		}
+		if _, dup := seen[name]; dup {
+			return true
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+		return true
+	})
+	return names
+}
+
 // scopeKind は scope frame の種別。
 type scopeKind int
 
@@ -249,24 +278,24 @@ func (f *scopeFrame) visible() map[string]Entry {
 //   - LHS 名は AST 順序で処理される（forward dataflow）
 //   - 代入の RHS が tainted を参照しない場合は LHS に何もしない（"untaint" はしない）
 //   - スコープ:
-//     - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
-//       親 visible を snapshot copy して隔離。内部代入は親に漏れない
-//     - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
-//       近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は #447 の
-//       簡略案 A により親に漏らさない
+//   - *syntax.Subshell `( ... )` と *syntax.CmdSubst `$(...)` は entry 時に
+//     親 visible を snapshot copy して隔離。内部代入は親に漏れない
+//   - *syntax.FuncDecl 本体は parent への lookup chain で bash dynamic scoping を
+//     近似。`local` / 装飾なし `declare` は本体ローカル、その他の代入は #447 の
+//     簡略案 A により親に漏らさない
 //   - 関数引数経由 taint 伝播 (#448):
-//     - FuncDecl 出現時には body を walk せず関数テーブル (funcTable) に登録のみ
-//     - CallExpr 検出時に call-site の args の taint state を tainted["1"]/["2"]/.../["@"]/["*"]
-//       として inject した上で body を walk (lazy walk)
-//     - 複数 call-site から同じ body stmt が walk された場合、visibleAt[stmt] は
-//       Sources を保守的 union (FP 寄り)
-//     - 再帰呼び出しは visited[name] で depth=1 制限 (固定点反復はしない)
-//     - forward reference (定義前 call) は 1-pass walk で自然に未登録扱い → bash 一致
-//     - 関数定義のみで一度も呼び出されない (uncalled) function body は walk されない。
-//       例えば `foo() { local X="$T"; echo "$X"; }` (foo が一度も呼ばれない) の
-//       内部派生 sink は検出されない。これは bash 実挙動に近づける選択 (uncalled
-//       function は実行されないため log にも漏れない)。eager walk への巻き戻しは
-//       しない方針。
+//   - FuncDecl 出現時には body を walk せず関数テーブル (funcTable) に登録のみ
+//   - CallExpr 検出時に call-site の args の taint state を tainted["1"]/["2"]/.../["@"]/["*"]
+//     として inject した上で body を walk (lazy walk)
+//   - 複数 call-site から同じ body stmt が walk された場合、visibleAt[stmt] は
+//     Sources を保守的 union (FP 寄り)
+//   - 再帰呼び出しは visited[name] で depth=1 制限 (固定点反復はしない)
+//   - forward reference (定義前 call) は 1-pass walk で自然に未登録扱い → bash 一致
+//   - 関数定義のみで一度も呼び出されない (uncalled) function body は walk されない。
+//     例えば `foo() { local X="$T"; echo "$X"; }` (foo が一度も呼ばれない) の
+//     内部派生 sink は検出されない。これは bash 実挙動に近づける選択 (uncalled
+//     function は実行されないため log にも漏れない)。eager walk への巻き戻しは
+//     しない方針。
 //
 // 戻り値は initial を変更せず新しい *ScopedTaint を返す。
 func PropagateTaint(file *syntax.File, initial map[string]Entry) *ScopedTaint {
@@ -761,16 +790,20 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
 	}
 	var atSources []string
 	for i, arg := range call.Args[1:] {
-		upstream, ok := WordReferencesEntry(arg, visible)
-		if !ok {
+		upstreams := WordReferencesEntries(arg, visible)
+		if len(upstreams) == 0 {
 			continue
 		}
-		binding[strconv.Itoa(i+1)] = Entry{
-			Sources: []string{"shellvar:" + upstream},
-			Offset:  -1,
+		var argSources []string
+		for _, u := range upstreams {
+			argSources = mergeSources(argSources, []string{"shellvar:" + u})
+			if e, ok := visible[u]; ok {
+				atSources = mergeSources(atSources, e.Sources)
+			}
 		}
-		if e, ok := visible[upstream]; ok {
-			atSources = mergeSources(atSources, e.Sources)
+		binding[strconv.Itoa(i+1)] = Entry{
+			Sources: argSources,
+			Offset:  -1,
 		}
 	}
 	if len(atSources) > 0 {

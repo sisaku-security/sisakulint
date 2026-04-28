@@ -164,6 +164,48 @@ func TestWordReferencesEntry(t *testing.T) {
 	}
 }
 
+func TestWordReferencesEntries(t *testing.T) {
+	t.Parallel()
+
+	tainted := map[string]Entry{
+		"X": {Sources: []string{"secrets.X"}, Offset: -1},
+		"Y": {Sources: []string{"secrets.Y"}, Offset: -1},
+	}
+
+	cases := []struct {
+		name      string
+		script    string
+		wantNames []string
+	}{
+		{"single_ref", `Z="$X"`, []string{"X"}},
+		{"two_refs", `Z="$X-$Y"`, []string{"X", "Y"}},
+		{"duplicate_ref", `Z="$X$X"`, []string{"X"}},
+		{"no_ref", `Z=literal`, nil},
+		{"untracked_only", `Z="$UNTRACKED"`, nil},
+		{"mixed_tracked_untracked", `Z="$UNTRACKED-$Y"`, []string{"Y"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			file := parseScript(t, tc.script)
+			assigns := WalkAssignments(file)
+			if len(assigns) != 1 || assigns[0].Value == nil {
+				t.Fatalf("unexpected assigns: %+v", assigns)
+			}
+			got := WordReferencesEntries(assigns[0].Value, tainted)
+			if len(got) != len(tc.wantNames) {
+				t.Fatalf("got %v, want %v", got, tc.wantNames)
+			}
+			for i, name := range tc.wantNames {
+				if got[i] != name {
+					t.Errorf("index %d: got %q, want %q", i, got[i], name)
+				}
+			}
+		})
+	}
+}
+
 func TestPropagateTaint(t *testing.T) {
 	t.Parallel()
 
@@ -1133,9 +1175,10 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 	t.Parallel()
 
 	type stmtVisibleAssertion struct {
-		stmtSubstr  string // stmt のテキスト中に含まれるべき部分文字列
-		varName     string // visible に含まれるべき変数名
-		originFirst string // visible[varName].First() の期待値
+		stmtSubstr     string   // stmt のテキスト中に含まれるべき部分文字列
+		varName        string   // visible に含まれるべき変数名
+		originFirst    string   // visible[varName].First() の期待値
+		sourcesContain []string // Sources に含まれるべき値 (nil なら検査しない)
 	}
 
 	type want struct {
@@ -1302,6 +1345,17 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 			},
 		},
 		{
+			name:    "multi_var_composite_word_arg",
+			script:  `foo() { echo "$1"; }; foo "$T1-$T2"`,
+			initial: map[string]Entry{"T1": {Sources: []string{"secrets.A"}, Offset: -1}, "T2": {Sources: []string{"secrets.B"}, Offset: -1}},
+			want: want{
+				finalHas: map[string]string{"T1": "secrets.A", "T2": "secrets.B"},
+				stmtVisibleHas: []stmtVisibleAssertion{
+					{stmtSubstr: `echo "$1"`, varName: "1", originFirst: "shellvar:T1", sourcesContain: []string{"shellvar:T1", "shellvar:T2"}},
+				},
+			},
+		},
+		{
 			name:    "non_function_callexpr_unaffected",
 			script:  `echo "$T"`,
 			initial: map[string]Entry{"T": {Sources: []string{"secrets.GH"}, Offset: -1}},
@@ -1368,6 +1422,11 @@ func TestPropagateTaint_FunctionArgs(t *testing.T) {
 				}
 				if entry.First() != assertion.originFirst {
 					t.Errorf("visibleAt(%q)[%q].First() = %q; want %q", assertion.stmtSubstr, assertion.varName, entry.First(), assertion.originFirst)
+				}
+				for _, wantSrc := range assertion.sourcesContain {
+					if !slices.Contains(entry.Sources, wantSrc) {
+						t.Errorf("visibleAt(%q)[%q].Sources = %v; want to contain %q", assertion.stmtSubstr, assertion.varName, entry.Sources, wantSrc)
+					}
 				}
 			}
 		})
