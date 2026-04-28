@@ -129,7 +129,14 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 	dependabotPath := rule.findDependabotFile(rule.projectRoot)
 
 	if dependabotPath == "" {
-		// dependabot.yaml does not exist
+		// Renovate Bot is an accepted alternative to Dependabot for managing GitHub Actions.
+		// If a Renovate config with the github-actions manager is present, skip the finding.
+		if rule.hasRenovateGitHubActionsManager(rule.projectRoot) {
+			rule.Debug("renovate config with github-actions manager found, skipping dependabot check (path: %s)", rule.workflowPath)
+			return nil
+		}
+
+		// dependabot.yaml does not exist and no equivalent Renovate config was found
 		rule.Errorf(
 			&ast.Position{Line: 1, Col: 1},
 			"dependabot.yaml does not exist. Without Dependabot, major version updates (e.g., v3 -> v4) for GitHub Actions won't be automated. "+
@@ -208,6 +215,81 @@ func (rule *DependabotGitHubActionsRule) findDependabotFile(projectRoot string) 
 	}
 
 	return ""
+}
+
+// renovateConfig represents the partial structure of a renovate.json configuration file
+// used to check if the github-actions manager is enabled.
+type renovateConfig struct {
+	Extends      []string `json:"extends" yaml:"extends"`
+	PackageRules []struct {
+		MatchManagers []string `json:"matchManagers" yaml:"matchManagers"`
+	} `json:"packageRules" yaml:"packageRules"`
+}
+
+// hasRenovateGitHubActionsManager checks if any Renovate config file exists and manages
+// GitHub Actions. Returns true if Renovate is configured as an equivalent replacement for
+// the dependabot github-actions ecosystem.
+func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(projectRoot string) bool {
+	candidates := []string{
+		filepath.Join(projectRoot, ".github", "renovate.json"),
+		filepath.Join(projectRoot, ".github", "renovate.json5"),
+		filepath.Join(projectRoot, "renovate.json"),
+		filepath.Join(projectRoot, "renovate.json5"),
+		filepath.Join(projectRoot, ".renovaterc"),
+		filepath.Join(projectRoot, ".renovaterc.json"),
+	}
+
+	for _, path := range candidates {
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if renovateManagesGitHubActions(data) {
+			return true
+		}
+	}
+	return false
+}
+
+// renovateManagesGitHubActions reports whether the given Renovate config content
+// configures management of GitHub Actions dependencies. It returns true when:
+//   - A packageRule with matchManagers containing "github-actions" is found, or
+//   - A known preset that enables github-actions management is extended
+//     (e.g. "config:recommended", "config:base", ":pinAllExceptPeerDependencies").
+func renovateManagesGitHubActions(data []byte) bool {
+	// Renovate config files are JSON (or JSON5). Use a tolerant unmarshal via yaml
+	// since gopkg.in/yaml.v3 handles JSON as a strict subset.
+	var cfg renovateConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return false
+	}
+
+	for _, rule := range cfg.PackageRules {
+		for _, manager := range rule.MatchManagers {
+			if manager == "github-actions" {
+				return true
+			}
+		}
+	}
+
+	// Certain standard presets implicitly enable all managers including github-actions.
+	knownPresets := []string{
+		"config:recommended",
+		"config:base",
+		"config:best-practices",
+	}
+	for _, ext := range cfg.Extends {
+		for _, preset := range knownPresets {
+			if ext == preset {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // checkDependabotConfig checks if the dependabot config has github-actions ecosystem.
