@@ -143,29 +143,38 @@ case *syntax.CallExpr:
 // 関数本体内の $1 / $2 / ... / $@ / $* に対応する binding map を返す。
 // untainted な arg は binding に登録しない (lookup miss = untainted の意味)。
 //
+// 各 arg 内の tainted 変数は WordReferencesEntries で全数列挙する。
+// composite word (例: "$T1-$T2") は複数 upstream を持ち得るため、
+// 個別 positional の Sources には各 upstream ごとの "shellvar:UPSTREAM" を集約する。
+//
 // $@ / $* は「いずれかの arg が tainted なら tainted」(issue 案)。
-// Sources は upstream entry の Sources を union (chain そのまま、後段で expandShellvarMarkers が展開)。
+// atSources は全 tainted args の upstream entry の Sources を union
+// (chain そのまま、後段で expandShellvarMarkers が展開)。
 //
 // Offset = -1 (env-like): body 内 sink から見て常に "before" 扱い。call-site の物理 offset
 // を使うと、関数定義が呼び出し以前にあるケースで sink offset > call-site offset の
 // order-aware 判定がおかしくなるため。
 func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string]Entry {
     binding := make(map[string]Entry)
-    if len(call.Args) <= 1 {
+    if call == nil || len(call.Args) <= 1 {
         return binding
     }
     var atSources []string
     for i, arg := range call.Args[1:] {
-        upstream, ok := WordReferencesEntry(arg, visible)
-        if !ok {
+        upstreams := WordReferencesEntries(arg, visible)
+        if len(upstreams) == 0 {
             continue
         }
-        binding[strconv.Itoa(i+1)] = Entry{
-            Sources: []string{"shellvar:" + upstream},
-            Offset:  -1,
+        var argSources []string
+        for _, u := range upstreams {
+            argSources = mergeSources(argSources, []string{"shellvar:" + u})
+            if e, ok := visible[u]; ok {
+                atSources = mergeSources(atSources, e.Sources)
+            }
         }
-        if e, ok := visible[upstream]; ok {
-            atSources = mergeSources(atSources, e.Sources)
+        binding[strconv.Itoa(i+1)] = Entry{
+            Sources: argSources,
+            Offset:  -1,
         }
     }
     if len(atSources) > 0 {
@@ -177,8 +186,8 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
 ```
 
 **Source 形式の意図**:
-- 個別 positional (`"1"`, `"2"`, ...): `["shellvar:UPSTREAM_NAME"]` 単一マーカー (`processAssign` と同形式)。secret-in-log の autofix が「UPSTREAM の代入直後に `::add-mask::$UPSTREAM` 挿入」の判定に使う
-- `"@"` / `"*"`: 全 tainted args の `Sources` を union (raw chain)。autofix は best-effort 不能なので無効化 (§5.2.2)
+- 個別 positional (`"1"`, `"2"`, ...): `["shellvar:U1", "shellvar:U2", ...]` — 1つの arg に複数 tainted 変数が含まれる場合 (e.g. `"$T1-$T2"`)、`WordReferencesEntries` が全 upstream を列挙し `argSources` に集約する。secret-in-log の positional 抑制は全 upstream が masked であることを要求する
+- `"@"` / `"*"`: `atSources` — 全 tainted args の upstream entry の Sources を `mergeSources` で union (raw chain)。autofix は best-effort 不能なので無効化 (§5.2.2)
 - `Offset = -1`: body 内のどの sink offset より前として扱う (env 由来と同形式)
 
 ### 4.5 `recordVisibleAt` (新規ヘルパ)
@@ -285,7 +294,7 @@ func callCommandName(call *syntax.CallExpr) string {
 
 ### 5.6 関数副作用 (簡略案 A 維持)
 
-#447 の `processDeclClause` ポリシーをそのまま維持:
+`#447` の `processDeclClause` ポリシーをそのまま維持:
 - 関数本体内の `X="..."` (装飾なし) は `processAssign` で current frame (= func frame) に書く → pop 時に消える
 - `local` / `declare` は本体ローカル
 - `export` / `readonly` / `declare -g` は簡略案 A により無視

@@ -1727,13 +1727,14 @@ func TestResolveMaskTarget(t *testing.T) {
 func TestSecretInLog_PositionalSuppression_RequiresAllUpstreamsMasked(t *testing.T) {
 	t.Parallel()
 
-	// $1 has two upstream sources: TOKEN and KEY.
-	// Only TOKEN is masked. $1 should still be reported because KEY is not masked.
+	// $1 receives a composite word "$TOKEN-$KEY" so it has two upstream sources.
+	// Only TOKEN is masked via ::add-mask::. Because KEY is NOT masked,
+	// the positional leak through $1 must NOT be suppressed.
 	runScript := `TOKEN=$(echo "$SECRET_A" | jq -r '.t')
 KEY=$(echo "$SECRET_B" | jq -r '.k')
 echo "::add-mask::$TOKEN"
 leak() { echo "$1"; }
-leak "$TOKEN"
+leak "${TOKEN}-${KEY}"
 `
 	step := &ast.Step{
 		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
@@ -1756,20 +1757,17 @@ leak "$TOKEN"
 		t.Fatalf("VisitJobPre: %v", err)
 	}
 
-	// TOKEN is masked before the leak call, so $1 (backed by TOKEN) should be suppressed.
-	// This test confirms the basic suppression works when the single upstream IS masked.
-	// The all-upstreams-masked logic only applies when entry.Sources has multiple shellvar: entries.
+	// $1 is backed by both TOKEN and KEY. TOKEN is masked but KEY is not,
+	// so the positional $1 leak must be reported (not suppressed).
 	errs := rule.Errors()
-	foundTokenLeak := false
+	foundPositionalLeak := false
 	for _, e := range errs {
-		if strings.Contains(e.Description, "$TOKEN") {
-			foundTokenLeak = true
+		if strings.Contains(e.Description, "$1") || strings.Contains(e.Description, "$KEY") || strings.Contains(e.Description, "KEY") {
+			foundPositionalLeak = true
 		}
 	}
-	// TOKEN's direct echo is suppressed by the mask, but the positional $1 backed by
-	// shellvar:TOKEN should also be suppressed since TOKEN is masked.
-	if foundTokenLeak {
-		t.Errorf("expected TOKEN-backed positional leak to be suppressed by add-mask; got errors: %v", errs)
+	if !foundPositionalLeak {
+		t.Errorf("expected positional leak to be reported because KEY upstream is not masked; got errors: %v", errs)
 	}
 }
 
