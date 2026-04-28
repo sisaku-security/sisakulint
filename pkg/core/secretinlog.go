@@ -260,15 +260,23 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		// positional ($1, $2, ...) は autofix が upstream var (例: TOKEN) を
 		// マスクするため (#448 resolveMaskTarget と対称)、upstream 名のマスクも
 		// 検出抑制対象にする。これにより autofix 後の再走で警告が再発しない。
+		// 全ての shellvar upstream が masked の場合のみ抑制する。
 		if isPositional(name) {
+			foundUpstream := false
+			allMasked := true
 			for _, src := range entry.Sources {
 				upstream, ok := strings.CutPrefix(src, "shellvar:")
 				if !ok || upstream == "" {
 					continue
 				}
-				if hasAddMaskBefore(script, upstream, sinkOffset) {
-					return true
+				foundUpstream = true
+				if !hasAddMaskBefore(script, upstream, sinkOffset) {
+					allMasked = false
+					break
 				}
+			}
+			if foundUpstream && allMasked {
+				return true
 			}
 		}
 		pos := offsetToPosition(runStr, script, sinkOffset)
@@ -554,10 +562,10 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 // resolveMaskTarget は autofix のマスク対象変数名を決定する。
 //
 // セマンティクス (#448):
-//   - varName が positional ($1, $2, ...): origin が "shellvar:UPSTREAM" の場合は
-//     UPSTREAM を返す (immediate upstream var をマスク対象にする)。
-//     origin が shellvar:* でない (env var 由来 secrets.X 等) なら ("", false) を返す
-//     → autofix no-op
+//   - varName が positional ($1, $2, ...): origin の "shellvar:" prefix を
+//     反復的に unwrap し、最終的な concrete 変数名を返す。
+//     chain 途中で "@" / "*" / 空文字列 / positional 以外の非 shellvar に到達したら
+//     それぞれ適切に処理する。
 //   - varName が "@" / "*": 確実な single-var ターゲットが取れないので ("", false) → autofix no-op
 //   - 通常 var: そのまま返す (現状互換)
 func resolveMaskTarget(varName, origin string) (string, bool) {
@@ -567,10 +575,23 @@ func resolveMaskTarget(varName, origin string) (string, bool) {
 	if !isPositional(varName) {
 		return varName, true
 	}
-	if upstream, ok := strings.CutPrefix(origin, "shellvar:"); ok && upstream != "" {
-		return upstream, true
+	// "shellvar:" prefix を反復的に剥がし、concrete 変数名に到達するまで辿る。
+	// 例: "shellvar:shellvar:TOKEN" → "shellvar:TOKEN" → "TOKEN"
+	// 例: "shellvar:1" → "1" (positional, shellvar: なし → no-op)
+	cur := origin
+	for {
+		after, ok := strings.CutPrefix(cur, "shellvar:")
+		if !ok || after == "" {
+			return "", false
+		}
+		if after == "@" || after == "*" {
+			return "", false
+		}
+		if !isPositional(after) && !strings.HasPrefix(after, "shellvar:") {
+			return after, true
+		}
+		cur = after
 	}
-	return "", false
 }
 
 // isPositional は s が positional parameter ($1, $2, ...) を表す数値文字列か判定する。

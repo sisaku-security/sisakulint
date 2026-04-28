@@ -582,6 +582,6 @@ jobs:
 
 - 関数の副作用伝播 (簡略案 A の解除): `foo() { X=...; }; foo; cmd "$X"` の親側 `$X` 解決
 - subshell-bound funcTable: bash 実挙動と一致する scope-aware 関数登録
-- `set -- ` / `shift` による positional 再バインド対応
+- `set --` / `shift` による positional 再バインド対応
 - callback 抽象化による直接 `${{ untrusted }}` args 対応 (§3.2 Approach 2)
 - 関数定義からの動的呼び出し (eval / `$cmd`) — 現状は scope 外、検出は code-injection 側で
