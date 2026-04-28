@@ -373,10 +373,23 @@ func resolveMaskTarget(varName, origin string) (string, bool) {
     if !isPositional(varName) {
         return varName, true
     }
-    if upstream, ok := strings.CutPrefix(origin, "shellvar:"); ok && upstream != "" {
-        return upstream, true
+    // "shellvar:" prefix を反復的に剥がし、concrete 変数名に到達するまで辿る。
+    // 例: "shellvar:shellvar:TOKEN" → "shellvar:TOKEN" → "TOKEN"
+    // 例: "shellvar:1" → "1" (positional, shellvar: なし → no-op)
+    cur := origin
+    for {
+        after, ok := strings.CutPrefix(cur, "shellvar:")
+        if !ok || after == "" {
+            return "", false
+        }
+        if after == "@" || after == "*" {
+            return "", false
+        }
+        if !isPositional(after) && !strings.HasPrefix(after, "shellvar:") {
+            return after, true
+        }
+        cur = after
     }
-    return "", false
 }
 
 func isPositional(s string) bool {

@@ -1762,12 +1762,12 @@ leak "${TOKEN}-${KEY}"
 	errs := rule.Errors()
 	foundPositionalLeak := false
 	for _, e := range errs {
-		if strings.Contains(e.Description, "$1") || strings.Contains(e.Description, "$KEY") || strings.Contains(e.Description, "KEY") {
+		if strings.Contains(e.Description, "variable $1") {
 			foundPositionalLeak = true
 		}
 	}
 	if !foundPositionalLeak {
-		t.Errorf("expected positional leak to be reported because KEY upstream is not masked; got errors: %v", errs)
+		t.Errorf("expected positional $1 leak to be reported because KEY upstream is not masked; got errors: %v", errs)
 	}
 }
 
