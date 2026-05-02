@@ -154,6 +154,51 @@ type ReusableWorkflowMetadata struct {
 	Secrets ReusableWorkflowMetadataSecrets `yaml:"secrets"`
 }
 
+// SinkType identifies where in a callee step a tainted input is consumed.
+type SinkType int
+
+const (
+	SinkRun SinkType = iota
+	SinkGitHubScript
+	SinkEnv
+)
+
+func (s SinkType) String() string {
+	switch s {
+	case SinkRun:
+		return "run"
+	case SinkGitHubScript:
+		return "github-script"
+	case SinkEnv:
+		return "env"
+	}
+	return "unknown"
+}
+
+// CallerTaint records that a caller workflow passes an untrusted value
+// to a reusable workflow input. Used by ResolvePendingChains.
+type CallerTaint struct {
+	CallerWorkflowPath   string
+	InputName            string // lowercased
+	UntrustedSources     []string
+	Pos                  *ast.Position
+	JobID                string
+	HasPrivilegedTrigger bool
+}
+
+// CalleeSink records that a reusable workflow uses ${{ inputs.X }} in a
+// dangerous context. Used by ResolvePendingChains.
+type CalleeSink struct {
+	CalleeWorkflowPath string
+	InputName          string // lowercased
+	InputPath          string // e.g. "inputs.title" or "inputs.cfg.branch"
+	SinkType           SinkType
+	Pos                *ast.Position
+	JobID              string
+	StepID             string
+	Step               *ast.Step // pointer retained for ChainFixer
+}
+
 // LocalReusableWorkflowCacheは、ローカルの再利用可能なワークフローメタデータファイルのキャッシュです。ローカルの再利用可能な
 // ワークフローのYAMLファイルの検索/読み取り/解析を回避します。このキャッシュは、'proj'フィールドのみに関連です。
 // 1つのプロジェクトごとに1つのLocalReusableWorkflowCacheインスタンスを作成する必要があります。
@@ -163,6 +208,10 @@ type LocalReusableWorkflowCache struct {
 	cache map[string]*ReusableWorkflowMetadata
 	cwd   string
 	dbg   io.Writer
+
+	// Cross-file taint chain indexes (#392).
+	callerTaints map[string][]*CallerTaint
+	calleeSinks  map[string][]*CalleeSink
 }
 
 func (c *LocalReusableWorkflowCache) debugf(format string, args ...any) {
@@ -383,16 +432,22 @@ func parseReusableWorkflowMetadata(src []byte) (*ReusableWorkflowMetadata, error
 // 複数のプロジェクト間で利用することはできません。
 func NewLocalReusableWorkflowCache(proj *Project, cwd string, dbg io.Writer) *LocalReusableWorkflowCache {
 	return &LocalReusableWorkflowCache{
-		proj:  proj,
-		cache: map[string]*ReusableWorkflowMetadata{},
-		cwd:   cwd,
-		dbg:   dbg,
+		proj:         proj,
+		cache:        map[string]*ReusableWorkflowMetadata{},
+		cwd:          cwd,
+		dbg:          dbg,
+		callerTaints: map[string][]*CallerTaint{},
+		calleeSinks:  map[string][]*CalleeSink{},
 	}
 }
 
 func newNullLocalReusableWorkflowCache(dbg io.Writer) *LocalReusableWorkflowCache {
 	// Nullキャッシュ, プロジェクトが見つからない場合,またはworkflow pathをworkflow call specに変換できない場合、このキャッシュはnilを返します。
-	return &LocalReusableWorkflowCache{dbg: dbg}
+	return &LocalReusableWorkflowCache{
+		dbg:          dbg,
+		callerTaints: map[string][]*CallerTaint{},
+		calleeSinks:  map[string][]*CalleeSink{},
+	}
 }
 
 // LocalReusableWorkflowCacheFactory は、プロジェクトごとにLocalReusableWorkflowCacheインスタンスを作成するためのファクトリオブジェクト
@@ -421,4 +476,18 @@ func (f *LocalReusableWorkflowCacheFactory) GetCache(proj *Project) *LocalReusab
 	c := NewLocalReusableWorkflowCache(proj, f.cwd, f.dbg)
 	f.caches[proj.RootDirectory()] = c
 	return c
+}
+
+func jobIDOf(job *ast.Job) string {
+	if job == nil || job.ID == nil {
+		return ""
+	}
+	return job.ID.Value
+}
+
+func stepIDOf(step *ast.Step) string {
+	if step == nil || step.ID == nil {
+		return ""
+	}
+	return step.ID.Value
 }
