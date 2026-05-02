@@ -105,11 +105,8 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 		return
 	}
 	calleeSpec := call.Uses.Value
-	if !strings.HasPrefix(calleeSpec, "./") {
-		return // remote workflow — out of scope for cross-file taint
-	}
 
-	chainEnabled := rule.cache != nil && rule.cache.IsChainResolutionEnabled()
+	chainEnabled := strings.HasPrefix(calleeSpec, "./") && rule.cache != nil && rule.cache.IsChainResolutionEnabled()
 	if chainEnabled {
 		normalizedSpec, ok := rule.cache.WorkflowCallSpecToWorkflowSpecification(calleeSpec)
 		if !ok {

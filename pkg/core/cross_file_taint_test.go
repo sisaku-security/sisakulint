@@ -87,6 +87,38 @@ func TestResolveChainMatch(t *testing.T) {
 	}
 }
 
+func TestResolveChainWildcardSinkMatchesConcreteCallerInput(t *testing.T) {
+	c := newTestCache(t)
+	c.RecordCallerTaint("./.github/workflows/build.yml", &CallerTaint{
+		CallerWorkflowPath:   "./.github/workflows/ci.yml",
+		InputName:            "branch",
+		UntrustedSources:     []string{"github.event.pull_request.head.ref"},
+		Pos:                  &ast.Position{Line: 5, Col: 7},
+		HasPrivilegedTrigger: true,
+	})
+	c.RecordCalleeSink("./.github/workflows/build.yml", &CalleeSink{
+		CalleeWorkflowPath: "./.github/workflows/build.yml",
+		InputName:          "*",
+		InputPath:          "inputs.*",
+		SinkType:           SinkRun,
+		Pos:                &ast.Position{Line: 12, Col: 9},
+		Step:               &ast.Step{},
+	})
+	caller := &workspaceAdapter{path: "./.github/workflows/ci.yml", result: &ValidateResult{}}
+	callee := &workspaceAdapter{path: "./.github/workflows/build.yml", result: &ValidateResult{}}
+	c.ResolvePendingChains([]workspaceLike{caller, callee})
+
+	if len(caller.result.Errors) != 1 {
+		t.Fatalf("wildcard sink should match concrete caller input, got %d errors", len(caller.result.Errors))
+	}
+	if len(callee.result.AutoFixers) != 0 {
+		t.Fatalf("wildcard sink cannot be safely autofixed, got %d fixers", len(callee.result.AutoFixers))
+	}
+	if !strings.Contains(caller.result.Errors[0].Description, "dynamic input") {
+		t.Fatalf("wildcard warning should mention dynamic input access, got %q", caller.result.Errors[0].Description)
+	}
+}
+
 func TestResolveCalleeSolo(t *testing.T) {
 	c := newTestCache(t)
 	c.RecordCalleeSink("./.github/workflows/build.yml", &CalleeSink{

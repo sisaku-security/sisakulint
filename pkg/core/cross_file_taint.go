@@ -123,7 +123,7 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 		stepSinks := make(map[stepKey][]*CalleeSink)
 		for _, caller := range callers {
 			for _, sink := range sinks {
-				if caller.InputName != sink.InputName {
+				if !inputNamesMatch(caller, sink) {
 					continue
 				}
 				k := chainKey{caller.CallerWorkflowPath, caller.Pos.Line, caller.Pos.Col, sink.Pos.Line, sink.Pos.Col}
@@ -148,7 +148,18 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 }
 
 func (s *CalleeSink) IsAutoFixable() bool {
-	return s != nil && (s.SinkType == SinkRun || s.SinkType == SinkGitHubScript)
+	return s != nil && !s.IsWildcardInput() && (s.SinkType == SinkRun || s.SinkType == SinkGitHubScript)
+}
+
+func (s *CalleeSink) IsWildcardInput() bool {
+	return s != nil && (s.InputName == "*" || s.InputPath == "inputs.*")
+}
+
+func inputNamesMatch(caller *CallerTaint, sink *CalleeSink) bool {
+	if caller == nil || sink == nil {
+		return false
+	}
+	return caller.InputName == sink.InputName || sink.IsWildcardInput()
 }
 
 // ChainFixer is the callee-side autofixer registered after chain
@@ -284,23 +295,42 @@ func (c *LocalReusableWorkflowCache) emitChainWarning(ws []workspaceLike, caller
 	if caller.HasPrivilegedTrigger {
 		severity = "critical"
 	}
-	msg := fmt.Sprintf(
-		"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s %s sink at line:%d. "+
-			"An attacker controlling %v can inject into the callee's %s context. "+
-			"Fix: in callee, move ${{ inputs.%s }} to env: and use $%s. "+
-			"See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
-		severity,
-		caller.UntrustedSources,
-		caller.CallerWorkflowPath,
-		caller.InputName,
-		sink.CalleeWorkflowPath,
-		sink.SinkType,
-		sink.Pos.Line,
-		caller.UntrustedSources,
-		sink.SinkType,
-		sink.InputName,
-		envVarNameFor(sink.InputName),
-	)
+	msg := ""
+	if sink.IsWildcardInput() {
+		msg = fmt.Sprintf(
+			"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s dynamic input %s sink at line:%d. "+
+				"An attacker controlling %v may be reachable through dynamic inputs[...] access in the callee's %s context. "+
+				"Fix: avoid dynamic inputs[...] access for untrusted values, or restrict it with an explicit allowlist before use. "+
+				"See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity,
+			caller.UntrustedSources,
+			caller.CallerWorkflowPath,
+			caller.InputName,
+			sink.CalleeWorkflowPath,
+			sink.SinkType,
+			sink.Pos.Line,
+			caller.UntrustedSources,
+			sink.SinkType,
+		)
+	} else {
+		msg = fmt.Sprintf(
+			"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s %s sink at line:%d. "+
+				"An attacker controlling %v can inject into the callee's %s context. "+
+				"Fix: in callee, move ${{ inputs.%s }} to env: and use $%s. "+
+				"See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity,
+			caller.UntrustedSources,
+			caller.CallerWorkflowPath,
+			caller.InputName,
+			sink.CalleeWorkflowPath,
+			sink.SinkType,
+			sink.Pos.Line,
+			caller.UntrustedSources,
+			sink.SinkType,
+			sink.InputName,
+			envVarNameFor(sink.InputName),
+		)
+	}
 	err := FormattedError(caller.Pos, "reusable-workflow-taint", "%s", msg)
 	if w := findWorkspace(ws, caller.CallerWorkflowPath); w != nil {
 		w.AppendError(err)

@@ -298,6 +298,39 @@ func TestCheckWorkflowCallInputs_ChainEnabled_RecordsToCache(t *testing.T) {
 	}
 }
 
+func TestCheckWorkflowCallInputs_RemoteWorkflowPreservesLegacyWarning(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "org/repo/.github/workflows/build.yml@v1"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("remote workflow should preserve legacy caller warning, got %d errors", got)
+	}
+	if got := len(cache.CalleeSpecs()); got != 0 {
+		t.Fatalf("remote workflow should not be recorded for chain resolution, got specs %v", cache.CalleeSpecs())
+	}
+}
+
 func TestCheckWorkflowCallInputs_ChainDisabled_StillEmitsErrorf(t *testing.T) {
 	cache := NewLocalReusableWorkflowCache(nil /* no project => disabled */, "/cwd", nil)
 	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
