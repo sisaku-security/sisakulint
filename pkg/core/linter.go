@@ -403,6 +403,10 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 	for _, c := range reusableWorkflowCacheFactory.AllCaches() {
 		c.ResolvePendingChains(adapters)
 	}
+	for i := range workspaces {
+		ws := &workspaces[i]
+		l.postProcessResolvedChains(ws.path, ws.result)
+	}
 
 	totalErrors := 0
 	// Preallocate allResult with the capacity equal to the number of workspaces
@@ -473,6 +477,7 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 	if localReusableWorkflow != nil && result != nil {
 		adapter := &workspaceAdapter{path: file, result: result}
 		localReusableWorkflow.ResolvePendingChains([]workspaceLike{adapter})
+		l.postProcessResolvedChains(file, result)
 	}
 
 	if err != nil {
@@ -512,6 +517,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	if localReusableWorkflow != nil && result != nil {
 		adapter := &workspaceAdapter{path: filepath, result: result}
 		localReusableWorkflow.ResolvePendingChains([]workspaceLike{adapter})
+		l.postProcessResolvedChains(filepath, result)
 	}
 
 	if err != nil {
@@ -548,14 +554,14 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		DeprecatedCommandsRule(),
 		NewConditionalRule(),
 		TimeoutMinuteRule(),
-		CodeInjectionCriticalRule(wfTaintMap), // Detects untrusted input in privileged workflow triggers
-		CodeInjectionMediumRule(wfTaintMap),   // Detects untrusted input in normal workflow triggers
-		EnvVarInjectionCriticalRule(wfTaintMap),  // Detects envvar injection in privileged workflow triggers
-		EnvVarInjectionMediumRule(wfTaintMap),    // Detects envvar injection in normal workflow triggers
-		EnvPathInjectionCriticalRule(), // Detects PATH injection in privileged workflow triggers
-		EnvPathInjectionMediumRule(),   // Detects PATH injection in normal workflow triggers
-		OutputClobberingCriticalRule(), // Detects output clobbering in privileged workflow triggers
-		OutputClobberingMediumRule(),   // Detects output clobbering in normal workflow triggers
+		CodeInjectionCriticalRule(wfTaintMap),   // Detects untrusted input in privileged workflow triggers
+		CodeInjectionMediumRule(wfTaintMap),     // Detects untrusted input in normal workflow triggers
+		EnvVarInjectionCriticalRule(wfTaintMap), // Detects envvar injection in privileged workflow triggers
+		EnvVarInjectionMediumRule(wfTaintMap),   // Detects envvar injection in normal workflow triggers
+		EnvPathInjectionCriticalRule(),          // Detects PATH injection in privileged workflow triggers
+		EnvPathInjectionMediumRule(),            // Detects PATH injection in normal workflow triggers
+		OutputClobberingCriticalRule(),          // Detects output clobbering in privileged workflow triggers
+		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
 		CommitShaRule(),
 		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
 		ArtifactPoisoningRule(),
@@ -589,13 +595,13 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		ArgumentInjectionCriticalRule(wfTaintMap),
 		ArgumentInjectionMediumRule(wfTaintMap),
 		RequestForgeryCriticalRule(wfTaintMap), // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(wfTaintMap),  // Detects SSRF vulnerabilities in normal triggers
-		NewCacheBloatRule(),                  // Detects cache bloat risk with cache/restore and cache/save
-		NewAIActionUnrestrictedTriggerRule(), // Detects AI actions with unrestricted user access (Clinejection attack pattern)
-		NewAIActionExcessiveToolsRule(),      // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
-		NewAIActionPromptInjectionRule(),     // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern)
-		NewAIActionUnsafeSandboxRule(),       // Detects unsafe sandbox settings in AI agent actions
-		NewAIActionExecutionOrderRule(),      // Detects AI agent actions that are not the last step in a job
+		RequestForgeryMediumRule(wfTaintMap),   // Detects SSRF vulnerabilities in normal triggers
+		NewCacheBloatRule(),                    // Detects cache bloat risk with cache/restore and cache/save
+		NewAIActionUnrestrictedTriggerRule(),   // Detects AI actions with unrestricted user access (Clinejection attack pattern)
+		NewAIActionExcessiveToolsRule(),        // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
+		NewAIActionPromptInjectionRule(),       // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern)
+		NewAIActionUnsafeSandboxRule(),         // Detects unsafe sandbox settings in AI agent actions
+		NewAIActionExecutionOrderRule(),        // Detects AI agent actions that are not the last step in a job
 	}
 }
 
@@ -801,6 +807,13 @@ func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError,
 		elapsed := time.Since(validationStart)
 		l.log(fmt.Sprintf("found %d errors in %dms", len(*allErrors), elapsed.Milliseconds()), filePath)
 	}
+}
+
+func (l *Linter) postProcessResolvedChains(filePath string, result *ValidateResult) {
+	if result == nil {
+		return
+	}
+	l.filterAndLogErrors(filePath, &result.Errors, &result.AutoFixers, time.Now())
 }
 
 // displayErrorsは、指定されたエラーを出力する

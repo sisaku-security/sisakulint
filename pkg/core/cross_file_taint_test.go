@@ -110,7 +110,9 @@ func TestResolveCalleeSolo(t *testing.T) {
 func TestResolveCallerWithoutSinkProducesNothing(t *testing.T) {
 	c := newTestCache(t)
 	c.RecordCallerTaint("./.github/workflows/build.yml", &CallerTaint{
-		InputName: "branch", Pos: &ast.Position{Line: 1, Col: 1},
+		CallerWorkflowPath: "./.github/workflows/ci.yml",
+		InputName:          "branch",
+		Pos:                &ast.Position{Line: 1, Col: 1},
 	})
 	caller := &workspaceAdapter{path: "./.github/workflows/ci.yml", result: &ValidateResult{}}
 	c.ResolvePendingChains([]workspaceLike{caller})
@@ -245,7 +247,7 @@ func TestChainFixer_FixStep_SkipsSinkEnv(t *testing.T) {
 			Run: &ast.String{Value: "true", Pos: &ast.Position{Line: 1, Col: 1}},
 		},
 		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
-			"USER_ENV": {
+			"user_env": {
 				Name:  &ast.String{Value: "USER_ENV"},
 				Value: &ast.String{Value: "${{ inputs.x }}"},
 			},
@@ -260,10 +262,54 @@ func TestChainFixer_FixStep_SkipsSinkEnv(t *testing.T) {
 	}
 	// Phase 1: SinkEnv is warning-only. INPUT_X must NOT be added,
 	// and USER_ENV value must be unchanged.
-	if _, exists := step.Env.Vars["input_x"]; exists {
+	if _, exists := step.Env.Vars[strings.ToLower(envVarNameFor("x"))]; exists {
 		t.Errorf("SinkEnv should not add INPUT_X env var")
 	}
-	if v := step.Env.Vars["USER_ENV"].Value.Value; v != "${{ inputs.x }}" {
+	if v := step.Env.Vars["user_env"].Value.Value; v != "${{ inputs.x }}" {
 		t.Errorf("existing env var was modified: %q", v)
+	}
+}
+
+func TestChainFixer_FixStep_RunSinkAvoidsExistingEnvCollision(t *testing.T) {
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.x }}",
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"input_x": {
+				Name:  &ast.String{Value: "INPUT_X"},
+				Value: &ast.String{Value: "${{ github.ref }}"},
+			},
+		}},
+	}
+	fixer := NewChainFixer([]*CalleeSink{{
+		InputName: "x",
+		InputPath: "inputs.x",
+		SinkType:  SinkRun,
+		Pos:       &ast.Position{Line: 1, Col: 1},
+		Step:      step,
+	}})
+	if err := fixer.FixStep(step); err != nil {
+		t.Fatalf("FixStep: %v", err)
+	}
+	if got := step.Env.Vars["input_x"].Value.Value; got != "${{ github.ref }}" {
+		t.Fatalf("existing INPUT_X value was overwritten: %q", got)
+	}
+	added := step.Env.Vars["input_x_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected INPUT_X_2 env var for colliding input, got %#v", step.Env.Vars)
+	}
+	if got := added.Value.Value; got != "${{ inputs.x }}" {
+		t.Fatalf("expected INPUT_X_2 env var for colliding input, got %q", got)
+	}
+	run := step.Exec.(*ast.ExecRun)
+	if strings.Contains(run.Run.Value, "$INPUT_X ") || run.Run.Value == "echo $INPUT_X" {
+		t.Fatalf("run reused colliding INPUT_X: %q", run.Run.Value)
+	}
+	if !strings.Contains(run.Run.Value, "$INPUT_X_2") {
+		t.Fatalf("run should reference INPUT_X_2, got %q", run.Run.Value)
 	}
 }

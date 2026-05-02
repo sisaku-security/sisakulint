@@ -182,19 +182,45 @@ func (f *ChainFixer) FixStep(step *ast.Step) error {
 		if sink.SinkType == SinkEnv {
 			continue // Phase 1: SinkEnv is warning-only, no auto-fix.
 		}
-		envName := envVarNameFor(sink.InputName)
 
 		if _, present := envVarMap[sink.InputPath]; !present {
-			envVarMap[sink.InputPath] = envName
+			expectedValue := fmt.Sprintf("${{ %s }}", sink.InputPath)
+			envName := envVarNameFor(sink.InputName)
 			lower := strings.ToLower(envName)
-			if _, exists := step.Env.Vars[lower]; !exists {
+			if existing, exists := step.Env.Vars[lower]; exists {
+				if existing != nil && existing.Value != nil && existing.Value.Value == expectedValue {
+					envVarMap[sink.InputPath] = envName
+				} else {
+					for suffix := 2; ; suffix++ {
+						candidate := fmt.Sprintf("%s_%d", envName, suffix)
+						candidateLower := strings.ToLower(candidate)
+						existing, exists := step.Env.Vars[candidateLower]
+						if exists {
+							if existing != nil && existing.Value != nil && existing.Value.Value == expectedValue {
+								envVarMap[sink.InputPath] = candidate
+								break
+							}
+							continue
+						}
+						step.Env.Vars[candidateLower] = &ast.EnvVar{
+							Name:  &ast.String{Value: candidate, Pos: sink.Pos},
+							Value: &ast.String{Value: expectedValue, Pos: sink.Pos},
+						}
+						envVarsForYAML[candidate] = expectedValue
+						envVarMap[sink.InputPath] = candidate
+						break
+					}
+				}
+			} else {
 				step.Env.Vars[lower] = &ast.EnvVar{
 					Name:  &ast.String{Value: envName, Pos: sink.Pos},
-					Value: &ast.String{Value: fmt.Sprintf("${{ %s }}", sink.InputPath), Pos: sink.Pos},
+					Value: &ast.String{Value: expectedValue, Pos: sink.Pos},
 				}
-				envVarsForYAML[envName] = fmt.Sprintf("${{ %s }}", sink.InputPath)
+				envVarsForYAML[envName] = expectedValue
+				envVarMap[sink.InputPath] = envName
 			}
 		}
+		envName := envVarMap[sink.InputPath]
 
 		switch sink.SinkType {
 		case SinkRun:

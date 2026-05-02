@@ -239,13 +239,18 @@ func TestReusableWorkflowTaintRule_checkWorkflowCallInputs(t *testing.T) {
 }
 
 func TestCheckWorkflowCallInputs_ChainEnabled_RecordsToCache(t *testing.T) {
-	cache := NewLocalReusableWorkflowCache(&Project{}, "/cwd", nil)
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
 	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
 	rule.hasPrivilegedTrigger = true
 
 	job := &ast.Job{
 		WorkflowCall: &ast.WorkflowCall{
-			Uses: &ast.String{Value: "./.github/workflows/build.yml"},
+			Uses: &ast.String{Value: "./.github/workflows/nested/../build.yml"},
 			Inputs: map[string]*ast.WorkflowCallInput{
 				"branch": {
 					Value: &ast.String{
@@ -669,7 +674,7 @@ func TestCheckTaintedInputUsage_ChainEnabled_RecordsAllThreeSinks(t *testing.T) 
 			},
 		},
 		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
-			"USER_ENV": {
+			"user_env": {
 				Name:  &ast.String{Value: "USER_ENV"},
 				Value: &ast.String{Value: "${{ inputs.envvar }}", Pos: &ast.Position{Line: 11, Col: 14}},
 			},
@@ -702,6 +707,49 @@ func TestCheckTaintedInputUsage_ChainEnabled_RecordsAllThreeSinks(t *testing.T) 
 	}
 	if !gotTypes[SinkRun] || !gotTypes[SinkEnv] {
 		t.Errorf("expected both SinkRun and SinkEnv recorded, got %v", gotTypes)
+	}
+}
+
+func TestCheckTaintedInputUsage_ChainEnabled_RecordsRunEvenWhenInputAlsoInEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
+	rule.isReusableWorkflow = true
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.title }}",
+				Pos:   &ast.Position{Line: 10, Col: 14},
+			},
+		},
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"title": {
+				Name:  &ast.String{Value: "TITLE"},
+				Value: &ast.String{Value: "${{ inputs.title }}", Pos: &ast.Position{Line: 11, Col: 14}},
+			},
+		}},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	rule.checkTaintedInputUsageInSteps(job)
+
+	specs := cache.CalleeSpecs()
+	if len(specs) != 1 {
+		t.Fatalf("expected exactly 1 callee spec recorded, got %d: %v", len(specs), specs)
+	}
+	sinks := cache.SinksOf(specs[0])
+	gotTypes := make(map[SinkType]bool)
+	for _, sink := range sinks {
+		gotTypes[sink.SinkType] = true
+	}
+	if !gotTypes[SinkRun] {
+		t.Fatalf("expected direct run sink to be recorded, got sink types %v", gotTypes)
 	}
 }
 

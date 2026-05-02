@@ -105,6 +105,14 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 	}
 
 	chainEnabled := rule.cache != nil && rule.cache.IsChainResolutionEnabled()
+	if chainEnabled {
+		normalizedSpec, ok := rule.cache.PathToWorkflowSpecification(calleeSpec)
+		if !ok {
+			chainEnabled = false
+		} else {
+			calleeSpec = normalizedSpec
+		}
+	}
 
 	for inputName, input := range call.Inputs {
 		if input == nil || input.Value == nil {
@@ -209,13 +217,6 @@ func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
 	calleeSpec string, chainEnabled bool, stepTainted *stepWithTaintedInput,
 ) *stepWithTaintedInput {
 	for _, usage := range usages {
-		// isDefinedInEnv is the "already passed safely through env" guard for
-		// run/script sinks. For SinkEnv itself, the env value being scanned IS
-		// one of step.Env.Vars, so the guard would always self-match and make
-		// the env-sink path unreachable. Skip the guard for env sinks.
-		if sinkType != SinkEnv && rule.isDefinedInEnv(usage.inputPath, step.Env) {
-			continue
-		}
 		if chainEnabled {
 			rule.cache.RecordCalleeSink(calleeSpec, &CalleeSink{
 				CalleeWorkflowPath: rule.workflowPath,
