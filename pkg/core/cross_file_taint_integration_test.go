@@ -8,28 +8,26 @@ import (
 )
 
 // runCrossFileLinter runs the Linter on the given fixtures from script/actions/.
-// The fixture directory is treated as the project root so caller `uses:` paths
-// (e.g. `./cross-file-taint-callee-run.yaml`) match the callee's
-// pathToWorkflowSpecification output, enabling chain resolution.
+// The project is rooted at the repo root so caller `uses:` paths
+// (e.g. `./script/actions/cross-file-taint-callee-run.yaml`) match the
+// callee's pathToWorkflowSpecification output, enabling chain resolution.
+// This mirrors how GitHub Actions resolves `./...` — repo-root-relative.
 // Returns the aggregated results.
 func runCrossFileLinter(t *testing.T, files ...string) []*ValidateResult {
 	t.Helper()
-	scriptActionsDir, err := filepath.Abs("../../script/actions")
+	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatalf("filepath.Abs: %v", err)
 	}
-	// Construct the project explicitly with script/actions/ as root so
-	// pathToWorkflowSpecification resolves callee paths to ./<basename>.yaml,
-	// matching the caller's `uses: ./<basename>.yaml` literal.
-	proj, err := NewProject(scriptActionsDir)
+	proj, err := NewProject(repoRoot)
 	if err != nil {
-		t.Fatalf("NewProject(%q): %v", scriptActionsDir, err)
+		t.Fatalf("NewProject(%q): %v", repoRoot, err)
 	}
-	// Set CWD to script/actions/ so Linter's filepath.Rel(cwd, ws.path)
-	// strips the prefix consistently for both workspace adapter paths and
-	// the cache's internal spec resolution.
+	if proj == nil {
+		t.Fatalf("NewProject returned nil; expected project at %s", repoRoot)
+	}
 	opts := &LinterOptions{
-		CurrentWorkingDirectoryPath: scriptActionsDir,
+		CurrentWorkingDirectoryPath: repoRoot,
 	}
 	l, err := NewLinter(io.Discard, opts)
 	if err != nil {
@@ -37,7 +35,7 @@ func runCrossFileLinter(t *testing.T, files ...string) []*ValidateResult {
 	}
 	paths := make([]string, len(files))
 	for i, f := range files {
-		paths[i] = filepath.Join(scriptActionsDir, f)
+		paths[i] = filepath.Join(repoRoot, "script/actions", f)
 	}
 	results, err := l.LintFiles(paths, proj)
 	if err != nil {

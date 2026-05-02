@@ -1,6 +1,6 @@
 on: pull_request
 jobs:
   build:
-    uses: ./cross-file-taint-callee-script.yaml
+    uses: ./script/actions/cross-file-taint-callee-script.yaml
     with:
       title: ${{ github.event.pull_request.title }}
