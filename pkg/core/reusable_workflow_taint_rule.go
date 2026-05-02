@@ -163,7 +163,7 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 			if run := step.Exec.(*ast.ExecRun); run.Run != nil {
 				stepTainted = rule.recordOrReportSinks(
 					rule.findTaintedInputUsagesInString(run.Run),
-					SinkRun, step, job, calleeSpec, chainEnabled, stepTainted, true,
+					SinkRun, step, job, calleeSpec, chainEnabled, stepTainted,
 				)
 			}
 		}
@@ -175,7 +175,7 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 				if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
 					stepTainted = rule.recordOrReportSinks(
 						rule.findTaintedInputUsagesInString(scriptInput.Value),
-						SinkGitHubScript, step, job, calleeSpec, chainEnabled, stepTainted, false,
+						SinkGitHubScript, step, job, calleeSpec, chainEnabled, stepTainted,
 					)
 				}
 			}
@@ -189,7 +189,7 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 				}
 				stepTainted = rule.recordOrReportSinks(
 					rule.findTaintedInputUsagesInString(envVar.Value),
-					SinkEnv, step, job, calleeSpec, chainEnabled, stepTainted, false,
+					SinkEnv, step, job, calleeSpec, chainEnabled, stepTainted,
 				)
 			}
 		}
@@ -206,10 +206,14 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 // tracking when disabled. Returns the (possibly initialized) stepTainted.
 func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
 	usages []taintedInputInfo, sinkType SinkType, step *ast.Step, job *ast.Job,
-	calleeSpec string, chainEnabled bool, stepTainted *stepWithTaintedInput, isInRunScript bool,
+	calleeSpec string, chainEnabled bool, stepTainted *stepWithTaintedInput,
 ) *stepWithTaintedInput {
 	for _, usage := range usages {
-		if rule.isDefinedInEnv(usage.inputPath, step.Env) {
+		// isDefinedInEnv is the "already passed safely through env" guard for
+		// run/script sinks. For SinkEnv itself, the env value being scanned IS
+		// one of step.Env.Vars, so the guard would always self-match and make
+		// the env-sink path unreachable. Skip the guard for env sinks.
+		if sinkType != SinkEnv && rule.isDefinedInEnv(usage.inputPath, step.Env) {
 			continue
 		}
 		if chainEnabled {
@@ -231,6 +235,7 @@ func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
 		if sinkType == SinkEnv {
 			continue
 		}
+		isInRunScript := sinkType == SinkRun
 		if stepTainted == nil {
 			stepTainted = &stepWithTaintedInput{step: step}
 		}

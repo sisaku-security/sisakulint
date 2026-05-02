@@ -2,6 +2,7 @@ package core
 
 import (
 	"io"
+	"path/filepath"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -645,13 +646,19 @@ func TestIsPrivilegedTrigger(t *testing.T) {
 }
 
 func TestCheckTaintedInputUsage_ChainEnabled_RecordsAllThreeSinks(t *testing.T) {
-	cache := NewLocalReusableWorkflowCache(&Project{}, "/cwd", nil)
-	// Note: PathToWorkflowSpecification may return false if proj root isn't
-	// configured — in that case chainEnabled is false and the test exercises
-	// the fallback branch instead. We accept either outcome and assert the
-	// appropriate one. The branch actually exercised depends on whether the
-	// project's RootDirectory() resolves the test workflow path.
-	rule := NewReusableWorkflowTaintRule("./.github/workflows/build.yml", cache)
+	// Set up a project rooted at tmpDir so pathToWorkflowSpecification
+	// succeeds and chainEnabled becomes true. NewProject succeeds without
+	// any .github/sisakulint.y(a)ml or boilerplate file present (loaders
+	// silently return nil when files are missing).
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
 	rule.isReusableWorkflow = true
 
 	step := &ast.Step{
@@ -671,21 +678,30 @@ func TestCheckTaintedInputUsage_ChainEnabled_RecordsAllThreeSinks(t *testing.T) 
 	job := &ast.Job{Steps: []*ast.Step{step}}
 	rule.checkTaintedInputUsageInSteps(job)
 
+	// Chain branch must have run: 0 Errorf, 0 fixers (legacy fixer is only
+	// registered in fallback mode; the chain resolver registers fixers later).
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("chain mode should not call Errorf, got %d errors", got)
+	}
+	if got := len(rule.AutoFixers()); got != 0 {
+		t.Errorf("chain mode should not register legacy fixer, got %d fixers", got)
+	}
+	// Both sinks (run + env) recorded in cache under the resolved spec.
 	specs := cache.CalleeSpecs()
-	if len(specs) > 0 {
-		// chain branch executed
-		var totalSinks int
-		for _, s := range specs {
-			totalSinks += len(cache.SinksOf(s))
-		}
-		if totalSinks != 2 {
-			t.Errorf("expected 2 recorded sinks (run + env), got %d", totalSinks)
-		}
-	} else {
-		// fallback branch executed (no project root resolution)
-		if got := len(rule.Errors()); got != 1 {
-			t.Errorf("fallback mode should produce 1 error for run sink, got %d", got)
-		}
+	if len(specs) != 1 {
+		t.Fatalf("expected exactly 1 callee spec recorded, got %d: %v", len(specs), specs)
+	}
+	sinks := cache.SinksOf(specs[0])
+	if len(sinks) != 2 {
+		t.Fatalf("expected 2 recorded sinks (run + env), got %d", len(sinks))
+	}
+	// Verify both sink types are present (order may vary).
+	gotTypes := make(map[SinkType]bool)
+	for _, s := range sinks {
+		gotTypes[s.SinkType] = true
+	}
+	if !gotTypes[SinkRun] || !gotTypes[SinkEnv] {
+		t.Errorf("expected both SinkRun and SinkEnv recorded, got %v", gotTypes)
 	}
 }
 
