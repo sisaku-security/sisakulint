@@ -107,6 +107,7 @@ func TestPermissionRule_ValidScopes(t *testing.T) {
 	// Test that all valid permission scopes are recognized
 	validScopes := []string{
 		"actions",
+		"artifact-metadata",
 		"attestations",
 		"checks",
 		"contents",
