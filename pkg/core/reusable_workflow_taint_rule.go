@@ -99,30 +99,44 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 	if call == nil || call.Uses == nil {
 		return
 	}
+	calleeSpec := call.Uses.Value
+	if !strings.HasPrefix(calleeSpec, "./") {
+		return // remote workflow — out of scope for cross-file taint
+	}
+
+	chainEnabled := rule.cache != nil && rule.cache.IsChainResolutionEnabled()
 
 	for inputName, input := range call.Inputs {
 		if input == nil || input.Value == nil {
 			continue
 		}
-
-		// Check if the input value contains untrusted expressions
 		untrustedPaths := rule.findUntrustedExpressionsInString(input.Value)
-		if len(untrustedPaths) > 0 {
-			// Get severity based on whether this workflow has privileged triggers
-			severity := "medium"
-			if rule.hasPrivilegedTrigger {
-				severity = "critical"
-			}
-
-			rule.Errorf(
-				input.Value.Pos,
-				"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
-				severity,
-				inputName,
-				strings.Join(untrustedPaths, ", "),
-				call.Uses.Value,
-			)
+		if len(untrustedPaths) == 0 {
+			continue
 		}
+
+		if chainEnabled {
+			rule.cache.RecordCallerTaint(calleeSpec, &CallerTaint{
+				CallerWorkflowPath:   rule.workflowPath,
+				InputName:            strings.ToLower(inputName),
+				UntrustedSources:     untrustedPaths,
+				Pos:                  input.Value.Pos,
+				JobID:                jobIDOf(job),
+				HasPrivilegedTrigger: rule.hasPrivilegedTrigger,
+			})
+			continue
+		}
+
+		// Fallback (single-file lint mode / no project): keep existing per-file behavior.
+		severity := "medium"
+		if rule.hasPrivilegedTrigger {
+			severity = "critical"
+		}
+		rule.Errorf(
+			input.Value.Pos,
+			"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity, inputName, strings.Join(untrustedPaths, ", "), call.Uses.Value,
+		)
 	}
 }
 

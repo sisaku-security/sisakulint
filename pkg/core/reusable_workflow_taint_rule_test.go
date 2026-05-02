@@ -237,6 +237,66 @@ func TestReusableWorkflowTaintRule_checkWorkflowCallInputs(t *testing.T) {
 	}
 }
 
+func TestCheckWorkflowCallInputs_ChainEnabled_RecordsToCache(t *testing.T) {
+	cache := NewLocalReusableWorkflowCache(&Project{}, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "./.github/workflows/build.yml"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("chain-enabled mode should not call Errorf, got %d errors", got)
+	}
+	callers := cache.CallersOf("./.github/workflows/build.yml")
+	if len(callers) != 1 {
+		t.Fatalf("expected 1 recorded caller taint, got %d", len(callers))
+	}
+	if callers[0].InputName != "branch" || !callers[0].HasPrivilegedTrigger {
+		t.Errorf("unexpected caller taint: %#v", callers[0])
+	}
+}
+
+func TestCheckWorkflowCallInputs_ChainDisabled_StillEmitsErrorf(t *testing.T) {
+	cache := NewLocalReusableWorkflowCache(nil /* no project => disabled */, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "./.github/workflows/build.yml"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("fallback mode should emit 1 error, got %d", got)
+	}
+	if got := len(cache.CallersOf("./.github/workflows/build.yml")); got != 0 {
+		t.Errorf("disabled mode should not record to cache, got %d", got)
+	}
+}
+
 func TestReusableWorkflowTaintRule_checkTaintedInputUsage(t *testing.T) {
 	tests := []struct {
 		name       string
