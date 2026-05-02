@@ -156,8 +156,93 @@ func NewChainFixer(sinks []*CalleeSink) *ChainFixer {
 
 func (f *ChainFixer) RuleNames() string { return "reusable-workflow-taint" }
 
-// FixStep is filled in by Plan Task 7.
-func (f *ChainFixer) FixStep(step *ast.Step) error { return nil }
+// FixStep lifts ${{ inputs.X }} sinks into a step-level env: var and
+// rewrites consuming sites. SinkEnv is warning-only in Phase 1 and is
+// skipped here. Mirrors ReusableWorkflowTaintRule.FixStep but operates
+// from CalleeSink records joined post-Wait by ResolvePendingChains.
+func (f *ChainFixer) FixStep(step *ast.Step) error {
+	if step == nil || len(f.sinks) == 0 {
+		return nil
+	}
+
+	// Ensure step.Env exists for env-var lifting.
+	if step.Env == nil {
+		step.Env = &ast.Env{Vars: make(map[string]*ast.EnvVar)}
+	}
+	if step.Env.Vars == nil {
+		step.Env.Vars = make(map[string]*ast.EnvVar)
+	}
+
+	envVarMap := make(map[string]string)      // inputPath -> env var name
+	envVarsForYAML := make(map[string]string) // env var name -> "${{ inputs.X }}"
+	runReplacements := make(map[string]string)
+	scriptReplacements := make(map[string]string)
+
+	for _, sink := range f.sinks {
+		if sink.SinkType == SinkEnv {
+			continue // Phase 1: SinkEnv is warning-only, no auto-fix.
+		}
+		envName := envVarNameFor(sink.InputName)
+
+		if _, present := envVarMap[sink.InputPath]; !present {
+			envVarMap[sink.InputPath] = envName
+			lower := strings.ToLower(envName)
+			if _, exists := step.Env.Vars[lower]; !exists {
+				step.Env.Vars[lower] = &ast.EnvVar{
+					Name:  &ast.String{Value: envName, Pos: sink.Pos},
+					Value: &ast.String{Value: fmt.Sprintf("${{ %s }}", sink.InputPath), Pos: sink.Pos},
+				}
+				envVarsForYAML[envName] = fmt.Sprintf("${{ %s }}", sink.InputPath)
+			}
+		}
+
+		switch sink.SinkType {
+		case SinkRun:
+			runReplacements[fmt.Sprintf("${{ %s }}", sink.InputPath)] = "$" + envName
+			runReplacements[fmt.Sprintf("${{%s}}", sink.InputPath)] = "$" + envName
+			if run, ok := step.Exec.(*ast.ExecRun); ok && run.Run != nil {
+				run.Run.Value = strings.ReplaceAll(run.Run.Value,
+					fmt.Sprintf("${{ %s }}", sink.InputPath), "$"+envName)
+				run.Run.Value = strings.ReplaceAll(run.Run.Value,
+					fmt.Sprintf("${{%s}}", sink.InputPath), "$"+envName)
+			}
+		case SinkGitHubScript:
+			scriptReplacements[fmt.Sprintf("${{ %s }}", sink.InputPath)] = "process.env." + envName
+			scriptReplacements[fmt.Sprintf("${{%s}}", sink.InputPath)] = "process.env." + envName
+			if action, ok := step.Exec.(*ast.ExecAction); ok {
+				if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
+					scriptInput.Value.Value = strings.ReplaceAll(scriptInput.Value.Value,
+						fmt.Sprintf("${{ %s }}", sink.InputPath), "process.env."+envName)
+					scriptInput.Value.Value = strings.ReplaceAll(scriptInput.Value.Value,
+						fmt.Sprintf("${{%s}}", sink.InputPath), "process.env."+envName)
+				}
+			}
+		}
+	}
+
+	// Apply YAML-level rewrites via BaseNode (sed-style edits in the source file).
+	if step.BaseNode != nil {
+		if len(envVarsForYAML) > 0 {
+			if err := AddEnvVarsToStepNode(step.BaseNode, envVarsForYAML); err != nil {
+				return fmt.Errorf("ChainFixer: add env vars: %w", err)
+			}
+		}
+		if len(runReplacements) > 0 {
+			if err := ReplaceInRunScript(step.BaseNode, runReplacements); err != nil &&
+				!strings.Contains(err.Error(), "run section not found") {
+				return fmt.Errorf("ChainFixer: replace run: %w", err)
+			}
+		}
+		if len(scriptReplacements) > 0 {
+			if err := ReplaceInGitHubScript(step.BaseNode, scriptReplacements); err != nil &&
+				!strings.Contains(err.Error(), "section not found") &&
+				!strings.Contains(err.Error(), "field not found") {
+				return fmt.Errorf("ChainFixer: replace script: %w", err)
+			}
+		}
+	}
+	return nil
+}
 
 func (c *LocalReusableWorkflowCache) emitChainWarning(ws []workspaceLike, caller *CallerTaint, sink *CalleeSink) {
 	severity := "medium"

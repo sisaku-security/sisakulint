@@ -207,3 +207,63 @@ func TestEnvVarNameFor(t *testing.T) {
 		}
 	}
 }
+
+func TestChainFixer_FixStep_RunSink(t *testing.T) {
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.branch }}",
+				Pos:   &ast.Position{Line: 12, Col: 14},
+			},
+		},
+	}
+	fixer := NewChainFixer([]*CalleeSink{{
+		InputName: "branch",
+		InputPath: "inputs.branch",
+		SinkType:  SinkRun,
+		Pos:       &ast.Position{Line: 12, Col: 14},
+		Step:      step,
+	}})
+	if err := fixer.FixStep(step); err != nil {
+		t.Fatalf("FixStep: %v", err)
+	}
+	if step.Env == nil || step.Env.Vars["input_branch"] == nil {
+		t.Fatalf("expected INPUT_BRANCH env var to be added, got %#v", step.Env)
+	}
+	run := step.Exec.(*ast.ExecRun)
+	if !strings.Contains(run.Run.Value, "$INPUT_BRANCH") {
+		t.Errorf("expected $INPUT_BRANCH in run, got %q", run.Run.Value)
+	}
+	if strings.Contains(run.Run.Value, "${{ inputs.branch }}") {
+		t.Errorf("expected ${{ inputs.branch }} to be replaced, got %q", run.Run.Value)
+	}
+}
+
+func TestChainFixer_FixStep_SkipsSinkEnv(t *testing.T) {
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{Value: "true", Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"USER_ENV": {
+				Name:  &ast.String{Value: "USER_ENV"},
+				Value: &ast.String{Value: "${{ inputs.x }}"},
+			},
+		}},
+	}
+	fixer := NewChainFixer([]*CalleeSink{{
+		InputName: "x", InputPath: "inputs.x",
+		SinkType: SinkEnv, Pos: &ast.Position{Line: 1, Col: 1}, Step: step,
+	}})
+	if err := fixer.FixStep(step); err != nil {
+		t.Fatalf("FixStep: %v", err)
+	}
+	// Phase 1: SinkEnv is warning-only. INPUT_X must NOT be added,
+	// and USER_ENV value must be unchanged.
+	if _, exists := step.Env.Vars["input_x"]; exists {
+		t.Errorf("SinkEnv should not add INPUT_X env var")
+	}
+	if v := step.Env.Vars["USER_ENV"].Value.Value; v != "${{ inputs.x }}" {
+		t.Errorf("existing env var was modified: %q", v)
+	}
+}
