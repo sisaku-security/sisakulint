@@ -1,0 +1,6 @@
+on: pull_request_target
+jobs:
+  build:
+    uses: ./cross-file-taint-callee-env.yaml
+    with:
+      payload: ${{ github.event.issue.body }}

@@ -1,0 +1,12 @@
+on:
+  workflow_call:
+    inputs:
+      payload:
+        type: string
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAYLOAD: ${{ inputs.payload }}
+        run: echo "$PAYLOAD"

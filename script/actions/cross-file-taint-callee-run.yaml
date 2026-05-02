@@ -1,0 +1,13 @@
+on:
+  workflow_call:
+    inputs:
+      branch:
+        type: string
+      safe_input:
+        type: string
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout ${{ inputs.branch }}
+      - run: echo "${{ inputs.safe_input }}"

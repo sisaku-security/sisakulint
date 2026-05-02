@@ -1,0 +1,10 @@
+on:
+  workflow_call:
+    inputs:
+      lone_input:
+        type: string
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.lone_input }}"
