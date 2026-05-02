@@ -8,6 +8,7 @@ import (
 
 var allPermissionScopes = map[string]struct{}{
 	"actions":             {},
+	"artifact-metadata":   {},
 	"attestations":        {},
 	"checks":              {},
 	"contents":            {},
