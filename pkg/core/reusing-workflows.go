@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -490,4 +491,88 @@ func stepIDOf(step *ast.Step) string {
 		return ""
 	}
 	return step.ID.Value
+}
+
+// IsChainResolutionEnabled returns true when the cache can correlate
+// caller and callee taint info — i.e. it has a Project context.
+func (c *LocalReusableWorkflowCache) IsChainResolutionEnabled() bool {
+	return c != nil && c.proj != nil
+}
+
+// PathToWorkflowSpecification is an exported wrapper around the existing
+// pathToWorkflowSpecification helper so rules can normalize callee paths.
+func (c *LocalReusableWorkflowCache) PathToWorkflowSpecification(spec string) (string, bool) {
+	return c.pathToWorkflowSpecification(spec)
+}
+
+// RecordCallerTaint adds a caller-side taint entry under the given callee
+// spec. Thread-safe. Idempotency is intentionally NOT enforced here —
+// duplicate (caller, sink) pairs are deduped by ResolvePendingChains.
+func (c *LocalReusableWorkflowCache) RecordCallerTaint(calleeSpec string, taint *CallerTaint) {
+	if c == nil || taint == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.callerTaints[calleeSpec] = append(c.callerTaints[calleeSpec], taint)
+}
+
+// RecordCalleeSink adds a callee-side sink entry under the given callee
+// spec. Thread-safe.
+func (c *LocalReusableWorkflowCache) RecordCalleeSink(calleeSpec string, sink *CalleeSink) {
+	if c == nil || sink == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calleeSinks[calleeSpec] = append(c.calleeSinks[calleeSpec], sink)
+}
+
+// CallersOf returns a copy of the caller taint list for a callee spec.
+func (c *LocalReusableWorkflowCache) CallersOf(calleeSpec string) []*CallerTaint {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	src := c.callerTaints[calleeSpec]
+	out := make([]*CallerTaint, len(src))
+	copy(out, src)
+	return out
+}
+
+// SinksOf returns a copy of the callee sink list for a callee spec.
+func (c *LocalReusableWorkflowCache) SinksOf(calleeSpec string) []*CalleeSink {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	src := c.calleeSinks[calleeSpec]
+	out := make([]*CalleeSink, len(src))
+	copy(out, src)
+	return out
+}
+
+// CalleeSpecs returns the sorted union of callerTaints + calleeSinks keys.
+// Used by ResolvePendingChains to iterate deterministically.
+func (c *LocalReusableWorkflowCache) CalleeSpecs() []string {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := make(map[string]struct{}, len(c.callerTaints)+len(c.calleeSinks))
+	for k := range c.callerTaints {
+		seen[k] = struct{}{}
+	}
+	for k := range c.calleeSinks {
+		seen[k] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
