@@ -44,6 +44,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `secret-in-log-safe.yaml` | Safe counterparts using `::add-mask::` before printing derived variables, unrelated echo, and no-echo (curl-only) patterns |
 | `taint-scope-fp-safe.yaml` | TaintTracker scope-aware (#447): subshell 内の変数上書きが親スコープに漏れないことを示す |
 | `taint-scope-fn-vulnerable.yaml` | TaintTracker scope-aware (#447): 関数本体内 local 変数の secret-in-log 検出を示す |
+| `taint-args-vulnerable.yaml` | 関数引数経由の secret 漏洩 (`leak() { echo "$1"; }; leak "$TOKEN"`) — `secret-in-log` が検出 |
+| `taint-args-safe.yaml` | autofix 後の安全パターン (TOKEN= の直後に `::add-mask::$TOKEN` を挿入) |
 
 ### Usage
 
