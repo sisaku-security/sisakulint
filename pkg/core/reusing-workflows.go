@@ -479,6 +479,16 @@ func (f *LocalReusableWorkflowCacheFactory) GetCache(proj *Project) *LocalReusab
 	return c
 }
 
+// AllCaches returns every cache instance the factory has created.
+// Used by the linter post-Wait phase to invoke ResolvePendingChains.
+func (f *LocalReusableWorkflowCacheFactory) AllCaches() []*LocalReusableWorkflowCache {
+	out := make([]*LocalReusableWorkflowCache, 0, len(f.caches))
+	for _, c := range f.caches {
+		out = append(out, c)
+	}
+	return out
+}
+
 func jobIDOf(job *ast.Job) string {
 	if job == nil || job.ID == nil {
 		return ""

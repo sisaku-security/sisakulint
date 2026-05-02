@@ -393,6 +393,17 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		return nil, err
 	}
 
+	// Cross-file taint chain resolution (#392): run single-threaded after
+	// all per-file validate() goroutines have completed. Mutates each
+	// workspace's result.Errors / result.AutoFixers as needed.
+	adapters := make([]workspaceLike, len(workspaces))
+	for i := range workspaces {
+		adapters[i] = &workspaceAdapter{path: workspaces[i].path, result: workspaces[i].result}
+	}
+	for _, c := range reusableWorkflowCacheFactory.AllCaches() {
+		c.ResolvePendingChains(adapters)
+	}
+
 	totalErrors := 0
 	// Preallocate allResult with the capacity equal to the number of workspaces
 	allResult := make([]*ValidateResult, 0, len(workspaces))
@@ -455,6 +466,15 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 	result, err := l.validate(file, source, project, proc, localActions, localReusableWorkflow)
 	proc.Wait()
 
+	// Cross-file taint chain resolution for single-file mode (#392).
+	// In single-file mode the cache only has data from this one file;
+	// chain matching is essentially a no-op but we run it for symmetry
+	// and forward-compat with future preload helpers.
+	if localReusableWorkflow != nil && result != nil {
+		adapter := &workspaceAdapter{path: file, result: result}
+		localReusableWorkflow.ResolvePendingChains([]workspaceLike{adapter})
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +508,12 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	localReusableWorkflow := NewLocalReusableWorkflowCache(project, l.currentWorkingDirectory, l.debugWriter())
 	result, err := l.validate(filepath, content, project, proc, localActions, localReusableWorkflow)
 	proc.Wait()
+
+	if localReusableWorkflow != nil && result != nil {
+		adapter := &workspaceAdapter{path: filepath, result: result}
+		localReusableWorkflow.ResolvePendingChains([]workspaceLike{adapter})
+	}
+
 	if err != nil {
 		return nil, err
 	}
