@@ -113,6 +113,9 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 			continue
 		}
 		if len(sinks) == 0 {
+			if !c.IsCalleeAnalyzed(spec) {
+				c.emitCallerOnlyWarnings(ws, spec, callers)
+			}
 			continue
 		}
 
@@ -129,8 +132,10 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 				}
 				seen[k] = struct{}{}
 				c.emitChainWarning(ws, caller, sink)
-				sk := stepKey{path: sink.CalleeWorkflowPath, step: sink.Step}
-				stepSinks[sk] = append(stepSinks[sk], sink)
+				if sink.IsAutoFixable() {
+					sk := stepKey{path: sink.CalleeWorkflowPath, step: sink.Step}
+					stepSinks[sk] = append(stepSinks[sk], sink)
+				}
 			}
 		}
 		for sk, ss := range stepSinks {
@@ -140,6 +145,10 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 			}
 		}
 	}
+}
+
+func (s *CalleeSink) IsAutoFixable() bool {
+	return s != nil && (s.SinkType == SinkRun || s.SinkType == SinkGitHubScript)
 }
 
 // ChainFixer is the callee-side autofixer registered after chain
@@ -298,6 +307,36 @@ func (c *LocalReusableWorkflowCache) emitChainWarning(ws []workspaceLike, caller
 	}
 }
 
+func (c *LocalReusableWorkflowCache) emitCallerOnlyWarnings(ws []workspaceLike, calleeSpec string, callers []*CallerTaint) {
+	seen := make(map[string]struct{})
+	for _, caller := range callers {
+		if caller == nil || caller.Pos == nil {
+			continue
+		}
+		key := fmt.Sprintf("%s:%d:%d:%s", caller.CallerWorkflowPath, caller.Pos.Line, caller.Pos.Col, caller.InputName)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		severity := "medium"
+		if caller.HasPrivilegedTrigger {
+			severity = "critical"
+		}
+		msg := fmt.Sprintf(
+			"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity,
+			caller.InputName,
+			strings.Join(caller.UntrustedSources, ", "),
+			calleeSpec,
+		)
+		err := FormattedError(caller.Pos, "reusable-workflow-taint", "%s", msg)
+		if w := findWorkspace(ws, caller.CallerWorkflowPath); w != nil {
+			w.AppendError(err)
+		}
+	}
+}
+
 func (c *LocalReusableWorkflowCache) emitCalleeSoloWarnings(ws []workspaceLike, sinks []*CalleeSink) {
 	dedup := make(map[string]struct{})
 	stepSinks := make(map[stepKey][]*CalleeSink)
@@ -319,8 +358,10 @@ func (c *LocalReusableWorkflowCache) emitCalleeSoloWarnings(ws []workspaceLike, 
 		if w := findWorkspace(ws, sink.CalleeWorkflowPath); w != nil {
 			w.AppendError(err)
 		}
-		sk := stepKey{path: sink.CalleeWorkflowPath, step: sink.Step}
-		stepSinks[sk] = append(stepSinks[sk], sink)
+		if sink.IsAutoFixable() {
+			sk := stepKey{path: sink.CalleeWorkflowPath, step: sink.Step}
+			stepSinks[sk] = append(stepSinks[sk], sink)
+		}
 	}
 	for sk, ss := range stepSinks {
 		fx := NewStepFixer(sk.step, NewChainFixer(ss))

@@ -109,6 +109,7 @@ func TestResolveCalleeSolo(t *testing.T) {
 
 func TestResolveCallerWithoutSinkProducesNothing(t *testing.T) {
 	c := newTestCache(t)
+	c.RecordAnalyzedCallee("./.github/workflows/build.yml")
 	c.RecordCallerTaint("./.github/workflows/build.yml", &CallerTaint{
 		CallerWorkflowPath: "./.github/workflows/ci.yml",
 		InputName:          "branch",
@@ -118,6 +119,26 @@ func TestResolveCallerWithoutSinkProducesNothing(t *testing.T) {
 	c.ResolvePendingChains([]workspaceLike{caller})
 	if len(caller.result.Errors) != 0 {
 		t.Errorf("expected no errors, got %d", len(caller.result.Errors))
+	}
+}
+
+func TestResolveCallerOnlyPreservesLegacyWarning(t *testing.T) {
+	c := newTestCache(t)
+	c.RecordCallerTaint("./.github/workflows/build.yml", &CallerTaint{
+		CallerWorkflowPath:   "./.github/workflows/ci.yml",
+		InputName:            "branch",
+		UntrustedSources:     []string{"github.event.pull_request.head.ref"},
+		Pos:                  &ast.Position{Line: 5, Col: 7},
+		HasPrivilegedTrigger: true,
+	})
+	caller := &workspaceAdapter{path: "./.github/workflows/ci.yml", result: &ValidateResult{}}
+	c.ResolvePendingChains([]workspaceLike{caller})
+
+	if len(caller.result.Errors) != 1 {
+		t.Fatalf("caller-only lint should preserve legacy warning, got %d errors", len(caller.result.Errors))
+	}
+	if !strings.Contains(caller.result.Errors[0].Description, "reusable workflow input taint (critical)") {
+		t.Fatalf("unexpected caller-only warning: %q", caller.result.Errors[0].Description)
 	}
 }
 
@@ -170,6 +191,54 @@ func TestResolveTwoCallerFilesAtSamePosNotDeduped(t *testing.T) {
 	}
 	if len(b.result.Errors) != 1 {
 		t.Errorf("caller b should have 1 error, got %d", len(b.result.Errors))
+	}
+}
+
+func TestResolveChainEnvSinkDoesNotRegisterFixer(t *testing.T) {
+	c := newTestCache(t)
+	c.RecordCallerTaint("./b.yml", &CallerTaint{
+		CallerWorkflowPath: "./a.yml",
+		InputName:          "x",
+		Pos:                &ast.Position{Line: 1, Col: 1},
+	})
+	c.RecordCalleeSink("./b.yml", &CalleeSink{
+		CalleeWorkflowPath: "./b.yml",
+		InputName:          "x",
+		InputPath:          "inputs.x",
+		SinkType:           SinkEnv,
+		Pos:                &ast.Position{Line: 5, Col: 5},
+		Step:               &ast.Step{},
+	})
+	caller := &workspaceAdapter{path: "./a.yml", result: &ValidateResult{}}
+	callee := &workspaceAdapter{path: "./b.yml", result: &ValidateResult{}}
+	c.ResolvePendingChains([]workspaceLike{caller, callee})
+
+	if len(caller.result.Errors) != 1 {
+		t.Fatalf("expected env sink chain warning, got %d", len(caller.result.Errors))
+	}
+	if len(callee.result.AutoFixers) != 0 {
+		t.Fatalf("SinkEnv is warning-only; expected no autofixers, got %d", len(callee.result.AutoFixers))
+	}
+}
+
+func TestResolveCalleeSoloEnvSinkDoesNotRegisterFixer(t *testing.T) {
+	c := newTestCache(t)
+	c.RecordCalleeSink("./b.yml", &CalleeSink{
+		CalleeWorkflowPath: "./b.yml",
+		InputName:          "x",
+		InputPath:          "inputs.x",
+		SinkType:           SinkEnv,
+		Pos:                &ast.Position{Line: 5, Col: 5},
+		Step:               &ast.Step{},
+	})
+	callee := &workspaceAdapter{path: "./b.yml", result: &ValidateResult{}}
+	c.ResolvePendingChains([]workspaceLike{callee})
+
+	if len(callee.result.Errors) != 1 {
+		t.Fatalf("expected callee-solo env warning, got %d", len(callee.result.Errors))
+	}
+	if len(callee.result.AutoFixers) != 0 {
+		t.Fatalf("SinkEnv is warning-only; expected no autofixers, got %d", len(callee.result.AutoFixers))
 	}
 }
 

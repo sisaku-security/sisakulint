@@ -106,6 +106,29 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 	}
 }
 
+func TestReusableWorkflowTaintRule_VisitWorkflowPreMarksReusableWorkflowAnalyzed(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
+
+	err = rule.VisitWorkflowPre(&ast.Workflow{
+		On: []ast.Event{
+			&ast.WorkflowCallEvent{Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if !cache.IsCalleeAnalyzed("./.github/workflows/build.yml") {
+		t.Fatalf("expected reusable workflow to be marked analyzed")
+	}
+}
+
 func TestReusableWorkflowTaintRule_checkWorkflowCallInputs(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -74,6 +74,11 @@ func (rule *ReusableWorkflowTaintRule) VisitWorkflowPre(node *ast.Workflow) erro
 			rule.hasPrivilegedTrigger = true
 		}
 	}
+	if rule.isReusableWorkflow && rule.cache != nil && rule.cache.IsChainResolutionEnabled() {
+		if spec, ok := rule.cache.PathToWorkflowSpecification(rule.workflowPath); ok {
+			rule.cache.RecordAnalyzedCallee(spec)
+		}
+	}
 
 	return nil
 }
@@ -106,7 +111,7 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 
 	chainEnabled := rule.cache != nil && rule.cache.IsChainResolutionEnabled()
 	if chainEnabled {
-		normalizedSpec, ok := rule.cache.PathToWorkflowSpecification(calleeSpec)
+		normalizedSpec, ok := rule.cache.WorkflowCallSpecToWorkflowSpecification(calleeSpec)
 		if !ok {
 			chainEnabled = false
 		} else {

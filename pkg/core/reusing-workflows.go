@@ -213,6 +213,7 @@ type LocalReusableWorkflowCache struct {
 	// Cross-file taint chain indexes (#392).
 	callerTaints map[string][]*CallerTaint
 	calleeSinks  map[string][]*CalleeSink
+	calleeSeen   map[string]struct{}
 }
 
 func (c *LocalReusableWorkflowCache) debugf(format string, args ...any) {
@@ -305,6 +306,16 @@ func (c *LocalReusableWorkflowCache) pathToWorkflowSpecification(spec string) (s
 		p = "./" + p
 	}
 	return p, true
+}
+
+func (c *LocalReusableWorkflowCache) workflowCallSpecToWorkflowSpecification(spec string) (string, bool) {
+	if c.proj == nil {
+		return "", false
+	}
+	if !filepath.IsAbs(spec) {
+		spec = filepath.Join(c.proj.RootDirectory(), spec)
+	}
+	return c.pathToWorkflowSpecification(spec)
 }
 
 // WriteWorkflowCallEventは、WorkflowCallEvent AST node からreusable workflow metadata を書き込む
@@ -439,6 +450,7 @@ func NewLocalReusableWorkflowCache(proj *Project, cwd string, dbg io.Writer) *Lo
 		dbg:          dbg,
 		callerTaints: map[string][]*CallerTaint{},
 		calleeSinks:  map[string][]*CalleeSink{},
+		calleeSeen:   map[string]struct{}{},
 	}
 }
 
@@ -448,6 +460,7 @@ func newNullLocalReusableWorkflowCache(dbg io.Writer) *LocalReusableWorkflowCach
 		dbg:          dbg,
 		callerTaints: map[string][]*CallerTaint{},
 		calleeSinks:  map[string][]*CalleeSink{},
+		calleeSeen:   map[string]struct{}{},
 	}
 }
 
@@ -513,6 +526,36 @@ func (c *LocalReusableWorkflowCache) IsChainResolutionEnabled() bool {
 // pathToWorkflowSpecification helper so rules can normalize callee paths.
 func (c *LocalReusableWorkflowCache) PathToWorkflowSpecification(spec string) (string, bool) {
 	return c.pathToWorkflowSpecification(spec)
+}
+
+// WorkflowCallSpecToWorkflowSpecification normalizes a jobs.<id>.uses local
+// reusable workflow spec. GitHub resolves ./... reusable workflow specs
+// relative to the repository root, not the process working directory.
+func (c *LocalReusableWorkflowCache) WorkflowCallSpecToWorkflowSpecification(spec string) (string, bool) {
+	return c.workflowCallSpecToWorkflowSpecification(spec)
+}
+
+// RecordAnalyzedCallee marks a reusable workflow as analyzed even when no
+// tainted sinks were found. ResolvePendingChains uses this to distinguish
+// "callee was safe" from "callee was not part of this lint invocation".
+func (c *LocalReusableWorkflowCache) RecordAnalyzedCallee(calleeSpec string) {
+	if c == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calleeSeen[calleeSpec] = struct{}{}
+}
+
+// IsCalleeAnalyzed reports whether a reusable workflow has been analyzed.
+func (c *LocalReusableWorkflowCache) IsCalleeAnalyzed(calleeSpec string) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.calleeSeen[calleeSpec]
+	return ok
 }
 
 // RecordCallerTaint adds a caller-side taint entry under the given callee

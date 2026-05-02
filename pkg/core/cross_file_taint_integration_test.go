@@ -103,6 +103,35 @@ func TestCrossFileTaint_Critical_RunSink(t *testing.T) {
 	}
 }
 
+func TestCrossFileTaint_UsesSpecIsRepoRootRelativeFromSubdir(t *testing.T) {
+	t.Parallel()
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	proj, err := NewProject(repoRoot)
+	if err != nil {
+		t.Fatalf("NewProject(%q): %v", repoRoot, err)
+	}
+	l, err := NewLinter(io.Discard, &LinterOptions{
+		CurrentWorkingDirectoryPath: filepath.Join(repoRoot, "script"),
+	})
+	if err != nil {
+		t.Fatalf("NewLinter: %v", err)
+	}
+	results, err := l.LintFiles([]string{
+		filepath.Join(repoRoot, "script/actions/cross-file-taint-caller-critical.yaml"),
+		filepath.Join(repoRoot, "script/actions/cross-file-taint-callee-run.yaml"),
+	}, proj)
+	if err != nil {
+		t.Fatalf("LintFiles: %v", err)
+	}
+	if got := collectChainErrors(results, "critical"); len(got) != 1 {
+		t.Errorf("expected 1 critical chain warning from subdir cwd, got %d", len(got))
+		dumpErrors(t, results)
+	}
+}
+
 func TestCrossFileTaint_Medium_ScriptSink(t *testing.T) {
 	t.Parallel()
 	res := runCrossFileLinter(t,
@@ -216,6 +245,33 @@ func TestCrossFileTaint_LintFileIgnoreFiltersResolvedChains(t *testing.T) {
 		t.Fatalf("LintFile: %v", err)
 	}
 	assertNoReusableWorkflowTaintResults(t, []*ValidateResult{result})
+}
+
+func TestCrossFileTaint_LintFileCallerOnlyPreservesLegacyWarning(t *testing.T) {
+	t.Parallel()
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	proj, err := NewProject(repoRoot)
+	if err != nil {
+		t.Fatalf("NewProject(%q): %v", repoRoot, err)
+	}
+	l, err := NewLinter(io.Discard, &LinterOptions{
+		CurrentWorkingDirectoryPath: repoRoot,
+	})
+	if err != nil {
+		t.Fatalf("NewLinter: %v", err)
+	}
+	result, err := l.LintFile(filepath.Join(repoRoot, "script/actions/cross-file-taint-caller-critical.yaml"), proj)
+	if err != nil {
+		t.Fatalf("LintFile: %v", err)
+	}
+	got := collectErrors([]*ValidateResult{result}, "reusable-workflow-taint", "reusable workflow input taint (critical)")
+	if len(got) != 1 {
+		t.Errorf("expected 1 legacy caller-only warning, got %d", len(got))
+		dumpErrors(t, []*ValidateResult{result})
+	}
 }
 
 func TestCrossFileTaint_LintIgnoreFiltersResolvedChains(t *testing.T) {
