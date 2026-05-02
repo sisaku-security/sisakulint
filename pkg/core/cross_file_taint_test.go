@@ -141,6 +141,59 @@ func TestResolveDedupChainKey(t *testing.T) {
 	}
 }
 
+func TestResolveTwoCallerFilesAtSamePosNotDeduped(t *testing.T) {
+	c := newTestCache(t)
+	for _, callerPath := range []string{"./a.yml", "./b.yml"} {
+		c.RecordCallerTaint("./shared.yml", &CallerTaint{
+			CallerWorkflowPath:   callerPath,
+			InputName:            "x",
+			Pos:                  &ast.Position{Line: 5, Col: 7},
+			HasPrivilegedTrigger: true,
+		})
+	}
+	c.RecordCalleeSink("./shared.yml", &CalleeSink{
+		CalleeWorkflowPath: "./shared.yml",
+		InputName:          "x",
+		SinkType:           SinkRun,
+		Pos:                &ast.Position{Line: 12, Col: 9},
+		Step:               &ast.Step{},
+	})
+	a := &workspaceAdapter{path: "./a.yml", result: &ValidateResult{}}
+	b := &workspaceAdapter{path: "./b.yml", result: &ValidateResult{}}
+	callee := &workspaceAdapter{path: "./shared.yml", result: &ValidateResult{}}
+	c.ResolvePendingChains([]workspaceLike{a, b, callee})
+
+	if len(a.result.Errors) != 1 {
+		t.Errorf("caller a should have 1 error, got %d", len(a.result.Errors))
+	}
+	if len(b.result.Errors) != 1 {
+		t.Errorf("caller b should have 1 error, got %d", len(b.result.Errors))
+	}
+}
+
+func TestResolveSkipsEntriesWithNilPos(t *testing.T) {
+	c := newTestCache(t)
+	c.RecordCallerTaint("./b.yml", &CallerTaint{
+		CallerWorkflowPath: "./a.yml",
+		InputName:          "x",
+		Pos:                nil, // would panic without guard
+	})
+	c.RecordCalleeSink("./b.yml", &CalleeSink{
+		CalleeWorkflowPath: "./b.yml",
+		InputName:          "x",
+		Pos:                nil,
+		Step:               &ast.Step{},
+	})
+	a := &workspaceAdapter{path: "./a.yml", result: &ValidateResult{}}
+	callee := &workspaceAdapter{path: "./b.yml", result: &ValidateResult{}}
+	// Must not panic; should produce zero warnings (nothing valid to emit).
+	c.ResolvePendingChains([]workspaceLike{a, callee})
+	if len(a.result.Errors)+len(callee.result.Errors) != 0 {
+		t.Errorf("expected no errors when Pos missing, got a=%d callee=%d",
+			len(a.result.Errors), len(callee.result.Errors))
+	}
+}
+
 func TestEnvVarNameFor(t *testing.T) {
 	cases := map[string]string{
 		"":            "UNTRUSTED_INPUT",

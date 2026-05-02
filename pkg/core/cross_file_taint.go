@@ -52,9 +52,38 @@ func findWorkspace(ws []workspaceLike, normPath string) workspaceLike {
 	return nil
 }
 
-// chainKey dedupes by (caller pos, sink pos) so the same flow only
-// generates one warning even if recorded multiple times.
+// filterCallersWithPos drops entries with nil Pos so downstream emit
+// helpers can dereference Pos safely. Reuses the input slice's backing
+// array — safe because CallersOf returns a fresh copy.
+func filterCallersWithPos(in []*CallerTaint) []*CallerTaint {
+	out := in[:0]
+	for _, c := range in {
+		if c != nil && c.Pos != nil {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// filterSinksWithPos drops entries with nil Pos so downstream emit
+// helpers can dereference Pos safely. Reuses the input slice's backing
+// array — safe because SinksOf returns a fresh copy.
+func filterSinksWithPos(in []*CalleeSink) []*CalleeSink {
+	out := in[:0]
+	for _, s := range in {
+		if s != nil && s.Pos != nil {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// chainKey dedupes by (caller file path, caller pos, sink pos) so the
+// same flow only generates one warning even if recorded multiple times.
+// callerPath is included so two callers from different files at
+// coincidentally identical positions are not collapsed into one warning.
 type chainKey struct {
+	callerPath                               string
 	callerLine, callerCol, sinkLine, sinkCol int
 }
 
@@ -76,6 +105,8 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 	for _, spec := range c.CalleeSpecs() {
 		callers := c.CallersOf(spec)
 		sinks := c.SinksOf(spec)
+		callers = filterCallersWithPos(callers)
+		sinks = filterSinksWithPos(sinks)
 
 		if len(callers) == 0 && len(sinks) > 0 {
 			c.emitCalleeSoloWarnings(ws, sinks)
@@ -92,7 +123,7 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 				if caller.InputName != sink.InputName {
 					continue
 				}
-				k := chainKey{caller.Pos.Line, caller.Pos.Col, sink.Pos.Line, sink.Pos.Col}
+				k := chainKey{caller.CallerWorkflowPath, caller.Pos.Line, caller.Pos.Col, sink.Pos.Line, sink.Pos.Col}
 				if _, dup := seen[k]; dup {
 					continue
 				}
