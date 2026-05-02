@@ -426,6 +426,246 @@ updates:
 	}
 }
 
+func TestRenovateManagesGitHubActions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name: "packageRule with matchManagers github-actions",
+			content: `{
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "pinDigests": true
+    }
+  ]
+}`,
+			expected: true,
+		},
+		{
+			name: "config:recommended preset",
+			content: `{
+  "extends": ["config:recommended"]
+}`,
+			expected: true,
+		},
+		{
+			name: "config:base preset",
+			content: `{
+  "extends": ["config:base"]
+}`,
+			expected: true,
+		},
+		{
+			name: "config:best-practices preset",
+			content: `{
+  "extends": ["config:best-practices"]
+}`,
+			expected: true,
+		},
+		{
+			name: "no github-actions manager",
+			content: `{
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "groupName": "npm-packages"
+    }
+  ]
+}`,
+			expected: false,
+		},
+		{
+			name:     "empty config",
+			content:  `{}`,
+			expected: false,
+		},
+		{
+			name:     "invalid json",
+			content:  `not-json`,
+			expected: false,
+		},
+		{
+			name: "multiple managers including github-actions",
+			content: `{
+  "packageRules": [
+    {
+      "matchManagers": ["npm", "github-actions", "pip"],
+      "automerge": true
+    }
+  ]
+}`,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := renovateManagesGitHubActions([]byte(tt.content))
+			if got != tt.expected {
+				t.Errorf("renovateManagesGitHubActions() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDependabotGitHubActionsRule_RenovateWithGitHubActions(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	githubDir := filepath.Join(tmpDir, ".github")
+	workflowsDir := filepath.Join(githubDir, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create renovate.json with github-actions manager
+	renovateContent := `{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "pinDigests": true
+    }
+  ]
+}`
+	renovatePath := filepath.Join(githubDir, "renovate.json")
+	if err := os.WriteFile(renovatePath, []byte(renovateContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
+		t.Fatal(err)
+	}
+
+	workflowPath := filepath.Join(workflowsDir, "test.yaml")
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
+
+	workflow := &ast.Workflow{}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+		},
+	}
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatal(err)
+	}
+	if err := rule.VisitWorkflowPost(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("expected 0 errors when renovate.json with github-actions manager is configured, got %d", len(errors))
+		for _, err := range errors {
+			t.Logf("  error: %s", err.Description)
+		}
+	}
+}
+
+func TestDependabotGitHubActionsRule_RenovateAtRootLevel(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	workflowsDir := filepath.Join(tmpDir, ".github", "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create renovate.json at project root
+	renovateContent := `{
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "renovate.json"), []byte(renovateContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
+		t.Fatal(err)
+	}
+
+	workflowPath := filepath.Join(workflowsDir, "test.yaml")
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
+
+	workflow := &ast.Workflow{}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatal(err)
+	}
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+		},
+	}
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatal(err)
+	}
+	if err := rule.VisitWorkflowPost(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("expected 0 errors when root-level renovate.json with github-actions manager is configured, got %d", len(errors))
+	}
+}
+
+func TestDependabotGitHubActionsRule_RenovateWithoutGitHubActions(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	githubDir := filepath.Join(tmpDir, ".github")
+	workflowsDir := filepath.Join(githubDir, "workflows")
+	if err := os.MkdirAll(workflowsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Renovate manages only npm, not github-actions
+	renovateContent := `{
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "groupName": "npm-packages"
+    }
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovateContent), 0o644); err != nil { //nolint:gosec // test helper writes fixture files with standard permissions
+		t.Fatal(err)
+	}
+
+	workflowPath := filepath.Join(workflowsDir, "test.yaml")
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
+
+	workflow := &ast.Workflow{}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatal(err)
+	}
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/checkout@v4"},
+		},
+	}
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatal(err)
+	}
+	if err := rule.VisitWorkflowPost(workflow); err != nil {
+		t.Fatal(err)
+	}
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Errorf("expected 1 error when renovate.json does not manage github-actions, got %d", len(errors))
+	}
+}
+
 func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
 	t.Parallel()
 
