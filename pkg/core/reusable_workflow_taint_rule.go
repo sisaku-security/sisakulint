@@ -470,30 +470,6 @@ func (rule *ReusableWorkflowTaintRule) checkUntrustedPaths(expr expressions.Expr
 	return paths
 }
 
-// isDefinedInEnv checks if the input path is defined in the step's env section
-func (rule *ReusableWorkflowTaintRule) isDefinedInEnv(inputPath string, env *ast.Env) bool {
-	if env == nil {
-		return false
-	}
-
-	if env.Vars != nil {
-		for _, envVar := range env.Vars {
-			if envVar.Value != nil && envVar.Value.ContainsExpression() {
-				envExprs := extractExpressionsFromString(envVar.Value.Value)
-				for _, envExpr := range envExprs {
-					normalizedEnv := normalizeExpression(envExpr)
-					normalizedInput := normalizeExpression(inputPath)
-					if normalizedEnv == normalizedInput {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
 // RuleNames returns the rule name for the fixer interface
 func (rule *ReusableWorkflowTaintRule) RuleNames() string {
 	return rule.RuleName
