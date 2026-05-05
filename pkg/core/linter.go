@@ -766,7 +766,9 @@ func (l *Linter) validate(
 	}, nil
 }
 
-func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError, allAutoFixers *[]AutoFixer, validationStart time.Time) {
+// filterAndSortErrors applies errorIgnorePatterns, sets FilePath, and stable-sorts.
+// Idempotent — safe to call repeatedly on the same result.
+func (l *Linter) filterAndSortErrors(filePath string, allErrors *[]*LintingError, allAutoFixers *[]AutoFixer) {
 	if len(l.errorIgnorePatterns) > 0 {
 		filtered := make([]*LintingError, 0, len(*allErrors))
 		for _, err := range *allErrors {
@@ -802,6 +804,10 @@ func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError,
 	}
 
 	sort.Stable(ByRuleErrorPosition(*allErrors))
+}
+
+func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError, allAutoFixers *[]AutoFixer, validationStart time.Time) {
+	l.filterAndSortErrors(filePath, allErrors, allAutoFixers)
 
 	if l.loggingLevel >= LogLevelDetailedOutput {
 		elapsed := time.Since(validationStart)
@@ -809,11 +815,16 @@ func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError,
 	}
 }
 
+// postProcessResolvedChains re-applies filter/sort to results that had chain
+// warnings appended by ResolvePendingChains after validate() already ran.
+// Logging is intentionally skipped — validate() already emitted the per-file
+// "found N errors" line, and a second log here with elapsed=time.Since(time.Now())
+// would be both duplicate and misleading.
 func (l *Linter) postProcessResolvedChains(filePath string, result *ValidateResult) {
 	if result == nil {
 		return
 	}
-	l.filterAndLogErrors(filePath, &result.Errors, &result.AutoFixers, time.Now())
+	l.filterAndSortErrors(filePath, &result.Errors, &result.AutoFixers)
 }
 
 // displayErrorsは、指定されたエラーを出力する
