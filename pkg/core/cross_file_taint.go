@@ -78,13 +78,18 @@ func filterSinksWithPos(in []*CalleeSink) []*CalleeSink {
 	return out
 }
 
-// chainKey dedupes by (caller file path, caller pos, sink pos) so the
-// same flow only generates one warning even if recorded multiple times.
-// callerPath is included so two callers from different files at
+// chainKey dedupes by (caller file path, caller pos, sink pos, input name)
+// so the same flow only generates one warning even if recorded multiple
+// times. callerPath is included so two callers from different files at
 // coincidentally identical positions are not collapsed into one warning.
+// inputName is included as a defensive measure: pos-only keys assume
+// each `with:` value occupies a unique YAML position, which holds for
+// today's caller-side recorder but will not necessarily hold for
+// future transitive / synthesized sinks (Phase 2+).
 type chainKey struct {
 	callerPath                               string
 	callerLine, callerCol, sinkLine, sinkCol int
+	inputName                                string
 }
 
 // stepKey groups callee sinks by their containing step so a single
@@ -126,7 +131,14 @@ func (c *LocalReusableWorkflowCache) ResolvePendingChains(ws []workspaceLike) {
 				if !inputNamesMatch(caller, sink) {
 					continue
 				}
-				k := chainKey{caller.CallerWorkflowPath, caller.Pos.Line, caller.Pos.Col, sink.Pos.Line, sink.Pos.Col}
+				k := chainKey{
+					callerPath: caller.CallerWorkflowPath,
+					callerLine: caller.Pos.Line,
+					callerCol:  caller.Pos.Col,
+					sinkLine:   sink.Pos.Line,
+					sinkCol:    sink.Pos.Col,
+					inputName:  caller.InputName,
+				}
 				if _, dup := seen[k]; dup {
 					continue
 				}
@@ -312,6 +324,24 @@ func (c *LocalReusableWorkflowCache) emitChainWarning(ws []workspaceLike, caller
 			caller.UntrustedSources,
 			sink.SinkType,
 		)
+	} else if sink.SinkType == SinkEnv {
+		// SinkEnv is the env: block itself — telling the user to "move to env:"
+		// is nonsensical. Phase 1 has no auto-fix here (see ChainFixer.FixStep);
+		// guide the user toward the correct manual remediation instead.
+		msg = fmt.Sprintf(
+			"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s env value at line:%d. "+
+				"An attacker controlling %v reaches the callee's env value, where downstream `run:` / `script:` may interpolate it unsafely. "+
+				"Fix (Phase 1, manual): remove ${{ inputs.%s }} from this env value and validate / sanitize it in a preceding step before re-exporting. "+
+				"See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity,
+			caller.UntrustedSources,
+			caller.CallerWorkflowPath,
+			caller.InputName,
+			sink.CalleeWorkflowPath,
+			sink.Pos.Line,
+			caller.UntrustedSources,
+			sink.InputName,
+		)
 	} else {
 		msg = fmt.Sprintf(
 			"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s %s sink at line:%d. "+
@@ -371,7 +401,7 @@ func (c *LocalReusableWorkflowCache) emitCalleeSoloWarnings(ws []workspaceLike, 
 	dedup := make(map[string]struct{})
 	stepSinks := make(map[stepKey][]*CalleeSink)
 	for _, sink := range sinks {
-		key := fmt.Sprintf("%s:%d:%s", sink.CalleeWorkflowPath, sink.Pos.Line, sink.InputName)
+		key := fmt.Sprintf("%s:%d:%d:%s", sink.CalleeWorkflowPath, sink.Pos.Line, sink.Pos.Col, sink.InputName)
 		if _, ok := dedup[key]; ok {
 			continue
 		}
