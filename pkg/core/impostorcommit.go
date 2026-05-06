@@ -285,7 +285,50 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		}
 	}
 
+	// Final check: verify if the commit's parent is reachable from the default branch.
+	// This handles legitimate orphan commits (e.g., from force-push or branch deletion)
+	// that exist in the official repo but are no longer reachable from any branch or tag.
+	// An impostor commit from a fork would have a parent that is also in the fork, so its
+	// parent would NOT be reachable from the official default branch.
+	parentReachable, err := rule.isCommitParentReachable(ctx, client, owner, repo, defaultBranch, sha)
+	if err != nil {
+		rule.Debug("Error checking parent reachability for %s/%s@%s: %v", owner, repo, sha, err)
+		// Fail open: if we can't determine parent reachability, don't flag as impostor
+		return &commitVerificationResult{isImpostor: false, latestTag: latestTag, err: err}
+	}
+	if parentReachable {
+		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
+	}
+
 	return &commitVerificationResult{isImpostor: true, latestTag: latestTag}
+}
+
+// isCommitParentReachable fetches the parent commit SHAs of the given SHA and checks
+// whether any parent is reachable from the specified branch. This is used as a last-resort
+// check to distinguish legitimate orphan commits (whose parents are in the official repo
+// history) from true impostor commits in a fork (whose parents are also not in the official
+// repo history).
+func (rule *ImpostorCommitRule) isCommitParentReachable(ctx context.Context, client *github.Client, owner, repo, branch, sha string) (bool, error) {
+	commit, _, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to get commit %s for parent check: %w", sha, err)
+	}
+
+	for _, parent := range commit.Parents {
+		parentSHA := parent.GetSHA()
+		if parentSHA == "" {
+			continue
+		}
+		reachable, err := rule.isReachableFromBranch(ctx, client, owner, repo, branch, parentSHA)
+		if err != nil {
+			rule.Debug("Error checking parent %s reachability: %v", parentSHA, err)
+			continue
+		}
+		if reachable {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (rule *ImpostorCommitRule) getTags(ctx context.Context, client *github.Client, owner, repo string) ([]*github.RepositoryTag, error) {

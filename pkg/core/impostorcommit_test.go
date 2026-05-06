@@ -1260,6 +1260,124 @@ func TestImpostorCommitRule_TagPointingToForkCommitIsImpostor(t *testing.T) {
 	}
 }
 
+// TestImpostorCommitRule_OrphanCommitWithReachableParent tests that a legitimate orphan
+// commit (not reachable from any branch or tag, but whose parent IS reachable from the
+// default branch) is NOT flagged as an impostor.
+//
+// This reproduces a real-world false positive: capcom6/android-sms-gateway pins
+// capcom6/discord-webhook at a commit that was authored by the repo owner but is
+// no longer reachable from any branch (e.g., due to a force-push or branch deletion).
+// Because the commit's parent IS in the default branch history, the commit is legitimate.
+func TestImpostorCommitRule_OrphanCommitWithReachableParent(t *testing.T) {
+	t.Parallel()
+
+	const orphanSha = "3a447f4ed76c79ed32fb073d705bda1cd45119e6"
+	const parentSha = "8153e27a488e4f9ade460a36294dad7c83c1b2a7"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// No tags exist in this repo
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches-where-head"):
+			// The orphan SHA is not a branch HEAD
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			// Default branch is master, its HEAD does not match the orphan SHA
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"master","commit":{"sha":"2322d351e2794ac2cbf23d1bd430da02de508012"}}]`))
+		case strings.HasSuffix(path, "/repos/owner/repo"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"master"}`))
+		case strings.Contains(path, "/compare/master..."+orphanSha):
+			// The orphan commit has diverged from master (1 ahead, 1 behind)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":1,"behind_by":1,"commits":[],"files":[]}`))
+		case strings.Contains(path, "/compare/master..."+parentSha):
+			// The parent commit IS reachable from master (it's behind/ancestor)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"behind","ahead_by":0,"behind_by":1,"commits":[],"files":[]}`))
+		case strings.Contains(path, "/commits/"+orphanSha) && !strings.Contains(path, "/branches-where-head"):
+			// GetCommit: return the orphan commit with its parent
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"sha":%q,"parents":[{"sha":%q}]}`, orphanSha, parentSha)
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", orphanSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false: orphan commit whose parent is reachable from default branch is legitimate, but got true")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+}
+
+// TestImpostorCommitRule_OrphanCommitWithUnreachableParent tests that a commit
+// whose parent is also NOT reachable from the default branch is still flagged as
+// an impostor (true fork-network attack scenario).
+func TestImpostorCommitRule_OrphanCommitWithUnreachableParent(t *testing.T) {
+	t.Parallel()
+
+	const impostorSha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	const parentSha = "cafebabecafebabecafebabecafebabecafebabe"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches-where-head"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"1111111111111111111111111111111111111111"}}]`))
+		case strings.HasSuffix(path, "/repos/owner/repo"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// Both the impostor SHA and its parent are diverged from main (fork network)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":1,"behind_by":1,"commits":[],"files":[]}`))
+		case strings.Contains(path, "/commits/"+impostorSha) && !strings.Contains(path, "/branches-where-head"):
+			// GetCommit: the impostor has a parent that is also in the fork (not official repo)
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w, `{"sha":%q,"parents":[{"sha":%q}]}`, impostorSha, parentSha)
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("owner", "repo", impostorSha)
+	if !result.isImpostor {
+		t.Error("expected isImpostor to be true: orphan commit whose parent is also not reachable from default branch is an impostor, but got false")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+}
+
 // TestImpostorCommitRule_BranchHeadAPIUnavailable_FallthroughToReachability tests that
 // when the branches-where-head API is unavailable (500), the rule falls through to
 // the default branch reachability check and succeeds.
