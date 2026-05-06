@@ -268,15 +268,27 @@ func resolveVarInScriptBefore(script, varName string, maxOffset int) string {
 	valuePattern := `(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))`
 	assignmentValue := `(?:"[^"]*"|'[^']*'|[^\s;|&]+)`
 	directPattern := `(?m)(?:^|[;&|]\s*)\s*(?:[A-Za-z_][A-Za-z0-9_]*=` + assignmentValue + `\s+)*` + regexp.QuoteMeta(varName) + `=` + valuePattern
-	envPattern := `(?m)(?:^|[;&|]\s*)\s*env(?:\s+\S+)*\s+` + regexp.QuoteMeta(varName) + `=` + valuePattern
 
 	direct := lastAssignmentMatchBefore(script, directPattern, maxOffset)
-	env := lastAssignmentMatchBefore(script, envPattern, maxOffset)
-	if direct == nil && env == nil {
+	if direct == nil {
 		return ""
 	}
-	if env == nil || (direct != nil && direct.end > env.end) {
-		return direct.value
+	return direct.value
+}
+
+func resolveEnvVarInScriptBefore(script, varName string, maxOffset int) string {
+	if maxOffset < 0 {
+		return ""
+	}
+	if maxOffset > len(script) {
+		maxOffset = len(script)
+	}
+
+	valuePattern := `(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))`
+	envPattern := `(?m)(?:^|[;&|]\s*)\s*env(?:\s+\S+)*\s+` + regexp.QuoteMeta(varName) + `=` + valuePattern
+	env := lastAssignmentMatchBefore(script, envPattern, maxOffset)
+	if env == nil {
+		return ""
 	}
 	return env.value
 }
@@ -565,6 +577,9 @@ func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg 
 			continue
 		}
 		resolved := resolveVarInScriptBefore(script, varName, maxOffset)
+		if resolved == "" {
+			resolved = resolveEnvVarInScriptBefore(script, varName, maxOffset)
+		}
 		if resolved == "" {
 			continue
 		}

