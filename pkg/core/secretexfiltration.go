@@ -2,10 +2,13 @@ package core
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 // SecretExfiltrationRule detects patterns where secrets may be exfiltrated to external services.
@@ -56,8 +59,6 @@ var networkCommands = []networkCommand{
 			"maven.org",
 			"sonatype.org",
 			"jfrog.io",
-			"artifactory",
-			"nexus",
 			"slack.com/api",
 			"hooks.slack.com",
 			"discord.com/api",
@@ -75,8 +76,7 @@ var networkCommands = []networkCommand{
 			"circleci.com",
 			"travis-ci.com",
 			"app.terraform.io",
-			"vault.",
-			"hashicorp",
+			"hashicorp.com",
 		},
 	},
 	{
@@ -240,11 +240,6 @@ func (rule *SecretExfiltrationRule) checkStep(step *ast.Step) {
 		return
 	}
 
-	// Check if script matches legitimate patterns
-	if rule.isLegitimateUse(script) {
-		return
-	}
-
 	// Collect step environment variables
 	stepEnvSecrets := rule.collectEnvSecrets(step.Env)
 
@@ -350,19 +345,38 @@ func buildLogicalCommand(lines []string, startIdx int) string {
 // shell semantics where later assignments overwrite earlier ones. This prevents a bypass
 // where an attacker shadows a legitimate assignment with a malicious one.
 func resolveVarInScript(script, varName string) string {
+	return resolveVarInScriptBefore(script, varName, len(script))
+}
+
+func resolveVarInScriptBefore(script, varName string, maxOffset int) string {
+	if maxOffset < 0 {
+		return ""
+	}
+	if maxOffset > len(script) {
+		maxOffset = len(script)
+	}
+
 	// Single regex matching all three quote styles: VAR="value", VAR='value', VAR=value
 	// Group 1: double-quoted value, Group 2: single-quoted value, Group 3: unquoted value
 	pattern := `(?m)^\s*` + regexp.QuoteMeta(varName) + `=(?:"([^"]+)"|'([^']+)'|(\S+))`
 	re := regexp.MustCompile(pattern)
-	all := re.FindAllStringSubmatch(script, -1)
-	if len(all) == 0 {
+	all := re.FindAllStringSubmatchIndex(script, -1)
+
+	var last []int
+	for _, match := range all {
+		if len(match) < 8 || match[1] > maxOffset {
+			continue
+		}
+		last = match
+	}
+	if last == nil {
 		return ""
 	}
+
 	// Take the last assignment to match shell semantics.
-	last := all[len(all)-1]
-	for _, group := range last[1:] {
-		if group != "" {
-			return group
+	for groupIdx := 2; groupIdx < len(last); groupIdx += 2 {
+		if last[groupIdx] >= 0 && last[groupIdx+1] >= 0 {
+			return script[last[groupIdx]:last[groupIdx+1]]
 		}
 	}
 	return ""
@@ -398,24 +412,531 @@ func (rule *SecretExfiltrationRule) matchesLegitPatternWithVarResolution(line, s
 	return false
 }
 
-// detectExfiltrationPatterns analyzes the script for exfiltration patterns
+// detectExfiltrationPatterns analyzes the script for exfiltration patterns.
 func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, runStr *ast.String, envSecrets map[string]string) []exfiltrationPattern {
+	parsedScript, secretPlaceholders := shellScriptForNetworkParsing(script)
+	parser := shell.NewShellParser(parsedScript)
+	calls := parser.FindNetworkCommands()
+	if len(calls) == 0 {
+		return nil
+	}
+
+	var patterns []exfiltrationPattern
+	for _, call := range calls {
+		cmd, ok := networkCommandByName(call.CommandName)
+		if !ok {
+			continue
+		}
+		if rule.networkCallMatchesAllowlist(call, script, cmd) {
+			continue
+		}
+		patterns = append(patterns, rule.analyzeNetworkCommandCall(call, runStr, envSecrets, cmd, secretPlaceholders)...)
+	}
+	return patterns
+}
+
+func shellScriptForNetworkParsing(script string) (string, map[string]string) {
+	re := regexp.MustCompile(`\$\{\{\s*([^}]*)\s*\}\}`)
+	secretPlaceholders := map[string]string{}
+	secretIdx := 0
+
+	normalized := re.ReplaceAllStringFunc(script, func(match string) string {
+		submatches := re.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return strings.Repeat("_", len(match))
+		}
+
+		expr := strings.TrimSpace(submatches[1])
+		if strings.HasPrefix(expr, "secrets.") {
+			secretName := strings.TrimPrefix(expr, "secrets.")
+			if regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(secretName) {
+				token := "__slgha" + strconv.FormatInt(int64(secretIdx), 36) + "__"
+				secretIdx++
+				if len(token) > len(match) {
+					token = "__" + strconv.FormatInt(int64(secretIdx), 36) + "__"
+				}
+				if len(token) > len(match) {
+					return strings.Repeat("_", len(match))
+				}
+				token += strings.Repeat("_", len(match)-len(token))
+				secretPlaceholders[token] = "secrets." + secretName
+				return token
+			}
+		}
+		return strings.Repeat("_", len(match))
+	})
+	return normalized, secretPlaceholders
+}
+
+func networkCommandByName(name string) (networkCommand, bool) {
+	for _, cmd := range networkCommands {
+		if cmd.name == name {
+			return cmd, true
+		}
+	}
+	return networkCommand{}, false
+}
+
+func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.NetworkCommandCall, runStr *ast.String, envSecrets map[string]string, cmd networkCommand, secretPlaceholders map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
 
-	// Split script into lines for line-by-line analysis
-	lines := strings.Split(script, "\n")
-	lineOffset := 0
+	for idx, arg := range call.Args {
+		if !rule.isDataSinkArg(call, idx, cmd) {
+			continue
+		}
 
-	for lineIdx, line := range lines {
-		// Build the logical command (joining shell line continuations) for
-		// legitimate pattern matching across multi-line curl commands.
-		logicalCmd := buildLogicalCommand(lines, lineIdx)
-		linePatterns := rule.analyzeLine(line, logicalCmd, script, runStr, lineIdx, lineOffset, envSecrets)
-		patterns = append(patterns, linePatterns...)
-		lineOffset += len(line) + 1 // +1 for newline
+		for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(arg, secretPlaceholders) {
+			patterns = append(patterns, exfiltrationPattern{
+				command:   cmd.name,
+				secretRef: secretRef,
+				position:  positionFromCommandArg(runStr, arg),
+				severity:  rule.severityForCallArg(call, idx, cmd),
+			})
+		}
+
+		for _, envLeak := range rule.envSecretRefsFromCommandArg(arg, envSecrets) {
+			patterns = append(patterns, exfiltrationPattern{
+				command:      cmd.name,
+				secretRef:    envLeak.secretRef,
+				envVarName:   envLeak.envName,
+				isEnvVarLeak: true,
+				position:     positionFromCommandArg(runStr, arg),
+				severity:     rule.severityForCallArg(call, idx, cmd),
+			})
+		}
+	}
+
+	if call.InPipe && len(cmd.dataFlags) == 0 {
+		for _, pipeArg := range call.PipeInputs {
+			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(pipeArg, secretPlaceholders) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:   cmd.name,
+					secretRef: secretRef,
+					position:  positionFromCommandArg(runStr, pipeArg),
+					severity:  "high",
+				})
+			}
+			for _, envLeak := range rule.envSecretRefsFromCommandArg(pipeArg, envSecrets) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:      cmd.name,
+					secretRef:    envLeak.secretRef,
+					envVarName:   envLeak.envName,
+					isEnvVarLeak: true,
+					position:     positionFromCommandArg(runStr, pipeArg),
+					severity:     "high",
+				})
+			}
+		}
 	}
 
 	return patterns
+}
+
+type envSecretLeak struct {
+	envName   string
+	secretRef string
+}
+
+func (rule *SecretExfiltrationRule) envSecretRefsFromCommandArg(arg shell.CommandArg, envSecrets map[string]string) []envSecretLeak {
+	if len(envSecrets) == 0 || len(arg.VarNames) == 0 {
+		return nil
+	}
+
+	leaks := make([]envSecretLeak, 0, len(arg.VarNames))
+	seen := map[string]bool{}
+	for _, varName := range arg.VarNames {
+		secretRef, ok := envSecrets[varName]
+		if !ok || seen[varName] {
+			continue
+		}
+		seen[varName] = true
+		leaks = append(leaks, envSecretLeak{
+			envName:   varName,
+			secretRef: secretRef,
+		})
+	}
+	return leaks
+}
+
+func secretRefsFromCommandArg(arg shell.CommandArg) []string {
+	return secretRefsFromCommandArgWithPlaceholders(arg, nil)
+}
+
+func secretRefsFromCommandArgWithPlaceholders(arg shell.CommandArg, secretPlaceholders map[string]string) []string {
+	refs := make([]string, 0, len(arg.GHAExprs))
+	seen := map[string]bool{}
+
+	for _, expr := range arg.GHAExprs {
+		expr = strings.TrimSpace(expr)
+		if !strings.HasPrefix(expr, "secrets.") {
+			continue
+		}
+		if !seen[expr] {
+			seen[expr] = true
+			refs = append(refs, expr)
+		}
+	}
+
+	if len(refs) > 0 {
+		return refs
+	}
+
+	for placeholder, secretRef := range secretPlaceholders {
+		if strings.Contains(arg.Value, placeholder) || strings.Contains(arg.LiteralValue, placeholder) {
+			if !seen[secretRef] {
+				seen[secretRef] = true
+				refs = append(refs, secretRef)
+			}
+		}
+	}
+	if len(refs) > 0 {
+		return refs
+	}
+
+	re := regexp.MustCompile(`\$\{\{\s*(secrets\.[A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
+	matches := re.FindAllStringSubmatch(arg.Value, -1)
+	for _, match := range matches {
+		if len(match) > 1 && !seen[match[1]] {
+			seen[match[1]] = true
+			refs = append(refs, match[1])
+		}
+	}
+	return refs
+}
+
+func (rule *SecretExfiltrationRule) isDataSinkArg(call shell.NetworkCommandCall, argIdx int, cmd networkCommand) bool {
+	if argIdx < 0 || argIdx >= len(call.Args) {
+		return false
+	}
+	arg := call.Args[argIdx]
+
+	if len(cmd.dataFlags) == 0 {
+		return true
+	}
+
+	if rule.argIsInlineDataFlag(arg, cmd) {
+		return true
+	}
+
+	if argIdx > 0 && rule.argConsumesPreviousDataFlag(call.Args[argIdx-1], cmd) {
+		return true
+	}
+
+	return false
+}
+
+func (rule *SecretExfiltrationRule) argConsumesPreviousDataFlag(previous shell.CommandArg, cmd networkCommand) bool {
+	if !previous.IsFlag {
+		return false
+	}
+	flag := flagName(previous)
+	if flagHasInlineValue(previous) {
+		return false
+	}
+	return stringInSlice(flag, cmd.dataFlags)
+}
+
+func (rule *SecretExfiltrationRule) argIsInlineDataFlag(arg shell.CommandArg, cmd networkCommand) bool {
+	if !arg.IsFlag || !flagHasInlineValue(arg) {
+		return false
+	}
+	return stringInSlice(flagName(arg), cmd.dataFlags)
+}
+
+func flagName(arg shell.CommandArg) string {
+	value := arg.LiteralValue
+	if value == "" {
+		value = arg.Value
+	}
+	if flag, ok := attachedShortFlagName(value); ok {
+		return flag
+	}
+	if idx := strings.Index(value, "="); idx >= 0 {
+		return value[:idx]
+	}
+	return value
+}
+
+func flagHasInlineValue(arg shell.CommandArg) bool {
+	value := arg.LiteralValue
+	if value == "" {
+		value = arg.Value
+	}
+	if strings.Contains(value, "=") {
+		return true
+	}
+	_, ok := attachedShortFlagName(value)
+	return ok
+}
+
+func attachedShortFlagName(value string) (string, bool) {
+	if len(value) <= 2 || !strings.HasPrefix(value, "-") || strings.HasPrefix(value, "--") {
+		return "", false
+	}
+
+	flag := value[:2]
+	if !knownAttachedShortValueFlag(flag) {
+		return "", false
+	}
+	return flag, true
+}
+
+func knownAttachedShortValueFlag(flag string) bool {
+	switch flag {
+	case "-A", "-b", "-c", "-d", "-e", "-F", "-H", "-K", "-o", "-O", "-u", "-w", "-X":
+		return true
+	default:
+		return false
+	}
+}
+
+func stringInSlice(value string, values []string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+func (rule *SecretExfiltrationRule) severityForCallArg(call shell.NetworkCommandCall, argIdx int, cmd networkCommand) string {
+	if cmd.isHighRisk && len(cmd.dataFlags) > 0 && rule.isDataSinkArg(call, argIdx, cmd) {
+		return "critical"
+	}
+	return "high"
+}
+
+func positionFromCommandArg(runStr *ast.String, arg shell.CommandArg) *ast.Position {
+	line := int(arg.Position.Line()) //nolint:gosec // workflow line numbers fit in int
+	col := int(arg.Position.Col())   //nolint:gosec // workflow columns fit in int
+
+	if runStr != nil && runStr.Pos != nil {
+		line += runStr.Pos.Line - 1
+	}
+	if runStr != nil && runStr.Literal {
+		line++
+	}
+	if line <= 0 {
+		line = 1
+	}
+	if col <= 0 {
+		col = 1
+	}
+
+	return &ast.Position{Line: line, Col: col}
+}
+
+func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.NetworkCommandCall, script string, cmd networkCommand) bool {
+	if len(cmd.legitPatterns) == 0 {
+		return false
+	}
+
+	maxOffset := int(call.Position.Offset()) //nolint:gosec // workflow shell script offsets fit in int
+	destinationArgs := rule.destinationArgsForCall(call, cmd)
+	if len(destinationArgs) == 0 {
+		return false
+	}
+	for _, arg := range destinationArgs {
+		if !rule.argMatchesLegitPattern(arg, script, cmd, maxOffset) {
+			return false
+		}
+	}
+	return true
+}
+
+func (rule *SecretExfiltrationRule) argMatchesLegitPattern(arg shell.CommandArg, script string, cmd networkCommand, maxOffset int) bool {
+	values := []string{arg.Value, arg.LiteralValue}
+	for _, varName := range arg.VarNames {
+		if resolved := resolveVarInScriptBefore(script, varName, maxOffset); resolved != "" {
+			values = append(values, resolved)
+			values = append(values, strings.ReplaceAll(arg.Value, "$"+varName, resolved))
+			values = append(values, strings.ReplaceAll(arg.Value, "${"+varName+"}", resolved))
+			values = append(values, strings.ReplaceAll(arg.LiteralValue, "$"+varName, resolved))
+			values = append(values, strings.ReplaceAll(arg.LiteralValue, "${"+varName+"}", resolved))
+		}
+	}
+
+	for _, value := range values {
+		if rule.destinationMatchesLegitPattern(value, cmd) {
+			return true
+		}
+	}
+	return false
+}
+
+func (rule *SecretExfiltrationRule) destinationArgsForCall(call shell.NetworkCommandCall, cmd networkCommand) []shell.CommandArg {
+	switch cmd.name {
+	case "curl":
+		return destinationArgsForURLCommand(call.Args, curlFlagsConsumingNextArg(), []string{"--url"})
+	case "wget":
+		return destinationArgsForURLCommand(call.Args, wgetFlagsConsumingNextArg(), nil)
+	default:
+		return destinationArgsForDNSCommand(call.Args)
+	}
+}
+
+func destinationArgsForURLCommand(args []shell.CommandArg, consumingFlags map[string]bool, destinationFlags []string) []shell.CommandArg {
+	var destinations []shell.CommandArg
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
+		if arg.IsFlag {
+			flag := flagName(arg)
+			if stringInSlice(flag, destinationFlags) {
+				if flagHasInlineValue(arg) {
+					destinations = append(destinations, arg)
+				} else if idx+1 < len(args) {
+					idx++
+					destinations = append(destinations, args[idx])
+				}
+				continue
+			}
+			if consumingFlags[flag] && !flagHasInlineValue(arg) {
+				idx++
+			}
+			continue
+		}
+		if isURLishCommandArg(arg) {
+			destinations = append(destinations, arg)
+		}
+	}
+	return destinations
+}
+
+func destinationArgsForDNSCommand(args []shell.CommandArg) []shell.CommandArg {
+	var destinations []shell.CommandArg
+	for _, arg := range args {
+		if arg.IsFlag {
+			continue
+		}
+		destinations = append(destinations, arg)
+	}
+	return destinations
+}
+
+func curlFlagsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-A": true, "--user-agent": true,
+		"-b": true, "--cookie": true,
+		"-c": true, "--cookie-jar": true,
+		"-d": true, "--data": true, "--data-ascii": true, "--data-binary": true, "--data-raw": true, "--data-urlencode": true,
+		"-e": true, "--referer": true,
+		"-F": true, "--form": true, "--form-string": true,
+		"-H": true, "--header": true,
+		"-K": true, "--config": true,
+		"-o": true, "--output": true,
+		"-u": true, "--user": true,
+		"-w": true, "--write-out": true,
+		"-X": true, "--request": true,
+		"--cacert": true, "--cert": true, "--connect-to": true, "--key": true, "--proxy": true, "--resolve": true,
+	}
+}
+
+func wgetFlagsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-O": true, "--output-document": true,
+		"-o": true, "--output-file": true,
+		"--body-data": true, "--body-file": true,
+		"--header":        true,
+		"--http-password": true, "--http-user": true,
+		"--post-data": true, "--post-file": true,
+		"--referer": true,
+		"--user":    true, "--user-agent": true,
+		"--password": true,
+	}
+}
+
+func isURLishCommandArg(arg shell.CommandArg) bool {
+	value := commandArgComparableValue(arg)
+	value = strings.Trim(value, `"'`)
+	return strings.HasPrefix(value, "http://") ||
+		strings.HasPrefix(value, "https://") ||
+		strings.HasPrefix(value, "$") ||
+		strings.HasPrefix(value, "${")
+}
+
+func (rule *SecretExfiltrationRule) destinationMatchesLegitPattern(value string, cmd networkCommand) bool {
+	for _, pattern := range cmd.legitPatterns {
+		if legitPatternMatchesDestination(value, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func legitPatternMatchesDestination(value, pattern string) bool {
+	value = strings.ToLower(strings.TrimSpace(strings.Trim(value, `"'`)))
+	pattern = strings.ToLower(strings.TrimSpace(pattern))
+	if value == "" || pattern == "" {
+		return false
+	}
+
+	host, path := destinationHostAndPath(value)
+	patternHost, patternPath := splitLegitPattern(pattern)
+	if host == "" || patternHost == "" {
+		return value == pattern
+	}
+	if !hostMatchesPattern(host, patternHost) {
+		return false
+	}
+	return patternPath == "" || strings.HasPrefix(path, patternPath)
+}
+
+func splitLegitPattern(pattern string) (string, string) {
+	value := strings.TrimSpace(strings.Trim(pattern, `"'`))
+	if strings.Contains(value, "://") {
+		return destinationHostAndPath(value)
+	}
+	if strings.HasPrefix(value, "@") {
+		return value, ""
+	}
+	if slashIdx := strings.Index(value, "/"); slashIdx >= 0 {
+		return value[:slashIdx], value[slashIdx:]
+	}
+	return value, ""
+}
+
+func destinationHostAndPath(value string) (string, string) {
+	value = strings.TrimSpace(strings.Trim(value, `"'`))
+	if value == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(value, "@") {
+		return value, ""
+	}
+
+	parseValue := value
+	if !strings.Contains(parseValue, "://") {
+		parseValue = "//" + parseValue
+	}
+	parsed, err := url.Parse(parseValue)
+	if err == nil && parsed.Hostname() != "" {
+		return parsed.Hostname(), parsed.EscapedPath()
+	}
+
+	host := value
+	if slashIdx := strings.Index(host, "/"); slashIdx >= 0 {
+		host = host[:slashIdx]
+	}
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx > strings.LastIndex(host, "]") {
+		host = host[:colonIdx]
+	}
+	return strings.Trim(host, "[]"), ""
+}
+
+func hostMatchesPattern(host, pattern string) bool {
+	host = strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(host), "@"), ".")
+	pattern = strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(pattern), "@"), ".")
+	if host == "" || pattern == "" {
+		return false
+	}
+	return host == pattern || strings.HasSuffix(host, "."+pattern)
+}
+
+func commandArgComparableValue(arg shell.CommandArg) string {
+	if arg.LiteralValue != "" {
+		return arg.LiteralValue
+	}
+	return arg.Value
 }
 
 // isSecretAsUrlArg returns true when the secret reference appears to be the
