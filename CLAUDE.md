@@ -172,7 +172,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **ArchivedUsesRule** - Detects usage of archived actions/reusable workflows that are no longer maintained
 - **UnpinnedImagesRule** - Detects container images not pinned by SHA256 digest
 - **SecretExfiltrationRule** - Detects secret exfiltration via network commands (curl, wget, nc, etc.)
-- **ReusableWorkflowTaintRule** - Detects untrusted inputs passed to reusable workflows and used unsafely (auto-fix supported)
+- **ReusableWorkflowTaintRule** - Detects untrusted inputs flowing through reusable workflow boundaries via cross-file taint correlation (#392). Records caller-side `with:` taint and callee-side `inputs.*` sinks (run / github-script / env), then joins them in a post-validate phase. Reports chain warnings at caller's `with:` line (Critical for privileged triggers, Medium otherwise). When no caller in the same project passes untrusted data, falls back to a Medium standalone warning at the callee sink. Auto-fix lifts callee `${{ inputs.X }}` into a step-level `env:` (auto-fix supported for SinkRun and SinkGitHubScript; SinkEnv is warning-only in Phase 1)
 - **SecretsInheritRule** - Detects excessive secret inheritance using 'secrets: inherit' in reusable workflow calls (auto-fix supported)
 - **DependabotGitHubActionsRule** - Checks if dependabot.yaml has github-actions ecosystem configured when unpinned actions are detected (auto-fix supported)
 - **ArgumentInjectionCriticalRule** - Detects argument injection in command-line args with privileged triggers (auto-fix supported)
@@ -313,6 +313,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 - **RequestForgeryRule** (`requestforgery.go`) - Moves untrusted input to environment variables for network commands
 - **CacheBloatRule** (`cachebloatrule.go`) - Adds `if: github.event_name != 'push'` to restore and `if: github.event_name == 'push'` to save steps
 - **SecretInLogRule** (`secretinlog.go`) - Inserts `echo "::add-mask::$VAR"` before any usage of tainted shell variables
+- **ChainFixer** (`cross_file_taint.go`) - Lifts callee `${{ inputs.X }}` into step-level `env:` and rewrites `run:` references to `$INPUT_X` (or `process.env.INPUT_X` in github-script). Activated by `ResolvePendingChains` after cross-file chain confirmation; SinkEnv is warning-only in Phase 1
 
 ## Recent Security Enhancements
 
@@ -339,6 +340,14 @@ Two rules detect supply chain attacks:
    - Validates cache key construction
    - Identifies untrusted inputs in cache keys (e.g., `github.event.pull_request.head.ref`)
    - Prevents attackers from poisoning build caches
+
+### Cross-File Taint Tracking for Reusable Workflows (#392)
+
+Phase 1 of cross-file correlation between caller and callee reusable workflows. Eliminates duplicate per-file warnings, suppresses false positives where caller passes constants (callee silent) or callee never reaches a sink (caller silent), and surfaces a chain narrative naming the source, the `with:` boundary, and the callee sink. Implementation lives in `pkg/core/cross_file_taint.go` and extends `LocalReusableWorkflowCache` with bidirectional indexes (`callerTaints`, `calleeSinks`). The post-Wait `ResolvePendingChains` phase runs single-threaded after `errgroup.Wait()` to safely mutate per-workspace results.
+
+Phase 1 sinks: `run:`, `actions/github-script` `script:`, and `env:` direct interpolation. Severity follows caller trigger context (Critical for privileged, Medium otherwise). Auto-fix lifts callee `${{ inputs.X }}` into a step-level `env:` for SinkRun and SinkGitHubScript; SinkEnv is warning-only (auto-fix deferred to Phase 2).
+
+Out of scope (tracked as future issues): transitive chains (callee_A → callee_B), `with:` passthrough sinks, step-output taint sources at caller, SinkEnv auto-fix, and remote reusable workflows.
 
 ## Additional Documentation
 

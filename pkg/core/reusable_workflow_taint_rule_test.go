@@ -2,6 +2,7 @@ package core
 
 import (
 	"io"
+	"path/filepath"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -102,6 +103,29 @@ func TestReusableWorkflowTaintRule_VisitWorkflowPre(t *testing.T) {
 				t.Errorf("VisitWorkflowPre() hasPrivilegedTrigger = %v, want %v", rule.hasPrivilegedTrigger, tt.wantHasPrivilegedTrigger)
 			}
 		})
+	}
+}
+
+func TestReusableWorkflowTaintRule_VisitWorkflowPreMarksReusableWorkflowAnalyzed(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
+
+	err = rule.VisitWorkflowPre(&ast.Workflow{
+		On: []ast.Event{
+			&ast.WorkflowCallEvent{Pos: &ast.Position{Line: 1, Col: 1}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if !cache.IsCalleeAnalyzed("./.github/workflows/build.yml") {
+		t.Fatalf("expected reusable workflow to be marked analyzed")
 	}
 }
 
@@ -234,6 +258,104 @@ func TestReusableWorkflowTaintRule_checkWorkflowCallInputs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCheckWorkflowCallInputs_ChainEnabled_RecordsToCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "./.github/workflows/nested/../build.yml"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("chain-enabled mode should not call Errorf, got %d errors", got)
+	}
+	callers := cache.CallersOf("./.github/workflows/build.yml")
+	if len(callers) != 1 {
+		t.Fatalf("expected 1 recorded caller taint, got %d", len(callers))
+	}
+	if callers[0].InputName != "branch" || !callers[0].HasPrivilegedTrigger {
+		t.Errorf("unexpected caller taint: %#v", callers[0])
+	}
+}
+
+func TestCheckWorkflowCallInputs_RemoteWorkflowPreservesLegacyWarning(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "org/repo/.github/workflows/build.yml@v1"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("remote workflow should preserve legacy caller warning, got %d errors", got)
+	}
+	if got := len(cache.CalleeSpecs()); got != 0 {
+		t.Fatalf("remote workflow should not be recorded for chain resolution, got specs %v", cache.CalleeSpecs())
+	}
+}
+
+func TestCheckWorkflowCallInputs_ChainDisabled_StillEmitsErrorf(t *testing.T) {
+	cache := NewLocalReusableWorkflowCache(nil /* no project => disabled */, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/ci.yml", cache)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "./.github/workflows/build.yml"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("fallback mode should emit 1 error, got %d", got)
+	}
+	if got := len(cache.CallersOf("./.github/workflows/build.yml")); got != 0 {
+		t.Errorf("disabled mode should not record to cache, got %d", got)
 	}
 }
 
@@ -581,5 +703,132 @@ func TestIsPrivilegedTrigger(t *testing.T) {
 				t.Errorf("isPrivilegedTrigger(%q) = %v, want %v", tt.eventName, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCheckTaintedInputUsage_ChainEnabled_RecordsAllThreeSinks(t *testing.T) {
+	// Set up a project rooted at tmpDir so pathToWorkflowSpecification
+	// succeeds and chainEnabled becomes true. NewProject succeeds without
+	// any .github/sisakulint.y(a)ml or boilerplate file present (loaders
+	// silently return nil when files are missing).
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
+	rule.isReusableWorkflow = true
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.title }}",
+				Pos:   &ast.Position{Line: 10, Col: 14},
+			},
+		},
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"user_env": {
+				Name:  &ast.String{Value: "USER_ENV"},
+				Value: &ast.String{Value: "${{ inputs.envvar }}", Pos: &ast.Position{Line: 11, Col: 14}},
+			},
+		}},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	rule.checkTaintedInputUsageInSteps(job)
+
+	// Chain branch must have run: 0 Errorf, 0 fixers (legacy fixer is only
+	// registered in fallback mode; the chain resolver registers fixers later).
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("chain mode should not call Errorf, got %d errors", got)
+	}
+	if got := len(rule.AutoFixers()); got != 0 {
+		t.Errorf("chain mode should not register legacy fixer, got %d fixers", got)
+	}
+	// Both sinks (run + env) recorded in cache under the resolved spec.
+	specs := cache.CalleeSpecs()
+	if len(specs) != 1 {
+		t.Fatalf("expected exactly 1 callee spec recorded, got %d: %v", len(specs), specs)
+	}
+	sinks := cache.SinksOf(specs[0])
+	if len(sinks) != 2 {
+		t.Fatalf("expected 2 recorded sinks (run + env), got %d", len(sinks))
+	}
+	// Verify both sink types are present (order may vary).
+	gotTypes := make(map[SinkType]bool)
+	for _, s := range sinks {
+		gotTypes[s.SinkType] = true
+	}
+	if !gotTypes[SinkRun] || !gotTypes[SinkEnv] {
+		t.Errorf("expected both SinkRun and SinkEnv recorded, got %v", gotTypes)
+	}
+}
+
+func TestCheckTaintedInputUsage_ChainEnabled_RecordsRunEvenWhenInputAlsoInEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	project, err := NewProject(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProject(%q) failed: %v", tmpDir, err)
+	}
+	wfPath := filepath.Join(tmpDir, ".github", "workflows", "build.yml")
+	cache := NewLocalReusableWorkflowCache(project, tmpDir, nil)
+
+	rule := NewReusableWorkflowTaintRule(wfPath, cache)
+	rule.isReusableWorkflow = true
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.title }}",
+				Pos:   &ast.Position{Line: 10, Col: 14},
+			},
+		},
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"title": {
+				Name:  &ast.String{Value: "TITLE"},
+				Value: &ast.String{Value: "${{ inputs.title }}", Pos: &ast.Position{Line: 11, Col: 14}},
+			},
+		}},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	rule.checkTaintedInputUsageInSteps(job)
+
+	specs := cache.CalleeSpecs()
+	if len(specs) != 1 {
+		t.Fatalf("expected exactly 1 callee spec recorded, got %d: %v", len(specs), specs)
+	}
+	sinks := cache.SinksOf(specs[0])
+	gotTypes := make(map[SinkType]bool)
+	for _, sink := range sinks {
+		gotTypes[sink.SinkType] = true
+	}
+	if !gotTypes[SinkRun] {
+		t.Fatalf("expected direct run sink to be recorded, got sink types %v", gotTypes)
+	}
+}
+
+func TestCheckTaintedInputUsage_ChainDisabled_PreservesLegacy(t *testing.T) {
+	cache := NewLocalReusableWorkflowCache(nil, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRule("./.github/workflows/build.yml", cache)
+	rule.isReusableWorkflow = true
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.title }}",
+				Pos:   &ast.Position{Line: 10, Col: 14},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	rule.checkTaintedInputUsageInSteps(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("disabled mode should preserve legacy Errorf, got %d errors", got)
+	}
+	if got := len(rule.AutoFixers()); got != 1 {
+		t.Errorf("disabled mode should still register legacy fixer, got %d", got)
 	}
 }

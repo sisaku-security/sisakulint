@@ -74,6 +74,11 @@ func (rule *ReusableWorkflowTaintRule) VisitWorkflowPre(node *ast.Workflow) erro
 			rule.hasPrivilegedTrigger = true
 		}
 	}
+	if rule.isReusableWorkflow && rule.cache != nil && rule.cache.IsChainResolutionEnabled() {
+		if spec, ok := rule.cache.PathToWorkflowSpecification(rule.workflowPath); ok {
+			rule.cache.RecordAnalyzedCallee(spec)
+		}
+	}
 
 	return nil
 }
@@ -99,88 +104,103 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 	if call == nil || call.Uses == nil {
 		return
 	}
+	calleeSpec := call.Uses.Value
+
+	chainEnabled := strings.HasPrefix(calleeSpec, "./") && rule.cache != nil && rule.cache.IsChainResolutionEnabled()
+	if chainEnabled {
+		normalizedSpec, ok := rule.cache.WorkflowCallSpecToWorkflowSpecification(calleeSpec)
+		if !ok {
+			chainEnabled = false
+		} else {
+			calleeSpec = normalizedSpec
+		}
+	}
 
 	for inputName, input := range call.Inputs {
 		if input == nil || input.Value == nil {
 			continue
 		}
-
-		// Check if the input value contains untrusted expressions
 		untrustedPaths := rule.findUntrustedExpressionsInString(input.Value)
-		if len(untrustedPaths) > 0 {
-			// Get severity based on whether this workflow has privileged triggers
-			severity := "medium"
-			if rule.hasPrivilegedTrigger {
-				severity = "critical"
-			}
-
-			rule.Errorf(
-				input.Value.Pos,
-				"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
-				severity,
-				inputName,
-				strings.Join(untrustedPaths, ", "),
-				call.Uses.Value,
-			)
+		if len(untrustedPaths) == 0 {
+			continue
 		}
+
+		if chainEnabled {
+			rule.cache.RecordCallerTaint(calleeSpec, &CallerTaint{
+				CallerWorkflowPath:   rule.workflowPath,
+				InputName:            strings.ToLower(inputName),
+				UntrustedSources:     untrustedPaths,
+				Pos:                  input.Value.Pos,
+				JobID:                jobIDOf(job),
+				HasPrivilegedTrigger: rule.hasPrivilegedTrigger,
+			})
+			continue
+		}
+
+		// Fallback (single-file lint mode / no project): keep existing per-file behavior.
+		severity := "medium"
+		if rule.hasPrivilegedTrigger {
+			severity = "critical"
+		}
+		rule.Errorf(
+			input.Value.Pos,
+			"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity, inputName, strings.Join(untrustedPaths, ", "), call.Uses.Value,
+		)
 	}
 }
 
 // checkTaintedInputUsageInSteps checks if inputs.* are used in dangerous contexts
 // This is called when analyzing a reusable workflow
 func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Job) {
+	var calleeSpec string
+	chainEnabled := false
+	if rule.cache != nil {
+		if spec, ok := rule.cache.PathToWorkflowSpecification(rule.workflowPath); ok && rule.cache.IsChainResolutionEnabled() {
+			calleeSpec = spec
+			chainEnabled = true
+		}
+	}
+
 	for _, step := range job.Steps {
 		if step.Exec == nil {
 			continue
 		}
-
 		var stepTainted *stepWithTaintedInput
 
-		// Check run: scripts
+		// Sink: run:
 		if step.Exec.Kind() == ast.ExecKindRun {
-			run := step.Exec.(*ast.ExecRun)
-			if run.Run != nil {
-				taintedUsages := rule.findTaintedInputUsagesInString(run.Run)
-				for _, usage := range taintedUsages {
-					if !rule.isDefinedInEnv(usage.inputPath, step.Env) {
-						if stepTainted == nil {
-							stepTainted = &stepWithTaintedInput{step: step}
-						}
-						usage.isInRunScript = true
-						stepTainted.taintedInfo = append(stepTainted.taintedInfo, usage)
-
-						rule.Errorf(
-							usage.pos,
-							"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
-							usage.inputPath,
-						)
-					}
-				}
+			if run := step.Exec.(*ast.ExecRun); run.Run != nil {
+				stepTainted = rule.recordOrReportSinks(
+					rule.findTaintedInputUsagesInString(run.Run),
+					SinkRun, step, job, calleeSpec, chainEnabled, stepTainted,
+				)
 			}
 		}
 
-		// Check actions/github-script script: parameter
+		// Sink: actions/github-script script:
 		if step.Exec.Kind() == ast.ExecKindAction {
 			action := step.Exec.(*ast.ExecAction)
 			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/github-script@") {
 				if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
-					taintedUsages := rule.findTaintedInputUsagesInString(scriptInput.Value)
-					for _, usage := range taintedUsages {
-						if !rule.isDefinedInEnv(usage.inputPath, step.Env) {
-							if stepTainted == nil {
-								stepTainted = &stepWithTaintedInput{step: step}
-							}
-							usage.isInRunScript = false
-							stepTainted.taintedInfo = append(stepTainted.taintedInfo, usage)
-
-							rule.Errorf(
-								usage.pos,
-								"tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
-								usage.inputPath,
-							)
-						}
-					}
+					stepTainted = rule.recordOrReportSinks(
+						rule.findTaintedInputUsagesInString(scriptInput.Value),
+						SinkGitHubScript, step, job, calleeSpec, chainEnabled, stepTainted,
+					)
 				}
+			}
+		}
+
+		// Sink (NEW): env: direct interpolation
+		if step.Env != nil && step.Env.Vars != nil {
+			for _, envVar := range step.Env.Vars {
+				if envVar.Value == nil {
+					continue
+				}
+				stepTainted = rule.recordOrReportSinks(
+					rule.findTaintedInputUsagesInString(envVar.Value),
+					SinkEnv, step, job, calleeSpec, chainEnabled, stepTainted,
+				)
 			}
 		}
 
@@ -189,6 +209,48 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 			rule.AddAutoFixer(NewStepFixer(step, rule))
 		}
 	}
+}
+
+// recordOrReportSinks records sinks into the cache when chain resolution
+// is enabled, or falls back to immediate Errorf + legacy stepsWithTaintedInputs
+// tracking when disabled. Returns the (possibly initialized) stepTainted.
+func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
+	usages []taintedInputInfo, sinkType SinkType, step *ast.Step, job *ast.Job,
+	calleeSpec string, chainEnabled bool, stepTainted *stepWithTaintedInput,
+) *stepWithTaintedInput {
+	for _, usage := range usages {
+		if chainEnabled {
+			rule.cache.RecordCalleeSink(calleeSpec, &CalleeSink{
+				CalleeWorkflowPath: rule.workflowPath,
+				InputName:          strings.ToLower(usage.inputName),
+				InputPath:          usage.inputPath,
+				SinkType:           sinkType,
+				Pos:                usage.pos,
+				JobID:              jobIDOf(job),
+				StepID:             stepIDOf(step),
+				Step:               step,
+			})
+			continue
+		}
+		// Fallback: legacy per-file behavior. SinkEnv has no fallback message
+		// historically, so we skip emitting it in disabled mode (preserves
+		// existing test expectations for run/script sinks).
+		if sinkType == SinkEnv {
+			continue
+		}
+		isInRunScript := sinkType == SinkRun
+		if stepTainted == nil {
+			stepTainted = &stepWithTaintedInput{step: step}
+		}
+		usage.isInRunScript = isInRunScript
+		stepTainted.taintedInfo = append(stepTainted.taintedInfo, usage)
+		template := "tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/"
+		if !isInRunScript {
+			template = "tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/"
+		}
+		rule.Errorf(usage.pos, template, usage.inputPath)
+	}
+	return stepTainted
 }
 
 // findUntrustedExpressionsInString finds all untrusted expression paths in a string
@@ -406,30 +468,6 @@ func (rule *ReusableWorkflowTaintRule) checkUntrustedPaths(expr expressions.Expr
 	}
 
 	return paths
-}
-
-// isDefinedInEnv checks if the input path is defined in the step's env section
-func (rule *ReusableWorkflowTaintRule) isDefinedInEnv(inputPath string, env *ast.Env) bool {
-	if env == nil {
-		return false
-	}
-
-	if env.Vars != nil {
-		for _, envVar := range env.Vars {
-			if envVar.Value != nil && envVar.Value.ContainsExpression() {
-				envExprs := extractExpressionsFromString(envVar.Value.Value)
-				for _, envExpr := range envExprs {
-					normalizedEnv := normalizeExpression(envExpr)
-					normalizedInput := normalizeExpression(inputPath)
-					if normalizedEnv == normalizedInput {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	return false
 }
 
 // RuleNames returns the rule name for the fixer interface

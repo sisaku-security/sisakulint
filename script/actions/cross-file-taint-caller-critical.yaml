@@ -1,0 +1,7 @@
+on: pull_request_target
+jobs:
+  build:
+    uses: ./script/actions/cross-file-taint-callee-run.yaml
+    with:
+      branch: ${{ github.event.pull_request.head.ref }}
+      safe_input: "main"

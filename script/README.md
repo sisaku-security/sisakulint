@@ -122,6 +122,25 @@ Workflow files from [step-security/github-actions-goat](https://github.com/step-
 | `goat-self-hosted-network-filtering-hr.yml` | Network filtering on self-hosted runners (secure) | Out of scope |
 | `goat-self-hosted-network-monitoring-hr.yml` | Network monitoring on self-hosted runners | Out of scope |
 
+### Cross-file Reusable Workflow Taint Fixtures (#392)
+
+Fixtures demonstrating chain detection across `workflow_call` boundaries. Run them as a set (the rule needs both files in the same project to confirm the chain):
+
+| Caller fixture                                  | Callee fixture                              | Expected outcome                                |
+| ----------------------------------------------- | ------------------------------------------- | ----------------------------------------------- |
+| `cross-file-taint-caller-critical.yaml`         | `cross-file-taint-callee-run.yaml`          | Critical chain warning at caller `with: branch` |
+| `cross-file-taint-caller-medium.yaml`           | `cross-file-taint-callee-script.yaml`       | Medium chain warning at caller `with: title`    |
+| `cross-file-taint-caller-env.yaml`              | `cross-file-taint-callee-env.yaml`          | Critical chain warning, no auto-fix (SinkEnv)   |
+| `cross-file-taint-caller-safe.yaml`             | `cross-file-taint-callee-run.yaml`          | No chain warning (caller passes constant)       |
+| (no caller)                                     | `cross-file-taint-callee-solo.yaml`         | Medium callee-solo warning                      |
+
+Run example:
+
+```bash
+sisakulint script/actions/cross-file-taint-caller-critical.yaml \
+           script/actions/cross-file-taint-callee-run.yaml
+```
+
 ## github_to_aws/
 
 Contains Terraform infrastructure code for deploying from GitHub Actions to AWS using OIDC authentication. This is used for the sisakulint project's own CI/CD pipeline.

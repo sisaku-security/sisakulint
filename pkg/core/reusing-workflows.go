@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -154,6 +155,51 @@ type ReusableWorkflowMetadata struct {
 	Secrets ReusableWorkflowMetadataSecrets `yaml:"secrets"`
 }
 
+// SinkType identifies where in a callee step a tainted input is consumed.
+type SinkType int
+
+const (
+	SinkRun SinkType = iota
+	SinkGitHubScript
+	SinkEnv
+)
+
+func (s SinkType) String() string {
+	switch s {
+	case SinkRun:
+		return "run"
+	case SinkGitHubScript:
+		return "github-script"
+	case SinkEnv:
+		return "env"
+	}
+	return "unknown"
+}
+
+// CallerTaint records that a caller workflow passes an untrusted value
+// to a reusable workflow input. Used by ResolvePendingChains.
+type CallerTaint struct {
+	CallerWorkflowPath   string
+	InputName            string // lowercased
+	UntrustedSources     []string
+	Pos                  *ast.Position
+	JobID                string
+	HasPrivilegedTrigger bool
+}
+
+// CalleeSink records that a reusable workflow uses ${{ inputs.X }} in a
+// dangerous context. Used by ResolvePendingChains.
+type CalleeSink struct {
+	CalleeWorkflowPath string
+	InputName          string // lowercased
+	InputPath          string // e.g. "inputs.title" or "inputs.cfg.branch"
+	SinkType           SinkType
+	Pos                *ast.Position
+	JobID              string
+	StepID             string
+	Step               *ast.Step // pointer retained for ChainFixer
+}
+
 // LocalReusableWorkflowCacheは、ローカルの再利用可能なワークフローメタデータファイルのキャッシュです。ローカルの再利用可能な
 // ワークフローのYAMLファイルの検索/読み取り/解析を回避します。このキャッシュは、'proj'フィールドのみに関連です。
 // 1つのプロジェクトごとに1つのLocalReusableWorkflowCacheインスタンスを作成する必要があります。
@@ -163,6 +209,11 @@ type LocalReusableWorkflowCache struct {
 	cache map[string]*ReusableWorkflowMetadata
 	cwd   string
 	dbg   io.Writer
+
+	// Cross-file taint chain indexes (#392).
+	callerTaints map[string][]*CallerTaint
+	calleeSinks  map[string][]*CalleeSink
+	calleeSeen   map[string]struct{}
 }
 
 func (c *LocalReusableWorkflowCache) debugf(format string, args ...any) {
@@ -255,6 +306,16 @@ func (c *LocalReusableWorkflowCache) pathToWorkflowSpecification(spec string) (s
 		p = "./" + p
 	}
 	return p, true
+}
+
+func (c *LocalReusableWorkflowCache) workflowCallSpecToWorkflowSpecification(spec string) (string, bool) {
+	if c.proj == nil {
+		return "", false
+	}
+	if !filepath.IsAbs(spec) {
+		spec = filepath.Join(c.proj.RootDirectory(), spec)
+	}
+	return c.pathToWorkflowSpecification(spec)
 }
 
 // WriteWorkflowCallEventは、WorkflowCallEvent AST node からreusable workflow metadata を書き込む
@@ -383,16 +444,24 @@ func parseReusableWorkflowMetadata(src []byte) (*ReusableWorkflowMetadata, error
 // 複数のプロジェクト間で利用することはできません。
 func NewLocalReusableWorkflowCache(proj *Project, cwd string, dbg io.Writer) *LocalReusableWorkflowCache {
 	return &LocalReusableWorkflowCache{
-		proj:  proj,
-		cache: map[string]*ReusableWorkflowMetadata{},
-		cwd:   cwd,
-		dbg:   dbg,
+		proj:         proj,
+		cache:        map[string]*ReusableWorkflowMetadata{},
+		cwd:          cwd,
+		dbg:          dbg,
+		callerTaints: map[string][]*CallerTaint{},
+		calleeSinks:  map[string][]*CalleeSink{},
+		calleeSeen:   map[string]struct{}{},
 	}
 }
 
 func newNullLocalReusableWorkflowCache(dbg io.Writer) *LocalReusableWorkflowCache {
 	// Nullキャッシュ, プロジェクトが見つからない場合,またはworkflow pathをworkflow call specに変換できない場合、このキャッシュはnilを返します。
-	return &LocalReusableWorkflowCache{dbg: dbg}
+	return &LocalReusableWorkflowCache{
+		dbg:          dbg,
+		callerTaints: map[string][]*CallerTaint{},
+		calleeSinks:  map[string][]*CalleeSink{},
+		calleeSeen:   map[string]struct{}{},
+	}
 }
 
 // LocalReusableWorkflowCacheFactory は、プロジェクトごとにLocalReusableWorkflowCacheインスタンスを作成するためのファクトリオブジェクト
@@ -421,4 +490,142 @@ func (f *LocalReusableWorkflowCacheFactory) GetCache(proj *Project) *LocalReusab
 	c := NewLocalReusableWorkflowCache(proj, f.cwd, f.dbg)
 	f.caches[proj.RootDirectory()] = c
 	return c
+}
+
+// AllCaches returns every cache instance the factory has created.
+// Used by the linter post-Wait phase to invoke ResolvePendingChains.
+func (f *LocalReusableWorkflowCacheFactory) AllCaches() []*LocalReusableWorkflowCache {
+	out := make([]*LocalReusableWorkflowCache, 0, len(f.caches))
+	for _, c := range f.caches {
+		out = append(out, c)
+	}
+	return out
+}
+
+func jobIDOf(job *ast.Job) string {
+	if job == nil || job.ID == nil {
+		return ""
+	}
+	return job.ID.Value
+}
+
+func stepIDOf(step *ast.Step) string {
+	if step == nil || step.ID == nil {
+		return ""
+	}
+	return step.ID.Value
+}
+
+// IsChainResolutionEnabled returns true when the cache can correlate
+// caller and callee taint info — i.e. it has a Project context.
+func (c *LocalReusableWorkflowCache) IsChainResolutionEnabled() bool {
+	return c != nil && c.proj != nil
+}
+
+// PathToWorkflowSpecification is an exported wrapper around the existing
+// pathToWorkflowSpecification helper so rules can normalize callee paths.
+func (c *LocalReusableWorkflowCache) PathToWorkflowSpecification(spec string) (string, bool) {
+	return c.pathToWorkflowSpecification(spec)
+}
+
+// WorkflowCallSpecToWorkflowSpecification normalizes a jobs.<id>.uses local
+// reusable workflow spec. GitHub resolves ./... reusable workflow specs
+// relative to the repository root, not the process working directory.
+func (c *LocalReusableWorkflowCache) WorkflowCallSpecToWorkflowSpecification(spec string) (string, bool) {
+	return c.workflowCallSpecToWorkflowSpecification(spec)
+}
+
+// RecordAnalyzedCallee marks a reusable workflow as analyzed even when no
+// tainted sinks were found. ResolvePendingChains uses this to distinguish
+// "callee was safe" from "callee was not part of this lint invocation".
+func (c *LocalReusableWorkflowCache) RecordAnalyzedCallee(calleeSpec string) {
+	if c == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calleeSeen[calleeSpec] = struct{}{}
+}
+
+// IsCalleeAnalyzed reports whether a reusable workflow has been analyzed.
+func (c *LocalReusableWorkflowCache) IsCalleeAnalyzed(calleeSpec string) bool {
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.calleeSeen[calleeSpec]
+	return ok
+}
+
+// RecordCallerTaint adds a caller-side taint entry under the given callee
+// spec. Thread-safe. Idempotency is intentionally NOT enforced here —
+// duplicate (caller, sink) pairs are deduped by ResolvePendingChains.
+func (c *LocalReusableWorkflowCache) RecordCallerTaint(calleeSpec string, taint *CallerTaint) {
+	if c == nil || taint == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.callerTaints[calleeSpec] = append(c.callerTaints[calleeSpec], taint)
+}
+
+// RecordCalleeSink adds a callee-side sink entry under the given callee
+// spec. Thread-safe.
+func (c *LocalReusableWorkflowCache) RecordCalleeSink(calleeSpec string, sink *CalleeSink) {
+	if c == nil || sink == nil || calleeSpec == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calleeSinks[calleeSpec] = append(c.calleeSinks[calleeSpec], sink)
+}
+
+// CallersOf returns a copy of the caller taint list for a callee spec.
+func (c *LocalReusableWorkflowCache) CallersOf(calleeSpec string) []*CallerTaint {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	src := c.callerTaints[calleeSpec]
+	out := make([]*CallerTaint, len(src))
+	copy(out, src)
+	return out
+}
+
+// SinksOf returns a copy of the callee sink list for a callee spec.
+func (c *LocalReusableWorkflowCache) SinksOf(calleeSpec string) []*CalleeSink {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	src := c.calleeSinks[calleeSpec]
+	out := make([]*CalleeSink, len(src))
+	copy(out, src)
+	return out
+}
+
+// CalleeSpecs returns the sorted union of callerTaints + calleeSinks keys.
+// Used by ResolvePendingChains to iterate deterministically.
+func (c *LocalReusableWorkflowCache) CalleeSpecs() []string {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	seen := make(map[string]struct{}, len(c.callerTaints)+len(c.calleeSinks))
+	for k := range c.callerTaints {
+		seen[k] = struct{}{}
+	}
+	for k := range c.calleeSinks {
+		seen[k] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
