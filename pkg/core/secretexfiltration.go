@@ -89,6 +89,24 @@ var networkCommands = []networkCommand{
 		},
 	},
 	{
+		name:       "http",
+		dataFlags:  []string{},
+		isHighRisk: true,
+		legitPatterns: []string{
+			"api.github.com",
+			"uploads.github.com",
+		},
+	},
+	{
+		name:       "https",
+		dataFlags:  []string{},
+		isHighRisk: true,
+		legitPatterns: []string{
+			"api.github.com",
+			"uploads.github.com",
+		},
+	},
+	{
 		name:          "nc",
 		dataFlags:     []string{},
 		isHighRisk:    true,
@@ -426,14 +444,19 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 		}
 	}
 
-	if commandReadsStdinAsNetworkSink(cmd) || commandUsesStdinDataArg(call, cmd) {
+	stdinDataArgIdx := stdinDataArgIndex(call, cmd)
+	if commandReadsStdinAsNetworkSink(cmd) || stdinDataArgIdx >= 0 {
+		stdinSeverity := "high"
+		if stdinDataArgIdx >= 0 {
+			stdinSeverity = rule.severityForCallArg(call, stdinDataArgIdx, cmd)
+		}
 		for _, pipeArg := range call.PipeInputs {
 			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(pipeArg, secretPlaceholders) {
 				patterns = append(patterns, exfiltrationPattern{
 					command:   cmd.name,
 					secretRef: secretRef,
 					position:  positionFromCommandArg(runStr, pipeArg),
-					severity:  "high",
+					severity:  stdinSeverity,
 				})
 			}
 			for _, envLeak := range rule.envSecretRefsFromCommandArg(pipeArg, envSecrets) {
@@ -443,7 +466,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					envVarName:   envLeak.envName,
 					isEnvVarLeak: true,
 					position:     positionFromCommandArg(runStr, pipeArg),
-					severity:     "high",
+					severity:     stdinSeverity,
 				})
 			}
 			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(pipeArg, script, maxOffset) {
@@ -453,7 +476,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					envVarName:   envLeak.envName,
 					isEnvVarLeak: true,
 					position:     positionFromCommandArg(runStr, pipeArg),
-					severity:     "high",
+					severity:     stdinSeverity,
 				})
 			}
 		}
@@ -463,7 +486,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					command:   cmd.name,
 					secretRef: secretRef,
 					position:  positionFromCommandArg(runStr, stdinArg),
-					severity:  "high",
+					severity:  stdinSeverity,
 				})
 			}
 			for _, envLeak := range rule.envSecretRefsFromCommandArg(stdinArg, envSecrets) {
@@ -473,7 +496,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					envVarName:   envLeak.envName,
 					isEnvVarLeak: true,
 					position:     positionFromCommandArg(runStr, stdinArg),
-					severity:     "high",
+					severity:     stdinSeverity,
 				})
 			}
 			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(stdinArg, script, maxOffset) {
@@ -483,7 +506,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					envVarName:   envLeak.envName,
 					isEnvVarLeak: true,
 					position:     positionFromCommandArg(runStr, stdinArg),
-					severity:     "high",
+					severity:     stdinSeverity,
 				})
 			}
 		}
@@ -502,15 +525,19 @@ func commandReadsStdinAsNetworkSink(cmd networkCommand) bool {
 }
 
 func commandUsesStdinDataArg(call shell.NetworkCommandCall, cmd networkCommand) bool {
+	return stdinDataArgIndex(call, cmd) >= 0
+}
+
+func stdinDataArgIndex(call shell.NetworkCommandCall, cmd networkCommand) int {
 	for idx, arg := range call.Args {
 		if argIsInlineStdinDataFlag(arg, cmd) {
-			return true
+			return idx
 		}
 		if idx > 0 && previousFlagConsumesStdinData(call.Args[idx-1], arg, cmd) {
-			return true
+			return idx
 		}
 	}
-	return false
+	return -1
 }
 
 func argIsInlineStdinDataFlag(arg shell.CommandArg, cmd networkCommand) bool {
@@ -823,7 +850,7 @@ func (rule *SecretExfiltrationRule) argMatchesLegitPattern(arg shell.CommandArg,
 
 func (rule *SecretExfiltrationRule) destinationArgsForCall(call shell.NetworkCommandCall, cmd networkCommand) []shell.CommandArg {
 	switch cmd.name {
-	case "curl":
+	case "curl", "http", "https":
 		return destinationArgsForURLCommand(call.Args, curlFlagsConsumingNextArg(), []string{"--url"})
 	case "wget":
 		return destinationArgsForURLCommand(call.Args, wgetFlagsConsumingNextArg(), nil)

