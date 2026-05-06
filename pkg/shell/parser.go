@@ -708,12 +708,18 @@ func (p *ShellParser) walkForNetworkCommandsTest(node syntax.TestExpr, ctx *netw
 
 func (p *ShellParser) isNetworkCommand(cmdName string) bool {
 	networkCmds := map[string]bool{
-		"curl":   true,
-		"wget":   true,
-		"nc":     true,
-		"netcat": true,
-		"http":   true,
-		"https":  true,
+		"curl":     true,
+		"wget":     true,
+		"nc":       true,
+		"netcat":   true,
+		"ncat":     true,
+		"telnet":   true,
+		"socat":    true,
+		"dig":      true,
+		"nslookup": true,
+		"host":     true,
+		"http":     true,
+		"https":    true,
 	}
 	return networkCmds[cmdName]
 }

