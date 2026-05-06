@@ -294,23 +294,6 @@ func resolveVarInScriptBefore(script, varName string, maxOffset int) string {
 	return direct.value
 }
 
-func resolveEnvVarInScriptBefore(script, varName string, maxOffset int) string {
-	if maxOffset < 0 {
-		return ""
-	}
-	if maxOffset > len(script) {
-		maxOffset = len(script)
-	}
-
-	valuePattern := `(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))`
-	envPattern := `(?m)(?:^|[;&|]\s*)\s*env(?:\s+\S+)*\s+` + regexp.QuoteMeta(varName) + `=` + valuePattern
-	env := lastAssignmentMatchBefore(script, envPattern, maxOffset)
-	if env == nil {
-		return ""
-	}
-	return env.value
-}
-
 type assignmentMatch struct {
 	end   int
 	value string
@@ -325,6 +308,9 @@ func lastAssignmentMatchBefore(script, pattern string, maxOffset int) *assignmen
 		if len(match) < 8 || match[1] > maxOffset {
 			continue
 		}
+		if !assignmentPersistsBeforeOffset(script, match[1], maxOffset) {
+			continue
+		}
 		for groupIdx := 2; groupIdx < len(match); groupIdx += 2 {
 			if match[groupIdx] >= 0 && match[groupIdx+1] >= 0 {
 				last = &assignmentMatch{
@@ -336,6 +322,23 @@ func lastAssignmentMatchBefore(script, pattern string, maxOffset int) *assignmen
 		}
 	}
 	return last
+}
+
+func assignmentPersistsBeforeOffset(script string, assignmentEnd, maxOffset int) bool {
+	if assignmentEnd >= len(script) || assignmentEnd > maxOffset {
+		return true
+	}
+	for idx := assignmentEnd; idx <= maxOffset && idx < len(script); idx++ {
+		switch script[idx] {
+		case ' ', '\t', '\r':
+			continue
+		case '\n', ';', '&', '|':
+			return true
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // detectExfiltrationPatterns analyzes the script for exfiltration patterns.
@@ -604,9 +607,6 @@ func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg 
 			continue
 		}
 		resolved := resolveVarInScriptBefore(script, varName, maxOffset)
-		if resolved == "" {
-			resolved = resolveEnvVarInScriptBefore(script, varName, maxOffset)
-		}
 		if resolved == "" {
 			continue
 		}
