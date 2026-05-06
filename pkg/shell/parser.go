@@ -482,6 +482,12 @@ func (p *ShellParser) GetDangerousPatternType() string {
 type NetworkCommandCall struct {
 	CommandName string
 	Args        []CommandArg
+	// PipeInputs is conservative argv metadata from upstream pipeline producers,
+	// not exact stdout dataflow.
+	PipeInputs []CommandArg
+	// StdinInputs is conservative word metadata from stdin redirects such as
+	// here-strings and heredocs.
+	StdinInputs []CommandArg
 	Position    syntax.Pos
 	InCmdSubst  bool
 	InPipe      bool
@@ -508,8 +514,10 @@ func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
 }
 
 type networkWalkContext struct {
-	inCmdSubst bool
-	inPipe     bool
+	inCmdSubst  bool
+	inPipe      bool
+	pipeInputs  []CommandArg
+	stdinInputs []CommandArg
 }
 
 func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
@@ -524,15 +532,17 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		}
 
 	case *syntax.Stmt:
-		p.walkForNetworkCommands(x.Cmd, ctx, calls)
+		stmtCtx := *ctx
+		stmtCtx.stdinInputs = p.collectStdinRedirectArgs(x.Redirs)
+		p.walkForNetworkCommands(x.Cmd, &stmtCtx, calls)
 		for _, redirect := range x.Redirs {
 			p.walkForNetworkCommands(redirect, ctx, calls)
 		}
 
 	case *syntax.CallExpr:
-		cmdName := p.getCommandName(x)
-		if p.isNetworkCommand(cmdName) {
-			call := p.parseNetworkCommand(x, ctx)
+		cmdIdx, cmdName, ok := p.networkCommandInCall(x)
+		if ok {
+			call := p.parseNetworkCommand(x, ctx, cmdIdx, cmdName)
 			*calls = append(*calls, call)
 		}
 
@@ -544,12 +554,20 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		}
 
 	case *syntax.BinaryCmd:
-		newCtx := *ctx
-		if x.Op == syntax.Pipe {
-			newCtx.inPipe = true
+		if isPipeOp(x.Op) {
+			leftCtx := *ctx
+			leftCtx.inPipe = true
+			p.walkForNetworkCommands(x.X, &leftCtx, calls)
+
+			rightCtx := *ctx
+			rightCtx.inPipe = true
+			rightCtx.pipeInputs = p.collectPipeInputArgs(x.X)
+			p.walkForNetworkCommands(x.Y, &rightCtx, calls)
+			return
 		}
-		p.walkForNetworkCommands(x.X, &newCtx, calls)
-		p.walkForNetworkCommands(x.Y, &newCtx, calls)
+
+		p.walkForNetworkCommands(x.X, ctx, calls)
+		p.walkForNetworkCommands(x.Y, ctx, calls)
 
 	case *syntax.CmdSubst:
 		newCtx := *ctx
@@ -671,6 +689,10 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 	}
 }
 
+func isPipeOp(op syntax.BinCmdOperator) bool {
+	return op == syntax.Pipe || op == syntax.PipeAll
+}
+
 // walkForNetworkCommandsLoop handles loop nodes for network command detection.
 func (p *ShellParser) walkForNetworkCommandsLoop(node syntax.Loop, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
 	if node == nil {
@@ -708,30 +730,311 @@ func (p *ShellParser) walkForNetworkCommandsTest(node syntax.TestExpr, ctx *netw
 
 func (p *ShellParser) isNetworkCommand(cmdName string) bool {
 	networkCmds := map[string]bool{
-		"curl":   true,
-		"wget":   true,
-		"nc":     true,
-		"netcat": true,
-		"http":   true,
-		"https":  true,
+		"curl":     true,
+		"wget":     true,
+		"nc":       true,
+		"netcat":   true,
+		"ncat":     true,
+		"telnet":   true,
+		"socat":    true,
+		"dig":      true,
+		"nslookup": true,
+		"host":     true,
+		"http":     true,
+		"https":    true,
 	}
 	return networkCmds[cmdName]
 }
 
-func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext) NetworkCommandCall {
+func (p *ShellParser) networkCommandInCall(call *syntax.CallExpr) (int, string, bool) {
+	if len(call.Args) == 0 {
+		return -1, "", false
+	}
+
+	cmdName := p.commandWordValue(call.Args[0])
+	if p.isNetworkCommand(cmdName) {
+		return 0, cmdName, true
+	}
+
+	switch cmdName {
+	case "command", "builtin":
+		return p.networkCommandAfterCommandWrapper(call, 1)
+	case "env":
+		return p.networkCommandAfterEnvWrapper(call)
+	case "sudo":
+		return p.networkCommandAfterOptionWrapper(call, sudoOptionsConsumingNextArg())
+	case "doas":
+		return p.networkCommandAfterOptionWrapper(call, map[string]bool{"-u": true})
+	case "nohup":
+		return p.networkCommandAfterCommandWrapper(call, 1)
+	default:
+		return -1, "", false
+	}
+}
+
+func (p *ShellParser) networkCommandAfterCommandWrapper(call *syntax.CallExpr, start int) (int, string, bool) {
+	for idx := start; idx < len(call.Args); idx++ {
+		value := p.commandWordValue(call.Args[idx])
+		if value == "--" {
+			continue
+		}
+		if strings.HasPrefix(value, "-") {
+			continue
+		}
+		if p.isNetworkCommand(value) {
+			return idx, value, true
+		}
+		return -1, "", false
+	}
+	return -1, "", false
+}
+
+func (p *ShellParser) networkCommandAfterEnvWrapper(call *syntax.CallExpr) (int, string, bool) {
+	for idx := 1; idx < len(call.Args); idx++ {
+		value := p.commandWordValue(call.Args[idx])
+		if value == "--" || strings.HasPrefix(value, "-") {
+			continue
+		}
+		if strings.Contains(value, "=") && !strings.HasPrefix(value, "=") {
+			continue
+		}
+		if p.isNetworkCommand(value) {
+			return idx, value, true
+		}
+		return -1, "", false
+	}
+	return -1, "", false
+}
+
+func (p *ShellParser) networkCommandAfterOptionWrapper(call *syntax.CallExpr, consumingOptions map[string]bool) (int, string, bool) {
+	for idx := 1; idx < len(call.Args); idx++ {
+		value := p.commandWordValue(call.Args[idx])
+		if value == "--" {
+			continue
+		}
+		if strings.HasPrefix(value, "--") {
+			option := value
+			if eqIdx := strings.Index(option, "="); eqIdx >= 0 {
+				option = option[:eqIdx]
+			}
+			if consumingOptions[option] && !strings.Contains(value, "=") {
+				idx++
+			}
+			continue
+		}
+		if strings.HasPrefix(value, "-") && value != "-" {
+			if consumingOptions[value] {
+				idx++
+			}
+			continue
+		}
+		if p.isNetworkCommand(value) {
+			return idx, value, true
+		}
+		return -1, "", false
+	}
+	return -1, "", false
+}
+
+func sudoOptionsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-C":                true,
+		"--close-from":      true,
+		"-g":                true,
+		"--group":           true,
+		"-h":                true,
+		"--host":            true,
+		"-p":                true,
+		"--prompt":          true,
+		"-r":                true,
+		"--role":            true,
+		"-t":                true,
+		"--type":            true,
+		"-T":                true,
+		"--command-timeout": true,
+		"-u":                true,
+		"--user":            true,
+		"-U":                true,
+		"--other-user":      true,
+	}
+}
+
+func (p *ShellParser) commandWordValue(word *syntax.Word) string {
+	value := p.extractLiteralValue(word)
+	if value == "" {
+		value = p.wordToString(word)
+	}
+	return strings.TrimSpace(value)
+}
+
+func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext, cmdIdx int, cmdName string) NetworkCommandCall {
 	cmd := NetworkCommandCall{
-		CommandName: p.getCommandName(call),
-		Position:    call.Pos(),
+		CommandName: cmdName,
+		PipeInputs:  append([]CommandArg(nil), ctx.pipeInputs...),
+		StdinInputs: append([]CommandArg(nil), ctx.stdinInputs...),
+		Position:    call.Args[cmdIdx].Pos(),
 		InCmdSubst:  ctx.inCmdSubst,
 		InPipe:      ctx.inPipe,
 	}
 
-	for i := 1; i < len(call.Args); i++ {
+	for i := cmdIdx + 1; i < len(call.Args); i++ {
 		arg := p.parseCommandArg(call.Args[i])
 		cmd.Args = append(cmd.Args, arg)
 	}
 
 	return cmd
+}
+
+func (p *ShellParser) collectStdinRedirectArgs(redirs []*syntax.Redirect) []CommandArg {
+	var args []CommandArg
+	for _, redir := range redirs {
+		if redir == nil {
+			continue
+		}
+		if redir.N != nil && redir.N.Value != "0" {
+			continue
+		}
+		switch redir.Op {
+		case syntax.WordHdoc:
+			if redir.Word != nil {
+				args = append(args, p.parseCommandArg(redir.Word))
+			}
+		case syntax.Hdoc, syntax.DashHdoc:
+			if redir.Hdoc != nil {
+				args = append(args, p.parseCommandArg(redir.Hdoc))
+			}
+		}
+	}
+	return args
+}
+
+func (p *ShellParser) collectPipeInputArgs(node syntax.Node) []CommandArg {
+	if node == nil {
+		return nil
+	}
+
+	var args []CommandArg
+	p.collectPipeInputArgsInto(node, &args)
+	return args
+}
+
+func (p *ShellParser) collectPipeInputArgsInto(node syntax.Node, args *[]CommandArg) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.File:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.Stmt:
+		p.collectPipeInputArgsInto(x.Cmd, args)
+		for _, redirect := range x.Redirs {
+			p.collectPipeInputArgsInto(redirect, args)
+		}
+	case *syntax.CallExpr:
+		if len(x.Args) < 2 {
+			return
+		}
+		for _, word := range x.Args[1:] {
+			*args = append(*args, p.parseCommandArg(word))
+		}
+	case *syntax.BinaryCmd:
+		if isPipeOp(x.Op) {
+			p.collectPipeInputArgsInto(x.X, args)
+			p.collectPipeInputArgsInto(x.Y, args)
+			return
+		}
+		p.collectPipeInputArgsInto(x.X, args)
+		p.collectPipeInputArgsInto(x.Y, args)
+	case *syntax.Block:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.Subshell:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.IfClause:
+		for _, cond := range x.Cond {
+			p.collectPipeInputArgsInto(cond, args)
+		}
+		for _, then := range x.Then {
+			p.collectPipeInputArgsInto(then, args)
+		}
+		if x.Else != nil {
+			p.collectPipeInputArgsInto(x.Else, args)
+		}
+	case *syntax.WhileClause:
+		for _, cond := range x.Cond {
+			p.collectPipeInputArgsInto(cond, args)
+		}
+		for _, do := range x.Do {
+			p.collectPipeInputArgsInto(do, args)
+		}
+	case *syntax.ForClause:
+		for _, do := range x.Do {
+			p.collectPipeInputArgsInto(do, args)
+		}
+	case *syntax.CaseClause:
+		if x.Word != nil {
+			p.collectPipeInputArgsInto(x.Word, args)
+		}
+		for _, item := range x.Items {
+			p.collectPipeInputArgsInto(item, args)
+		}
+	case *syntax.CaseItem:
+		for _, pattern := range x.Patterns {
+			p.collectPipeInputArgsInto(pattern, args)
+		}
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.FuncDecl:
+		p.collectPipeInputArgsInto(x.Body, args)
+	case *syntax.ProcSubst:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.DeclClause:
+		for _, assign := range x.Args {
+			p.collectPipeInputArgsInto(assign, args)
+		}
+	case *syntax.Assign:
+		if x.Value != nil {
+			p.collectPipeInputArgsInto(x.Value, args)
+		}
+		if x.Array != nil {
+			p.collectPipeInputArgsInto(x.Array, args)
+		}
+	case *syntax.ArrayExpr:
+		for _, elem := range x.Elems {
+			p.collectPipeInputArgsInto(elem, args)
+		}
+	case *syntax.ArrayElem:
+		if x.Value != nil {
+			p.collectPipeInputArgsInto(x.Value, args)
+		}
+	case *syntax.CoprocClause:
+		p.collectPipeInputArgsInto(x.Stmt, args)
+	case *syntax.TimeClause:
+		if x.Stmt != nil {
+			p.collectPipeInputArgsInto(x.Stmt, args)
+		}
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.collectPipeInputArgsInto(part, args)
+		}
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.collectPipeInputArgsInto(part, args)
+		}
+	case *syntax.CmdSubst:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	}
 }
 
 func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
