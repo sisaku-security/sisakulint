@@ -265,30 +265,47 @@ func resolveVarInScriptBefore(script, varName string, maxOffset int) string {
 		maxOffset = len(script)
 	}
 
-	// Single regex matching all three quote styles: VAR="value", VAR='value', VAR=value
-	// Group 1: double-quoted value, Group 2: single-quoted value, Group 3: unquoted value
-	pattern := `(?m)^\s*` + regexp.QuoteMeta(varName) + `=(?:"([^"]+)"|'([^']+)'|(\S+))`
+	valuePattern := `(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))`
+	assignmentValue := `(?:"[^"]*"|'[^']*'|[^\s;|&]+)`
+	directPattern := `(?m)(?:^|[;&|]\s*)\s*(?:[A-Za-z_][A-Za-z0-9_]*=` + assignmentValue + `\s+)*` + regexp.QuoteMeta(varName) + `=` + valuePattern
+	envPattern := `(?m)(?:^|[;&|]\s*)\s*env(?:\s+\S+)*\s+` + regexp.QuoteMeta(varName) + `=` + valuePattern
+
+	direct := lastAssignmentMatchBefore(script, directPattern, maxOffset)
+	env := lastAssignmentMatchBefore(script, envPattern, maxOffset)
+	if direct == nil && env == nil {
+		return ""
+	}
+	if env == nil || (direct != nil && direct.end > env.end) {
+		return direct.value
+	}
+	return env.value
+}
+
+type assignmentMatch struct {
+	end   int
+	value string
+}
+
+func lastAssignmentMatchBefore(script, pattern string, maxOffset int) *assignmentMatch {
 	re := regexp.MustCompile(pattern)
 	all := re.FindAllStringSubmatchIndex(script, -1)
 
-	var last []int
+	var last *assignmentMatch
 	for _, match := range all {
 		if len(match) < 8 || match[1] > maxOffset {
 			continue
 		}
-		last = match
-	}
-	if last == nil {
-		return ""
-	}
-
-	// Take the last assignment to match shell semantics.
-	for groupIdx := 2; groupIdx < len(last); groupIdx += 2 {
-		if last[groupIdx] >= 0 && last[groupIdx+1] >= 0 {
-			return script[last[groupIdx]:last[groupIdx+1]]
+		for groupIdx := 2; groupIdx < len(match); groupIdx += 2 {
+			if match[groupIdx] >= 0 && match[groupIdx+1] >= 0 {
+				last = &assignmentMatch{
+					end:   match[1],
+					value: script[match[groupIdx]:match[groupIdx+1]],
+				}
+				break
+			}
 		}
 	}
-	return ""
+	return last
 }
 
 // detectExfiltrationPatterns analyzes the script for exfiltration patterns.
@@ -309,7 +326,7 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 		if rule.networkCallMatchesAllowlist(call, script, cmd) {
 			continue
 		}
-		patterns = append(patterns, rule.analyzeNetworkCommandCall(call, runStr, envSecrets, cmd, secretPlaceholders)...)
+		patterns = append(patterns, rule.analyzeNetworkCommandCall(call, script, runStr, envSecrets, cmd, secretPlaceholders)...)
 	}
 	return patterns
 }
@@ -356,8 +373,9 @@ func networkCommandByName(name string) (networkCommand, bool) {
 	return networkCommand{}, false
 }
 
-func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.NetworkCommandCall, runStr *ast.String, envSecrets map[string]string, cmd networkCommand, secretPlaceholders map[string]string) []exfiltrationPattern {
+func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.NetworkCommandCall, script string, runStr *ast.String, envSecrets map[string]string, cmd networkCommand, secretPlaceholders map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
+	maxOffset := int(call.Position.Offset()) //nolint:gosec // workflow shell script offsets fit in int
 
 	for idx, arg := range call.Args {
 		if !rule.isDataSinkArg(call, idx, cmd) {
@@ -374,6 +392,17 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 		}
 
 		for _, envLeak := range rule.envSecretRefsFromCommandArg(arg, envSecrets) {
+			patterns = append(patterns, exfiltrationPattern{
+				command:      cmd.name,
+				secretRef:    envLeak.secretRef,
+				envVarName:   envLeak.envName,
+				isEnvVarLeak: true,
+				position:     positionFromCommandArg(runStr, arg),
+				severity:     rule.severityForCallArg(call, idx, cmd),
+			})
+		}
+
+		for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(arg, script, maxOffset) {
 			patterns = append(patterns, exfiltrationPattern{
 				command:      cmd.name,
 				secretRef:    envLeak.secretRef,
@@ -405,6 +434,16 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					severity:     "high",
 				})
 			}
+			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(pipeArg, script, maxOffset) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:      cmd.name,
+					secretRef:    envLeak.secretRef,
+					envVarName:   envLeak.envName,
+					isEnvVarLeak: true,
+					position:     positionFromCommandArg(runStr, pipeArg),
+					severity:     "high",
+				})
+			}
 		}
 		for _, stdinArg := range call.StdinInputs {
 			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(stdinArg, secretPlaceholders) {
@@ -416,6 +455,16 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 				})
 			}
 			for _, envLeak := range rule.envSecretRefsFromCommandArg(stdinArg, envSecrets) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:      cmd.name,
+					secretRef:    envLeak.secretRef,
+					envVarName:   envLeak.envName,
+					isEnvVarLeak: true,
+					position:     positionFromCommandArg(runStr, stdinArg),
+					severity:     "high",
+				})
+			}
+			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(stdinArg, script, maxOffset) {
 				patterns = append(patterns, exfiltrationPattern{
 					command:      cmd.name,
 					secretRef:    envLeak.secretRef,
@@ -493,6 +542,34 @@ func (rule *SecretExfiltrationRule) envSecretRefsFromCommandArg(arg shell.Comman
 	for _, varName := range arg.VarNames {
 		secretRef, ok := envSecrets[varName]
 		if !ok || seen[varName] {
+			continue
+		}
+		seen[varName] = true
+		leaks = append(leaks, envSecretLeak{
+			envName:   varName,
+			secretRef: secretRef,
+		})
+	}
+	return leaks
+}
+
+func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg shell.CommandArg, script string, maxOffset int) []envSecretLeak {
+	if len(arg.VarNames) == 0 {
+		return nil
+	}
+
+	leaks := make([]envSecretLeak, 0, len(arg.VarNames))
+	seen := map[string]bool{}
+	for _, varName := range arg.VarNames {
+		if seen[varName] {
+			continue
+		}
+		resolved := resolveVarInScriptBefore(script, varName, maxOffset)
+		if resolved == "" {
+			continue
+		}
+		secretRef := rule.extractSecretRef(resolved)
+		if secretRef == "" {
 			continue
 		}
 		seen[varName] = true
