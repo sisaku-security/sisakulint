@@ -761,8 +761,12 @@ func (p *ShellParser) networkCommandInCall(call *syntax.CallExpr) (int, string, 
 		return p.networkCommandAfterCommandWrapper(call, 1)
 	case "env":
 		return p.networkCommandAfterEnvWrapper(call)
-	case "sudo", "doas", "nohup":
-		return p.firstNetworkCommandAfterWrapper(call, 1)
+	case "sudo":
+		return p.networkCommandAfterOptionWrapper(call, sudoOptionsConsumingNextArg())
+	case "doas":
+		return p.networkCommandAfterOptionWrapper(call, map[string]bool{"-u": true})
+	case "nohup":
+		return p.networkCommandAfterCommandWrapper(call, 1)
 	default:
 		return -1, "", false
 	}
@@ -802,14 +806,57 @@ func (p *ShellParser) networkCommandAfterEnvWrapper(call *syntax.CallExpr) (int,
 	return -1, "", false
 }
 
-func (p *ShellParser) firstNetworkCommandAfterWrapper(call *syntax.CallExpr, start int) (int, string, bool) {
-	for idx := start; idx < len(call.Args); idx++ {
+func (p *ShellParser) networkCommandAfterOptionWrapper(call *syntax.CallExpr, consumingOptions map[string]bool) (int, string, bool) {
+	for idx := 1; idx < len(call.Args); idx++ {
 		value := p.commandWordValue(call.Args[idx])
+		if value == "--" {
+			continue
+		}
+		if strings.HasPrefix(value, "--") {
+			option := value
+			if eqIdx := strings.Index(option, "="); eqIdx >= 0 {
+				option = option[:eqIdx]
+			}
+			if consumingOptions[option] && !strings.Contains(value, "=") {
+				idx++
+			}
+			continue
+		}
+		if strings.HasPrefix(value, "-") && value != "-" {
+			if consumingOptions[value] {
+				idx++
+			}
+			continue
+		}
 		if p.isNetworkCommand(value) {
 			return idx, value, true
 		}
+		return -1, "", false
 	}
 	return -1, "", false
+}
+
+func sudoOptionsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-C":                true,
+		"--close-from":      true,
+		"-g":                true,
+		"--group":           true,
+		"-h":                true,
+		"--host":            true,
+		"-p":                true,
+		"--prompt":          true,
+		"-r":                true,
+		"--role":            true,
+		"-t":                true,
+		"--type":            true,
+		"-T":                true,
+		"--command-timeout": true,
+		"-u":                true,
+		"--user":            true,
+		"-U":                true,
+		"--other-user":      true,
+	}
 }
 
 func (p *ShellParser) commandWordValue(word *syntax.Word) string {
@@ -842,6 +889,9 @@ func (p *ShellParser) collectStdinRedirectArgs(redirs []*syntax.Redirect) []Comm
 	var args []CommandArg
 	for _, redir := range redirs {
 		if redir == nil {
+			continue
+		}
+		if redir.N != nil && redir.N.Value != "0" {
 			continue
 		}
 		switch redir.Op {

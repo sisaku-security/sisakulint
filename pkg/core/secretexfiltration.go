@@ -385,7 +385,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 		}
 	}
 
-	if commandReadsStdinAsNetworkSink(cmd) {
+	if commandReadsStdinAsNetworkSink(cmd) || commandUsesStdinDataArg(call, cmd) {
 		for _, pipeArg := range call.PipeInputs {
 			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(pipeArg, secretPlaceholders) {
 				patterns = append(patterns, exfiltrationPattern{
@@ -435,6 +435,44 @@ func commandReadsStdinAsNetworkSink(cmd networkCommand) bool {
 	switch cmd.name {
 	case "nc", "netcat", "ncat", "telnet", "socat":
 		return true
+	default:
+		return false
+	}
+}
+
+func commandUsesStdinDataArg(call shell.NetworkCommandCall, cmd networkCommand) bool {
+	for idx, arg := range call.Args {
+		if argIsInlineStdinDataFlag(arg, cmd) {
+			return true
+		}
+		if idx > 0 && previousFlagConsumesStdinData(call.Args[idx-1], arg, cmd) {
+			return true
+		}
+	}
+	return false
+}
+
+func argIsInlineStdinDataFlag(arg shell.CommandArg, cmd networkCommand) bool {
+	if !arg.IsFlag || !flagHasInlineValue(arg) {
+		return false
+	}
+	return flagValueReadsStdin(cmd.name, flagName(arg), inlineFlagValue(arg))
+}
+
+func previousFlagConsumesStdinData(previous, current shell.CommandArg, cmd networkCommand) bool {
+	if !previous.IsFlag || flagHasInlineValue(previous) {
+		return false
+	}
+	return flagValueReadsStdin(cmd.name, flagName(previous), commandArgComparableValue(current))
+}
+
+func flagValueReadsStdin(commandName, flag, value string) bool {
+	value = strings.Trim(value, `"'`)
+	switch commandName {
+	case "curl":
+		return stringInSlice(flag, []string{"-d", "--data", "--data-ascii", "--data-binary", "--data-raw", "--data-urlencode", "-F", "--form"}) && value == "@-"
+	case "wget":
+		return flag == "--post-file" && value == "-"
 	default:
 		return false
 	}
@@ -577,6 +615,20 @@ func flagHasInlineValue(arg shell.CommandArg) bool {
 	return ok
 }
 
+func inlineFlagValue(arg shell.CommandArg) string {
+	value := arg.LiteralValue
+	if value == "" {
+		value = arg.Value
+	}
+	if idx := strings.Index(value, "="); idx >= 0 {
+		return value[idx+1:]
+	}
+	if flag, ok := attachedShortFlagName(value); ok {
+		return value[len(flag):]
+	}
+	return ""
+}
+
 func attachedShortFlagName(value string) (string, bool) {
 	if len(value) <= 2 || !strings.HasPrefix(value, "-") || strings.HasPrefix(value, "--") {
 		return "", false
@@ -666,6 +718,11 @@ func (rule *SecretExfiltrationRule) argMatchesLegitPattern(arg shell.CommandArg,
 
 	for _, value := range values {
 		if rule.destinationMatchesLegitPattern(value, cmd) {
+			return true
+		}
+	}
+	if arg.IsFlag && flagHasInlineValue(arg) {
+		if value := inlineFlagValue(arg); rule.destinationMatchesLegitPattern(value, cmd) {
 			return true
 		}
 	}

