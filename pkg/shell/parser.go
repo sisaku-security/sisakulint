@@ -482,9 +482,12 @@ func (p *ShellParser) GetDangerousPatternType() string {
 type NetworkCommandCall struct {
 	CommandName string
 	Args        []CommandArg
-	Position    syntax.Pos
-	InCmdSubst  bool
-	InPipe      bool
+	// PipeInputs is conservative argv metadata from upstream pipeline producers,
+	// not exact stdout dataflow.
+	PipeInputs []CommandArg
+	Position   syntax.Pos
+	InCmdSubst bool
+	InPipe     bool
 }
 
 type CommandArg struct {
@@ -510,6 +513,7 @@ func (p *ShellParser) FindNetworkCommands() []NetworkCommandCall {
 type networkWalkContext struct {
 	inCmdSubst bool
 	inPipe     bool
+	pipeInputs []CommandArg
 }
 
 func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
@@ -544,12 +548,20 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		}
 
 	case *syntax.BinaryCmd:
-		newCtx := *ctx
-		if x.Op == syntax.Pipe {
-			newCtx.inPipe = true
+		if isPipeOp(x.Op) {
+			leftCtx := *ctx
+			leftCtx.inPipe = true
+			p.walkForNetworkCommands(x.X, &leftCtx, calls)
+
+			rightCtx := *ctx
+			rightCtx.inPipe = true
+			rightCtx.pipeInputs = p.collectPipeInputArgs(x.X)
+			p.walkForNetworkCommands(x.Y, &rightCtx, calls)
+			return
 		}
-		p.walkForNetworkCommands(x.X, &newCtx, calls)
-		p.walkForNetworkCommands(x.Y, &newCtx, calls)
+
+		p.walkForNetworkCommands(x.X, ctx, calls)
+		p.walkForNetworkCommands(x.Y, ctx, calls)
 
 	case *syntax.CmdSubst:
 		newCtx := *ctx
@@ -671,6 +683,10 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 	}
 }
 
+func isPipeOp(op syntax.BinCmdOperator) bool {
+	return op == syntax.Pipe || op == syntax.PipeAll
+}
+
 // walkForNetworkCommandsLoop handles loop nodes for network command detection.
 func (p *ShellParser) walkForNetworkCommandsLoop(node syntax.Loop, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
 	if node == nil {
@@ -727,6 +743,7 @@ func (p *ShellParser) isNetworkCommand(cmdName string) bool {
 func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWalkContext) NetworkCommandCall {
 	cmd := NetworkCommandCall{
 		CommandName: p.getCommandName(call),
+		PipeInputs:  append([]CommandArg(nil), ctx.pipeInputs...),
 		Position:    call.Pos(),
 		InCmdSubst:  ctx.inCmdSubst,
 		InPipe:      ctx.inPipe,
@@ -738,6 +755,135 @@ func (p *ShellParser) parseNetworkCommand(call *syntax.CallExpr, ctx *networkWal
 	}
 
 	return cmd
+}
+
+func (p *ShellParser) collectPipeInputArgs(node syntax.Node) []CommandArg {
+	if node == nil {
+		return nil
+	}
+
+	var args []CommandArg
+	p.collectPipeInputArgsInto(node, &args)
+	return args
+}
+
+func (p *ShellParser) collectPipeInputArgsInto(node syntax.Node, args *[]CommandArg) {
+	if node == nil {
+		return
+	}
+
+	switch x := node.(type) {
+	case *syntax.File:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.Stmt:
+		p.collectPipeInputArgsInto(x.Cmd, args)
+		for _, redirect := range x.Redirs {
+			p.collectPipeInputArgsInto(redirect, args)
+		}
+	case *syntax.CallExpr:
+		if len(x.Args) < 2 {
+			return
+		}
+		for _, word := range x.Args[1:] {
+			*args = append(*args, p.parseCommandArg(word))
+		}
+	case *syntax.BinaryCmd:
+		if isPipeOp(x.Op) {
+			p.collectPipeInputArgsInto(x.X, args)
+			p.collectPipeInputArgsInto(x.Y, args)
+			return
+		}
+		p.collectPipeInputArgsInto(x.X, args)
+		p.collectPipeInputArgsInto(x.Y, args)
+	case *syntax.Block:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.Subshell:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.IfClause:
+		for _, cond := range x.Cond {
+			p.collectPipeInputArgsInto(cond, args)
+		}
+		for _, then := range x.Then {
+			p.collectPipeInputArgsInto(then, args)
+		}
+		if x.Else != nil {
+			p.collectPipeInputArgsInto(x.Else, args)
+		}
+	case *syntax.WhileClause:
+		for _, cond := range x.Cond {
+			p.collectPipeInputArgsInto(cond, args)
+		}
+		for _, do := range x.Do {
+			p.collectPipeInputArgsInto(do, args)
+		}
+	case *syntax.ForClause:
+		for _, do := range x.Do {
+			p.collectPipeInputArgsInto(do, args)
+		}
+	case *syntax.CaseClause:
+		if x.Word != nil {
+			p.collectPipeInputArgsInto(x.Word, args)
+		}
+		for _, item := range x.Items {
+			p.collectPipeInputArgsInto(item, args)
+		}
+	case *syntax.CaseItem:
+		for _, pattern := range x.Patterns {
+			p.collectPipeInputArgsInto(pattern, args)
+		}
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.FuncDecl:
+		p.collectPipeInputArgsInto(x.Body, args)
+	case *syntax.ProcSubst:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	case *syntax.DeclClause:
+		for _, assign := range x.Args {
+			p.collectPipeInputArgsInto(assign, args)
+		}
+	case *syntax.Assign:
+		if x.Value != nil {
+			p.collectPipeInputArgsInto(x.Value, args)
+		}
+		if x.Array != nil {
+			p.collectPipeInputArgsInto(x.Array, args)
+		}
+	case *syntax.ArrayExpr:
+		for _, elem := range x.Elems {
+			p.collectPipeInputArgsInto(elem, args)
+		}
+	case *syntax.ArrayElem:
+		if x.Value != nil {
+			p.collectPipeInputArgsInto(x.Value, args)
+		}
+	case *syntax.CoprocClause:
+		p.collectPipeInputArgsInto(x.Stmt, args)
+	case *syntax.TimeClause:
+		if x.Stmt != nil {
+			p.collectPipeInputArgsInto(x.Stmt, args)
+		}
+	case *syntax.Word:
+		for _, part := range x.Parts {
+			p.collectPipeInputArgsInto(part, args)
+		}
+	case *syntax.DblQuoted:
+		for _, part := range x.Parts {
+			p.collectPipeInputArgsInto(part, args)
+		}
+	case *syntax.CmdSubst:
+		for _, stmt := range x.Stmts {
+			p.collectPipeInputArgsInto(stmt, args)
+		}
+	}
 }
 
 func (p *ShellParser) parseCommandArg(word *syntax.Word) CommandArg {
