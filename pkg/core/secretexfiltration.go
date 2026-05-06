@@ -385,7 +385,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 		}
 	}
 
-	if call.InPipe && len(cmd.dataFlags) == 0 {
+	if commandReadsStdinAsNetworkSink(cmd) {
 		for _, pipeArg := range call.PipeInputs {
 			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(pipeArg, secretPlaceholders) {
 				patterns = append(patterns, exfiltrationPattern{
@@ -406,9 +406,38 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 				})
 			}
 		}
+		for _, stdinArg := range call.StdinInputs {
+			for _, secretRef := range secretRefsFromCommandArgWithPlaceholders(stdinArg, secretPlaceholders) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:   cmd.name,
+					secretRef: secretRef,
+					position:  positionFromCommandArg(runStr, stdinArg),
+					severity:  "high",
+				})
+			}
+			for _, envLeak := range rule.envSecretRefsFromCommandArg(stdinArg, envSecrets) {
+				patterns = append(patterns, exfiltrationPattern{
+					command:      cmd.name,
+					secretRef:    envLeak.secretRef,
+					envVarName:   envLeak.envName,
+					isEnvVarLeak: true,
+					position:     positionFromCommandArg(runStr, stdinArg),
+					severity:     "high",
+				})
+			}
+		}
 	}
 
 	return patterns
+}
+
+func commandReadsStdinAsNetworkSink(cmd networkCommand) bool {
+	switch cmd.name {
+	case "nc", "netcat", "ncat", "telnet", "socat":
+		return true
+	default:
+		return false
+	}
 }
 
 type envSecretLeak struct {
@@ -727,10 +756,15 @@ func wgetFlagsConsumingNextArg() map[string]bool {
 func isURLishCommandArg(arg shell.CommandArg) bool {
 	value := commandArgComparableValue(arg)
 	value = strings.Trim(value, `"'`)
-	return strings.HasPrefix(value, "http://") ||
+	if strings.HasPrefix(value, "http://") ||
 		strings.HasPrefix(value, "https://") ||
 		strings.HasPrefix(value, "$") ||
-		strings.HasPrefix(value, "${")
+		strings.HasPrefix(value, "${") {
+		return true
+	}
+
+	host, _ := destinationHostAndPath(value)
+	return host == "localhost" || strings.Contains(host, ".")
 }
 
 func (rule *SecretExfiltrationRule) destinationMatchesLegitPattern(value string, cmd networkCommand) bool {

