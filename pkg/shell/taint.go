@@ -469,7 +469,7 @@ func declHasGlobalFlag(decl *syntax.DeclClause) bool {
 			// Name != nil は代入 (X=v) なのでフラグではない
 			continue
 		}
-		flag := wordLitPrefix(a.Value)
+		flag := WordLitPrefix(a.Value)
 		if strings.HasPrefix(flag, "-") && strings.ContainsRune(flag, 'g') {
 			return true
 		}
@@ -663,10 +663,10 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 	// would be mis-handled (the value `50%` contains `%` but is not a format).
 	// Use path.Base so absolute invocations like /usr/bin/printf are still
 	// recognized as printf.
-	isPrintf := path.Base(wordLitPrefix(call.Args[0])) == "printf"
+	isPrintf := path.Base(WordLitPrefix(call.Args[0])) == "printf"
 	for i := 1; i < len(call.Args); i++ {
 		arg := call.Args[i]
-		lit := wordLitPrefix(arg)
+		lit := WordLitPrefix(arg)
 		if strings.HasPrefix(lit, "-") && lit != "-" {
 			continue
 		}
@@ -689,7 +689,7 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 			valueWord := call.Args[i+1]
 			var sb strings.Builder
 			for j := i + 1; j < len(call.Args); j++ {
-				sb.WriteString(wordLitPrefix(call.Args[j]))
+				sb.WriteString(WordLitPrefix(call.Args[j]))
 			}
 			return name, valueWord, sb.String(), true
 		}
@@ -698,9 +698,13 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 	return "", nil, "", false
 }
 
-// wordLitPrefix は word の先頭 Lit / DblQuoted 内 Lit を結合した文字列を返す。
+// WordLitPrefix は word の先頭 Lit / DblQuoted 内 Lit を結合した文字列を返す。
 // 例: `"name=value"` -> name=value
-func wordLitPrefix(w *syntax.Word) string {
+//
+// pkg/core 側の旧 firstWordLiteral (#462) はこのスーパーセット。command-name
+// (echo/printf/cat/tee/dd) 検出や `-v` フラグ判定など、引数が単一 Lit のケースは
+// 完全互換。DblQuoted (`"NAME=$VAR"`) の Lit 部分も結合するため、より頑健。
+func WordLitPrefix(w *syntax.Word) string {
 	if w == nil {
 		return ""
 	}
@@ -739,10 +743,11 @@ func keywordFor(variant string) AssignKeyword {
 	}
 }
 
-// mergeSources は順序保持で重複なしの slice merge。
-// 後続タスクの buildArgBinding / recordVisibleAt から呼び出す内部ヘルパ。
-// pkg/core/taint.go::mergeUnique と同等のロジック (cyclic import 回避のため複製)。
-func mergeSources(dst, src []string) []string {
+// MergeSources は順序保持で重複なしの slice merge。
+// pkg/shell の buildArgBinding / recordVisibleAt と pkg/core (taint, secretinlog)
+// から共有される単一の実装 (#462)。dst の前置順序を維持しつつ src の新規要素を
+// 末尾に追加する。
+func MergeSources(dst, src []string) []string {
 	if len(src) == 0 {
 		return dst
 	}
@@ -768,7 +773,7 @@ func callCommandName(call *syntax.CallExpr) string {
 	if call == nil || len(call.Args) == 0 {
 		return ""
 	}
-	return wordLitPrefix(call.Args[0])
+	return WordLitPrefix(call.Args[0])
 }
 
 // buildArgBinding は CallExpr の args から call-site の taint state を抽出し、
@@ -796,9 +801,9 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
 		}
 		var argSources []string
 		for _, u := range upstreams {
-			argSources = mergeSources(argSources, []string{"shellvar:" + u})
+			argSources = MergeSources(argSources, []string{"shellvar:" + u})
 			if e, ok := visible[u]; ok {
-				atSources = mergeSources(atSources, e.Sources)
+				atSources = MergeSources(atSources, e.Sources)
 			}
 		}
 		binding[strconv.Itoa(i+1)] = Entry{
@@ -833,7 +838,7 @@ func recordVisibleAt(result *ScopedTaint, stmt *syntax.Stmt, visible map[string]
 			existing[name] = entry
 			continue
 		}
-		cur.Sources = mergeSources(cur.Sources, entry.Sources)
+		cur.Sources = MergeSources(cur.Sources, entry.Sources)
 		// 早い (小さい) offset を保持。-1 は env-like で常勝
 		if entry.Offset < 0 || (cur.Offset >= 0 && entry.Offset < cur.Offset) {
 			cur.Offset = entry.Offset

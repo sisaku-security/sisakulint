@@ -267,7 +267,7 @@ func (t *TaintTracker) seedTaintFromExpressions(file *syntax.File, exprMap map[s
 			continue
 		}
 		existing := t.taintedVars[a.Name]
-		existing.Sources = mergeUnique(existing.Sources, sources)
+		existing.Sources = shell.MergeSources(existing.Sources, sources)
 		if existing.Offset == 0 {
 			existing.Offset = a.Offset
 		}
@@ -406,7 +406,7 @@ func (t *TaintTracker) populateTaintedVarsFromEnv(env *ast.Env) {
 		}
 		// env-derived taint has Offset=-1 (precedes any script position).
 		existing := t.taintedVars[varName]
-		existing.Sources = mergeUnique(existing.Sources, collected)
+		existing.Sources = shell.MergeSources(existing.Sources, collected)
 		existing.Offset = -1
 		t.taintedVars[varName] = existing
 	}
@@ -424,7 +424,7 @@ func expandShellvarMarkers(tainted map[string]shell.Entry) {
 			for _, src := range entry.Sources {
 				if ref, ok := strings.CutPrefix(src, "shellvar:"); ok && ref != name {
 					if upstream, exists := tainted[ref]; exists {
-						expanded = mergeUnique(expanded, upstream.Sources)
+						expanded = shell.MergeSources(expanded, upstream.Sources)
 						anyExpanded = true
 						continue
 					}
@@ -447,23 +447,6 @@ func expandShellvarMarkers(tainted map[string]shell.Entry) {
 	}
 }
 
-// mergeUnique は順序保持で重複なしの merge。
-func mergeUnique(dst, src []string) []string {
-	seen := make(map[string]struct{}, len(dst)+len(src))
-	for _, s := range dst {
-		seen[s] = struct{}{}
-	}
-	out := dst
-	for _, s := range src {
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
-}
-
 // recordRedirWrite は WalkRedirectWrites の結果をもとに taintedOutputs に記録する。
 // VALUE 内に直接 untrusted 式（プレースホルダ経由を含む）があるか、または
 // visible 内の tainted 変数を参照していれば、その output を tainted として登録する。
@@ -475,7 +458,7 @@ func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprM
 	// VALUE 内の $VAR 参照を visible と照合
 	if w.ValueWord != nil {
 		if name, ok := shell.WordReferencesEntry(w.ValueWord, visible); ok {
-			sources = mergeUnique(sources, visible[name].Sources)
+			sources = shell.MergeSources(sources, visible[name].Sources)
 		}
 	} else {
 		// heredoc 等で ValueWord が無い場合は文字列ベースで $VAR を検出
@@ -485,7 +468,7 @@ func (t *TaintTracker) recordRedirWrite(stepID string, w shell.RedirWrite, exprM
 				continue
 			}
 			if entry, ok := visible[m[1]]; ok {
-				sources = mergeUnique(sources, entry.Sources)
+				sources = shell.MergeSources(sources, entry.Sources)
 			}
 		}
 	}

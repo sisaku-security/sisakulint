@@ -98,12 +98,12 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 		if !ok || len(call.Args) == 0 {
 			return true
 		}
-		cmdName := firstWordLiteral(call.Args[0])
+		cmdName := shell.WordLitPrefix(call.Args[0])
 		if cmdName != "echo" && cmdName != "printf" {
 			return true
 		}
 		// `printf -v VAR ...` は stdout へ出力しない（指定変数に格納する）ためスキップ。
-		if cmdName == "printf" && len(call.Args) >= 2 && firstWordLiteral(call.Args[1]) == "-v" {
+		if cmdName == "printf" && len(call.Args) >= 2 && shell.WordLitPrefix(call.Args[1]) == "-v" {
 			return true
 		}
 		for _, arg := range call.Args[1:] {
@@ -143,7 +143,7 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 	if !ok || len(call.Args) == 0 {
 		return
 	}
-	cmdName := firstWordLiteral(call.Args[0])
+	cmdName := shell.WordLitPrefix(call.Args[0])
 	switch cmdName {
 	case "cat", "tee", "dd":
 		// proceed
@@ -289,17 +289,6 @@ func (rule *SecretInLogRule) collectLeakedVars(
 		})
 		return true
 	})
-}
-
-// firstWordLiteral は Word の先頭リテラル（コマンド名）を取り出す。
-func firstWordLiteral(word *syntax.Word) string {
-	if word == nil || len(word.Parts) == 0 {
-		return ""
-	}
-	if lit, ok := word.Parts[0].(*syntax.Lit); ok {
-		return lit.Value
-	}
-	return ""
 }
 
 // hasAddMaskFor は script 内に該当変数への ::add-mask:: 呼び出しがあれば true。
@@ -790,7 +779,7 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 			return true
 		}
 		visible := scoped.At(stmt)
-		cmdName := firstWordLiteral(call.Args[0])
+		cmdName := shell.WordLitPrefix(call.Args[0])
 		switch cmdName {
 		case "echo", "printf":
 			rule.collectEchoEnvWrites(call, visible, result)
@@ -826,7 +815,7 @@ func (rule *SecretInLogRule) collectEchoEnvWrites(
 	nameArgIdx := -1
 	var name string
 	for i := 1; i < len(call.Args); i++ {
-		lit := firstWordLiteral(call.Args[i])
+		lit := shell.WordLitPrefix(call.Args[i])
 		// `-` 単独 (stdin 指定) は NAME= にはなり得ないが、スキップせずに探索を進める。
 		if strings.HasPrefix(lit, "-") && lit != "-" {
 			// 短いオプション群 (`-n`, `-e`, `-nE` 等) または long option を飛ばして次へ。
