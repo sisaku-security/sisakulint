@@ -77,6 +77,9 @@ type LinterOptions struct {
 	// IsRemoteは、リモートスキャンモードで実行されているかどうかを示すフラグ
 	// trueの場合、ローカルファイルシステムへのアクセスが不要なチェックをスキップする
 	IsRemote bool
+	// EnabledOptInRules は、CLI -enable-rule で指定された
+	// オプトインルール名のリスト。空の場合、opt-in なルールはすべて無効。
+	EnabledOptInRules []string
 }
 
 // Linterは、workflowをlintするための構造体
@@ -105,6 +108,8 @@ type Linter struct {
 	modifyCheckRules func([]Rule) []Rule
 	// isRemoteは、リモートスキャンモードで実行されているかどうかを示すフラグ
 	isRemote bool
+	// enabledOptInRules は、有効化されたオプトインルール名のリスト。
+	enabledOptInRules []string
 }
 
 // NewLinterは新しいLinterインスタンスを作成する
@@ -182,18 +187,19 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 	}
 
 	return &Linter{
-		NewProjects(),
-		errorOutput,
-		logOutput,
-		logLevel,
-		options.ShellcheckExecutable,
-		ignorePatterns,
-		config,
-		boiler,
-		errorFormatter,
-		workDir,
-		options.OnCheckRulesModified,
-		options.IsRemote,
+		projectInformation:       NewProjects(),
+		errorOutput:              errorOutput,
+		logOutput:                logOutput,
+		loggingLevel:             logLevel,
+		shellcheckExecutablePath: options.ShellcheckExecutable,
+		errorIgnorePatterns:      ignorePatterns,
+		defaultConfiguration:     config,
+		boilerplateGeneration:    boiler,
+		errorFormatter:           errorFormatter,
+		currentWorkingDirectory:  workDir,
+		modifyCheckRules:         options.OnCheckRulesModified,
+		isRemote:                 options.IsRemote,
+		enabledOptInRules:        options.EnabledOptInRules,
 	}, nil
 }
 
@@ -718,6 +724,12 @@ func (l *Linter) validate(
 		dbg := l.debugWriter()
 
 		rules := makeRules(filePath, l.isRemote, localActions, localReusableWorkflow)
+
+		filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
+		if optErr != nil {
+			return nil, optErr
+		}
+		rules = filteredRules
 
 		v := NewSyntaxTreeVisitor()
 		for _, rule := range rules {
