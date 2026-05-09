@@ -3,7 +3,7 @@ title: "Timeout Minutes Rule"
 weight: 1
 ---
 
-### Status: opt-in (disabled by default)
+## Status: opt-in (disabled by default)
 
 This rule is disabled by default and must be explicitly enabled with the
 `-enable-rule` CLI flag:
@@ -183,14 +183,14 @@ jobs:
 
 ### Auto-Fix Support
 
-The timeout-minutes rule supports auto-fixing by adding a default timeout:
+The timeout-minutes rule supports auto-fixing by adding a default timeout. Because the rule is opt-in, the `-enable-rule` flag is required for the auto-fixer to fire:
 
 ```bash
 # Preview changes without applying
-sisakulint -fix dry-run
+sisakulint -enable-rule missing-timeout-minutes -fix dry-run
 
 # Apply fixes
-sisakulint -fix on
+sisakulint -enable-rule missing-timeout-minutes -fix on
 ```
 
 **Before (Missing Timeout):**

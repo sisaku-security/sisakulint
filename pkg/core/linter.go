@@ -666,6 +666,18 @@ func (l *Linter) validate(
 		validationStart = time.Now()
 	}
 
+	// Validate -enable-rule names early so unknown names surface regardless
+	// of the file type or whether parsing later succeeds. Without this, a
+	// dependabot config / composite action / unparseable workflow would
+	// silently skip the rule-name check and the user's CLI typo would not
+	// be reported until a parseable workflow happened to reach validate().
+	rules := makeRules(filePath, l.isRemote, localActions, localReusableWorkflow)
+	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
+	if optErr != nil {
+		return nil, optErr
+	}
+	rules = filteredRules
+
 	// Check if this is a dependabot configuration file
 	if isDependabotConfigFile(filePath) {
 		l.log("validating dependabot config...", filePath)
@@ -723,13 +735,8 @@ func (l *Linter) validate(
 	if parsedWorkflow != nil {
 		dbg := l.debugWriter()
 
-		rules := makeRules(filePath, l.isRemote, localActions, localReusableWorkflow)
-
-		filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
-		if optErr != nil {
-			return nil, optErr
-		}
-		rules = filteredRules
+		// rules were built and filtered at the top of validate() so that
+		// rule-name validation runs even when this branch is skipped.
 
 		v := NewSyntaxTreeVisitor()
 		for _, rule := range rules {
