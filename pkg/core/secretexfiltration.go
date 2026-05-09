@@ -347,6 +347,13 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 	parser := shell.NewShellParser(parsedScript)
 	calls := parser.FindNetworkCommands()
 	if len(calls) == 0 {
+		// If the shell parser failed and the raw script contains both a
+		// network command keyword and a secret-bearing or env reference, the
+		// AST walk has been silently disabled. Emit a conservative warning so
+		// the gap surfaces instead of becoming a false negative.
+		if parser.ParseError() != nil && scriptHasNetworkKeyword(script) && scriptHasSecretReference(script, envSecrets) {
+			rule.reportShellParseFailure(runStr, parser.ParseError())
+		}
 		return nil
 	}
 
@@ -395,6 +402,61 @@ func shellScriptForNetworkParsing(script string) (string, map[string]string) {
 		return strings.Repeat("_", len(match))
 	})
 	return normalized, secretPlaceholders
+}
+
+// scriptHasNetworkKeyword reports whether the raw script contains a token
+// that looks like a network command we care about. Used as a coarse trigger
+// for the parse-failure fallback warning so genuinely script-free run blocks
+// (echo only, etc.) do not generate noise on parse errors.
+func scriptHasNetworkKeyword(script string) bool {
+	keywords := []string{
+		"curl", "wget", "http", "https",
+		"nc ", "netcat", "ncat", "socat", "telnet",
+		"dig ", "nslookup", "host ",
+	}
+	for _, kw := range keywords {
+		if strings.Contains(script, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// scriptHasSecretReference reports whether the raw script contains either a
+// `${{ secrets.X }}` expression or a reference to an environment variable
+// that has been wired to a secret value. Used together with
+// scriptHasNetworkKeyword to gate the parse-failure fallback warning so we
+// only warn on plausibly secret-bearing exfiltration scripts.
+func scriptHasSecretReference(script string, envSecrets map[string]string) bool {
+	if strings.Contains(script, "secrets.") {
+		return true
+	}
+	for envName := range envSecrets {
+		if envName == "" {
+			continue
+		}
+		if strings.Contains(script, "$"+envName) || strings.Contains(script, "${"+envName) {
+			return true
+		}
+	}
+	return false
+}
+
+// reportShellParseFailure emits a single warning when the shell AST parser
+// could not parse the run script and the raw script otherwise looks like it
+// might exfiltrate a secret. This converts a silent FN into a reviewable
+// warning at the run-block position.
+func (rule *SecretExfiltrationRule) reportShellParseFailure(runStr *ast.String, parseErr error) {
+	if runStr == nil || runStr.Pos == nil {
+		return
+	}
+	pos := &ast.Position{Line: runStr.Pos.Line, Col: runStr.Pos.Col}
+	rule.Errorf(
+		pos,
+		"secret exfiltration: shell parser could not analyze this run script (%v); "+
+			"network-command sink detection was skipped. Simplify the script or split the suspicious portion into its own step so the rule can verify it.",
+		parseErr,
+	)
 }
 
 func networkCommandByName(name string) (networkCommand, bool) {
@@ -967,7 +1029,16 @@ func legitPatternMatchesDestination(value, pattern string) bool {
 	if !hostMatchesPattern(host, patternHost) {
 		return false
 	}
-	return patternPath == "" || strings.HasPrefix(path, patternPath)
+	if patternPath == "" {
+		return true
+	}
+	// Path boundary required: pattern "slack.com/api" must not match
+	// "slack.com/api2/evil" or "slack.com/api-attacker".
+	patternPath = strings.TrimSuffix(patternPath, "/")
+	if path == patternPath {
+		return true
+	}
+	return strings.HasPrefix(path, patternPath+"/")
 }
 
 func splitLegitPattern(pattern string) (string, string) {

