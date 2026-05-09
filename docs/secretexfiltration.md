@@ -81,7 +81,9 @@ Secrets passed via environment variables to network commands:
 
 ## Safe Patterns (Not Flagged)
 
-The rule recognizes legitimate use cases and does NOT flag:
+The rule ignores commands that do not send secrets through a monitored network
+sink, and suppresses secret-bearing network commands only when every parsed
+destination is a known trusted endpoint.
 
 ### Package Publishing
 
@@ -169,9 +171,12 @@ The rule recognizes legitimate use cases and does NOT flag:
 | `nslookup` | High | (DNS exfiltration) |
 | `host` | High | (DNS exfiltration) |
 
-## Trusted Domains (Allowlisted)
+## Trusted Destinations (Allowlisted)
 
-The following domains are considered trusted and won't trigger alerts:
+The following explicit destinations are considered trusted and won't trigger
+alerts when they are used as the actual network destination. A trusted domain
+mentioned in a header, request body, or attacker-controlled suffix such as
+`api.github.com.evil.com` is not allowlisted.
 
 - GitHub: `api.github.com`, `github.com`, `githubusercontent.com`
 - Package Registries: `registry.npmjs.org`, `pypi.org`, `rubygems.org`, `crates.io`, `nuget.org`
@@ -180,8 +185,8 @@ The following domains are considered trusted and won't trigger alerts:
 - Monitoring: `sentry.io`, `datadoghq.com`, `newrelic.com`
 - Notifications: `slack.com/api`, `hooks.slack.com`, `discord.com/api`, `api.telegram.org`
 - Security Tools: `snyk.io`, `sonarcloud.io`
-- Infrastructure: `app.terraform.io`, `vault.*`, `hashicorp`
-- Artifact Management: `jfrog.io`, `artifactory`, `nexus`, `sonatype.org`
+- Infrastructure: `app.terraform.io`, `hashicorp.com`
+- Artifact Management: `jfrog.io`, `sonatype.org`
 
 ## Why This Rule Matters
 
