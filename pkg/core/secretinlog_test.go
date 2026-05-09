@@ -1759,15 +1759,16 @@ leak "${TOKEN}-${KEY}"
 
 	// $1 is backed by both TOKEN and KEY. TOKEN is masked but KEY is not,
 	// so the positional $1 leak must be reported (not suppressed).
+	// Pinpoint assertion (issue #460 AC6): exactly one error, naming variable $1.
+	// Strictness avoids false-positive suppression regressions and prevents
+	// unrelated leaks (e.g. spurious flagging of the ::add-mask:: directive
+	// itself) from passing the test silently.
 	errs := rule.Errors()
-	foundPositionalLeak := false
-	for _, e := range errs {
-		if strings.Contains(e.Description, "variable $1") {
-			foundPositionalLeak = true
-		}
+	if len(errs) != 1 {
+		t.Fatalf("expected exactly 1 leak for positional $1 (KEY upstream unmasked); got %d: %v", len(errs), errs)
 	}
-	if !foundPositionalLeak {
-		t.Errorf("expected positional $1 leak to be reported because KEY upstream is not masked; got errors: %v", errs)
+	if !strings.Contains(errs[0].Description, "variable $1") {
+		t.Errorf("expected positional $1 leak; got: %q", errs[0].Description)
 	}
 }
 
