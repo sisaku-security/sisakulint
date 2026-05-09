@@ -470,7 +470,18 @@ func networkCommandByName(name string) (networkCommand, bool) {
 
 func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.NetworkCommandCall, script string, runStr *ast.String, envSecrets map[string]string, cmd networkCommand, secretPlaceholders map[string]string) []exfiltrationPattern {
 	var patterns []exfiltrationPattern
+	// For calls extracted from inline shell wrappers (bash -c, sh -c, eval),
+	// shell-assignment resolution must run against the inner script — the
+	// outer script has the assignment buried inside a quoted body where the
+	// regex anchors (`^|[;&|]`) cannot reach it. InnerScript / InnerOffset
+	// preserved by walkInlineScript before the position rewrite let us pick
+	// the correct frame.
+	resolutionScript := script
 	maxOffset := int(call.Position.Offset()) //nolint:gosec // workflow shell script offsets fit in int
+	if call.InnerScript != "" {
+		resolutionScript = call.InnerScript
+		maxOffset = int(call.InnerOffset) //nolint:gosec // workflow shell script offsets fit in int
+	}
 
 	for idx, arg := range call.Args {
 		if !rule.isDataSinkArg(call, idx, cmd) {
@@ -497,7 +508,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 			})
 		}
 
-		for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(arg, script, maxOffset) {
+		for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(arg, resolutionScript, maxOffset, secretPlaceholders) {
 			patterns = append(patterns, exfiltrationPattern{
 				command:      cmd.name,
 				secretRef:    envLeak.secretRef,
@@ -534,7 +545,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					severity:     stdinSeverity,
 				})
 			}
-			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(pipeArg, script, maxOffset) {
+			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(pipeArg, resolutionScript, maxOffset, secretPlaceholders) {
 				patterns = append(patterns, exfiltrationPattern{
 					command:      cmd.name,
 					secretRef:    envLeak.secretRef,
@@ -564,7 +575,7 @@ func (rule *SecretExfiltrationRule) analyzeNetworkCommandCall(call shell.Network
 					severity:     stdinSeverity,
 				})
 			}
-			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(stdinArg, script, maxOffset) {
+			for _, envLeak := range rule.shellAssignmentSecretRefsFromCommandArg(stdinArg, resolutionScript, maxOffset, secretPlaceholders) {
 				patterns = append(patterns, exfiltrationPattern{
 					command:      cmd.name,
 					secretRef:    envLeak.secretRef,
@@ -657,7 +668,7 @@ func (rule *SecretExfiltrationRule) envSecretRefsFromCommandArg(arg shell.Comman
 	return leaks
 }
 
-func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg shell.CommandArg, script string, maxOffset int) []envSecretLeak {
+func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg shell.CommandArg, script string, maxOffset int, secretPlaceholders map[string]string) []envSecretLeak {
 	if len(arg.VarNames) == 0 {
 		return nil
 	}
@@ -673,6 +684,15 @@ func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg 
 			continue
 		}
 		secretRef := rule.extractSecretRef(resolved)
+		// When the resolution script comes from a wrapper-extracted inner
+		// (bash -c '...' / eval '...'), the assignment value contains the
+		// pre-tokenization placeholder rather than the original
+		// `${{ secrets.X }}` expression — extractSecretRef misses it. Fall
+		// back to the placeholder map so the inner-script flow stays in
+		// parity with the outer-script flow.
+		if secretRef == "" {
+			secretRef = secretRefFromPlaceholders(resolved, secretPlaceholders)
+		}
 		if secretRef == "" {
 			continue
 		}
@@ -683,6 +703,15 @@ func (rule *SecretExfiltrationRule) shellAssignmentSecretRefsFromCommandArg(arg 
 		})
 	}
 	return leaks
+}
+
+func secretRefFromPlaceholders(value string, secretPlaceholders map[string]string) string {
+	for placeholder, secretRef := range secretPlaceholders {
+		if strings.Contains(value, placeholder) {
+			return secretRef
+		}
+	}
+	return ""
 }
 
 func secretRefsFromCommandArg(arg shell.CommandArg) []string {

