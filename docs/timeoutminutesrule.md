@@ -3,6 +3,20 @@ title: "Timeout Minutes Rule"
 weight: 1
 ---
 
+### Status: opt-in (disabled by default)
+
+This rule is disabled by default and must be explicitly enabled with the
+`-enable-rule` CLI flag:
+
+```bash
+sisakulint -enable-rule missing-timeout-minutes
+```
+
+Why opt-in? `missing-timeout-minutes` is primarily a best practice rather
+than a security finding, and it fires on every job/step without an explicit
+timeout — which generated noisy reports and skewed severity summaries.
+Teams that want to enforce timeouts can still do so by enabling the rule.
+
 ### Timeout Minutes Rule Overview
 
 This rule enforces the `timeout-minutes` attribute for all jobs in GitHub Actions workflows. Without explicit timeouts, jobs can run indefinitely, consuming CI/CD resources and potentially being exploited for malicious purposes.

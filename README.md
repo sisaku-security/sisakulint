@@ -267,6 +267,9 @@ $ sisakulint -fix on
 
 # Output in SARIF format for CI/CD integration
 $ sisakulint -format "{{sarif .}}"
+
+# Enable an opt-in rule (e.g. missing-timeout-minutes is opt-in)
+$ sisakulint -enable-rule missing-timeout-minutes
 ```
 
 ## Example: Detecting Security Vulnerabilities
