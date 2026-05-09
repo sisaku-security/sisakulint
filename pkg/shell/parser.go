@@ -712,7 +712,21 @@ func (p *ShellParser) walkForNetworkCommands(node syntax.Node, ctx *networkWalkC
 			p.walkForNetworkCommands(part, ctx, calls)
 		}
 
-	case *syntax.SglQuoted, *syntax.ParamExp, *syntax.Redirect, *syntax.Lit:
+	case *syntax.Redirect:
+		// Heredoc bodies and here-string words can contain command
+		// substitutions like `<<EOF\n$(curl ...)\nEOF` (unquoted heredoc)
+		// or `<<< $(curl ...)`. Recurse so the inner CmdSubst case still
+		// triggers network-command detection. Quoted heredocs (`<<'EOF'`)
+		// emit a single literal Lit part with no expandable nodes, so this
+		// is FP-safe.
+		if x.Hdoc != nil {
+			p.walkForNetworkCommands(x.Hdoc, ctx, calls)
+		}
+		if x.Word != nil {
+			p.walkForNetworkCommands(x.Word, ctx, calls)
+		}
+
+	case *syntax.SglQuoted, *syntax.ParamExp, *syntax.Lit:
 		// These nodes don't contain network commands
 	}
 }
