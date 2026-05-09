@@ -444,6 +444,7 @@ func isPositional(s string) bool {
 | 15 | redefined_function_winner_takes | `foo() { echo "first"; }; foo() { echo "$1"; }; foo "$T"` | 後勝ち。2 番目の body が walk され `tainted["1"]` 検出 |
 | 16 | regression_447_subshell_isolation | (既存 #447 ケース 1〜13 を現状通り pass) | 関数引数機能の追加で既存 scope semantics に regression なし |
 | 17 | dynamic_dispatch_unresolved | `cmd="$T"; $cmd "arg"` | `wordLitPrefix` が空 → funcTable 未登録扱い → 静的解決スキップ |
+| 18 | multi_var_composite_word_arg (#461) | `foo() { echo "$1"; }; foo "$T1-$T2"` | 1 つの word に複数 tainted 変数を含む場合 `WordReferencesEntries` が全 upstream を列挙 → `binding["1"].Sources = [shellvar:T1, shellvar:T2]` (`binding["@"]` も同様に union) |
 
 加えて以下の API/edge ケース:
 
