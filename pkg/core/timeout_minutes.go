@@ -14,6 +14,7 @@ func TimeoutMinuteRule() *TimeoutMinutesRule {
 		BaseRule: BaseRule{
 			RuleName: "missing-timeout-minutes",
 			RuleDesc: "This rule checks missing timeout-minutes in job level.",
+			optIn:    true,
 		},
 	}
 }
