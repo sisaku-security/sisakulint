@@ -28,6 +28,9 @@ func TestTimeoutMinuteRule(t *testing.T) {
 			if got.RuleName != tt.want.RuleName || got.RuleDesc != tt.want.RuleDesc {
 				t.Errorf("TimeoutMinuteRule() = %v, want %v", got, tt.want)
 			}
+			if !got.IsOptIn() {
+				t.Errorf("TimeoutMinuteRule().IsOptIn() = false, want true (rule is opt-in)")
+			}
 		})
 	}
 }

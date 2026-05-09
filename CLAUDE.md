@@ -139,7 +139,7 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **ExpressionRule** - Parses and validates `${{ }}` expressions
 - **DeprecatedCommandsRule** - Detects deprecated GitHub Actions commands
 - **ConditionalRule** - Validates conditional expressions
-- **TimeoutMinuteRule** - Enforces timeout configurations (auto-fix supported)
+- **TimeoutMinuteRule** - Enforces timeout configurations (auto-fix supported, **opt-in: requires `-enable-rule missing-timeout-minutes`**)
 - **CodeInjectionCriticalRule** - Detects code injection in privileged triggers (auto-fix supported)
 - **CodeInjectionMediumRule** - Detects code injection in normal triggers (auto-fix supported)
 - **EnvVarInjectionCriticalRule** - Detects environment variable injection in privileged triggers (auto-fix supported)
@@ -225,6 +225,9 @@ sisakulint -ignore "SC2086" -ignore "permissions"
 
 # Generate boilerplate workflow
 sisakulint -boilerplate
+
+# Enable an opt-in rule (currently available: missing-timeout-minutes)
+sisakulint -enable-rule missing-timeout-minutes
 ```
 
 ## Exit Codes
@@ -285,7 +288,7 @@ See `pkg/core/permissionrule.go` for auto-fix example.
 
 ### Current Auto-Fix Implementations
 
-- **TimeoutMinutesRule** (`timeout_minutes.go`) - Adds default timeout-minutes: 5
+- **TimeoutMinutesRule** (`timeout_minutes.go`) - Adds default timeout-minutes: 5 (only runs when the rule is enabled via `-enable-rule missing-timeout-minutes`)
 - **CommitSHARule** (`commitsha.go`) - Converts action tags to commit SHAs with comment preservation
 - **CredentialRule** (`credential.go`) - Removes hardcoded passwords from container configs
 - **CodeInjectionRule** (`codeinjection.go`) - Moves untrusted expressions to environment variables

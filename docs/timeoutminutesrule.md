@@ -3,6 +3,20 @@ title: "Timeout Minutes Rule"
 weight: 1
 ---
 
+## Status: opt-in (disabled by default)
+
+This rule is disabled by default and must be explicitly enabled with the
+`-enable-rule` CLI flag:
+
+```bash
+sisakulint -enable-rule missing-timeout-minutes
+```
+
+Why opt-in? `missing-timeout-minutes` is primarily a best practice rather
+than a security finding, and it fires on every job/step without an explicit
+timeout — which generated noisy reports and skewed severity summaries.
+Teams that want to enforce timeouts can still do so by enabling the rule.
+
 ### Timeout Minutes Rule Overview
 
 This rule enforces the `timeout-minutes` attribute for all jobs in GitHub Actions workflows. Without explicit timeouts, jobs can run indefinitely, consuming CI/CD resources and potentially being exploited for malicious purposes.
@@ -169,14 +183,14 @@ jobs:
 
 ### Auto-Fix Support
 
-The timeout-minutes rule supports auto-fixing by adding a default timeout:
+The timeout-minutes rule supports auto-fixing by adding a default timeout. Because the rule is opt-in, the `-enable-rule` flag is required for the auto-fixer to fire:
 
 ```bash
 # Preview changes without applying
-sisakulint -fix dry-run
+sisakulint -enable-rule missing-timeout-minutes -fix dry-run
 
 # Apply fixes
-sisakulint -fix on
+sisakulint -enable-rule missing-timeout-minutes -fix on
 ```
 
 **Before (Missing Timeout):**
@@ -300,11 +314,7 @@ jobs:
 
 ### False Positives
 
-This rule has no false positives because:
-
-1. Explicit timeouts are always a best practice
-2. The default 6-hour timeout is rarely appropriate
-3. Setting timeouts has no negative side effects (when properly configured)
+This rule has no false positives in the strict sense — every match is technically a missing timeout — but the volume of matches in real-world repos (every job and step without an explicit timeout) is what motivated the opt-in default. Teams can opt into the rule once they're ready to enforce timeouts across their workflows.
 
 ### Related Rules
 
@@ -323,22 +333,22 @@ This rule has no false positives because:
 
 ### Testing
 
-To test this rule:
+To test this rule (the `-enable-rule` flag is required because the rule is opt-in):
 
 ```bash
 # Detect missing timeouts
-sisakulint .github/workflows/*.yml
+sisakulint -enable-rule missing-timeout-minutes .github/workflows/*.yml
 
 # Apply auto-fix
-sisakulint -fix on .github/workflows/*.yml
+sisakulint -enable-rule missing-timeout-minutes -fix on .github/workflows/*.yml
 ```
 
 ### Configuration
 
-This rule is enabled by default. To disable it:
+This rule is **disabled by default** (opt-in). See the [Status](#status-opt-in-disabled-by-default) section above for the enable command and rationale.
+
+If you have enabled the rule and want to suppress only the message text without disabling the rule itself, you can still use:
 
 ```bash
 sisakulint -ignore missing-timeout-minutes
 ```
-
-However, disabling this rule is **not recommended** as explicit timeouts are an important security and resource management practice.

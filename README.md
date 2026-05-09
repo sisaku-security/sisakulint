@@ -267,6 +267,9 @@ $ sisakulint -fix on
 
 # Output in SARIF format for CI/CD integration
 $ sisakulint -format "{{sarif .}}"
+
+# Enable an opt-in rule (e.g. missing-timeout-minutes is opt-in)
+$ sisakulint -enable-rule missing-timeout-minutes
 ```
 
 ## Example: Detecting Security Vulnerabilities
@@ -298,7 +301,7 @@ jobs:
         run: npm install && npm run build
 ```
 
-Running `sisakulint` detects multiple security issues:
+Running `sisakulint -enable-rule missing-timeout-minutes` detects multiple security issues (the `-enable-rule` flag enables the opt-in `missing-timeout-minutes` rule shown in the output below):
 
 ```
 .github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block. Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. Add a 'permissions:' block to follow the principle of least privilege. See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]

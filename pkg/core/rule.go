@@ -10,8 +10,11 @@ import (
 
 // BaseRuleはruleの基本構造体
 type BaseRule struct {
-	RuleName   string
-	RuleDesc   string
+	RuleName string
+	RuleDesc string
+	// optIn が true のルールはデフォルト無効 (オプトイン)。
+	// CLI -enable-rule で名前を指定したときだけ動作する。
+	optIn      bool
 	ruleErrors []*LintingError
 	autoFixers []AutoFixer
 	debugOut   io.Writer
@@ -58,6 +61,12 @@ func (rule *BaseRule) RuleDescription() string {
 	return rule.RuleDesc
 }
 
+// IsOptIn は、このルールがデフォルト無効 (オプトイン) かどうかを返す。
+// true の場合、CLI -enable-rule <name> による明示的有効化が必要。
+func (rule *BaseRule) IsOptIn() bool {
+	return rule.optIn
+}
+
 func (rule *BaseRule) EnableDebugOutput(out io.Writer) {
 	rule.debugOut = out
 }
@@ -87,4 +96,5 @@ type Rule interface {
 	UpdateConfig(config *Config)
 	AddAutoFixer(fixer AutoFixer)
 	AutoFixers() []AutoFixer
+	IsOptIn() bool
 }
