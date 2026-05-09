@@ -177,11 +177,22 @@ func (i *ignorePatternFlags) Set(v string) error {
 	return nil
 }
 
+type enabledRuleFlags []string
+
+func (e *enabledRuleFlags) String() string {
+	return "option for enabling opt-in rules"
+}
+func (e *enabledRuleFlags) Set(v string) error {
+	*e = append(*e, v)
+	return nil
+}
+
 // todo: sisakulintのmain関数
 func (cmd *Command) Main(args []string) int {
 	var showVersion bool
 	var linterOpts LinterOptions
 	var ignorePats ignorePatternFlags
+	var enabledRules enabledRuleFlags
 	var initConfig bool
 	var generateBoilerplate bool
 	var generateActionList bool
@@ -195,6 +206,9 @@ func (cmd *Command) Main(args []string) int {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(cmd.Stderr)
 	flags.Var(&ignorePats, "ignore", "Regular expression matching to error messages you want to ignore. This flag is repeatable")
+	flags.Var(&enabledRules, "enable-rule",
+		"Enable an opt-in rule by name. Repeatable. "+
+			"Currently available opt-in rules: missing-timeout-minutes")
 	flags.BoolVar(&generateBoilerplate, "boilerplate", false, "Generate a costomized template file for GitHub Actions workflow")
 	flags.StringVar(&linterOpts.CustomErrorMessageFormat, "format", "", "Custom template to format error messages in Go template syntax.")
 	flags.StringVar(&linterOpts.ConfigurationFilePath, "config-file", "", "File path to config file")
@@ -238,6 +252,7 @@ func (cmd *Command) Main(args []string) int {
 	}
 
 	linterOpts.ErrorIgnorePatterns = ignorePats
+	linterOpts.EnabledOptInRules = enabledRules
 	linterOpts.LogOutputDestination = cmd.Stderr
 
 	if generateActionList {
