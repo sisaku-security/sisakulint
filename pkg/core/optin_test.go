@@ -24,11 +24,11 @@ func (r *stubRule) VisitStep(*ast.Step) error             { return nil }
 
 func TestApplyOptInRules(t *testing.T) {
 	tests := []struct {
-		name        string
-		rules       []Rule
-		enabled     []string
-		wantNames   []string
-		wantErrSub  string
+		name       string
+		rules      []Rule
+		enabled    []string
+		wantNames  []string
+		wantErrSub string
 	}{
 		{
 			name:      "default excludes opt-in rule",

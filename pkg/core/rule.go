@@ -10,8 +10,8 @@ import (
 
 // BaseRuleはruleの基本構造体
 type BaseRule struct {
-	RuleName   string
-	RuleDesc   string
+	RuleName string
+	RuleDesc string
 	// optIn が true のルールはデフォルト無効 (オプトイン)。
 	// CLI -enable-rule で名前を指定したときだけ動作する。
 	optIn      bool
