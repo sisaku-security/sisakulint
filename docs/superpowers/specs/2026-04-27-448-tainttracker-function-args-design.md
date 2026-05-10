@@ -71,7 +71,7 @@ A を採用した理由:
 
 検討した 3 案:
 
-- **Approach 1** (採用) — `shell.PropagateTaint` は shellvar 参照のみで関数引数 binding。CallExpr 検出時、args の Word を `WordReferencesEntry` で照合し、tainted shell var が見つかれば `tainted["1"]/...` として inject
+- **Approach 1** (採用) — `shell.PropagateTaint` は shellvar 参照のみで関数引数 binding。CallExpr 検出時、args の Word を `WordReferencesEntries` で照合し、tainted shell var が見つかれば `tainted["1"]/...` として inject
 - **Approach 2** — `shell.PropagateTaint` に `WithCallArgTainter(fn)` callback を足し、core 側で `${{ untrusted }}` も含めた tainter を渡す
 - **Approach 3** — 関数解決を core 側に外出し (`shell` は table/列挙のみ)
 
@@ -167,9 +167,9 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
         }
         var argSources []string
         for _, u := range upstreams {
-            argSources = mergeSources(argSources, []string{"shellvar:" + u})
+            argSources = MergeSources(argSources, []string{"shellvar:" + u})
             if e, ok := visible[u]; ok {
-                atSources = mergeSources(atSources, e.Sources)
+                atSources = MergeSources(atSources, e.Sources)
             }
         }
         binding[strconv.Itoa(i+1)] = Entry{
@@ -187,7 +187,7 @@ func buildArgBinding(call *syntax.CallExpr, visible map[string]Entry) map[string
 
 **Source 形式の意図**:
 - 個別 positional (`"1"`, `"2"`, ...): `["shellvar:U1", "shellvar:U2", ...]` — 1つの arg に複数 tainted 変数が含まれる場合 (e.g. `"$T1-$T2"`)、`WordReferencesEntries` が全 upstream を列挙し `argSources` に集約する。secret-in-log の positional 抑制は全 upstream が masked であることを要求する
-- `"@"` / `"*"`: `atSources` — 全 tainted args の upstream entry の Sources を `mergeSources` で union (raw chain)。autofix は best-effort 不能なので無効化 (§5.2.2)
+- `"@"` / `"*"`: `atSources` — 全 tainted args の upstream entry の Sources を `MergeSources` で union (raw chain)。autofix は best-effort 不能なので無効化 (§5.2.2)
 - `Offset = -1`: body 内のどの sink offset より前として扱う (env 由来と同形式)
 
 ### 4.5 `recordVisibleAt` (新規ヘルパ)
@@ -210,7 +210,7 @@ func recordVisibleAt(result *ScopedTaint, stmt *syntax.Stmt, visible map[string]
             existing[name] = entry
             continue
         }
-        cur.Sources = mergeSources(cur.Sources, entry.Sources)
+        cur.Sources = MergeSources(cur.Sources, entry.Sources)
         // 早い (小さい) offset を保持。-1 は env-like で常勝
         if entry.Offset < 0 || (cur.Offset >= 0 && entry.Offset < cur.Offset) {
             cur.Offset = entry.Offset
@@ -239,11 +239,11 @@ func callCommandName(call *syntax.CallExpr) string {
     if call == nil || len(call.Args) == 0 {
         return ""
     }
-    return wordLitPrefix(call.Args[0])  // 既存ヘルパ流用
+    return WordLitPrefix(call.Args[0])
 }
 ```
 
-`$cmd` のような変数経由呼び出しは `wordLitPrefix` が空文字を返すため、自然に "未登録 → スキップ" となる。
+`$cmd` のような変数経由呼び出しは `WordLitPrefix` が空文字を返すため、自然に "未登録 → スキップ" となる。
 
 ## 5. Semantics 詳細
 
@@ -262,7 +262,7 @@ func callCommandName(call *syntax.CallExpr) string {
 |---|---|
 | 関数名が funcTable にない | 通常 CallExpr (= 子ノード walk のみ)、関数解決スキップ |
 | 関数名が visited[name] >= 1 | 再帰: body 再 walk せず `return true` (CallExpr の子ノードは通常通り walk して visibleAt 記録は残す) |
-| `$cmd "$T"` のような変数経由呼び出し | `wordLitPrefix` が空文字 → funcTable 未登録扱い → スキップ (静的解決不能、bash 上は dynamic dispatch) |
+| `$cmd "$T"` のような変数経由呼び出し | `WordLitPrefix` が空文字 → funcTable 未登録扱い → スキップ (静的解決不能、bash 上は dynamic dispatch) |
 | Forward reference (`foo` 呼び出しが `foo()` 定義より前) | 1-pass walk で funcTable 未登録 → スキップ。bash 実挙動 (定義前 call はエラー) と一致 |
 
 ### 5.3 再帰展開ポリシー
@@ -307,8 +307,8 @@ func callCommandName(call *syntax.CallExpr) string {
 |---|---|
 | 引数なし call `foo` | `binding = {}` (空 map)、body 内 `$1` 等は lookup miss で untainted |
 | 引数の一部だけ tainted `foo "$T" "safe"` | `binding["1"]` のみ登録、`binding["2"]` は未登録、`binding["@"]` は T 経由 tainted |
-| 引数が複合 word `foo "prefix-$T"` | `WordReferencesEntry` が word 内 ParamExp を deep walk するので T を検出 → `binding["1"] = shellvar:T` |
-| 引数が cmdsubst `foo "$(cmd)"` | 既存 `WordReferencesEntry` は cmdsubst 内も deep walk するため、cmdsubst 内の tainted 参照を含む arg は tainted 扱い (#447 の lock-in 挙動を継承) |
+| 引数が複合 word `foo "prefix-$T"` | `WordReferencesEntries` が word 内 ParamExp を deep walk するので T を検出 → `binding["1"] = shellvar:T` |
+| 引数が cmdsubst `foo "$(cmd)"` | `WordReferencesEntries` は cmdsubst 内も deep walk するため、cmdsubst 内の tainted 参照を含む arg は tainted 扱い (#447 の lock-in 挙動を継承) |
 | 関数を 2 回 redefine | 後勝ち。先の定義の body は funcTable から消える |
 | `$1` を `local X="$1"` で受けず直接 sink | `echo "$1"` は `tainted["1"]` で照合され検出 |
 
@@ -320,11 +320,34 @@ func callCommandName(call *syntax.CallExpr) string {
 
 検証は §7.2 の `TestTaintTracker_RedirWriteInFunctionBody` で行う。
 
-### 6.2 `pkg/core/secretinlog.go` — autofix の positional 対応のみ
+### 6.2 `pkg/core/secretinlog.go` — positional 検出抑制と autofix
 
-#### 6.2.1 検出側 (`findEchoLeaks` 等) — **変更不要**
+#### 6.2.1 検出側 (`collectLeakedVars`) — 全 upstream mask 要件
 
 `scoped.At(stmt)` が返す visible に binding が含まれるため、body 内 `echo "$1"` / `echo "$@"` は既存 walker で自然にリーク検出される。エラーメッセージは `variable $1 (origin: shellvar:TOKEN) is printed ...` のように `$1` 参照が出るが許容。
+
+ただし positional leak は autofix が upstream 変数 (`TOKEN`) を mask するため、検出抑制も upstream 側を見る。`entry.Sources` に複数の `shellvar:*` upstream がある場合、**全 upstream が sink より前に mask 済みの場合のみ**抑制する (#460)。一つでも未 mask の upstream があれば `$1` leak として報告する。
+
+```go
+if isPositional(name) {
+    foundUpstream := false
+    allMasked := true
+    for _, src := range entry.Sources {
+        upstream, ok := strings.CutPrefix(src, "shellvar:")
+        if !ok || upstream == "" {
+            continue
+        }
+        foundUpstream = true
+        if !hasAddMaskBefore(script, upstream, sinkOffset) {
+            allMasked = false
+            break
+        }
+    }
+    if foundUpstream && allMasked {
+        return true
+    }
+}
+```
 
 #### 6.2.2 autofix (`secretInLogFixer.FixStep`) — positional 名の解決
 
@@ -364,7 +387,7 @@ func (f *secretInLogFixer) FixStep(node *ast.Step) error {
 
 // resolveMaskTarget は leak.VarName が positional ($1, $2, ...) の場合に
 // origin (shellvar:UPSTREAM) から UPSTREAM を取り出して返す。
-// $@ / $* は確実な single-var ターゲットが取れないので (false, "") を返す。
+// $@ / $* は確実な single-var ターゲットが取れないので ("", false) を返す。
 // 非 positional はそのまま VarName を返す (現状互換)。
 func resolveMaskTarget(varName, origin string) (string, bool) {
     if varName == "@" || varName == "*" {
@@ -411,9 +434,9 @@ func isPositional(s string) bool {
 
 | ファイル | 変更 |
 |---|---|
-| `pkg/shell/taint.go` | 主要な実装変更 (§4: walker 拡張、`buildArgBinding`、`mergeSources`、`recordVisibleAt`、`callCommandName`) |
+| `pkg/shell/taint.go` | 主要な実装変更 (§4: walker 拡張、`buildArgBinding`、`MergeSources`、`recordVisibleAt`、`callCommandName`) |
 | `pkg/core/taint.go` | **変更なし** (recordRedirWrite が既に per-stmt visible 経由) |
-| `pkg/core/secretinlog.go` | autofix の `FixStep` のみ (§6.2.2: `resolveMaskTarget` ヘルパ + 呼び出し点 1 箇所) |
+| `pkg/core/secretinlog.go` | positional 検出抑制を全 upstream mask 要件に変更 (§6.2.1)、autofix の `FixStep` に `resolveMaskTarget` を追加 (§6.2.2) |
 | `pkg/shell/taint_test.go` | テストケース追加 (§7.1) |
 | `pkg/core/taint_test.go` | テストケース追加 (§7.2) |
 | `pkg/core/secretinlog_test.go` | テストケース追加 (§7.3) |
@@ -443,7 +466,7 @@ func isPositional(s string) bool {
 | 14 | non_function_callexpr_unaffected | `echo "$T"` (関数呼び出しではない通常 CallExpr) | funcTable lookup 空振り、body walk なし、既存挙動に回帰なし |
 | 15 | redefined_function_winner_takes | `foo() { echo "first"; }; foo() { echo "$1"; }; foo "$T"` | 後勝ち。2 番目の body が walk され `tainted["1"]` 検出 |
 | 16 | regression_447_subshell_isolation | (既存 #447 ケース 1〜13 を現状通り pass) | 関数引数機能の追加で既存 scope semantics に regression なし |
-| 17 | dynamic_dispatch_unresolved | `cmd="$T"; $cmd "arg"` | `wordLitPrefix` が空 → funcTable 未登録扱い → 静的解決スキップ |
+| 17 | dynamic_dispatch_unresolved | `cmd="$T"; $cmd "arg"` | `WordLitPrefix` が空 → funcTable 未登録扱い → 静的解決スキップ |
 | 18 | multi_var_composite_word_arg (#461) | `foo() { echo "$1"; }; foo "$T1-$T2"` | 1 つの word に複数 tainted 変数を含む場合 `WordReferencesEntries` が全 upstream を列挙 → `binding["1"].Sources = [shellvar:T1, shellvar:T2]` (`binding["@"]` も同様に union) |
 
 加えて以下の API/edge ケース:
@@ -512,6 +535,18 @@ func isPositional(s string) bool {
 
   期待: `echo "$X"` が leak 検出され、origin chain が TOKEN まで遡る
 
+- **`TestSecretInLog_PositionalSuppression_RequiresAllUpstreamsMasked`** (#460/#461) —
+
+  ```bash
+  TOKEN=$(echo "$SECRET_A" | jq -r '.t')
+  KEY=$(echo "$SECRET_B" | jq -r '.k')
+  echo "::add-mask::$TOKEN"
+  leak() { echo "$1"; }
+  leak "${TOKEN}-${KEY}"
+  ```
+
+  期待: `$1` は `TOKEN` と `KEY` の両 upstream を持つ。`TOKEN` だけ mask 済みでも `KEY` が未 mask なので抑制せず、`variable $1` の leak をちょうど 1 件報告する
+
 ### 7.4 `script/actions/` — workflow fixture
 
 2 ファイル新設、`script/README.md` に追記。
@@ -560,7 +595,7 @@ jobs:
 
 | # | ステップ | 確認 |
 |---|---|---|
-| 1 | `pkg/shell/taint.go` に private ヘルパ `mergeSources`, `recordVisibleAt`, `callCommandName`, `buildArgBinding` を追加 (まだ walker 本体は変更しない) | 既存テスト緑 |
+| 1 | `pkg/shell/taint.go` にヘルパ `MergeSources`, `recordVisibleAt`, `callCommandName`, `buildArgBinding` を追加 (まだ walker 本体は変更しない) | 既存テスト緑 |
 | 2 | `makeWalkFn` を funcTable / visited を closure 引数に持つ形に refactor (セマンティクス変更なし、リファクタのみ) | 既存テスト緑 |
 | 3 | `*syntax.FuncDecl` ケースを「テーブル登録のみ、body walk しない」に変更。`*syntax.CallExpr` ケースを新設し lazy body walk を実装 (recursion guard, scopeFunc frame push) | §7.1 ケース #1 (single_call_simple) と #14 (regression) を緑 |
 | 4 | `recordVisibleAt` を `*syntax.Stmt` ケースの記録に組み込み、複数 call-site の visibleAt union を有効化 | §7.1 ケース #2 (multi_call_union) を緑 |
