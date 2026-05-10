@@ -98,12 +98,12 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 		if !ok || len(call.Args) == 0 {
 			return true
 		}
-		cmdName := shell.WordLitPrefix(call.Args[0])
+		cmdName := leadingBareLiteral(call.Args[0])
 		if cmdName != "echo" && cmdName != "printf" {
 			return true
 		}
 		// `printf -v VAR ...` は stdout へ出力しない（指定変数に格納する）ためスキップ。
-		if cmdName == "printf" && len(call.Args) >= 2 && shell.WordLitPrefix(call.Args[1]) == "-v" {
+		if cmdName == "printf" && len(call.Args) >= 2 && leadingBareLiteral(call.Args[1]) == "-v" {
 			return true
 		}
 		for _, arg := range call.Args[1:] {
@@ -143,7 +143,7 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 	if !ok || len(call.Args) == 0 {
 		return
 	}
-	cmdName := shell.WordLitPrefix(call.Args[0])
+	cmdName := leadingBareLiteral(call.Args[0])
 	switch cmdName {
 	case "cat", "tee", "dd":
 		// proceed
@@ -224,6 +224,19 @@ func wordLiteralValue(w *syntax.Word) string {
 		}
 	}
 	return b.String()
+}
+
+// leadingBareLiteral returns only the first unquoted literal word part.
+// Use this for command and flag identity checks where dropping quoted
+// expansions (for example `"echo$SUFFIX"`) would misclassify a dynamic word.
+func leadingBareLiteral(word *syntax.Word) string {
+	if word == nil || len(word.Parts) == 0 {
+		return ""
+	}
+	if lit, ok := word.Parts[0].(*syntax.Lit); ok {
+		return lit.Value
+	}
+	return ""
 }
 
 // collectLeakedVars は単一の引数内で tainted 変数参照をすべて報告リストに追加する。
@@ -779,7 +792,7 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 			return true
 		}
 		visible := scoped.At(stmt)
-		cmdName := shell.WordLitPrefix(call.Args[0])
+		cmdName := leadingBareLiteral(call.Args[0])
 		switch cmdName {
 		case "echo", "printf":
 			rule.collectEchoEnvWrites(call, visible, result)

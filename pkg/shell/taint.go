@@ -701,9 +701,9 @@ func firstNameEqualsArg(call *syntax.CallExpr) (string, *syntax.Word, string, bo
 // WordLitPrefix は word の先頭 Lit / DblQuoted 内 Lit を結合した文字列を返す。
 // 例: `"name=value"` -> name=value
 //
-// pkg/core 側の旧 firstWordLiteral (#462) はこのスーパーセット。command-name
-// (echo/printf/cat/tee/dd) 検出や `-v` フラグ判定など、引数が単一 Lit のケースは
-// 完全互換。DblQuoted (`"NAME=$VAR"`) の Lit 部分も結合するため、より頑健。
+// pkg/core 側の旧 firstWordLiteral (#462) はこのスーパーセット。DblQuoted
+// (`"NAME=$VAR"`) の Lit 部分も結合するため、env assignment などの
+// literal prefix 抽出に使える。
 func WordLitPrefix(w *syntax.Word) string {
 	if w == nil {
 		return ""

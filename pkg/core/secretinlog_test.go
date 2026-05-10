@@ -82,6 +82,12 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			}{{"PRIVATE_KEY", "echo"}},
 		},
 		{
+			name: "double-quoted dynamic command name is not echo",
+			script:   "SUFFIX=x\n\"echo$SUFFIX\" \"$TOKEN\"\n",
+			tainted:  map[string]shell.Entry{"TOKEN": {Sources: []string{"secrets.API"}, Offset: -1}},
+			wantHits: nil,
+		},
+		{
 			name: "printf of tainted var",
 			script: `printf "%s\n" "$TOKEN"
 `,
