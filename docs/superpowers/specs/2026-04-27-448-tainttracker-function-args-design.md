@@ -228,9 +228,9 @@ case *syntax.Stmt:
     return true
 ```
 
-### 4.6 `mergeSources` (private 新規)
+### 4.6 `MergeSources` (export 共有化済み)
 
-`pkg/core/taint.go::mergeUnique` と同等のロジックを `pkg/shell` 内に private 複製 (cyclic import 回避)。共有化は将来の refactor。
+`pkg/shell.MergeSources` として export 済み。pkg/core 側 (`taint.go`, `workflow_taint.go`, `secretinlog.go`) も同関数を使用し、重複していた `pkg/core::mergeUnique` は #462 で削除済み。
 
 ### 4.7 `callCommandName` (新規ヘルパ)
 

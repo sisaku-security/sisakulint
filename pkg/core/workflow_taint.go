@@ -5,6 +5,7 @@ import (
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
+	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
 // WorkflowTaintMap tracks taint propagation across job boundaries via needs.*.outputs.*.
@@ -60,7 +61,7 @@ func (m *WorkflowTaintMap) setJobOutputTaint(jobID, outputName string, sources [
 		m.jobOutputTaints[jobID] = make(map[string][]string)
 	}
 
-	m.jobOutputTaints[jobID][outputName] = mergeUnique(m.jobOutputTaints[jobID][outputName], sources)
+	m.jobOutputTaints[jobID][outputName] = shell.MergeSources(m.jobOutputTaints[jobID][outputName], sources)
 }
 
 // IsTaintedNeedsOutput checks if needs.jobID.outputs.outputName carries taint.

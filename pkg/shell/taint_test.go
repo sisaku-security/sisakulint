@@ -575,11 +575,11 @@ func TestWordLitPrefix_Mixed(t *testing.T) {
 	// Mix Lit + SglQuoted + DblQuoted, then a ParamExp which truncates.
 	file := parseScript(t, `echo abc'def'"ghi"$X`)
 	call := file.Stmts[0].Cmd.(*syntax.CallExpr)
-	got := wordLitPrefix(call.Args[1])
+	got := WordLitPrefix(call.Args[1])
 	if got != "abcdefghi" {
 		t.Errorf("got %q, want %q", got, "abcdefghi")
 	}
-	if got := wordLitPrefix(nil); got != "" {
+	if got := WordLitPrefix(nil); got != "" {
 		t.Errorf("nil word: got %q", got)
 	}
 }
