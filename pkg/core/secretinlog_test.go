@@ -1321,6 +1321,127 @@ func TestSecretInLog_GitHubStepSummaryWriteFlagged(t *testing.T) {
 	}
 }
 
+// TestSecretInLog_GitHubStepSummary_PrintfFlagged は printf 経由の
+// $GITHUB_STEP_SUMMARY 書き込みも検出されることをピン留めする。
+// stmtRedirectsStdoutAwayFromLog の例外（line 212）が echo だけでなく
+// printf にも適用されることのリグレッションガード。
+func TestSecretInLog_GitHubStepSummary_PrintfFlagged(t *testing.T) {
+	t.Parallel()
+
+	step := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\nprintf \"debug: %s\\n\" \"$D\" >> $GITHUB_STEP_SUMMARY",
+	)
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 printf $GITHUB_STEP_SUMMARY leak, got %d: %v", got, rule.Errors())
+	}
+}
+
+// TestSecretInLog_GitHubStepSummary_HeredocFlagged は heredoc 形式の
+// $GITHUB_STEP_SUMMARY 書き込みも検出されることをピン留めする。
+// `cat <<EOF >> $GITHUB_STEP_SUMMARY ... EOF` は collectRedirectSinkLeaks の
+// heredoc sink 経路で flagged される想定。
+func TestSecretInLog_GitHubStepSummary_HeredocFlagged(t *testing.T) {
+	t.Parallel()
+
+	step := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\ncat <<EOF >> $GITHUB_STEP_SUMMARY\ndebug: $D\nEOF",
+	)
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 heredoc $GITHUB_STEP_SUMMARY leak, got %d: %v", got, rule.Errors())
+	}
+}
+
+// TestSecretInLog_CrossStep_NoIDStepOutputDoesNotPropagate は ID を持たない
+// step の $GITHUB_OUTPUT 書き込みが crossStepOutputs に登録されないことを
+// ピン留めする。checkStep の `step.ID != nil && step.ID.Value != ""` ゲート
+// （line 591）のリグレッションガード。
+func TestSecretInLog_CrossStep_NoIDStepOutputDoesNotPropagate(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	// step1.ID は意図的に未設定。
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ steps.derive.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("ID-less step output write must not propagate; got %d: %v", got, rule.Errors())
+	}
+}
+
+// TestSecretInLog_CrossStep_NeedsOutputsNotFlagged は cross-job propagation
+// （needs.<job>.outputs.<name>）が現在は範囲外であることをピン留めする。
+// resolveTaintedStepOutputExpr が `parts[0] != "steps"` を弾くロジック
+// （line 1184）が誤って needs を受け入れるよう拡張された場合、このテストが落ちる。
+func TestSecretInLog_CrossStep_NeedsOutputsNotFlagged(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	// downstream は needs.<job>.outputs.* を expand している想定。
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("needs.*.outputs.* is out of scope; got %d unexpected errors: %v", got, rule.Errors())
+	}
+}
+
+// TestSecretInLog_CrossStep_DirectSecretsExprToOutput は producer step が
+// env を介さず直接 ${{ secrets.X }} を $GITHUB_OUTPUT に書く場合、
+// downstream の ${{ steps.derive.outputs.token }} は flag されないことを
+// ピン留めする。
+//
+// この挙動は意図的: GitHub Actions は secrets.* の値をすべての log 出力で
+// 自動マスクするため、shell 派生（jq / sed / base64 等）を経由しない直接の
+// secrets 値は downstream で自動マスクされ、leak にならない。
+// このルールは「shell 派生で auto-mask が外れた値」を対象とするため、
+// 直接表現はあえて追跡しない。env 経由の derivation を介したケース
+// (TestSecretInLog_CrossStep_GithubOutputDirectExpressionLeak) との対比。
+func TestSecretInLog_CrossStep_DirectSecretsExprToOutput(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t, nil, `echo "token=${{ secrets.S }}" >> $GITHUB_OUTPUT`)
+	step1.ID = &ast.String{Value: "derive"}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ steps.derive.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Errorf("direct secrets.* expression to $GITHUB_OUTPUT relies on GHA auto-mask; got %d unexpected errors: %v", got, rule.Errors())
+	}
+}
+
 func TestSecretInLog_CrossStep_StepEnvOverridesCrossStep(t *testing.T) {
 	t.Parallel()
 

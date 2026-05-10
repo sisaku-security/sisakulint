@@ -425,6 +425,21 @@ func expressionOffsetsByPlaceholder(script string) map[string]int {
 	return offsets
 }
 
+// hasAddMaskForExpressionBefore は script 内に同一の `${{ ... }}` 表現に対する
+// `echo "::add-mask::${{ ... }}"` 呼び出しがあり、かつその位置（バイトオフセット）が
+// beforeOffset 以下なら true を返す。beforeOffset に負の値を渡すと位置制約なし。
+//
+// "current-occurrence mask" 不変条件:
+//   GitHub Actions の `::add-mask::` は発行 *後* のログ出力にのみ適用されるため、
+//   sink occurrence より前に置かれた mask 行のみが保護として機能する。
+//   同じ表現が script 内に複数回出現する場合、最初の occurrence が mask 行の前に
+//   置かれていても（例: `: "${{ X }}"; echo "::add-mask::${{ X }}"; echo "${{ X }}"`)、
+//   2 回目以降の occurrence は mask 後のものなので保護される。判定は「mask 行の
+//   位置が *この* sink occurrence （beforeOffset）以下か」で行う必要がある。
+//
+// `exprStart <= beforeOffset` は等号を許容することで `beforeOffset == exprStart`
+// （mask 行自身を sink として誤検出しないための再帰的な保護）も拾う。
+// `beforeOffset < 0` は位置制約なしの全域走査用フォールバック。
 func hasAddMaskForExpressionBefore(script, expr string, beforeOffset int) bool {
 	for _, m := range taintGhExprPattern.FindAllStringSubmatchIndex(script, -1) {
 		if len(m) < 4 {
@@ -434,8 +449,9 @@ func hasAddMaskForExpressionBefore(script, expr string, beforeOffset int) bool {
 			continue
 		}
 		exprStart := m[0]
-		prefixStart := exprStart - len("::add-mask::")
-		if prefixStart < 0 || !strings.HasSuffix(script[:exprStart], "::add-mask::") {
+		// `::add-mask::${{ ... }}` 形式の検出。`HasSuffix` は prefix が短い場合
+		// false を返すため、明示的な長さチェックは不要。
+		if !strings.HasSuffix(script[:exprStart], "::add-mask::") {
 			continue
 		}
 		if beforeOffset < 0 || exprStart <= beforeOffset {
@@ -628,6 +644,14 @@ func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
 	)
 }
 
+// reportStepOutputLeak は stepOutputLeakOccurrence をエラーとして記録する。
+//
+// Phase 1 では autofix を実装しない (warning のみ): この経路は consumer 側の
+// `${{ steps.<id>.outputs.* }}` 直接展開なので、autofix は (a) 直前に
+// `echo "::add-mask::${{ … }}"` 行を挿入する形か、(b) producer 側の export を
+// env 経由に書き換える形のいずれかが必要で、後者は producer/consumer 両方の
+// step を編集することになり影響範囲が広い。Phase 2 で対応予定。
+// echoLeak 経路 (env 由来 shellvar) との非対称はこの理由による。
 func (rule *SecretInLogRule) reportStepOutputLeak(leak stepOutputLeakOccurrence) {
 	rule.Errorf(
 		leak.Position,
@@ -906,12 +930,6 @@ func stmtRedirectsToGitHubFile(stmt *syntax.Stmt, target string) bool {
 		}
 	}
 	return false
-}
-
-// stmtRedirectsToGitHubEnv は Stmt の Redirs に `> $GITHUB_ENV` / `>> $GITHUB_ENV` 系が
-// 含まれていれば true。
-func stmtRedirectsToGitHubEnv(stmt *syntax.Stmt) bool {
-	return stmtRedirectsToGitHubFile(stmt, "GITHUB_ENV")
 }
 
 // firstNameEqualsPrefix は Word の先頭 Lit 部分から `NAME=` 形式の NAME を取り出す。

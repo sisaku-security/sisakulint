@@ -79,7 +79,7 @@ Derived values flow through standard shell variable assignment and GitHub Action
 The rule performs taint propagation within a single `run` step, and additionally propagates
 taint across steps that belong to the same job via `$GITHUB_ENV`:
 
-1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all four scopes — workflow / job / cross-step / step — are merged, with step-level entries overriding the others on name conflict; cross-step entries propagated from previous steps are also overridden by step-level `env:` on the same name).
+1. **Taint sources** — environment variables whose value either (a) contains `${{ secrets.* }}` declared at workflow-level, job-level, or step-level `env`, or (b) is assigned a tainted `${{ steps.<id>.outputs.<name> }}` expression at step-level `env`. All five sources — workflow `env` / job `env` / cross-step `$GITHUB_ENV` propagation / step-level step-output-derived `env` / step-level secrets `env` — are merged in that order, with later entries overriding earlier ones on name conflict (so step-level entries always win).
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`). Propagation is **order-aware**: a single forward pass records the byte offset of each assignment, and sinks that appear *before* the assignment are not flagged (avoids false positives on `a=1; echo $a; a=$SECRET`). Environment-sourced variables are treated as set before the script begins (offset `-1`) and always considered valid.
 3. **Shell function argument propagation** — when a shell function is called with tainted arguments, positional parameters (`$1`, `$2`, `$@`, `$*`) inside the function body inherit that taint. Composite words such as `"$TOKEN-$KEY"` keep all upstream variables, so a partial mask does not suppress an unmasked upstream value.
 4. **Cross-step propagation via `$GITHUB_ENV`** — if a tainted shell variable is written to `$GITHUB_ENV` (via `echo "NAME=$VAR" >> $GITHUB_ENV`, `echo "NAME=$VAR" > $GITHUB_ENV`, or `cat <<EOF >> $GITHUB_ENV ... EOF`), the environment variable `NAME` becomes tainted for subsequent steps in the same job.
@@ -96,7 +96,8 @@ taint across steps that belong to the same job via `$GITHUB_ENV`:
 The following patterns are intentionally excluded from detection because their output does not reach *the current step's* build log directly:
 
 - **Stdout redirected to a file** — `echo "$TOKEN" > secret.txt`, `echo "$TOKEN" 1> out.txt` etc. Redirects to `/dev/stderr`, `/dev/stdout`, `/dev/tty`, or `/dev/fd/{1,2}` are *not* excluded because they are still shown in the log.
-- **Stdout redirected to `$GITHUB_OUTPUT`** — the current step's log does not receive the value, so no warning is raised for the redirect itself. If a subsequent step prints the resulting `${{ steps.<id>.outputs.<name> }}` value, that downstream use is reported.
+- **Stdout redirected to `$GITHUB_OUTPUT`** — the current step's log does not receive the value, so no warning is raised for the redirect itself. If a subsequent step (a) prints the resulting `${{ steps.<id>.outputs.<name> }}` value directly, or (b) assigns that expression to a step-level `env:` and prints the resulting shell variable, both downstream uses are reported.
+- **Direct `${{ secrets.X }}` expression written to `$GITHUB_OUTPUT`** — when a producer step has no env-derived shell taint and writes `${{ secrets.X }}` directly (e.g. `echo "token=${{ secrets.X }}" >> $GITHUB_OUTPUT`), no leak is reported for downstream `${{ steps.<id>.outputs.* }}` expansion. GitHub Actions auto-masks any occurrence of a `secrets.*` value across the entire run, so the same value is masked when the downstream step expands the step output. This rule only tracks shell-derived values whose auto-mask coverage is broken (jq / sed / base64 / etc.).
 - **`printf -v VAR ...`** — captures to a shell variable instead of printing.
 - **Inside command substitutions** — `VAR=$(echo "$SECRET")` does not leak because the inner stdout is captured by `$(...)`.
 
@@ -208,7 +209,7 @@ must be masked before the leak is suppressed.
 
 ### Scope Limitations (MVP)
 
-- **Same-job scope only** — cross-step taint is tracked within a single job via `$GITHUB_ENV`. Taint does not cross *job* boundaries (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432).
+- **Same-job scope only** — cross-step taint is tracked within a single job via `$GITHUB_ENV` and `$GITHUB_OUTPUT`. Taint does not cross *job* boundaries (`needs.*.outputs.*`); cross-job propagation is a planned follow-up (see #432).
 - **`logger` and pipe-consuming commands not yet covered** — `logger`, `xargs`, and similar sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream source if it is `echo`/`printf`, but the downstream command is not individually analyzed.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up (see #433).
 - **Composite / JS / Docker action internals are not parsed** — only `run:` blocks in the analyzed workflow are inspected. Leaks inside a `uses:`-referenced action are invisible.
