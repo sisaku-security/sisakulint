@@ -260,11 +260,9 @@ func (c *LocalReusableWorkflowCache) FindMetadata(spec string) (*ReusableWorkflo
 	file := filepath.Join(c.proj.RootDirectory(), filepath.FromSlash(spec))
 	file = filepath.Clean(file)
 
-	// Prevent path traversal attacks
-	rootDir := filepath.Clean(c.proj.RootDirectory())
-	if !strings.HasPrefix(file, rootDir+string(filepath.Separator)) && file != rootDir {
+	if err := validatePathInsideRoot(c.proj.RootDirectory(), file); err != nil {
 		c.writeCache(spec, nil)
-		return nil, fmt.Errorf("path traversal detected in workflow spec %q", spec)
+		return nil, fmt.Errorf("path traversal detected in workflow spec %q: %w", spec, err)
 	}
 
 	src, err := os.ReadFile(file)
@@ -294,7 +292,9 @@ func (c *LocalReusableWorkflowCache) pathToWorkflowSpecification(spec string) (s
 		spec = filepath.Join(c.cwd, spec)
 	}
 	r := c.proj.RootDirectory()
-	if !strings.HasPrefix(spec, r) {
+	spec = filepath.Clean(getAbsolutePath(spec))
+	r = filepath.Clean(getAbsolutePath(r))
+	if !isPathInsideRoot(r, spec) {
 		return "", false
 	}
 	p, err := filepath.Rel(r, spec)

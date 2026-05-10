@@ -55,6 +55,19 @@ type ScannerOptions struct {
 
 // NewScanner creates a new Scanner
 func NewScanner(opts *ScannerOptions) (*Scanner, error) {
+	if opts.Parallelism <= 0 {
+		return nil, fmt.Errorf("parallelism must be greater than zero")
+	}
+	if opts.MaxDepth < 0 {
+		return nil, fmt.Errorf("max depth must not be negative")
+	}
+	if opts.Limit <= 0 {
+		return nil, fmt.Errorf("limit must be greater than zero")
+	}
+	if opts.LintFunc == nil {
+		return nil, fmt.Errorf("LintFunc is not specified")
+	}
+
 	fetcher, err := NewFetcher(opts.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Fetcher: %w", err)
@@ -63,10 +76,6 @@ func NewScanner(opts *ScannerOptions) (*Scanner, error) {
 	output := opts.Output
 	if output == nil {
 		output = io.Discard
-	}
-
-	if opts.LintFunc == nil {
-		return nil, fmt.Errorf("LintFunc is not specified")
 	}
 
 	return &Scanner{
@@ -219,7 +228,7 @@ func (s *Scanner) scanWorkflowRecursive(ctx context.Context, wf *WorkflowFile, c
 				FullName: fmt.Sprintf("%s/%s", action.Owner, action.Repo),
 			}
 
-			actionWorkflow, err := s.fetcher.FetchSingleWorkflow(ctx, actionRepo, action.Path)
+			actionWorkflow, err := s.fetcher.FetchSingleWorkflow(ctx, actionRepo, action.Path, action.Ref)
 			if err != nil {
 				if ctx.Err() != nil {
 					break

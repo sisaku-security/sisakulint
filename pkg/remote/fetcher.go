@@ -208,13 +208,13 @@ func (f *Fetcher) FetchWorkflows(ctx context.Context, repo *RepositoryInfo) ([]*
 }
 
 // FetchSingleWorkflow retrieves a single workflow file
-func (f *Fetcher) FetchSingleWorkflow(ctx context.Context, repo *RepositoryInfo, workflowPath string) (*WorkflowFile, error) {
+func (f *Fetcher) FetchSingleWorkflow(ctx context.Context, repo *RepositoryInfo, workflowPath, ref string) (*WorkflowFile, error) {
 	fileContent, _, _, err := f.client.Repositories.GetContents(
 		ctx,
 		repo.Owner,
 		repo.Name,
 		workflowPath,
-		nil,
+		&github.RepositoryContentGetOptions{Ref: ref},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch workflow file %s: %w", workflowPath, err)

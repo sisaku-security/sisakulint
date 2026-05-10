@@ -23,6 +23,43 @@ func getAbsolutePath(path string) string {
 	return path
 }
 
+func isPathInsideRoot(root, target string) bool {
+	root = filepath.Clean(getAbsolutePath(root))
+	target = filepath.Clean(getAbsolutePath(target))
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (!filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+func validatePathInsideRoot(root, target string) error {
+	root = filepath.Clean(getAbsolutePath(root))
+	target = filepath.Clean(getAbsolutePath(target))
+	if !isPathInsideRoot(root, target) {
+		return fmt.Errorf("path traversal detected: %q escapes %q", target, root)
+	}
+
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Lstat(target); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	realTarget, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return err
+	}
+	if !isPathInsideRoot(realRoot, realTarget) {
+		return fmt.Errorf("path traversal detected: %q escapes %q", realTarget, realRoot)
+	}
+	return nil
+}
+
 // ぷろじぇくとの探索して指定されたパスが所属するプロジェクトを見つけることで新しいProjectインスタンスを作成する
 func locateProject(path string) (*Project, error) {
 	destinations := getAbsolutePath(path)

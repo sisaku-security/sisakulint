@@ -2,6 +2,8 @@ package core
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -799,4 +801,57 @@ func TestLocalReusableWorkflowCache(t *testing.T) {
 			t.Errorf("readCache() = %v, want nil", retrieved)
 		}
 	})
+}
+
+func TestLocalMetadataCachesRejectSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "action.yml"), []byte("name: outside\ninputs: {}\noutputs: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "workflow.yml"), []byte("on:\n  workflow_call:\n    inputs: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlink creation failed: %v", err)
+	}
+
+	project := &Project{root: root}
+	actionsCache := NewLocalActionsMetadataCache(project, nil)
+	actionMeta, actionErr := actionsCache.FindMetadata("./linked")
+	if actionErr == nil {
+		t.Fatalf("FindMetadata for symlinked local action returned metadata %+v without error", actionMeta)
+	}
+
+	workflowCache := NewLocalReusableWorkflowCache(project, root, nil)
+	workflowMeta, workflowErr := workflowCache.FindMetadata("./linked/workflow.yml")
+	if workflowErr == nil {
+		t.Fatalf("FindMetadata for symlinked reusable workflow returned metadata %+v without error", workflowMeta)
+	}
+}
+
+func TestWorkflowPathNormalizationRejectsRootPrefixSibling(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "repo")
+	sibling := filepath.Join(parent, "repo-evil", ".github", "workflows", "evil.yml")
+	if err := os.MkdirAll(filepath.Join(root, ".github", "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(sibling), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := NewLocalReusableWorkflowCache(&Project{root: root}, root, nil)
+	if spec, ok := cache.PathToWorkflowSpecification(sibling); ok {
+		t.Fatalf("PathToWorkflowSpecification accepted sibling path as %q", spec)
+	}
+	if spec, ok := cache.WorkflowCallSpecToWorkflowSpecification("./../repo-evil/.github/workflows/evil.yml"); ok {
+		t.Fatalf("WorkflowCallSpecToWorkflowSpecification accepted escaping spec as %q", spec)
+	}
 }

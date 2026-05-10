@@ -2,11 +2,18 @@ package remote
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-github/v68/github"
 )
 
 func TestExtractReusableActions(t *testing.T) {
@@ -237,6 +244,34 @@ func TestNewScanner_Validation(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "zero parallelism",
+			opts: &ScannerOptions{
+				Parallelism: 0,
+				Limit:       10,
+				LintFunc:    func(string, []byte) (bool, error) { return false, nil },
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative max depth",
+			opts: &ScannerOptions{
+				Parallelism: 1,
+				MaxDepth:    -1,
+				Limit:       10,
+				LintFunc:    func(string, []byte) (bool, error) { return false, nil },
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero limit",
+			opts: &ScannerOptions{
+				Parallelism: 1,
+				Limit:       0,
+				LintFunc:    func(string, []byte) (bool, error) { return false, nil },
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -246,6 +281,47 @@ func TestNewScanner_Validation(t *testing.T) {
 				t.Errorf("NewScanner() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestFetchSingleWorkflowUsesRequestedRef(t *testing.T) {
+	const wantRef = "v1.2.3"
+	const workflowPath = ".github/workflows/reusable.yml"
+	encoded := base64.StdEncoding.EncodeToString([]byte("name: reusable\non: workflow_call\n"))
+	var gotRef string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo/contents/"+workflowPath {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		gotRef = r.URL.Query().Get("ref")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"type":"file","name":"reusable.yml","path":%q,"encoding":"base64","content":%q}`, workflowPath, encoded)
+	}))
+	defer server.Close()
+
+	baseURL, err := url.Parse(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := github.NewClient(server.Client())
+	client.BaseURL = baseURL
+	client.UploadURL = baseURL
+	fetcher := &Fetcher{client: client}
+
+	workflow, err := fetcher.FetchSingleWorkflow(context.Background(), &RepositoryInfo{
+		Owner:    "owner",
+		Name:     "repo",
+		FullName: "owner/repo",
+	}, workflowPath, wantRef)
+	if err != nil {
+		t.Fatalf("FetchSingleWorkflow returned error: %v", err)
+	}
+	if gotRef != wantRef {
+		t.Fatalf("FetchSingleWorkflow used ref %q, want %q", gotRef, wantRef)
+	}
+	if string(workflow.Content) != "name: reusable\non: workflow_call\n" {
+		t.Fatalf("workflow content = %q", string(workflow.Content))
 	}
 }
 

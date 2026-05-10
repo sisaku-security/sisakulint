@@ -149,11 +149,9 @@ func (c *LocalActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata, 
 	dir := filepath.Join(c.proj.RootDirectory(), filepath.FromSlash(spec))
 	dir = filepath.Clean(dir)
 
-	// Prevent path traversal attacks
-	rootDir := filepath.Clean(c.proj.RootDirectory())
-	if !strings.HasPrefix(dir, rootDir+string(filepath.Separator)) && dir != rootDir {
+	if err := validatePathInsideRoot(c.proj.RootDirectory(), dir); err != nil {
 		c.writeCache(spec, nil)
-		return nil, fmt.Errorf("path traversal detected in action spec %q", spec)
+		return nil, fmt.Errorf("path traversal detected in action spec %q: %w", spec, err)
 	}
 
 	b, ok := c.readLocalActionMetadataFile(dir)
