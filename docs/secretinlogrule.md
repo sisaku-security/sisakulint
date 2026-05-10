@@ -82,10 +82,12 @@ taint across steps that belong to the same job via `$GITHUB_ENV`:
 1. **Taint sources** — environment variables whose value contains `${{ secrets.* }}` declared at the workflow-level, job-level, or step-level `env` (all four scopes — workflow / job / cross-step / step — are merged, with step-level entries overriding the others on name conflict; cross-step entries propagated from previous steps are also overridden by step-level `env:` on the same name).
 2. **Taint propagation** — shell assignments that reference a tainted variable, including command substitutions (`VAR=$(cmd $TAINTED)`). Propagation is **order-aware**: a single forward pass records the byte offset of each assignment, and sinks that appear *before* the assignment are not flagged (avoids false positives on `a=1; echo $a; a=$SECRET`). Environment-sourced variables are treated as set before the script begins (offset `-1`) and always considered valid.
 3. **Shell function argument propagation** — when a shell function is called with tainted arguments, positional parameters (`$1`, `$2`, `$@`, `$*`) inside the function body inherit that taint. Composite words such as `"$TOKEN-$KEY"` keep all upstream variables, so a partial mask does not suppress an unmasked upstream value.
-4. **Cross-step propagation via `$GITHUB_ENV`** — if a tainted shell variable is written to `$GITHUB_ENV` (via `echo "NAME=$VAR" >> $GITHUB_ENV`, `echo "NAME=$VAR" > $GITHUB_ENV`, or `cat <<EOF >> $GITHUB_ENV ... EOF`), the environment variable `NAME` becomes tainted for subsequent steps in the same job. Cross-*job* propagation (`needs.*.outputs.*`) and reusable-workflow propagation are separate follow-up items.
-5. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
+4. **Cross-step propagation via `$GITHUB_ENV`** — if a tainted shell variable is written to `$GITHUB_ENV` (via `echo "NAME=$VAR" >> $GITHUB_ENV`, `echo "NAME=$VAR" > $GITHUB_ENV`, or `cat <<EOF >> $GITHUB_ENV ... EOF`), the environment variable `NAME` becomes tainted for subsequent steps in the same job.
+5. **Cross-step propagation via `$GITHUB_OUTPUT`** — if a tainted shell variable is written to `$GITHUB_OUTPUT` by a step with an `id`, the corresponding `${{ steps.<id>.outputs.<name> }}` expression is treated as secret-derived for subsequent steps in the same job. Direct `run:` interpolation into `echo` / `printf` is flagged, and assigning that expression to `env:` taints the shell variable used by the step. Cross-*job* propagation (`needs.*.outputs.*`) and reusable-workflow propagation are separate follow-up items.
+6. **Sink detection** — the following commands are treated as sinks when they reference a tainted variable without a preceding `::add-mask::` for that variable:
    - `echo` / `printf` with a tainted argument
    - `cat` / `tee` / `dd` receiving tainted data via here-string (`<<<`) or heredoc (`<<EOF ... EOF`)
+   - writes of tainted values to `$GITHUB_STEP_SUMMARY`, because the value is rendered in the job summary UI
 
    Masks that appear *after* the sink are not considered protective, since GitHub Actions applies masking only to subsequent log output.
 
@@ -94,8 +96,7 @@ taint across steps that belong to the same job via `$GITHUB_ENV`:
 The following patterns are intentionally excluded from detection because their output does not reach *the current step's* build log directly:
 
 - **Stdout redirected to a file** — `echo "$TOKEN" > secret.txt`, `echo "$TOKEN" 1> out.txt` etc. Redirects to `/dev/stderr`, `/dev/stdout`, `/dev/tty`, or `/dev/fd/{1,2}` are *not* excluded because they are still shown in the log.
-- **Stdout redirected to `$GITHUB_OUTPUT` / `$GITHUB_STEP_SUMMARY`** — the current step's log does not receive the value, so no warning is raised for the redirect itself.
-  - However **the value is not gone**: writes to `$GITHUB_OUTPUT` become `steps.<id>.outputs.<name>` and will leak if a subsequent step does `run: echo ${{ steps.x.outputs.TOKEN }}`, and writes to `$GITHUB_STEP_SUMMARY` are rendered in the job summary UI. Downstream template-expression leaks and summary-UI leaks are **out of scope** for this rule and are not tracked.
+- **Stdout redirected to `$GITHUB_OUTPUT`** — the current step's log does not receive the value, so no warning is raised for the redirect itself. If a subsequent step prints the resulting `${{ steps.<id>.outputs.<name> }}` value, that downstream use is reported.
 - **`printf -v VAR ...`** — captures to a shell variable instead of printing.
 - **Inside command substitutions** — `VAR=$(echo "$SECRET")` does not leak because the inner stdout is captured by `$(...)`.
 
@@ -105,7 +106,6 @@ These are real leakage paths that this rule does **not** currently detect. They 
 
 - **Shell trace mode (`set -x` / `set -o xtrace` / `PS4`)** — when trace is enabled, bash prints every expanded command to stderr, which goes to the build log. Any command referencing a tainted variable leaks under trace mode. The rule only looks at `echo` / `printf` / `cat` / `tee` / `dd`, so trace-mode leaks are not flagged.
 - **File-based cross-step leakage (non-`$GITHUB_ENV`)** — `echo "$VAL" > /tmp/x` in one step followed by `cat /tmp/x` in another step. Taint is not tracked across the filesystem, and `cat file` (without heredoc / here-string) is not treated as a sink.
-- **Downstream use of `steps.<id>.outputs.*`** — see the `$GITHUB_OUTPUT` note above. The rule does not follow template-expression references between steps.
 - **Composite actions and JavaScript/Docker actions (`uses:`)** — only `run:` scripts in the caller workflow are analyzed. A vulnerable `echo` inside an external action's internals is invisible to this rule.
 - **`eval` / `bash -c '...'` / `trap '...' ERR|EXIT`** — sinks embedded inside a string argument to `eval` or `bash -c`, or inside `trap` handler bodies, are not parsed as `CallExpr` nodes and are therefore not recognized.
 - **Process substitution `>(cmd)` / `<(cmd)`** — sink detection does not descend into process substitutions.
@@ -163,6 +163,27 @@ The first step's derivation (`DERIVED`) is tainted, and writing `TOKEN=$DERIVED`
 marks `TOKEN` as a tainted environment variable for the next step. The next step's `echo "$TOKEN"`
 is therefore flagged even though neither the step nor the job declares `TOKEN` in `env:`.
 
+### Step output propagation example
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_JSON: ${{ secrets.SECRET_JSON }}
+    steps:
+      - id: derive
+        run: |
+          TOKEN=$(echo "$SECRET_JSON" | jq -r '.token')
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+      - run: |
+          echo "got: ${{ steps.derive.outputs.token }}"   # flagged
+```
+
+Writing to `$GITHUB_OUTPUT` does not print the value in the producing step, but GitHub Actions
+does not automatically mask the derived output when a later step expands
+`${{ steps.derive.outputs.token }}`. The rule tracks this same-job path.
+
 ### Shell function argument example
 
 ```yaml
@@ -193,7 +214,7 @@ must be masked before the leak is suppressed.
 - **Composite / JS / Docker action internals are not parsed** — only `run:` blocks in the analyzed workflow are inspected. Leaks inside a `uses:`-referenced action are invisible.
 - **Dynamic shell function dispatch is not resolved** — direct function calls are analyzed, but variable-driven calls such as `$cmd "$TOKEN"` are treated as statically unresolved.
 - **Shell trace mode, `eval` / `bash -c` strings, `trap` handlers, process substitution, env-dumping commands, and indirect expansion are not modeled** — see "Patterns the rule does not analyze at all" above.
-- **`$GITHUB_OUTPUT` downstream references are not tracked** — writes to `$GITHUB_OUTPUT` are excluded as non-sinks for the current step, but subsequent steps that expand `${{ steps.<id>.outputs.* }}` and print the result are not analyzed.
+- **`$GITHUB_OUTPUT` tracking is same-job only** — writes to `$GITHUB_OUTPUT` are tracked for subsequent `steps.<id>.outputs.*` uses in the same job, but job outputs consumed through `needs.*.outputs.*` are not tracked yet.
 
 ### Related Rules
 

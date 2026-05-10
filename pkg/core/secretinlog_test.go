@@ -82,7 +82,7 @@ func TestSecretInLog_FindEchoLeaks(t *testing.T) {
 			}{{"PRIVATE_KEY", "echo"}},
 		},
 		{
-			name: "double-quoted dynamic command name is not echo",
+			name:     "double-quoted dynamic command name is not echo",
 			script:   "SUFFIX=x\n\"echo$SUFFIX\" \"$TOKEN\"\n",
 			tainted:  map[string]shell.Entry{"TOKEN": {Sources: []string{"secrets.API"}, Offset: -1}},
 			wantHits: nil,
@@ -1211,6 +1211,116 @@ func TestSecretInLog_CrossStep_GithubOutputDoesNotPropagate(t *testing.T) {
 	}
 }
 
+func TestSecretInLog_CrossStep_GithubOutputDirectExpressionLeak(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ steps.derive.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 GITHUB_OUTPUT downstream leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "steps.derive.outputs.token") {
+		t.Errorf("message should mention the tainted step output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossStep_GithubOutputEnvExpressionLeak(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	step2 := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ steps.derive.outputs.token }}"},
+		`echo "$TOKEN"`,
+	)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 GITHUB_OUTPUT env downstream leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "steps.derive.outputs.token") {
+		t.Errorf("message should mention the tainted step output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossStep_GithubOutputDirectExpressionMasked(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	step2 := mkRunStepForTest(t, nil, `echo "::add-mask::${{ steps.derive.outputs.token }}"
+echo "got: ${{ steps.derive.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("masked GITHUB_OUTPUT expression should not leak, got %d: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_CrossStep_GithubOutputExpressionMaskUsesCurrentOccurrence(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	step2 := mkRunStepForTest(t, nil, `: "${{ steps.derive.outputs.token }}"
+echo "::add-mask::${{ steps.derive.outputs.token }}"
+echo "got: ${{ steps.derive.outputs.token }}"`)
+	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("mask before current sink should suppress even when expression appeared earlier, got %d: %v", got, rule.Errors())
+	}
+}
+
+func TestSecretInLog_GitHubStepSummaryWriteFlagged(t *testing.T) {
+	t.Parallel()
+
+	step := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"debug: $D\" >> $GITHUB_STEP_SUMMARY",
+	)
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 GITHUB_STEP_SUMMARY leak, got %d: %v", got, rule.Errors())
+	}
+}
+
 func TestSecretInLog_CrossStep_StepEnvOverridesCrossStep(t *testing.T) {
 	t.Parallel()
 
@@ -1393,10 +1503,11 @@ func TestSecretInLog_LineContinuationDoesNotBreakDetection(t *testing.T) {
 // Literal block 補正、out-of-range フォールバックを直接 assert する。
 //
 // script のオフセット境界:
-//   "echo $TOKEN\n  echo $SECRET\n"
-//        ^5             ^19
-//   - line 1: `echo $TOKEN` (offset 0..10), '\n' at 11
-//   - line 2: `  echo $SECRET` (offset 12..25), '\n' at 26
+//
+//	"echo $TOKEN\n  echo $SECRET\n"
+//	     ^5             ^19
+//	- line 1: `echo $TOKEN` (offset 0..10), '\n' at 11
+//	- line 2: `  echo $SECRET` (offset 12..25), '\n' at 26
 func TestOffsetToPosition_ColumnValue(t *testing.T) {
 	t.Parallel()
 

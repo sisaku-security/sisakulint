@@ -2,12 +2,14 @@ package core
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
@@ -33,6 +35,10 @@ type SecretInLogRule struct {
 	// VisitJobPre の冒頭でリセットされ、各 step 処理後に $GITHUB_ENV 書き込みから
 	// 追加される。クロスジョブ伝播は範囲外（follow-up issue）。
 	crossStepEnv map[string]string
+	// crossStepOutputs は同一 Job 内で前 step が `$GITHUB_OUTPUT` 経由で書き出した
+	// tainted な step output を、後続 step の `${{ steps.<id>.outputs.<name> }}`
+	// 参照に引き継ぐためのマップ。
+	crossStepOutputs map[string]map[string]string
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
@@ -57,6 +63,13 @@ type echoLeakOccurrence struct {
 	Origin   string
 	Position *ast.Position
 	Offset   int // sink のバイトオフセット（script 内での位置。offset-aware な add-mask 判定に使用）
+	Command  string
+}
+
+type stepOutputLeakOccurrence struct {
+	Expr     string
+	Origin   string
+	Position *ast.Position
 	Command  string
 }
 
@@ -196,6 +209,9 @@ func stmtRedirectsStdoutAwayFromLog(stmt *syntax.Stmt) bool {
 		case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
 			continue
 		}
+		if wordIsEnvVarRef(r.Word) == "GITHUB_STEP_SUMMARY" {
+			continue
+		}
 		return true
 	}
 	return false
@@ -304,6 +320,131 @@ func (rule *SecretInLogRule) collectLeakedVars(
 	})
 }
 
+func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr *ast.String) []stepOutputLeakOccurrence {
+	if script == "" || len(rule.crossStepOutputs) == 0 {
+		return nil
+	}
+	sanitized, exprMap := sanitizeForShellParse(script)
+	if len(exprMap) == 0 {
+		return nil
+	}
+	placeholderOffsets := expressionOffsetsByPlaceholder(script)
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return nil
+	}
+
+	var leaks []stepOutputLeakOccurrence
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
+			return false
+		}
+		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
+			if stmtRedirectsStdoutAwayFromLog(stmt) {
+				return false
+			}
+			return true
+		}
+		call, ok := node.(*syntax.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		cmdName := leadingBareLiteral(call.Args[0])
+		if cmdName != "echo" && cmdName != "printf" {
+			return true
+		}
+		if cmdName == "printf" && len(call.Args) >= 2 && leadingBareLiteral(call.Args[1]) == "-v" {
+			return true
+		}
+		for _, arg := range call.Args[1:] {
+			rule.collectLeakedStepOutputExprs(arg, exprMap, placeholderOffsets, script, runStr, cmdName, &leaks)
+		}
+		return true
+	})
+	return leaks
+}
+
+func (rule *SecretInLogRule) collectLeakedStepOutputExprs(
+	arg *syntax.Word,
+	exprMap map[string]string,
+	placeholderOffsets map[string]int,
+	script string,
+	runStr *ast.String,
+	cmdName string,
+	leaks *[]stepOutputLeakOccurrence,
+) {
+	seen := make(map[string]struct{})
+	syntax.Walk(arg, func(node syntax.Node) bool {
+		var text string
+		switch n := node.(type) {
+		case *syntax.Lit:
+			text = n.Value
+		case *syntax.SglQuoted:
+			text = n.Value
+		default:
+			return true
+		}
+		for _, placeholder := range taintPlaceholderPattern.FindAllString(text, -1) {
+			expr, ok := exprMap[placeholder]
+			if !ok {
+				continue
+			}
+			path, origin, ok := rule.resolveTaintedStepOutputExpr(expr)
+			if !ok {
+				continue
+			}
+			key := path + "\x00" + cmdName
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			offset := placeholderOffsets[placeholder]
+			if hasAddMaskForExpressionBefore(script, expr, offset) {
+				continue
+			}
+			*leaks = append(*leaks, stepOutputLeakOccurrence{
+				Expr:     path,
+				Origin:   origin,
+				Position: offsetToPosition(runStr, script, offset),
+				Command:  cmdName,
+			})
+		}
+		return true
+	})
+}
+
+func expressionOffsetsByPlaceholder(script string) map[string]int {
+	offsets := make(map[string]int)
+	for i, m := range taintGhExprPattern.FindAllStringSubmatchIndex(script, -1) {
+		if len(m) < 4 {
+			continue
+		}
+		offsets[taintPlaceholderPrefix+strconv.Itoa(i)+"_"] = m[0]
+	}
+	return offsets
+}
+
+func hasAddMaskForExpressionBefore(script, expr string, beforeOffset int) bool {
+	for _, m := range taintGhExprPattern.FindAllStringSubmatchIndex(script, -1) {
+		if len(m) < 4 {
+			continue
+		}
+		if strings.TrimSpace(script[m[2]:m[3]]) != strings.TrimSpace(expr) {
+			continue
+		}
+		exprStart := m[0]
+		prefixStart := exprStart - len("::add-mask::")
+		if prefixStart < 0 || !strings.HasSuffix(script[:exprStart], "::add-mask::") {
+			continue
+		}
+		if beforeOffset < 0 || exprStart <= beforeOffset {
+			return true
+		}
+	}
+	return false
+}
+
 // hasAddMaskFor は script 内に該当変数への ::add-mask:: 呼び出しがあれば true。
 // ブレース形式 "${NAME}" は常に "}" で終端されるため単純検索で十分。
 // ベア形式 "$NAME" は識別子境界チェックを行い、"$NAME_SUFFIX" の誤マッチを防ぐ。
@@ -376,6 +517,7 @@ func (rule *SecretInLogRule) VisitWorkflowPre(node *ast.Workflow) error {
 func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
 	rule.jobEnvSecrets = rule.collectSecretEnvVars(node.Env)
 	rule.crossStepEnv = make(map[string]string)
+	rule.crossStepOutputs = make(map[string]map[string]string)
 	for _, step := range node.Steps {
 		rule.checkStep(step)
 	}
@@ -410,9 +552,17 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	for k, v := range rule.crossStepEnv {
 		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
+	for k, v := range rule.collectTaintedStepOutputEnvVars(step.Env) {
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
+	}
 	for k, v := range rule.collectSecretEnvVars(step.Env) {
 		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
 	}
+
+	for _, leak := range rule.findStepOutputExpressionLeaks(script, execRun.Run) {
+		rule.reportStepOutputLeak(leak)
+	}
+
 	if len(initialTainted) == 0 {
 		return
 	}
@@ -437,6 +587,14 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	// 判定に使うため、ここでは展開せずそのまま流す (spec §5.2)。
 	for name, origin := range rule.collectGitHubEnvTaintWrites(file, scoped, script) {
 		rule.crossStepEnv[name] = origin
+	}
+	if step.ID != nil && step.ID.Value != "" {
+		for name, origin := range rule.collectGitHubOutputTaintWrites(file, scoped, script) {
+			if rule.crossStepOutputs[step.ID.Value] == nil {
+				rule.crossStepOutputs[step.ID.Value] = make(map[string]string)
+			}
+			rule.crossStepOutputs[step.ID.Value][name] = origin
+		}
 	}
 }
 
@@ -467,6 +625,18 @@ func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
 			"tools like jq are not masked and will appear in plaintext in build logs. %s "+
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
 		leak.VarName, leak.Origin, leak.Command, suggestion,
+	)
+}
+
+func (rule *SecretInLogRule) reportStepOutputLeak(leak stepOutputLeakOccurrence) {
+	rule.Errorf(
+		leak.Position,
+		"secret in log: step output %s (origin: %s) is printed via '%s' without masking. "+
+			"Values written to $GITHUB_OUTPUT are not automatically masked when later expanded "+
+			"through steps.*.outputs.* and can appear in plaintext in build logs. "+
+			"Pass the output through an environment variable and mask it before printing, or avoid printing the value. "+
+			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
+		leak.Expr, leak.Origin, leak.Command,
 	)
 }
 
@@ -713,9 +883,9 @@ func wordIsEnvVarRef(w *syntax.Word) string {
 	return ""
 }
 
-// stmtRedirectsToGitHubEnv は Stmt の Redirs に `> $GITHUB_ENV` / `>> $GITHUB_ENV` 系が
-// 含まれていれば true。書き込み先の Word が $GITHUB_ENV の参照であるかを AST で判定する。
-func stmtRedirectsToGitHubEnv(stmt *syntax.Stmt) bool {
+// stmtRedirectsToGitHubFile は Stmt の Redirs に `> $TARGET` / `>> $TARGET` 系が
+// 含まれていれば true。書き込み先の Word が指定 env var の参照であるかを AST で判定する。
+func stmtRedirectsToGitHubFile(stmt *syntax.Stmt, target string) bool {
 	if stmt == nil {
 		return false
 	}
@@ -731,11 +901,17 @@ func stmtRedirectsToGitHubEnv(stmt *syntax.Stmt) bool {
 		if r.N != nil && r.N.Value != "" && r.N.Value != "1" {
 			continue
 		}
-		if wordIsEnvVarRef(r.Word) == "GITHUB_ENV" {
+		if wordIsEnvVarRef(r.Word) == target {
 			return true
 		}
 	}
 	return false
+}
+
+// stmtRedirectsToGitHubEnv は Stmt の Redirs に `> $GITHUB_ENV` / `>> $GITHUB_ENV` 系が
+// 含まれていれば true。
+func stmtRedirectsToGitHubEnv(stmt *syntax.Stmt) bool {
+	return stmtRedirectsToGitHubFile(stmt, "GITHUB_ENV")
 }
 
 // firstNameEqualsPrefix は Word の先頭 Lit 部分から `NAME=` 形式の NAME を取り出す。
@@ -775,6 +951,23 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 	scoped *shell.ScopedTaint,
 	script string,
 ) map[string]string {
+	return rule.collectGitHubFileTaintWrites(file, scoped, script, "GITHUB_ENV")
+}
+
+func (rule *SecretInLogRule) collectGitHubOutputTaintWrites(
+	file *syntax.File,
+	scoped *shell.ScopedTaint,
+	script string,
+) map[string]string {
+	return rule.collectGitHubFileTaintWrites(file, scoped, script, "GITHUB_OUTPUT")
+}
+
+func (rule *SecretInLogRule) collectGitHubFileTaintWrites(
+	file *syntax.File,
+	scoped *shell.ScopedTaint,
+	script string,
+	target string,
+) map[string]string {
 	result := make(map[string]string)
 	if file == nil {
 		return result
@@ -784,7 +977,7 @@ func (rule *SecretInLogRule) collectGitHubEnvTaintWrites(
 		if !ok {
 			return true
 		}
-		if !stmtRedirectsToGitHubEnv(stmt) {
+		if !stmtRedirectsToGitHubFile(stmt, target) {
 			return true
 		}
 		call, ok := stmt.Cmd.(*syntax.CallExpr)
@@ -951,4 +1144,70 @@ func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]strin
 		result[name] = strings.Join(origins, ",")
 	}
 	return result
+}
+
+func (rule *SecretInLogRule) collectTaintedStepOutputEnvVars(env *ast.Env) map[string]string {
+	result := make(map[string]string)
+	if env == nil || env.Vars == nil || len(rule.crossStepOutputs) == 0 {
+		return result
+	}
+	for key, envVar := range env.Vars {
+		if envVar == nil || envVar.Value == nil || !envVar.Value.ContainsExpression() {
+			continue
+		}
+		name := key
+		if envVar.Name != nil && envVar.Name.Value != "" {
+			name = envVar.Name.Value
+		}
+		matches := taintGhExprPattern.FindAllStringSubmatch(envVar.Value.Value, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			path, origin, ok := rule.resolveTaintedStepOutputExpr(match[1])
+			if !ok {
+				continue
+			}
+			result[name] = path + " (origin: " + origin + ")"
+			break
+		}
+	}
+	return result
+}
+
+func (rule *SecretInLogRule) resolveTaintedStepOutputExpr(exprStr string) (string, string, bool) {
+	path := normalizeStepOutputExprPath(exprStr)
+	if path == "" {
+		return "", "", false
+	}
+	parts := strings.Split(path, ".")
+	if len(parts) < 4 || parts[0] != "steps" || parts[2] != "outputs" {
+		return "", "", false
+	}
+	stepID := parts[1]
+	outputName := strings.Join(parts[3:], ".")
+	if outputs := rule.crossStepOutputs[stepID]; outputs != nil {
+		if origin, ok := outputs[outputName]; ok {
+			return path, origin, true
+		}
+	}
+	return "", "", false
+}
+
+func normalizeStepOutputExprPath(exprStr string) string {
+	exprStr = strings.TrimSpace(exprStr)
+	if exprStr == "" {
+		return ""
+	}
+	tokenInput := exprStr
+	if !strings.HasSuffix(tokenInput, "}}") {
+		tokenInput += "}}"
+	}
+	l := expressions.NewTokenizer(tokenInput)
+	p := expressions.NewMiniParser()
+	node, err := p.Parse(l)
+	if err == nil && node != nil {
+		return exprNodeToString(node)
+	}
+	return exprStr
 }
