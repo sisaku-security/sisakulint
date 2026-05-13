@@ -23,6 +23,7 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | File | Description |
 |------|-------------|
 | `cache-poisoning.yaml` | Demonstrates cache poisoning vulnerabilities |
+| `cache-poisoning-composite-action.yaml` | TanStack-style cache poisoning via `pull_request_target`, unsafe PR merge checkout, and remote composite action cache usage |
 | `cache-poisoning-safe.yaml` | Safe cache configuration example |
 | `credential.yaml` | Credential exposure patterns |
 | `issueinjection.yaml` | Script injection via GitHub context |
