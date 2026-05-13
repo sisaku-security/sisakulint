@@ -346,6 +346,22 @@ jobs:
 			wantErr: true,
 			errMsg:  "checking out untrusted code from pull request",
 		},
+		{
+			name: "Vulnerable: pull_request_target with refs pull merge ref",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+`,
+			wantErr: true,
+			errMsg:  "checking out untrusted code from pull request",
+		},
 	}
 
 	for _, tt := range tests {

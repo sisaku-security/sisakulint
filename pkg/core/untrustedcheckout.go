@@ -156,23 +156,10 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 
 // isUntrustedPRRef checks if a ref value points to untrusted PR code
 func (rule *UntrustedCheckoutRule) isUntrustedPRRef(refValue *ast.String) bool {
-	// Check if the value contains expressions
-	if !refValue.ContainsExpression() {
-		// No expression - literal ref is safe
+	if refValue == nil {
 		return false
 	}
-
-	// Extract and parse all expressions in the ref value
-	exprs := rule.extractAndParseRefExpressions(refValue)
-
-	// Check each expression for untrusted PR references
-	for _, expr := range exprs {
-		if rule.isUntrustedPRExpression(expr.node, expr.raw) {
-			return true
-		}
-	}
-
-	return false
+	return IsUnsafeCheckoutRef(refValue.Value)
 }
 
 // refParsedExpression represents a parsed expression with its position and AST node

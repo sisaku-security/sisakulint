@@ -545,6 +545,11 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
 	wfTaintMap := NewWorkflowTaintMap()
+	var debugOut io.Writer
+	if localActions != nil {
+		debugOut = localActions.dbg
+	}
+	actionMetadata := NewMultiActionMetadataResolver(localActions, NewRemoteActionsMetadataCache(debugOut))
 
 	return []Rule{
 		// MatrixRule(),
@@ -574,7 +579,7 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		NewArtifactPoisoningMediumRule(),
 		NewActionListRule(),
 		NewUntrustedCheckoutRule(),
-		NewCachePoisoningRule(),
+		NewCachePoisoningRule(actionMetadata),
 		NewCachePoisoningPoisonableStepRule(),
 		NewSecretExposureRule(),                                       // Detects toJSON(secrets) and secrets[dynamic-access]
 		NewUnmaskedSecretExposureRule(),                               // Detects fromJson(secrets.XXX).yyy unmasked exposure

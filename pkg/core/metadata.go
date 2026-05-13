@@ -1,13 +1,17 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/sisaku-security/sisakulint/pkg/remote"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,14 +83,64 @@ func (outputs *ActionOutputsMetadata) UnmarshalYAML(n *yaml.Node) error {
 	return nil
 }
 
+// ActionRunsMetadata represents the "runs" section in GitHub Action metadata.
+// For this linter, only composite-action steps are needed so rules can inspect
+// transitive uses such as actions/cache.
+type ActionRunsMetadata struct {
+	Using string                `yaml:"using" json:"using"`
+	Steps []*ActionStepMetadata `yaml:"steps" json:"steps"`
+}
+
+// ActionStepMetadata is the subset of composite action step metadata needed by
+// rules that reason about transitive action calls.
+type ActionStepMetadata struct {
+	Uses string            `yaml:"uses" json:"uses"`
+	If   string            `yaml:"if" json:"if"`
+	With map[string]string `yaml:"with" json:"with"`
+}
+
 // GitHub Actionsの全体的なメタデータ構造体
 // *https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions
 type ActionMetadata struct {
 	Name        string                `yaml:"name" json:"name"`
 	Inputs      ActionInputsMetadata  `yaml:"inputs" json:"inputs"`
 	Outputs     ActionOutputsMetadata `yaml:"outputs" json:"outputs"`
+	Runs        *ActionRunsMetadata   `yaml:"runs" json:"runs"`
 	SkipInputs  bool                  `json:"skip_inputs"`
 	SkipOutputs bool                  `json:"skip_outputs"`
+}
+
+type ActionMetadataResolver interface {
+	FindMetadata(spec string) (*ActionMetadata, error)
+}
+
+type MultiActionMetadataResolver struct {
+	resolvers []ActionMetadataResolver
+}
+
+func NewMultiActionMetadataResolver(resolvers ...ActionMetadataResolver) *MultiActionMetadataResolver {
+	filtered := make([]ActionMetadataResolver, 0, len(resolvers))
+	for _, resolver := range resolvers {
+		if resolver != nil {
+			filtered = append(filtered, resolver)
+		}
+	}
+	return &MultiActionMetadataResolver{resolvers: filtered}
+}
+
+func (r *MultiActionMetadataResolver) FindMetadata(spec string) (*ActionMetadata, error) {
+	var lastErr error
+	for _, resolver := range r.resolvers {
+		meta, err := resolver.FindMetadata(spec)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if meta != nil {
+			return meta, nil
+		}
+	}
+	return nil, lastErr
 }
 
 // ローカルアクションのメタデータキャッシュ構造体
@@ -184,6 +238,136 @@ func (c *LocalActionsMetadataCache) readLocalActionMetadataFile(dir string) ([]b
 		}
 	}
 	return nil, false
+}
+
+type RemoteActionsMetadataCache struct {
+	mu      sync.RWMutex
+	fetcher *remote.Fetcher
+	cache   map[string]*ActionMetadata
+	dbg     io.Writer
+}
+
+type remoteActionSpec struct {
+	owner string
+	repo  string
+	dir   string
+	ref   string
+}
+
+func NewRemoteActionsMetadataCache(dbg io.Writer) *RemoteActionsMetadataCache {
+	fetcher, err := remote.NewFetcher(1)
+	if err != nil {
+		return &RemoteActionsMetadataCache{cache: make(map[string]*ActionMetadata), dbg: dbg}
+	}
+	return &RemoteActionsMetadataCache{fetcher: fetcher, cache: make(map[string]*ActionMetadata), dbg: dbg}
+}
+
+func (c *RemoteActionsMetadataCache) debug(format string, args ...interface{}) {
+	if c.dbg == nil {
+		return
+	}
+	format = "[RemoteActionsMetadataCache] " + format + "\n"
+	fmt.Fprintf(c.dbg, format, args...)
+}
+
+func (c *RemoteActionsMetadataCache) readCache(key string) (*ActionMetadata, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	m, ok := c.cache[key]
+	return m, ok
+}
+
+func (c *RemoteActionsMetadataCache) writeCache(key string, val *ActionMetadata) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache[key] = val
+}
+
+func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata, error) {
+	if c.fetcher == nil {
+		return nil, nil
+	}
+	if m, ok := c.readCache(spec); ok {
+		c.debug("cache hit @ %s: %v", spec, m)
+		return m, nil
+	}
+
+	actionSpec, ok := parseRemoteActionSpec(spec)
+	if !ok {
+		return nil, nil
+	}
+
+	repo := &remote.RepositoryInfo{
+		Owner:    actionSpec.owner,
+		Name:     actionSpec.repo,
+		FullName: actionSpec.owner + "/" + actionSpec.repo,
+	}
+
+	var lastErr error
+	for _, metadataPath := range remoteActionMetadataPaths(actionSpec.dir) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		b, err := c.fetcher.FetchFile(ctx, repo, metadataPath, actionSpec.ref)
+		cancel()
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var meta ActionMetadata
+		if err := yaml.Unmarshal(b, &meta); err != nil {
+			c.writeCache(spec, nil)
+			msg := strings.ReplaceAll(err.Error(), "\n", " ")
+			return nil, fmt.Errorf("failed to parse remote action metadata file %q: %s", metadataPath, msg)
+		}
+
+		c.debug("detected remote action metadata @ %s: %v", spec, meta)
+		c.writeCache(spec, &meta)
+		return &meta, nil
+	}
+
+	c.writeCache(spec, nil)
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed to fetch remote action metadata for %q: %w", spec, lastErr)
+	}
+	return nil, nil
+}
+
+func parseRemoteActionSpec(spec string) (*remoteActionSpec, bool) {
+	if spec == "" || strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, ".\\") || strings.HasPrefix(spec, "docker://") {
+		return nil, false
+	}
+
+	at := strings.LastIndex(spec, "@")
+	if at <= 0 || at == len(spec)-1 {
+		return nil, false
+	}
+
+	actionPath := spec[:at]
+	ref := spec[at+1:]
+	parts := strings.Split(actionPath, "/")
+	if len(parts) < 3 {
+		return nil, false
+	}
+
+	dir := pathpkg.Clean(strings.Join(parts[2:], "/"))
+	if dir == "." || strings.HasPrefix(dir, "../") || dir == ".." {
+		return nil, false
+	}
+
+	return &remoteActionSpec{
+		owner: parts[0],
+		repo:  parts[1],
+		dir:   dir,
+		ref:   ref,
+	}, true
+}
+
+func remoteActionMetadataPaths(dir string) []string {
+	cleanDir := pathpkg.Clean(dir)
+	return []string{
+		pathpkg.Join(cleanDir, "action.yml"),
+		pathpkg.Join(cleanDir, "action.yaml"),
+	}
 }
 
 // ローカルアクションのメタデータキャッシュファクトリ構造体
