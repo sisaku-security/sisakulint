@@ -11,7 +11,7 @@ weight: 1
 
 ### Cache Poisoning Rule Overview
 
-This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It identifies two types of cache poisoning attacks:
+This rule detects potential cache poisoning vulnerabilities in GitHub Actions workflows. It covers direct cache actions, setup actions that enable caching, and composite actions that invoke cache actions directly or transitively.
 
 ### Security Impact
 
@@ -27,18 +27,22 @@ Cache poisoning vulnerabilities pose significant risks to CI/CD pipeline integri
 This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-9: Improper Artifact Integrity Validation**.
 
 1. **Indirect Cache Poisoning**: Dangerous combinations of untrusted triggers with unsafe checkout and cache operations
-2. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
+2. **Composite Action Cache Poisoning**: Unsafe checkout followed by a composite action that invokes `actions/cache` or a setup action with caching enabled
+3. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
 
-The rule detects three types of cache poisoning attacks:
+The rule detects four types of cache poisoning attacks:
 1. **Indirect Cache Poisoning**: Untrusted triggers + unsafe checkout + cache actions
-2. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
-3. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
+2. **Composite Action Cache Poisoning**: Untrusted triggers + unsafe checkout + local or remote composite actions that use cache
+3. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
+4. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
 
 #### Key Features
 
 - **Dual Detection Mode**: Detects both indirect (trigger-based) and direct (input-based) cache poisoning
 - **Multiple Trigger Detection**: Identifies `issue_comment`, `pull_request_target`, and `workflow_run` triggers
 - **Comprehensive Cache Detection**: Detects both `actions/cache` and setup-* actions with cache enabled
+- **Composite Action Metadata Resolution**: Resolves local and remote action metadata, including `owner/repo@ref` and `owner/repo/path@ref`, to find direct and bounded transitive cache usage
+- **Job-Level Trigger Scoping**: Honors job-level `if:` filters such as `github.event_name == 'push'` to avoid applying workflow-level unsafe triggers to jobs that cannot run on them
 - **Direct Cache Input Validation**: Checks for untrusted expressions in `key`, `restore-keys`, and `path` inputs
 - **Job Isolation**: Correctly scopes detection to individual jobs
 - **Smart Checkout Tracking**: Resets unsafe state when a safe checkout follows an unsafe one
@@ -77,6 +81,24 @@ The rule triggers when all three conditions are met
    - `actions/setup-python` with `cache` input
    - `actions/setup-go` with `cache` input
    - `actions/setup-java` with `cache` input
+   - A composite action that invokes one of the above directly or through another composite action
+
+#### Composite Action Cache Poisoning
+
+The rule also resolves action metadata for composite actions. This detects cases where the workflow itself does not contain `actions/cache`, but calls a composite action that does.
+
+This is important for workflows that use a privileged trigger, check out fork-controlled PR code, and then call a mutable remote composite action such as `owner/repo/path@main`. In that shape, cache writes may happen in the base repository cache scope even when the workflow appears to grant only read permissions.
+
+The rule reports when all conditions are met:
+
+1. The job can run on an unsafe trigger (`pull_request_target`, `issue_comment`, or `workflow_run`)
+2. The job checks out untrusted PR code
+3. A later step calls a composite action whose metadata resolves to:
+   - `actions/cache`
+   - `actions/setup-*` with `cache` enabled
+   - Another composite action that eventually invokes one of the above
+
+For mutable remote composite actions, the rule also warns when the action currently resolves as composite but the visible metadata does not show cache usage. This covers historical-cache-risk cases where the current `@main` state may no longer contain the exact vulnerable transitive cache call.
 
 #### Direct Cache Poisoning (Input-Based)
 
@@ -189,6 +211,32 @@ jobs:
             pip-${{ github.head_ref }}-
 ```
 
+#### Example 4: Composite Action Cache Poisoning (TanStack-Style)
+
+```yaml
+name: Bundle Size
+on:
+  pull_request_target:
+
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+
+      # VULNERABLE: this remote composite action can invoke actions/cache transitively.
+      # In pull_request_target, cache writes happen in the base repository scope.
+      - uses: TanStack/config/.github/setup@main
+
+      - run: pnpm nx run @benchmarks/bundle-size:build
+```
+
+This pattern is risky even with `permissions: contents: read`. GitHub Actions cache writes are not controlled by the workflow `GITHUB_TOKEN` permissions in the same way as repository API access.
+
 ### Example Output
 
 #### Indirect Cache Poisoning Output
@@ -213,6 +261,15 @@ $ sisakulint ./cache-poisoning-direct.yaml
 
 ./cache-poisoning-direct.yaml:18:22: cache poisoning via untrusted input: 'github.head_ref' in cache restore-keys is potentially untrusted. An attacker can control the cache key to poison the cache. Use trusted inputs like github.sha, hashFiles(), or static values instead [cache-poisoning]
       18 👈|            pip-${{ github.head_ref }}-
+```
+
+#### Composite Action Cache Poisoning Output
+
+```bash
+$ sisakulint ./bundle-size.yaml
+
+./bundle-size.yaml:16:9: cache poisoning risk (critical): composite action 'TanStack/config/.github/setup@main' invokes 'actions/cache@v5' after checking out untrusted PR code (triggers: pull_request_target, chain: TanStack/config/.github/setup@main -> actions/cache@v5). This can persist attacker-controlled dependency state through GitHub Actions cache scope crossing; validate cached content or scope cache to PR level [cache-poisoning]
+      16 👈|      - uses: TanStack/config/.github/setup@main
 ```
 
 ### Safe Patterns
@@ -280,6 +337,20 @@ jobs:
       - uses: actions/cache@v3  # Safe: cache operates on base branch code
 ```
 
+5. Job Filtered to Safe Trigger
+```yaml
+on: [pull_request_target, push]
+
+jobs:
+  push-only:
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: actions/cache@v4  # Safe for this rule: this job cannot run on pull_request_target
+```
+
 ### Auto-fix Support
 
 The cache-poisoning rule supports auto-fixing for both types of vulnerabilities:
@@ -338,6 +409,9 @@ After fix
 2. **Scope Cache to PR**: Use PR-specific cache keys to isolate caches
 3. **Isolate Workflows**: Separate untrusted code execution from privileged operations
 4. **Use Safe Checkout**: Avoid checking out PR code in workflows with untrusted triggers and caching
+5. **Audit Composite Actions**: Treat remote composite actions as part of the workflow. Review their `action.yml` and nested `uses` steps for cache writes.
+6. **Pin Remote Actions**: Pin third-party or cross-repository composite actions to a full commit SHA rather than mutable refs such as `@main`.
+7. **Avoid Cache Writes in Privileged PR Jobs**: Prefer read-only cache restore or disable caching when a `pull_request_target` job must inspect untrusted PR code.
 
 #### For Direct Cache Poisoning
 
@@ -508,6 +582,9 @@ sisakulint uses a **conservative detection strategy** for maximum security:
 
 - **Direct patterns**: Detects explicit PR head references like `github.head_ref` and `github.event.pull_request.head.sha`
 - **Indirect patterns**: Detects step outputs that may contain PR head references (e.g., `steps.*.outputs.head_sha`)
+- **PR merge refs**: Detects `refs/pull/.../merge` checkout refs as untrusted PR code in privileged workflows
+- **Composite metadata**: Resolves composite action metadata to find direct and transitive cache usage hidden behind `uses:` steps
+- **Job-level filtering**: Uses job-level trigger analysis so jobs restricted to safe events do not inherit unrelated unsafe workflow triggers
 - **Unknown expressions**: Any unknown expression in `ref` with untrusted triggers is treated as potentially unsafe
 
 This conservative approach may result in some false positives but ensures that subtle attack vectors are not missed.
@@ -520,6 +597,8 @@ This conservative approach may result in some false positives but ensures that s
 | Label guards | Considers `if: contains(labels)` as safe | Reports warning (conservative) |
 | Multiple checkouts | May not handle correctly | Resets state on safe checkout |
 | Step outputs | Limited detection | Comprehensive pattern matching |
+| Composite actions | Limited to visible workflow steps | Resolves local and remote composite metadata |
+| Job-level trigger filters | Limited | Honors analyzable `github.event_name` conditions |
 
 **Example difference**: CodeQL may consider workflows with label guards safe, but sisakulint still reports warnings because label-based protection depends on operational procedures that may fail.
 
@@ -533,6 +612,8 @@ This rule addresses CICD-SEC-9: Improper Artifact Integrity Validation and helps
 - [GitHub Actions Security: Preventing Pwn Requests](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/)
 - [OWASP CI/CD Top 10: CICD-SEC-9](https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation)
 - [The Monsters in Your Build Cache - GitHub Actions Cache Poisoning](https://adnanthekhan.com/2024/05/06/the-monsters-in-your-build-cache-github-actions-cache-poisoning/) - Detailed analysis of cache hierarchy exploitation
+- [TanStack npm supply-chain compromise postmortem](https://tanstack.com/blog/npm-supply-chain-compromise-postmortem)
+- [StepSecurity: Mini Shai-Hulud supply-chain attack report](https://www.stepsecurity.io/blog/mini-shai-hulud-is-back-a-self-spreading-supply-chain-attack-hits-the-npm-ecosystem)
 
 {{< popup_link2 href="https://codeql.github.com/codeql-query-help/actions/actions-cache-poisoning-direct-cache/" >}}
 
@@ -541,3 +622,7 @@ This rule addresses CICD-SEC-9: Improper Artifact Integrity Validation and helps
 {{< popup_link2 href="https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation" >}}
 
 {{< popup_link2 href="https://adnanthekhan.com/2024/05/06/the-monsters-in-your-build-cache-github-actions-cache-poisoning/" >}}
+
+{{< popup_link2 href="https://tanstack.com/blog/npm-supply-chain-compromise-postmortem" >}}
+
+{{< popup_link2 href="https://www.stepsecurity.io/blog/mini-shai-hulud-is-back-a-self-spreading-supply-chain-attack-hits-the-npm-ecosystem" >}}
