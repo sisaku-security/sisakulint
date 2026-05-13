@@ -46,7 +46,7 @@ type directCacheFixInfo struct {
 func NewCachePoisoningRule(actionMetadata ...ActionMetadataResolver) *CachePoisoningRule {
 	var resolver ActionMetadataResolver
 	if len(actionMetadata) > 0 {
-		resolver = actionMetadata[0]
+		resolver = NewMultiActionMetadataResolver(actionMetadata...)
 	}
 	return &CachePoisoningRule{
 		BaseRule: BaseRule{
@@ -279,6 +279,7 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 		inspection := rule.inspectCompositeAction(uses)
 		if inspection.cacheFound {
 			rule.cacheActionCount++
+			rule.checkCacheHierarchyExploitation(node, inspection.cacheUses)
 			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,

@@ -114,6 +114,8 @@ func (with *ActionStepWithMetadata) UnmarshalYAML(n *yaml.Node) error {
 			md[strings.ToLower(name)] = value.Value
 			continue
 		}
+		// Cache detection only needs key presence and simple scalar values; complex
+		// structures are intentionally normalized without expression parsing.
 		md[strings.ToLower(name)] = ""
 	}
 	*with = md
@@ -278,6 +280,9 @@ type remoteActionSpec struct {
 func NewRemoteActionsMetadataCache(dbg io.Writer) *RemoteActionsMetadataCache {
 	fetcher, err := remote.NewFetcher(1)
 	if err != nil {
+		if dbg != nil {
+			fmt.Fprintf(dbg, "[RemoteActionsMetadataCache] failed to create remote fetcher: %v; FindMetadata remote resolution will be disabled\n", err)
+		}
 		return &RemoteActionsMetadataCache{cache: make(map[string]*ActionMetadata), dbg: dbg}
 	}
 	return &RemoteActionsMetadataCache{fetcher: fetcher, cache: make(map[string]*ActionMetadata), dbg: dbg}
@@ -373,7 +378,7 @@ func parseRemoteActionSpec(spec string) (*remoteActionSpec, bool) {
 	dir := "."
 	if len(parts) > 2 {
 		dir = pathpkg.Clean(strings.Join(parts[2:], "/"))
-		if dir == "." || strings.HasPrefix(dir, "../") || dir == ".." {
+		if dir == "." || strings.HasPrefix(dir, "/") || strings.HasPrefix(dir, "../") || dir == ".." {
 			return nil, false
 		}
 	}

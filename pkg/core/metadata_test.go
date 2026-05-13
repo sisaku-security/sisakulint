@@ -106,3 +106,11 @@ func TestRemoteActionMetadataPathsSupportsRootAction(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRemoteActionSpecRejectsAbsoluteActionPath(t *testing.T) {
+	t.Parallel()
+
+	if got, ok := parseRemoteActionSpec("owner/repo//absolute/path@main"); ok {
+		t.Fatalf("parseRemoteActionSpec returned ok with absolute path: %#v", got)
+	}
+}
