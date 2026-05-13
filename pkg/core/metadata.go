@@ -94,9 +94,30 @@ type ActionRunsMetadata struct {
 // ActionStepMetadata is the subset of composite action step metadata needed by
 // rules that reason about transitive action calls.
 type ActionStepMetadata struct {
-	Uses string            `yaml:"uses" json:"uses"`
-	If   string            `yaml:"if" json:"if"`
-	With map[string]string `yaml:"with" json:"with"`
+	Uses string                 `yaml:"uses" json:"uses"`
+	If   string                 `yaml:"if" json:"if"`
+	With ActionStepWithMetadata `yaml:"with" json:"with"`
+}
+
+type ActionStepWithMetadata map[string]string
+
+func (with *ActionStepWithMetadata) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return expectedMapping("with", n)
+	}
+
+	md := make(ActionStepWithMetadata, len(n.Content)/2)
+	for i := 0; i < len(n.Content); i += 2 {
+		name := n.Content[i].Value
+		value := n.Content[i+1]
+		if value.Kind == yaml.ScalarNode {
+			md[strings.ToLower(name)] = value.Value
+			continue
+		}
+		md[strings.ToLower(name)] = ""
+	}
+	*with = md
+	return nil
 }
 
 // GitHub Actionsの全体的なメタデータ構造体
@@ -345,13 +366,16 @@ func parseRemoteActionSpec(spec string) (*remoteActionSpec, bool) {
 	actionPath := spec[:at]
 	ref := spec[at+1:]
 	parts := strings.Split(actionPath, "/")
-	if len(parts) < 3 {
+	if len(parts) < 2 {
 		return nil, false
 	}
 
-	dir := pathpkg.Clean(strings.Join(parts[2:], "/"))
-	if dir == "." || strings.HasPrefix(dir, "../") || dir == ".." {
-		return nil, false
+	dir := "."
+	if len(parts) > 2 {
+		dir = pathpkg.Clean(strings.Join(parts[2:], "/"))
+		if dir == "." || strings.HasPrefix(dir, "../") || dir == ".." {
+			return nil, false
+		}
 	}
 
 	return &remoteActionSpec{

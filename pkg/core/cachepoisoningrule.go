@@ -20,6 +20,7 @@ import (
 type CachePoisoningRule struct {
 	BaseRule
 	unsafeTriggers      []string
+	jobUnsafeTriggers   []string
 	checkoutUnsafeRef   bool
 	unsafeCheckoutStep  *ast.Step
 	autoFixerRegistered bool
@@ -192,6 +193,27 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.checkoutUnsafeRef = false
 	rule.unsafeCheckoutStep = nil
 	rule.autoFixerRegistered = false
+	rule.jobUnsafeTriggers = nil
+
+	if len(rule.unsafeTriggers) == 0 {
+		return nil
+	}
+
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	for _, trigger := range analyzer.AnalyzeJobTriggers(node) {
+		if IsUnsafeTrigger(trigger) {
+			rule.jobUnsafeTriggers = append(rule.jobUnsafeTriggers, trigger)
+		}
+	}
+
+	if len(rule.jobUnsafeTriggers) == 0 {
+		jobID := "<nil>"
+		if node.ID != nil {
+			jobID = node.ID.Value
+		}
+		rule.Debug("Job '%s' filtered out unsafe triggers via if condition", jobID)
+	}
+
 	return nil
 }
 
@@ -213,7 +235,7 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	}
 
 	// Check for checkout with unsafe ref (only with unsafe triggers)
-	if actionName == "actions/checkout" && len(rule.unsafeTriggers) > 0 {
+	if actionName == "actions/checkout" && len(rule.jobUnsafeTriggers) > 0 {
 		if refInput, ok := action.Inputs["ref"]; ok && refInput != nil && refInput.Value != nil {
 			if IsUnsafeCheckoutRef(refInput.Value.Value) {
 				rule.checkoutUnsafeRef = true
@@ -247,31 +269,33 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 
 		// Check for indirect cache poisoning (unsafe checkout + cache action)
 		// This only applies with unsafe triggers
-		if len(rule.unsafeTriggers) > 0 && rule.checkoutUnsafeRef {
+		if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
 			rule.reportIndirectCachePoisoning(node, uses)
 		}
 		return nil
 	}
 
-	if len(rule.unsafeTriggers) > 0 && rule.checkoutUnsafeRef {
-		if cacheUses, ok := rule.findCompositeCacheAction(uses); ok {
+	if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
+		inspection := rule.inspectCompositeAction(uses)
+		if inspection.cacheFound {
 			rule.cacheActionCount++
-			triggers := strings.Join(rule.unsafeTriggers, ", ")
+			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
-				"cache poisoning risk (critical): composite action '%s' invokes '%s' after checking out untrusted PR code (triggers: %s). "+
+				"cache poisoning risk (critical): composite action '%s' invokes '%s' after checking out untrusted PR code (triggers: %s, chain: %s). "+
 					"This can persist attacker-controlled dependency state through GitHub Actions cache scope crossing; validate cached content or scope cache to PR level",
 				uses,
-				cacheUses,
+				inspection.cacheUses,
 				triggers,
+				strings.Join(inspection.chain, " -> "),
 			)
 			rule.registerIndirectCachePoisoningFixer()
-		} else if isMutableRemoteSubpathAction(uses) {
-			triggers := strings.Join(rule.unsafeTriggers, ", ")
+		} else if inspection.resolvedComposite && isMutableRemoteAction(uses) {
+			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
 				"cache poisoning risk: mutable remote composite action '%s' runs after checking out untrusted PR code (triggers: %s). "+
-					"Because the action ref is not pinned to a full commit SHA, historical transitive actions/cache usage and GitHub Actions cache scope crossing cannot be ruled out from the current repository state; pin the action to a full commit SHA or avoid unsafe checkout under privileged triggers",
+					"The action currently resolves as a composite action, but because the ref is not pinned to a full commit SHA, historical transitive actions/cache usage and GitHub Actions cache scope crossing cannot be ruled out from the current repository state; pin the action to a full commit SHA or avoid unsafe checkout under privileged triggers",
 				uses,
 				triggers,
 			)
@@ -282,7 +306,7 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	return nil
 }
 
-func isMutableRemoteSubpathAction(uses string) bool {
+func isMutableRemoteAction(uses string) bool {
 	if uses == "" || strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, ".\\") || strings.HasPrefix(uses, "docker://") {
 		return false
 	}
@@ -293,11 +317,11 @@ func isMutableRemoteSubpathAction(uses string) bool {
 	if !ok {
 		return false
 	}
-	return len(strings.Split(actionPath, "/")) >= 3
+	return len(strings.Split(actionPath, "/")) >= 2
 }
 
 func (rule *CachePoisoningRule) reportIndirectCachePoisoning(node *ast.Step, uses string) {
-	triggers := strings.Join(rule.unsafeTriggers, ", ")
+	triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 	rule.Errorf(
 		node.Pos,
 		"cache poisoning risk: '%s' used after checking out untrusted PR code (triggers: %s). Validate cached content or scope cache to PR level",
@@ -314,38 +338,64 @@ func (rule *CachePoisoningRule) registerIndirectCachePoisoningFixer() {
 	}
 }
 
-func (rule *CachePoisoningRule) findCompositeCacheAction(uses string) (string, bool) {
+const maxCompositeActionDepth = 4
+
+type compositeActionInspection struct {
+	cacheUses         string
+	chain             []string
+	cacheFound        bool
+	resolvedComposite bool
+}
+
+func (rule *CachePoisoningRule) inspectCompositeAction(uses string) compositeActionInspection {
 	if rule.actionMetadata == nil || uses == "" {
-		return "", false
+		return compositeActionInspection{}
 	}
+	return rule.inspectCompositeActionRecursive(uses, nil, make(map[string]bool), 0)
+}
+
+func (rule *CachePoisoningRule) inspectCompositeActionRecursive(uses string, chain []string, visited map[string]bool, depth int) compositeActionInspection {
+	if uses == "" || depth > maxCompositeActionDepth {
+		return compositeActionInspection{}
+	}
+	if visited[uses] {
+		return compositeActionInspection{}
+	}
+	visited[uses] = true
 
 	meta, err := rule.actionMetadata.FindMetadata(uses)
 	if err != nil {
 		rule.Debug("failed to resolve action metadata for %s: %v", uses, err)
-		return "", false
+		return compositeActionInspection{}
 	}
 
-	return firstCompositeCacheAction(meta)
-}
-
-func firstCompositeCacheAction(meta *ActionMetadata) (string, bool) {
 	if meta == nil || meta.Runs == nil || !strings.EqualFold(meta.Runs.Using, "composite") {
-		return "", false
+		return compositeActionInspection{}
 	}
 
+	nextChain := append(append([]string{}, chain...), uses)
 	for _, step := range meta.Runs.Steps {
 		if step == nil || step.Uses == "" {
 			continue
 		}
 		if isCacheAction(step.Uses, metadataStepInputs(step.With)) {
-			return step.Uses, true
+			return compositeActionInspection{
+				cacheUses:         step.Uses,
+				chain:             append(append([]string{}, nextChain...), step.Uses),
+				cacheFound:        true,
+				resolvedComposite: true,
+			}
+		}
+		child := rule.inspectCompositeActionRecursive(step.Uses, nextChain, visited, depth+1)
+		if child.cacheFound {
+			return child
 		}
 	}
 
-	return "", false
+	return compositeActionInspection{chain: nextChain, resolvedComposite: true}
 }
 
-func metadataStepInputs(with map[string]string) map[string]*ast.Input {
+func metadataStepInputs(with ActionStepWithMetadata) map[string]*ast.Input {
 	if len(with) == 0 {
 		return nil
 	}

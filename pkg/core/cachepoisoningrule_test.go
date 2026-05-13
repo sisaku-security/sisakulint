@@ -252,7 +252,7 @@ jobs:
 				Steps: []*ActionStepMetadata{
 					{
 						Uses: "actions/cache@v5",
-						With: map[string]string{
+						With: ActionStepWithMetadata{
 							"path": "~/.pnpm-store",
 							"key":  "Linux-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}",
 						},
@@ -280,6 +280,70 @@ jobs:
 		"actions/cache@v5",
 		"cache scope crossing",
 		"critical",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleDetectsTransitiveRemoteCompositeCacheAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "owner/nested-action@main"},
+				},
+			},
+		},
+		"owner/nested-action@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/setup-node@v4", With: ActionStepWithMetadata{"cache": "pnpm"}},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"owner/nested-action@main",
+		"actions/setup-node@v4",
+		"chain:",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("error description %q does not contain %q", got, want)
@@ -340,6 +404,88 @@ jobs:
 		if !strings.Contains(got, want) {
 			t.Fatalf("error description %q does not contain %q", got, want)
 		}
+	}
+}
+
+func TestCachePoisoningRuleSkipsJobFilteredToSafeTrigger(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: [pull_request_target, push]
+jobs:
+  push-only:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache@v5"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("len(rule.Errors()) = %d, want 0: %#v", got, rule.Errors())
+	}
+}
+
+func TestCachePoisoningRuleDoesNotReportMutableRemoteNonCompositeAction(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{Using: "node20"},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("len(rule.Errors()) = %d, want 0: %#v", got, rule.Errors())
 	}
 }
 
