@@ -264,10 +264,12 @@ func (c *LocalActionsMetadataCache) readLocalActionMetadataFile(dir string) ([]b
 }
 
 type RemoteActionsMetadataCache struct {
-	mu      sync.RWMutex
-	fetcher *remote.Fetcher
-	cache   map[string]*ActionMetadata
-	dbg     io.Writer
+	mu          sync.RWMutex
+	fetcherOnce sync.Once
+	fetcher     *remote.Fetcher
+	fetcherErr  error
+	cache       map[string]*ActionMetadata
+	dbg         io.Writer
 }
 
 type remoteActionSpec struct {
@@ -278,14 +280,28 @@ type remoteActionSpec struct {
 }
 
 func NewRemoteActionsMetadataCache(dbg io.Writer) *RemoteActionsMetadataCache {
-	fetcher, err := remote.NewFetcher(1)
-	if err != nil {
-		if dbg != nil {
-			fmt.Fprintf(dbg, "[RemoteActionsMetadataCache] failed to create remote fetcher: %v; FindMetadata remote resolution will be disabled\n", err)
+	return &RemoteActionsMetadataCache{cache: make(map[string]*ActionMetadata), dbg: dbg}
+}
+
+// ensureFetcher constructs the underlying remote.Fetcher on first use. The
+// constructor of remote.Fetcher resolves a GitHub token, which in the absence
+// of GITHUB_TOKEN/GH_TOKEN spawns external `gh auth token` and
+// `git credential fill` processes. Deferring construction until a spec that
+// actually requires network resolution is observed avoids that cost for files
+// that never reach a remote composite-action lookup.
+func (c *RemoteActionsMetadataCache) ensureFetcher() *remote.Fetcher {
+	c.fetcherOnce.Do(func() {
+		fetcher, err := remote.NewFetcher(1)
+		if err != nil {
+			c.fetcherErr = err
+			if c.dbg != nil {
+				fmt.Fprintf(c.dbg, "[RemoteActionsMetadataCache] failed to create remote fetcher: %v; FindMetadata remote resolution will be disabled\n", err)
+			}
+			return
 		}
-		return &RemoteActionsMetadataCache{cache: make(map[string]*ActionMetadata), dbg: dbg}
-	}
-	return &RemoteActionsMetadataCache{fetcher: fetcher, cache: make(map[string]*ActionMetadata), dbg: dbg}
+		c.fetcher = fetcher
+	})
+	return c.fetcher
 }
 
 func (c *RemoteActionsMetadataCache) debug(format string, args ...interface{}) {
@@ -310,9 +326,6 @@ func (c *RemoteActionsMetadataCache) writeCache(key string, val *ActionMetadata)
 }
 
 func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata, error) {
-	if c.fetcher == nil {
-		return nil, nil
-	}
 	if m, ok := c.readCache(spec); ok {
 		c.debug("cache hit @ %s: %v", spec, m)
 		return m, nil
@@ -320,6 +333,11 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 
 	actionSpec, ok := parseRemoteActionSpec(spec)
 	if !ok {
+		return nil, nil
+	}
+
+	fetcher := c.ensureFetcher()
+	if fetcher == nil {
 		return nil, nil
 	}
 
@@ -332,7 +350,7 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 	var lastErr error
 	for _, metadataPath := range remoteActionMetadataPaths(actionSpec.dir) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		b, err := c.fetcher.FetchFile(ctx, repo, metadataPath, actionSpec.ref)
+		b, err := fetcher.FetchFile(ctx, repo, metadataPath, actionSpec.ref)
 		cancel()
 		if err != nil {
 			lastErr = err

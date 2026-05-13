@@ -156,6 +156,18 @@ func TestIsCacheAction(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "actions/cache/save is cache action",
+			uses:   "actions/cache/save@v4",
+			inputs: nil,
+			want:   true,
+		},
+		{
+			name:   "actions/cache/restore is cache action",
+			uses:   "actions/cache/restore@v4",
+			inputs: nil,
+			want:   true,
+		},
+		{
 			name: "actions/setup-node with cache: npm",
 			uses: "actions/setup-node@v4",
 			inputs: map[string]*ast.Input{
@@ -280,6 +292,61 @@ jobs:
 		"actions/cache@v5",
 		"cache scope crossing",
 		"critical",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleDetectsRemoteCompositeCacheSaveAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache/save@v4"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"actions/cache/save@v4",
+		"cache scope crossing",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("error description %q does not contain %q", got, want)

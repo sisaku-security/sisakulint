@@ -68,7 +68,9 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 		actionName = uses[:idx]
 	}
 
-	if actionName == "actions/cache" {
+	if actionName == "actions/cache" ||
+		actionName == "actions/cache/save" ||
+		actionName == "actions/cache/restore" {
 		return true
 	}
 

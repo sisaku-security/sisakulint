@@ -114,3 +114,27 @@ func TestParseRemoteActionSpecRejectsAbsoluteActionPath(t *testing.T) {
 		t.Fatalf("parseRemoteActionSpec returned ok with absolute path: %#v", got)
 	}
 }
+
+func TestRemoteActionsMetadataCacheDeferFetcherConstruction(t *testing.T) {
+	t.Parallel()
+
+	c := NewRemoteActionsMetadataCache(nil)
+	if c.fetcher != nil {
+		t.Fatal("fetcher should not be constructed eagerly by NewRemoteActionsMetadataCache")
+	}
+
+	// Local / docker / malformed specs must short-circuit before fetcher construction.
+	for _, spec := range []string{
+		"./local-action",
+		"docker://alpine:3.18",
+		"no-at-sign",
+		"",
+	} {
+		if _, err := c.FindMetadata(spec); err != nil {
+			t.Fatalf("FindMetadata(%q) returned error: %v", spec, err)
+		}
+		if c.fetcher != nil {
+			t.Fatalf("fetcher must remain nil after FindMetadata(%q)", spec)
+		}
+	}
+}
