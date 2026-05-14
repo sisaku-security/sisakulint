@@ -20,9 +20,11 @@ import (
 type CachePoisoningRule struct {
 	BaseRule
 	unsafeTriggers      []string
+	jobUnsafeTriggers   []string
 	checkoutUnsafeRef   bool
 	unsafeCheckoutStep  *ast.Step
 	autoFixerRegistered bool
+	actionMetadata      ActionMetadataResolver
 	directCacheFixSteps []*directCacheFixInfo
 	// New fields for extended detection
 	isReleaseWorkflow      bool
@@ -41,12 +43,17 @@ type directCacheFixInfo struct {
 }
 
 // NewCachePoisoningRule creates a new cache poisoning detection rule.
-func NewCachePoisoningRule() *CachePoisoningRule {
+func NewCachePoisoningRule(actionMetadata ...ActionMetadataResolver) *CachePoisoningRule {
+	var resolver ActionMetadataResolver
+	if len(actionMetadata) > 0 {
+		resolver = NewMultiActionMetadataResolver(actionMetadata...)
+	}
 	return &CachePoisoningRule{
 		BaseRule: BaseRule{
 			RuleName: "cache-poisoning",
 			RuleDesc: "Detects potential cache poisoning vulnerabilities when using cache with untrusted triggers or untrusted inputs in cache configuration",
 		},
+		actionMetadata:      resolver,
 		directCacheFixSteps: make([]*directCacheFixInfo, 0),
 	}
 }
@@ -61,7 +68,9 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 		actionName = uses[:idx]
 	}
 
-	if actionName == "actions/cache" {
+	if actionName == "actions/cache" ||
+		actionName == "actions/cache/save" ||
+		actionName == "actions/cache/restore" {
 		return true
 	}
 
@@ -186,6 +195,27 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.checkoutUnsafeRef = false
 	rule.unsafeCheckoutStep = nil
 	rule.autoFixerRegistered = false
+	rule.jobUnsafeTriggers = nil
+
+	if len(rule.unsafeTriggers) == 0 {
+		return nil
+	}
+
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	for _, trigger := range analyzer.AnalyzeJobTriggers(node) {
+		if IsUnsafeTrigger(trigger) {
+			rule.jobUnsafeTriggers = append(rule.jobUnsafeTriggers, trigger)
+		}
+	}
+
+	if len(rule.jobUnsafeTriggers) == 0 {
+		jobID := "<nil>"
+		if node.ID != nil {
+			jobID = node.ID.Value
+		}
+		rule.Debug("Job '%s' filtered out unsafe triggers via if condition", jobID)
+	}
+
 	return nil
 }
 
@@ -207,7 +237,7 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	}
 
 	// Check for checkout with unsafe ref (only with unsafe triggers)
-	if actionName == "actions/checkout" && len(rule.unsafeTriggers) > 0 {
+	if actionName == "actions/checkout" && len(rule.jobUnsafeTriggers) > 0 {
 		if refInput, ok := action.Inputs["ref"]; ok && refInput != nil && refInput.Value != nil {
 			if IsUnsafeCheckoutRef(refInput.Value.Value) {
 				rule.checkoutUnsafeRef = true
@@ -241,22 +271,147 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 
 		// Check for indirect cache poisoning (unsafe checkout + cache action)
 		// This only applies with unsafe triggers
-		if len(rule.unsafeTriggers) > 0 && rule.checkoutUnsafeRef {
-			triggers := strings.Join(rule.unsafeTriggers, ", ")
+		if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
+			rule.reportIndirectCachePoisoning(node, uses)
+		}
+		return nil
+	}
+
+	if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
+		inspection := rule.inspectCompositeAction(uses)
+		if inspection.cacheFound {
+			rule.cacheActionCount++
+			rule.checkCacheHierarchyExploitation(node, inspection.cacheUses)
+			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
-				"cache poisoning risk: '%s' used after checking out untrusted PR code (triggers: %s). Validate cached content or scope cache to PR level",
+				"cache poisoning risk (critical): composite action '%s' invokes '%s' after checking out untrusted PR code (triggers: %s, chain: %s). "+
+					"This can persist attacker-controlled dependency state through GitHub Actions cache scope crossing; validate cached content or scope cache to PR level",
+				uses,
+				inspection.cacheUses,
+				triggers,
+				strings.Join(inspection.chain, " -> "),
+			)
+			rule.registerIndirectCachePoisoningFixer()
+		} else if inspection.resolvedComposite && isMutableRemoteAction(uses) {
+			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
+			rule.Errorf(
+				node.Pos,
+				"cache poisoning risk: mutable remote composite action '%s' runs after checking out untrusted PR code (triggers: %s). "+
+					"The action currently resolves as a composite action, but because the ref is not pinned to a full commit SHA, historical transitive actions/cache usage and GitHub Actions cache scope crossing cannot be ruled out from the current repository state; pin the action to a full commit SHA or avoid unsafe checkout under privileged triggers",
 				uses,
 				triggers,
 			)
-			if rule.unsafeCheckoutStep != nil && !rule.autoFixerRegistered {
-				rule.AddAutoFixer(NewStepFixer(rule.unsafeCheckoutStep, rule))
-				rule.autoFixerRegistered = true
-			}
+			rule.registerIndirectCachePoisoningFixer()
 		}
 	}
 
 	return nil
+}
+
+func isMutableRemoteAction(uses string) bool {
+	if uses == "" || strings.HasPrefix(uses, "./") || strings.HasPrefix(uses, ".\\") || strings.HasPrefix(uses, "docker://") {
+		return false
+	}
+	if isFullLengthSha(uses) {
+		return false
+	}
+	actionPath, _, ok := strings.Cut(uses, "@")
+	if !ok {
+		return false
+	}
+	return len(strings.Split(actionPath, "/")) >= 2
+}
+
+func (rule *CachePoisoningRule) reportIndirectCachePoisoning(node *ast.Step, uses string) {
+	triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
+	rule.Errorf(
+		node.Pos,
+		"cache poisoning risk: '%s' used after checking out untrusted PR code (triggers: %s). Validate cached content or scope cache to PR level",
+		uses,
+		triggers,
+	)
+	rule.registerIndirectCachePoisoningFixer()
+}
+
+func (rule *CachePoisoningRule) registerIndirectCachePoisoningFixer() {
+	if rule.unsafeCheckoutStep != nil && !rule.autoFixerRegistered {
+		rule.AddAutoFixer(NewStepFixer(rule.unsafeCheckoutStep, rule))
+		rule.autoFixerRegistered = true
+	}
+}
+
+const maxCompositeActionDepth = 4
+
+type compositeActionInspection struct {
+	cacheUses         string
+	chain             []string
+	cacheFound        bool
+	resolvedComposite bool
+}
+
+func (rule *CachePoisoningRule) inspectCompositeAction(uses string) compositeActionInspection {
+	if rule.actionMetadata == nil || uses == "" {
+		return compositeActionInspection{}
+	}
+	return rule.inspectCompositeActionRecursive(uses, nil, make(map[string]bool), 0)
+}
+
+func (rule *CachePoisoningRule) inspectCompositeActionRecursive(uses string, chain []string, visited map[string]bool, depth int) compositeActionInspection {
+	if uses == "" || depth > maxCompositeActionDepth {
+		return compositeActionInspection{}
+	}
+	if visited[uses] {
+		return compositeActionInspection{}
+	}
+	visited[uses] = true
+
+	meta, err := rule.actionMetadata.FindMetadata(uses)
+	if err != nil {
+		rule.Debug("failed to resolve action metadata for %s: %v", uses, err)
+		return compositeActionInspection{}
+	}
+
+	if meta == nil || meta.Runs == nil || !strings.EqualFold(meta.Runs.Using, "composite") {
+		return compositeActionInspection{}
+	}
+
+	nextChain := append(append([]string{}, chain...), uses)
+	for _, step := range meta.Runs.Steps {
+		if step == nil || step.Uses == "" {
+			continue
+		}
+		if isCacheAction(step.Uses, metadataStepInputs(step.With)) {
+			return compositeActionInspection{
+				cacheUses:         step.Uses,
+				chain:             append(append([]string{}, nextChain...), step.Uses),
+				cacheFound:        true,
+				resolvedComposite: true,
+			}
+		}
+		child := rule.inspectCompositeActionRecursive(step.Uses, nextChain, visited, depth+1)
+		if child.cacheFound {
+			return child
+		}
+	}
+
+	return compositeActionInspection{chain: nextChain, resolvedComposite: true}
+}
+
+func metadataStepInputs(with ActionStepWithMetadata) map[string]*ast.Input {
+	if len(with) == 0 {
+		return nil
+	}
+
+	inputs := make(map[string]*ast.Input, len(with))
+	for name, value := range with {
+		key := strings.ToLower(name)
+		inputs[key] = &ast.Input{
+			Name:  &ast.String{Value: name},
+			Value: &ast.String{Value: value},
+		}
+	}
+	return inputs
 }
 
 // checkDirectCachePoisoning checks for untrusted inputs in cache key/restore-keys/path

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
-	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
 // UntrustedCheckoutRule checks for dangerous combinations of privileged triggers
@@ -156,134 +155,10 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 
 // isUntrustedPRRef checks if a ref value points to untrusted PR code
 func (rule *UntrustedCheckoutRule) isUntrustedPRRef(refValue *ast.String) bool {
-	// Check if the value contains expressions
-	if !refValue.ContainsExpression() {
-		// No expression - literal ref is safe
+	if refValue == nil {
 		return false
 	}
-
-	// Extract and parse all expressions in the ref value
-	exprs := rule.extractAndParseRefExpressions(refValue)
-
-	// Check each expression for untrusted PR references
-	for _, expr := range exprs {
-		if rule.isUntrustedPRExpression(expr.node, expr.raw) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// refParsedExpression represents a parsed expression with its position and AST node
-type refParsedExpression struct {
-	raw  string               // Original expression content
-	node expressions.ExprNode // Parsed AST node
-	pos  *ast.Position        // Position in source
-}
-
-// extractAndParseRefExpressions extracts all expressions from a string and parses them
-//
-// NOTE: This implementation is similar to extractAndParseExpressions in issueinjection.go.
-// Future work could extract this into a shared utility function in pkg/expressions/ or pkg/core/util.go
-// to reduce code duplication and ensure consistent expression parsing across rules.
-func (rule *UntrustedCheckoutRule) extractAndParseRefExpressions(str *ast.String) []refParsedExpression {
-	if str == nil {
-		return nil
-	}
-
-	value := str.Value
-	var result []refParsedExpression
-	offset := 0
-
-	for {
-		// Find next expression start
-		idx := strings.Index(value[offset:], "${{")
-		if idx == -1 {
-			break
-		}
-
-		start := offset + idx
-		// Find closing }}
-		endIdx := strings.Index(value[start:], "}}")
-		if endIdx == -1 {
-			break
-		}
-
-		// Extract expression content (between ${{ and }})
-		exprContent := value[start+3 : start+endIdx]
-		exprContent = strings.TrimSpace(exprContent)
-
-		// Parse the expression
-		expr, parseErr := rule.parseExpression(exprContent)
-		if parseErr == nil && expr != nil {
-			// Calculate position
-			lineIdx := strings.Count(value[:start], "\n")
-			col := start
-			if lastNewline := strings.LastIndex(value[:start], "\n"); lastNewline != -1 {
-				col = start - lastNewline - 1
-			}
-
-			pos := &ast.Position{
-				Line: str.Pos.Line + lineIdx,
-				Col:  str.Pos.Col + col,
-			}
-
-			result = append(result, refParsedExpression{
-				raw:  exprContent,
-				node: expr,
-				pos:  pos,
-			})
-		}
-
-		offset = start + endIdx + 2
-	}
-
-	return result
-}
-
-// parseExpression parses a single expression string into an AST node
-func (rule *UntrustedCheckoutRule) parseExpression(exprStr string) (expressions.ExprNode, *expressions.ExprError) {
-	// The tokenizer expects the expression to end with }}
-	if !strings.HasSuffix(exprStr, "}}") {
-		exprStr = exprStr + "}}"
-	}
-	l := expressions.NewTokenizer(exprStr)
-	p := expressions.NewMiniParser()
-	return p.Parse(l)
-}
-
-// isUntrustedPRExpression checks if an expression accesses untrusted PR data
-//
-// NOTE: The ExprNode parameter is currently unused but reserved for future AST-based detection.
-// Currently using string-based matching which is simpler and covers the most common attack patterns.
-//
-// SCOPE: This rule focuses on github.event.pull_request.head.* patterns which are the most
-// common and dangerous patterns for checkout actions. Other untrusted inputs like:
-// - github.event.issue.* (issue context)
-// - github.event.comment.* (comment body)
-// - github.event.workflow_run.head_branch (workflow_run context)
-// are potential attack vectors but are less commonly used with checkout actions.
-// These patterns could be detected in a future enhancement or by the issue-injection rule.
-//
-// See: https://github.com/sisaku-security/sisakulint/pull/226#discussion_r2658869719
-func (rule *UntrustedCheckoutRule) isUntrustedPRExpression(_ expressions.ExprNode, rawExpr string) bool {
-	// Simple string-based check for common dangerous patterns
-	// These patterns access pull request HEAD code which is untrusted
-	dangerousPatterns := []string{
-		"github.event.pull_request.head.sha",
-		"github.event.pull_request.head.ref",
-		"github.event.pull_request.head.", // Catches head.number, head.label, etc.
-	}
-
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(rawExpr, pattern) {
-			rule.Debug("Found untrusted PR reference in expression: %s", rawExpr)
-			return true
-		}
-	}
-
-	return false
+	return IsUnsafeCheckoutRef(refValue.Value)
 }
 
 // VisitWorkflowPost resets state after workflow processing

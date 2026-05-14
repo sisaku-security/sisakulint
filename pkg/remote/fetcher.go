@@ -209,25 +209,35 @@ func (f *Fetcher) FetchWorkflows(ctx context.Context, repo *RepositoryInfo) ([]*
 
 // FetchSingleWorkflow retrieves a single workflow file
 func (f *Fetcher) FetchSingleWorkflow(ctx context.Context, repo *RepositoryInfo, workflowPath, ref string) (*WorkflowFile, error) {
-	fileContent, _, _, err := f.client.Repositories.GetContents(
-		ctx,
-		repo.Owner,
-		repo.Name,
-		workflowPath,
-		&github.RepositoryContentGetOptions{Ref: ref},
-	)
+	decodedContent, err := f.FetchFile(ctx, repo, workflowPath, ref)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch workflow file %s: %w", workflowPath, err)
-	}
-
-	decodedContent, err := fileContent.GetContent()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get content for file %s: %w", workflowPath, err)
+		return nil, err
 	}
 
 	return &WorkflowFile{
 		Path:     workflowPath,
-		Content:  []byte(decodedContent),
+		Content:  decodedContent,
 		RepoInfo: repo,
 	}, nil
+}
+
+// FetchFile retrieves a single file from a repository at the given ref.
+func (f *Fetcher) FetchFile(ctx context.Context, repo *RepositoryInfo, filePath, ref string) ([]byte, error) {
+	fileContent, _, _, err := f.client.Repositories.GetContents(
+		ctx,
+		repo.Owner,
+		repo.Name,
+		filePath,
+		&github.RepositoryContentGetOptions{Ref: ref},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch file %s: %w", filePath, err)
+	}
+
+	decodedContent, err := fileContent.GetContent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get content for file %s: %w", filePath, err)
+	}
+
+	return []byte(decodedContent), nil
 }

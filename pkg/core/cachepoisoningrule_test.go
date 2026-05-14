@@ -156,6 +156,18 @@ func TestIsCacheAction(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "actions/cache/save is cache action",
+			uses:   "actions/cache/save@v4",
+			inputs: nil,
+			want:   true,
+		},
+		{
+			name:   "actions/cache/restore is cache action",
+			uses:   "actions/cache/restore@v4",
+			inputs: nil,
+			want:   true,
+		},
+		{
 			name: "actions/setup-node with cache: npm",
 			uses: "actions/setup-node@v4",
 			inputs: map[string]*ast.Input{
@@ -216,6 +228,434 @@ func TestIsCacheAction(t *testing.T) {
 				t.Errorf("isCacheAction(%q, %v) = %v, want %v", tt.uses, tt.inputs, got, tt.want)
 			}
 		})
+	}
+}
+
+type fakeActionMetadataResolver map[string]*ActionMetadata
+
+func (f fakeActionMetadataResolver) FindMetadata(spec string) (*ActionMetadata, error) {
+	return f[spec], nil
+}
+
+func TestCachePoisoningRuleDetectsRemoteCompositeCacheAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{
+						Uses: "actions/cache@v5",
+						With: ActionStepWithMetadata{
+							"path": "~/.pnpm-store",
+							"key":  "Linux-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}",
+						},
+					},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"actions/cache@v5",
+		"cache scope crossing",
+		"critical",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleDetectsRemoteCompositeCacheSaveAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache/save@v4"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"actions/cache/save@v4",
+		"cache scope crossing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleUsesAllProvidedMetadataResolvers(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	emptyResolver := fakeActionMetadataResolver{}
+	cacheResolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache@v5"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(emptyResolver, cacheResolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+	if got := ruleErrs[0].Description; !strings.Contains(got, "actions/cache@v5") {
+		t.Fatalf("error description %q does not contain actions/cache@v5", got)
+	}
+}
+
+func TestCachePoisoningRuleDetectsTransitiveRemoteCompositeCacheAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "owner/nested-action@main"},
+				},
+			},
+		},
+		"owner/nested-action@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/setup-node@v4", With: ActionStepWithMetadata{"cache": "pnpm"}},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"owner/nested-action@main",
+		"actions/setup-node@v4",
+		"chain:",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleChecksHierarchyForCompositeCacheAction(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: [pull_request_target, workflow_dispatch]
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache@v5"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	var foundComposite, foundHierarchy bool
+	for _, ruleErr := range rule.Errors() {
+		if strings.Contains(ruleErr.Description, "composite action") {
+			foundComposite = true
+		}
+		if strings.Contains(ruleErr.Description, "cache hierarchy exploitation risk") {
+			foundHierarchy = true
+		}
+	}
+	if !foundComposite {
+		t.Fatalf("expected composite cache poisoning error, got %#v", rule.Errors())
+	}
+	if !foundHierarchy {
+		t.Fatalf("expected hierarchy exploitation error for composite cache action, got %#v", rule.Errors())
+	}
+}
+
+func TestCachePoisoningRuleDetectsMutableRemoteCompositeAfterUnsafeCheckout(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "pnpm/action-setup@739bfe42ca9233c5e6aca07c1a25a9d34aca49b0"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	ruleErrs := rule.Errors()
+	if len(ruleErrs) != 1 {
+		t.Fatalf("len(rule.Errors()) = %d, want 1: %#v", len(ruleErrs), ruleErrs)
+	}
+
+	got := ruleErrs[0].Description
+	for _, want := range []string{
+		"TanStack/config/.github/setup@main",
+		"mutable remote composite action",
+		"cache scope crossing",
+		"cannot be ruled out",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error description %q does not contain %q", got, want)
+		}
+	}
+}
+
+func TestCachePoisoningRuleSkipsJobFilteredToSafeTrigger(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: [pull_request_target, push]
+jobs:
+  push-only:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{Uses: "actions/cache@v5"},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("len(rule.Errors()) = %d, want 0: %#v", got, rule.Errors())
+	}
+}
+
+func TestCachePoisoningRuleDoesNotReportMutableRemoteNonCompositeAction(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: Bundle Size
+on: pull_request_target
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"TanStack/config/.github/setup@main": {
+			Runs: &ActionRunsMetadata{Using: "node20"},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("len(rule.Errors()) = %d, want 0: %#v", got, rule.Errors())
 	}
 }
 
