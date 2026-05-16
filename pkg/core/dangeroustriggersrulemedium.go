@@ -56,13 +56,22 @@ func (rule *DangerousTriggersMediumRule) VisitWorkflowPre(node *ast.Workflow) er
 
 	// Generate error message
 	triggerList := strings.Join(triggerNames, ", ")
+	cacheNote := ""
+	if status.HasCacheMutation {
+		cacheNote = " NOTE: this workflow performs actions/cache mutation; " +
+			"`permissions:` restrictions do NOT block cache poisoning because " +
+			"cache writes use a runner-internal token outside the GITHUB_TOKEN " +
+			"permission model. Prefer label/actor gating, environment protection, " +
+			"or splitting the cache-writing job out of the privileged trigger."
+	}
 	msg := fmt.Sprintf(
 		"dangerous trigger (medium): workflow uses privileged trigger(s) [%s] with partial mitigations (%s). "+
 			"Consider adding more mitigations for defense in depth: restrict permissions (permissions: read-all), "+
-			"use environment protection, add label conditions, or check github.actor. "+
+			"use environment protection, add label conditions, or check github.actor.%s "+
 			"See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulemedium/",
 		triggerList,
 		mitigationList,
+		cacheNote,
 	)
 
 	// Report error at the position of the first privileged trigger

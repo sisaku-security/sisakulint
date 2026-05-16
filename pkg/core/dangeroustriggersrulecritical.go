@@ -53,13 +53,22 @@ func (rule *DangerousTriggersCriticalRule) VisitWorkflowPre(node *ast.Workflow) 
 
 	// Generate error message
 	triggerList := strings.Join(triggerNames, ", ")
+	cacheNote := ""
+	if status.HasCacheMutation {
+		cacheNote = " NOTE: this workflow performs actions/cache mutation; " +
+			"a `permissions: {}` restriction will NOT block cache poisoning because " +
+			"cache writes use a runner-internal token outside the GITHUB_TOKEN " +
+			"permission model. Prefer label/actor gating, environment protection, " +
+			"or splitting the cache-writing job out of the privileged trigger."
+	}
 	msg := fmt.Sprintf(
 		"dangerous trigger (critical): workflow uses privileged trigger(s) [%s] without any security mitigations. "+
 			"These triggers grant write access and secrets access to potentially untrusted code. "+
 			"Add at least one mitigation: restrict permissions (permissions: read-all or permissions: {}), "+
-			"use environment protection, add label conditions, or check github.actor. "+
+			"use environment protection, add label conditions, or check github.actor.%s "+
 			"See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/",
 		triggerList,
+		cacheNote,
 	)
 
 	// Report error at the position of the first privileged trigger

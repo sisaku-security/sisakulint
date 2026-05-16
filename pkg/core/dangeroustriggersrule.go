@@ -35,6 +35,14 @@ type MitigationStatus struct {
 	// HasForkCheck indicates if the workflow checks for forks using
 	// github.event.pull_request.head.repo.fork or similar. (+1 point)
 	HasForkCheck bool
+
+	// HasCacheMutation indicates that at least one job references the
+	// actions/cache action family (cache, cache/save, cache/restore) or an
+	// actions/setup-* action with cache enabled. Cache writes use a runner
+	// internal token that is NOT scoped by the workflow permissions block,
+	// so a permissions restriction does not block cache poisoning. When this
+	// flag is set, the permissions restriction is downgraded in Score().
+	HasCacheMutation bool
 }
 
 // Score calculates the total mitigation score based on the applied security measures.
@@ -54,7 +62,15 @@ func (m *MitigationStatus) Score() int {
 	score := 0
 
 	if m.HasPermissionsRestriction {
-		score += 3
+		// Cache writes are gated by a runner-internal cache token rather than
+		// the workflow GITHUB_TOKEN, so `permissions: contents: read` does NOT
+		// block cache poisoning. When the workflow performs cache mutation,
+		// permissions restriction provides no meaningful protection against
+		// the cache poisoning chain that motivates this rule, so we do not
+		// credit it. See issue #469 (TanStack cache scope crossing).
+		if !m.HasCacheMutation {
+			score += 3
+		}
 	}
 	if m.HasEnvironmentProtection {
 		score += 2
@@ -181,14 +197,36 @@ func CheckMitigations(workflow *ast.Workflow) MitigationStatus {
 
 		// Check step conditions for mitigations
 		for _, step := range job.Steps {
-			if step == nil || step.If == nil || step.If.Value == "" {
+			if step == nil {
 				continue
 			}
-			checkConditionForMitigations(step.If.Value, &status)
+			if step.If != nil && step.If.Value != "" {
+				checkConditionForMitigations(step.If.Value, &status)
+			}
+			if !status.HasCacheMutation && jobStepUsesCacheAction(step) {
+				status.HasCacheMutation = true
+			}
 		}
 	}
 
 	return status
+}
+
+// jobStepUsesCacheAction reports whether the given step references an action
+// that mutates the GitHub Actions cache. It only inspects literal `uses:`
+// values; composite action traversal is handled separately by the
+// cache-poisoning rule. The match is intentionally conservative — it covers
+// the well-known actions/cache family (cache, cache/save, cache/restore) and
+// actions/setup-* steps that opt-in to caching via the `cache:` input.
+func jobStepUsesCacheAction(step *ast.Step) bool {
+	if step == nil {
+		return false
+	}
+	action, ok := step.Exec.(*ast.ExecAction)
+	if !ok || action == nil || action.Uses == nil {
+		return false
+	}
+	return isCacheAction(action.Uses.Value, action.Inputs)
 }
 
 // hasPermissionsRestriction checks if permissions are explicitly set and not write-all.
