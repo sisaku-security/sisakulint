@@ -1,0 +1,36 @@
+name: Dangerous Trigger With Cache Mutation
+
+# This workflow demonstrates that `permissions:` restrictions do NOT block
+# cache poisoning, because cache writes use a runner-internal token that is
+# outside the GITHUB_TOKEN permission model. Issue #469 (TanStack/router
+# supply-chain incident, 2026-05) exploited this exact gap.
+#
+# In previous sisakulint versions the dangerous-triggers-critical rule was
+# silenced here by `permissions: contents: read` (mitigation score 3). The
+# Gap 2 fix downgrades the permissions credit when cache mutation is in
+# scope so this case fires critical again.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR merge ref
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+
+      - name: Restore dependency cache
+        # `permissions:` cannot block this write — the GitHub Actions cache
+        # backend uses a runner-internal token. With an unsafe checkout above,
+        # PR-controlled code can poison the base-branch cache scope.
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: deps-${{ hashFiles('package-lock.json') }}
