@@ -58,11 +58,13 @@ func (rule *DangerousTriggersMediumRule) VisitWorkflowPre(node *ast.Workflow) er
 	triggerList := strings.Join(triggerNames, ", ")
 	cacheNote := ""
 	if status.HasCacheMutation {
-		cacheNote = " NOTE: this workflow performs actions/cache mutation; " +
+		cacheNote = " NOTE: this workflow uses actions/cache (read or write); " +
 			"`permissions:` restrictions do NOT block cache poisoning because " +
-			"cache writes use a runner-internal token outside the GITHUB_TOKEN " +
-			"permission model. Prefer label/actor gating, environment protection, " +
-			"or splitting the cache-writing job out of the privileged trigger."
+			"GitHub Actions cache I/O uses a runner-internal token outside the " +
+			"GITHUB_TOKEN permission model — both reads (which can hydrate a " +
+			"poisoned cache into the build) and writes are unaffected. Prefer " +
+			"label/actor gating, environment protection, or splitting the cache " +
+			"step out of the privileged trigger."
 	}
 	msg := fmt.Sprintf(
 		"dangerous trigger (medium): workflow uses privileged trigger(s) [%s] with partial mitigations (%s). "+

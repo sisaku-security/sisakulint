@@ -188,6 +188,8 @@ sisakulint includes the following security rules (as of pkg/core/linter.go:500-5
 - **AIActionPromptInjectionRule** - Detects untrusted user input (github.event.issue.title, github.event.comment.body, etc.) directly interpolated into AI agent prompt parameters, enabling prompt injection attacks (Clinejection attack pattern)
 - **AIActionUnsafeSandboxRule** - Detects unsafe sandbox or safety-strategy settings (e.g., `safety-strategy: unsafe`, `--dangerouslySkipPermissions`) in AI agent actions that disable sandbox protections
 - **AIActionExecutionOrderRule** - Detects AI agent actions that are not the last step in a job, risking subsequent steps inheriting compromised state
+- **DangerousTriggersCriticalRule** - Detects workflows using privileged triggers (pull_request_target, workflow_run, issue_comment, etc.) without any security mitigations (auto-fix adds `permissions: {}` when cache I/O is not in scope; see `HasCacheMutation` in `MitigationStatus`)
+- **DangerousTriggersMediumRule** - Detects workflows using privileged triggers with only partial mitigations and recommends defense in depth (auto-fix adds `permissions: {}` when neither already present nor cache I/O is in scope)
 
 ## Key Files
 

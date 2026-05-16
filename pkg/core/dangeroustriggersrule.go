@@ -38,10 +38,15 @@ type MitigationStatus struct {
 
 	// HasCacheMutation indicates that at least one job references the
 	// actions/cache action family (cache, cache/save, cache/restore) or an
-	// actions/setup-* action with cache enabled. Cache writes use a runner
-	// internal token that is NOT scoped by the workflow permissions block,
-	// so a permissions restriction does not block cache poisoning. When this
-	// flag is set, the permissions restriction is downgraded in Score().
+	// actions/setup-* action with cache enabled. The name retains "mutation"
+	// for historical continuity, but the flag covers both reads and writes:
+	// a privileged-trigger workflow that only restores from cache is still
+	// vulnerable because the restored content may already be attacker-poisoned
+	// from a prior unsafe checkout. Either operation uses a runner-internal
+	// cache token that is NOT scoped by the workflow permissions block, so
+	// permissions:{} cannot block the cache-poisoning chain in either
+	// direction. When this flag is set, the permissions restriction is
+	// downgraded in Score().
 	HasCacheMutation bool
 }
 
