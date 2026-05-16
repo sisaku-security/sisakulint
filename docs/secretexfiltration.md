@@ -188,6 +188,47 @@ mentioned in a header, request body, or attacker-controlled suffix such as
 - Infrastructure: `app.terraform.io`, `hashicorp.com`
 - Artifact Management: `jfrog.io`, `sonatype.org`
 
+### User-configurable allowlist (`allowed-hosts`)
+
+If your project legitimately sends data to additional vendor or internal
+endpoints, configure them in `.github/sisakulint.yaml`:
+
+```yaml
+secret-exfiltration:
+  allowed-hosts:
+    # Exact host match (case-insensitive)
+    - api.vendor.example.com
+    # Suffix wildcard — any subdomain of example.com
+    - "*.internal.example.com"
+```
+
+Only exact host names and `*.suffix` wildcards are supported. Regex,
+globs, paths, ports, and schemes are rejected. The allowlist is
+hostname-only, so trusted-host-in-header patterns such as
+`https://attacker.com -H "Host: api.vendor.example.com"` remain flagged.
+
+You can also scope an extra host list to a single workflow with a YAML
+comment directive anywhere in the file:
+
+```yaml
+# sisakulint:secret-exfiltration.allowed-hosts: api.vendor.example.com, *.internal.example.com
+name: Deploy
+on: workflow_dispatch
+# ...
+```
+
+The directive is additive — it never removes or widens entries
+configured globally. Entries listed in either the global config or the
+per-workflow comment that do not match any network command destination
+in the workflow are reported as "dead allow" warnings so the allowlist
+does not accumulate stale or typo'd entries that silently widen the
+suppression scope.
+
+The allowlist applies only to `secret-exfiltration`. The closely related
+`secret-in-log` rule is intentionally unaffected — its taint sources are
+different and a host-based allowlist would not express the equivalent
+intent there.
+
 ## Why This Rule Matters
 
 1. **Data Theft**: Attackers with write access to workflows can add steps that exfiltrate secrets to their servers
