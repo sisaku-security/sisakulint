@@ -1,15 +1,21 @@
 package core
 
 import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"gopkg.in/yaml.v3"
 )
 
 // TestCommitShaRule tests the CommitShaRule constructor function.
 func TestCommitShaRule(t *testing.T) {
-	rule := CommitShaRule()
+	rule := CommitShaRule("")
 
 	if rule.RuleName != "commit-sha" {
 		t.Errorf("Expected RuleName to be 'commit-sha', got '%s'", rule.RuleName)
@@ -271,7 +277,7 @@ func TestCommitSha_VisitStep(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CommitShaRule()
+			rule := CommitShaRule("")
 			err := rule.VisitStep(tt.step)
 
 			if err != nil {
@@ -347,7 +353,7 @@ func TestCommitSha_VisitStep_AutoFixer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CommitShaRule()
+			rule := CommitShaRule("")
 			_ = rule.VisitStep(tt.step)
 
 			autoFixerCount := len(rule.AutoFixers())
@@ -396,7 +402,7 @@ func TestCommitSha_VisitStep_NilChecks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CommitShaRule()
+			rule := CommitShaRule("")
 			// Should not panic
 			err := rule.VisitStep(tt.step)
 			if err != nil {
@@ -473,7 +479,7 @@ func TestCommitSha_FixStep_InvalidFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := CommitShaRule()
+			rule := CommitShaRule("")
 			err := rule.FixStep(tt.step)
 
 			if tt.wantError && err == nil {
@@ -488,7 +494,7 @@ func TestCommitSha_FixStep_InvalidFormat(t *testing.T) {
 
 // TestCommitSha_MultipleSteps tests processing multiple steps.
 func TestCommitSha_MultipleSteps(t *testing.T) {
-	rule := CommitShaRule()
+	rule := CommitShaRule("")
 
 	steps := []*ast.Step{
 		{
@@ -551,7 +557,7 @@ func TestCommitSha_MultipleSteps(t *testing.T) {
 
 // TestCommitSha_ErrorMessage tests that error messages are properly formatted.
 func TestCommitSha_ErrorMessage(t *testing.T) {
-	rule := CommitShaRule()
+	rule := CommitShaRule("")
 
 	step := &ast.Step{
 		ID: &ast.String{Value: "test-step"},
@@ -580,6 +586,103 @@ func TestCommitSha_ErrorMessage(t *testing.T) {
 	}
 	if !stringContains(errMsg, "full length commit SHA") {
 		t.Error("Error message should contain 'full length commit SHA'")
+	}
+}
+
+// TestCommitSha_FixStep_RateLimit verifies the silent-truncation guard from
+// issue #474. When the GitHub API responds with 403 + a rate-limit header,
+// FixStep must wrap the failure with ErrGitHubRateLimit so runAutofix can
+// recognise it, skip writing the partial file, and surface a non-zero exit.
+func TestCommitSha_FixStep_RateLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "60")
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", "9999999999")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting"}`))
+	}))
+	defer srv.Close()
+
+	rule := CommitShaRule("")
+	// Force lazy initialisation so we can swap in the test base URL before
+	// any request is dispatched. clientOnce ensures FixStep reuses this
+	// client instead of constructing a fresh unauthenticated one.
+	rule.client = github.NewClient(nil)
+	baseURL, _ := url.Parse(srv.URL + "/")
+	rule.client.BaseURL = baseURL
+	rule.clientOnce.Do(func() {})
+
+	step := &ast.Step{
+		ID: &ast.String{Value: "checkout"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{
+				Value:    "actions/checkout@v3",
+				BaseNode: &yaml.Node{},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	err := rule.FixStep(step)
+	if err == nil {
+		t.Fatal("expected rate-limit error, got nil")
+	}
+	if !errors.Is(err, ErrGitHubRateLimit) {
+		t.Errorf("expected error to wrap ErrGitHubRateLimit, got %v", err)
+	}
+	if !IsGitHubRateLimitError(err) {
+		t.Error("IsGitHubRateLimitError should return true for the wrapped failure")
+	}
+	var lintErr *LintingError
+	if !errors.As(err, &lintErr) {
+		t.Fatal("expected wrapped *LintingError so runAutofix can format the message")
+	}
+	if !strings.Contains(lintErr.Description, "GITHUB_TOKEN") {
+		t.Errorf("expected hint about GITHUB_TOKEN in description, got %q", lintErr.Description)
+	}
+}
+
+// TestCommitSha_FixStep_NonRateLimitError verifies that a 404 (or any
+// non-rate-limit failure) still returns a plain *LintingError without the
+// ErrGitHubRateLimit wrapper. Otherwise runAutofix would skip writing files
+// for unrelated lookup failures and silently regress the auto-fix flow.
+func TestCommitSha_FixStep_NonRateLimitError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"Not Found"}`))
+	}))
+	defer srv.Close()
+
+	rule := CommitShaRule("")
+	rule.client = github.NewClient(nil)
+	baseURL, _ := url.Parse(srv.URL + "/")
+	rule.client.BaseURL = baseURL
+	rule.clientOnce.Do(func() {})
+
+	step := &ast.Step{
+		ID: &ast.String{Value: "checkout"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{
+				Value:    "actions/does-not-exist@v3",
+				BaseNode: &yaml.Node{},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	err := rule.FixStep(step)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if errors.Is(err, ErrGitHubRateLimit) {
+		t.Errorf("404 should not be classified as a rate-limit failure: %v", err)
+	}
+	if IsGitHubRateLimitError(err) {
+		t.Error("IsGitHubRateLimitError must remain false for non-rate-limit errors")
+	}
+	var lintErr *LintingError
+	if !errors.As(err, &lintErr) {
+		t.Fatal("expected *LintingError")
 	}
 }
 

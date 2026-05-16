@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,14 +13,26 @@ import (
 
 type CommitSha struct {
 	BaseRule
+	// githubToken carries the authenticated token resolved at command startup.
+	// Empty means the unauthenticated 60 req/h limit applies and -fix on may
+	// truncate silently on workflows with many actions (issue #474).
+	githubToken string
+	// clientOnce guards lazy construction so that workflows whose actions are
+	// already pinned never instantiate an HTTP client.
+	clientOnce sync.Once
+	client     *github.Client
 }
 
-func CommitShaRule() *CommitSha {
+// CommitShaRule constructs the commit-sha rule. The token is forwarded to the
+// GitHub client used by FixStep when sisakulint is invoked with -fix on; pass
+// "" when no token is available (the resolver will then run unauthenticated).
+func CommitShaRule(token string) *CommitSha {
 	return &CommitSha{
 		BaseRule: BaseRule{
 			RuleName: "commit-sha",
 			RuleDesc: "Warn if the action ref is not a full length commit SHA and not an official GitHub Action.",
 		},
+		githubToken: token,
 	}
 }
 
@@ -82,18 +93,23 @@ func getLongVersion(cl *github.Client, owner, repo, sha string, expectedTag stri
 	return "", nil
 }
 
-var ghOnce sync.Once
-var ghClient *github.Client
+// githubClient lazily constructs the *github.Client, wiring in the OAuth2
+// transport when a token was resolved at startup. Returning the client per
+// rule (rather than a package-level singleton) ensures different sisakulint
+// invocations in the same process — e.g. the test suite — pick up the
+// token configured for that run.
+func (rule *CommitSha) githubClient() *github.Client {
+	rule.clientOnce.Do(func() {
+		rule.client = NewGitHubClient(context.Background(), rule.githubToken)
+	})
+	return rule.client
+}
 
 func (rule *CommitSha) FixStep(step *ast.Step) error {
 	// at here, we can assume that the action ref is not a full length commit SHA
 	action := step.Exec.(*ast.ExecAction)
 	usesValue := action.Uses.Value
-	ghOnce.Do(func() {
-		// TODO(on-keyday): make this configurable
-		ghClient = github.NewClient(http.DefaultClient)
-	})
-	gh := ghClient
+	gh := rule.githubClient()
 	splitTag := strings.Split(usesValue, "@")
 	if len(splitTag) != 2 {
 		// Create a LintingError with position information
@@ -112,22 +128,30 @@ func (rule *CommitSha) FixStep(step *ast.Step) error {
 	//tagComment := action.Uses.BaseNode.LineComment
 	sha, _, err := gh.Repositories.GetCommitSHA1(context.TODO(), ownerRepo[0], ownerRepo[1], tag, "")
 	if err != nil {
-		// Create a LintingError with position information
-		// Using error.Error() to include the full error message
-		lintErr := FormattedError(step.Pos, rule.RuleName, "failed to get commit SHA1: %s at step '%s'", err.Error(), step.String())
-		return lintErr
+		return rule.wrapAPIError(step, "failed to get commit SHA1", err)
 	}
 	if !isSemver && isShortTag {
 		longVersion, err := getLongVersion(gh, ownerRepo[0], ownerRepo[1], sha, splitTag[1])
 		if err != nil {
-			// Create a LintingError with position information
-			// Using error.Error() to include the full error message
-			lintErr := FormattedError(step.Pos, rule.RuleName, "failed to get long version: %s at step '%s'", err.Error(), step.String())
-			return lintErr
+			return rule.wrapAPIError(step, "failed to get long version", err)
 		}
 		tag = longVersion
 	}
 	action.Uses.BaseNode.Value = splitTag[0] + "@" + sha
 	action.Uses.BaseNode.LineComment = tag
 	return nil
+}
+
+// wrapAPIError converts a go-github failure into a LintingError. Rate-limit
+// failures are additionally wrapped with ErrGitHubRateLimit so that
+// runAutofix can recognise the silent-truncation case and skip writing
+// any partially-fixed workflow file.
+func (rule *CommitSha) wrapAPIError(step *ast.Step, prefix string, err error) error {
+	if IsGitHubRateLimitError(err) {
+		lintErr := FormattedError(step.Pos, rule.RuleName,
+			"%s: %s at step '%s' (set GITHUB_TOKEN, GH_TOKEN, SISAKULINT_GITHUB_TOKEN, or pass -github-token to lift the unauthenticated 60 req/h limit)",
+			prefix, err.Error(), step.String())
+		return fmt.Errorf("%w: %w", ErrGitHubRateLimit, lintErr)
+	}
+	return FormattedError(step.Pos, rule.RuleName, "%s: %s at step '%s'", prefix, err.Error(), step.String())
 }

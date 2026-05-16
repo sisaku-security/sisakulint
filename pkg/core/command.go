@@ -126,13 +126,25 @@ func (cmd *Command) runLint(args []string, linterOpts *LinterOptions, initConfig
 	return l.LintFiles(args, nil)
 }
 
-func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) {
+// runAutofix returns true if any fixer aborted because of a GitHub API
+// rate-limit. The caller uses that signal to surface a non-zero-exit
+// warning to the user instead of silently shipping a partially-fixed tree
+// (issue #474). Per-file rate-limit failures additionally suppress writing
+// that file, since the on-disk result would otherwise mix freshly-pinned
+// SHAs with leftover @vN tags and the user has no way to tell which is
+// which from the exit code alone.
+func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) (rateLimited bool) {
 	for _, res := range results {
 		if len(res.AutoFixers) == 0 {
 			continue
 		}
+		fileRateLimited := false
 		for _, fixer := range res.AutoFixers {
 			if err := fixer.Fix(); err != nil {
+				if IsGitHubRateLimitError(err) {
+					fileRateLimited = true
+					rateLimited = true
+				}
 				var lintErr *LintingError
 				if errors.As(err, &lintErr) {
 					lintErr.FilePath = res.FilePath
@@ -152,19 +164,28 @@ func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) {
 		data := buf.Bytes()
 		if isDryRun {
 			fmt.Fprintf(cmd.Stdout, "Fixed workflow %s:\n%s\n", res.FilePath, string(data))
-		} else {
-			err := os.WriteFile(res.FilePath, data, 0644) //nolint:gosec // auto-fix overwrites existing workflow files; preserving 0644 for git and CI compatibility
+			continue
+		}
+		if fileRateLimited {
+			// Skip writing partial output. Some fixers in this file succeeded,
+			// but a rate-limited commit-sha resolver would leave a mix of
+			// SHA-pinned and tag-pinned actions on disk that is harder to
+			// recover from than the original file.
+			fmt.Fprintf(cmd.Stderr, "Skipping write for %s due to GitHub API rate limit; re-run after authenticating to complete the fix.\n", res.FilePath)
+			continue
+		}
+		err = os.WriteFile(res.FilePath, data, 0644) //nolint:gosec // auto-fix overwrites existing workflow files; preserving 0644 for git and CI compatibility
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "Error while writing the fixed workflow: %v\n", err)
+			err := os.WriteFile(res.FilePath, res.Source, 0644) //nolint:gosec // restore original workflow file
 			if err != nil {
-				fmt.Fprintf(cmd.Stderr, "Error while writing the fixed workflow: %v\n", err)
-				err := os.WriteFile(res.FilePath, res.Source, 0644) //nolint:gosec // restore original workflow file
-				if err != nil {
-					fmt.Fprintf(cmd.Stderr, "Error while restoring the original workflow: %v\n", err)
-				}
-			} else {
-				fmt.Fprintf(cmd.Stdout, "Fixed workflow %s\n", res.FilePath)
+				fmt.Fprintf(cmd.Stderr, "Error while restoring the original workflow: %v\n", err)
 			}
+		} else {
+			fmt.Fprintf(cmd.Stdout, "Fixed workflow %s\n", res.FilePath)
 		}
 	}
+	return rateLimited
 }
 
 type ignorePatternFlags []string
@@ -202,6 +223,7 @@ func (cmd *Command) Main(args []string) int {
 	var maxDepth int
 	var parallelism int
 	var limit int
+	var githubTokenFlag string
 
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(cmd.Stderr)
@@ -224,6 +246,10 @@ func (cmd *Command) Main(args []string) int {
 	flags.IntVar(&maxDepth, "D", 3, "Max recursion depth for recursive scanning (-remote only)")
 	flags.IntVar(&parallelism, "p", 3, "Number of parallel scans (-remote only)")
 	flags.IntVar(&limit, "l", 30, "Max repositories for search queries (-remote only)")
+	flags.StringVar(&githubTokenFlag, "github-token", "",
+		"GitHub API token used by -fix on to resolve commit SHAs. "+
+			"Falls back to SISAKULINT_GITHUB_TOKEN, GITHUB_TOKEN, then GH_TOKEN. "+
+			"Without a token the unauthenticated 60 req/h limit may truncate fixes silently (issue #474)")
 
 	flags.Usage = func() {
 		printingUsageHeader(cmd.Stderr)
@@ -254,6 +280,24 @@ func (cmd *Command) Main(args []string) int {
 	linterOpts.ErrorIgnorePatterns = ignorePats
 	linterOpts.EnabledOptInRules = enabledRules
 	linterOpts.LogOutputDestination = cmd.Stderr
+
+	// Resolve the GitHub token used by commit-sha autofix. Even when the
+	// caller did not request -fix on, surfacing the source up-front (or the
+	// missing-token warning) keeps the behaviour observable: users discover
+	// the unauthenticated 60 req/h ceiling before it bites mid-fix
+	// (issue #474).
+	token, source := ResolveGitHubToken(githubTokenFlag, nil)
+	linterOpts.GitHubToken = token
+	enableAutofix := autoFixMode == "on" || autoFixMode == FileFixDryRun
+	if enableAutofix {
+		if token == "" {
+			fmt.Fprintln(cmd.Stderr,
+				"sisakulint: no GitHub token detected; commit-sha resolution limited to 60 req/h. "+
+					"Set GITHUB_TOKEN, GH_TOKEN, SISAKULINT_GITHUB_TOKEN, or pass -github-token to lift the limit.")
+		} else if linterOpts.IsVerboseOutputEnabled {
+			fmt.Fprintf(cmd.Stderr, "sisakulint: using GitHub token from %s for commit-sha resolution.\n", source)
+		}
+	}
 
 	if generateActionList {
 		if err := GenerateActionListConfig("."); err != nil {
@@ -287,9 +331,13 @@ func (cmd *Command) Main(args []string) int {
 		}
 	}
 	if hasErrors {
-		enableAutofix := autoFixMode == "on" || autoFixMode == FileFixDryRun
 		if enableAutofix {
-			cmd.runAutofix(errs, autoFixMode == FileFixDryRun)
+			if rateLimited := cmd.runAutofix(errs, autoFixMode == FileFixDryRun); rateLimited {
+				fmt.Fprintln(cmd.Stderr,
+					"sisakulint: commit-sha autofix aborted because the GitHub API rate limit was exceeded. "+
+						"Re-run with GITHUB_TOKEN / GH_TOKEN / SISAKULINT_GITHUB_TOKEN set or with -github-token to complete the fix.")
+				return ExitStatusFailure
+			}
 		}
 		return ExitStatusSuccessProblemFound
 	}

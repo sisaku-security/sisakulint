@@ -589,7 +589,13 @@ $ git diff .github/workflows/
 
 - **Always review changes**: Even though autofix is automated, always review the changes made to your workflow files before committing them
 - **Commit SHA fixes require internet**: The `commit-sha` rule needs to fetch commit information from GitHub, so it requires an active internet connection
-- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. For unauthenticated requests, the limit is 60 requests per hour
+- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**, which silently truncates `-fix on` once exceeded. Set a token to lift the limit to 5,000 req/h:
+   - `SISAKULINT_GITHUB_TOKEN` (preferred — scoped to this tool)
+   - `GITHUB_TOKEN` (set automatically inside GitHub Actions)
+   - `GH_TOKEN` (set by `gh auth login`)
+   - `-github-token "$(gh auth token)"` (CLI flag, highest priority)
+
+   A fine-grained PAT with `public_repo` (or just `Metadata: Read-only` on the targets you pin) is sufficient. When sisakulint detects no token at startup, it now prints a warning. If the rate limit is exhausted mid-run, sisakulint aborts with a non-zero exit and skips writing partial output for the affected file rather than leaving a mix of pinned and unpinned actions on disk.
 - **Backup your files**: Consider committing your changes or backing up your workflow files before running autofix
 - **Not all rules support autofix**: Some rules like `expression`, `permissions`, `issue-injection`, `cache-poisoning`, and `deprecated-commands` require manual fixes as they depend on your specific use case
 - **Auto-fix capabilities**: Currently, `timeout-minutes`, `commit-sha`, `credentials`, `untrusted-checkout`, and `artifact-poisoning` rules support auto-fix. More rules will support auto-fix in future releases
