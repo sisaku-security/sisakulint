@@ -190,54 +190,28 @@ mentioned in a header, request body, or attacker-controlled suffix such as
 
 ### User-configurable allowlist (`allowed-hosts`)
 
-If your project legitimately sends data to additional vendor or internal
-endpoints, configure them in `.github/sisakulint.yaml`:
+Add extra trusted hosts in `.github/sisakulint.yaml`:
 
 ```yaml
 secret-exfiltration:
   allowed-hosts:
-    # Exact host match (case-insensitive)
-    - api.vendor.example.com
-    # Suffix wildcard — any subdomain of example.com
-    - "*.internal.example.com"
+    - api.vendor.example.com      # exact host
+    - "*.internal.example.com"    # apex + any subdomain
 ```
 
-Only exact host names and `*.suffix` wildcards are supported. A leading
-`*.example.com` matches **both the apex `example.com` and any subdomain**
-(case-insensitive). Regex, globs (beyond a single leading `*.`), paths,
-ports, and schemes are rejected. The allowlist is hostname-only, so
-trusted-host-in-header patterns such as
-`https://attacker.com -H "Host: api.vendor.example.com"` remain flagged.
+Only exact hosts and a single leading `*.` wildcard are accepted (case-insensitive). Regex, paths, ports, and schemes are rejected. Matching is hostname-only, so `https://attacker.com -H "Host: api.vendor.example.com"` stays flagged.
 
-You can also scope an extra host list to a single workflow with a YAML
-comment directive, but only when the directive sits at the **top level**
-of the workflow file — that is, on the document node itself or as a
-comment attached to one of the top-level keys (`name:`, `on:`, `jobs:`,
-…). Directives buried deeper in the YAML (e.g. on a step's `name:`) are
-intentionally ignored so the suppression surface stays auditable from
-the file header.
+A single workflow can widen the list with a top-level comment directive (attached to the document or to `name:`/`on:`/`jobs:` — directives deeper in the file are ignored):
 
 ```yaml
 # sisakulint:secret-exfiltration.allowed-hosts: api.vendor.example.com, *.internal.example.com
 name: Deploy
 on: workflow_dispatch
-# ...
 ```
 
-The directive is additive: global directives are preserved, and a
-workflow-scoped directive may add (widen) the allowlist for that one
-file. It never removes a globally configured entry. Per-workflow
-directive entries that do not match any network command destination in
-the file are reported as "dead allow" warnings so the allowlist does
-not accumulate stale or typo'd entries that silently widen the
-suppression scope. Globally configured entries are not flagged on a
-per-workflow basis because a shared central allowlist will naturally
-have entries that any single workflow does not use.
+Per-workflow entries are additive; they never remove global ones. Per-workflow entries unused in the file are reported as "dead allow" warnings. Global entries are exempt from this check (a shared list will naturally contain entries unused by any single workflow).
 
-The allowlist applies only to `secret-exfiltration`. The closely related
-`secret-in-log` rule is intentionally unaffected — its taint sources are
-different and a host-based allowlist would not express the equivalent
-intent there.
+Applies only to `secret-exfiltration`; `secret-in-log` is unaffected.
 
 ## Why This Rule Matters
 
