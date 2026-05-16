@@ -391,7 +391,169 @@ func TestCheckMitigations(t *testing.T) {
 			if got.HasForkCheck != tt.want.HasForkCheck {
 				t.Errorf("HasForkCheck = %v, want %v", got.HasForkCheck, tt.want.HasForkCheck)
 			}
+			if got.HasCacheMutation != tt.want.HasCacheMutation {
+				t.Errorf("HasCacheMutation = %v, want %v", got.HasCacheMutation, tt.want.HasCacheMutation)
+			}
 		})
+	}
+}
+
+// TestCheckMitigationsCacheMutation verifies that CheckMitigations detects
+// jobs that mutate the actions cache, which is the precondition for issue #469
+// downgrading the permissions mitigation score.
+func TestCheckMitigationsCacheMutation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		workflow *ast.Workflow
+		want     bool
+	}{
+		{
+			name: "actions/cache",
+			workflow: &ast.Workflow{
+				Jobs: map[string]*ast.Job{
+					"build": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/cache@v4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "actions/cache/save",
+			workflow: &ast.Workflow{
+				Jobs: map[string]*ast.Job{
+					"build": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/cache/save@v4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "actions/cache/restore",
+			workflow: &ast.Workflow{
+				Jobs: map[string]*ast.Job{
+					"build": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/cache/restore@v4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "actions/setup-node with cache",
+			workflow: &ast.Workflow{
+				Jobs: map[string]*ast.Job{
+					"build": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/setup-node@v4"},
+									Inputs: map[string]*ast.Input{
+										"cache": {
+											Name:  &ast.String{Value: "cache"},
+											Value: &ast.String{Value: "npm"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "no cache action",
+			workflow: &ast.Workflow{
+				Jobs: map[string]*ast.Job{
+					"build": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecRun{
+									Run: &ast.String{Value: "echo hi"},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := CheckMitigations(tt.workflow)
+			if got.HasCacheMutation != tt.want {
+				t.Errorf("HasCacheMutation = %v, want %v", got.HasCacheMutation, tt.want)
+			}
+		})
+	}
+}
+
+// TestMitigationScoreSuppressedWhenCacheMutation verifies that the permissions
+// mitigation score is suppressed (returns 0 instead of 3) when the workflow
+// also mutates the actions cache, because `permissions:` does not constrain
+// the cache write token. See issue #469.
+func TestMitigationScoreSuppressedWhenCacheMutation(t *testing.T) {
+	t.Parallel()
+
+	// Baseline: permissions restriction alone should still be 3 when there is
+	// no cache mutation in scope.
+	baseline := MitigationStatus{HasPermissionsRestriction: true}
+	if got := baseline.Score(); got != 3 {
+		t.Fatalf("baseline Score() = %d, want 3", got)
+	}
+
+	// With cache mutation, the permissions credit is dropped.
+	withCache := MitigationStatus{
+		HasPermissionsRestriction: true,
+		HasCacheMutation:          true,
+	}
+	if got := withCache.Score(); got != 0 {
+		t.Fatalf("with cache mutation Score() = %d, want 0", got)
+	}
+
+	// Severity must escalate from "" (adequate) to critical when cache is in
+	// scope and no other mitigation is present.
+	if got := withCache.Severity(); got != SeverityCritical {
+		t.Fatalf("with cache mutation Severity() = %q, want %q", got, SeverityCritical)
+	}
+
+	// Mixing cache mutation with another mitigation should still warn at
+	// medium because permissions no longer covers the full score gap.
+	withCacheAndLabel := MitigationStatus{
+		HasPermissionsRestriction: true,
+		HasCacheMutation:          true,
+		HasLabelCondition:         true,
+	}
+	if got := withCacheAndLabel.Score(); got != 1 {
+		t.Fatalf("with cache mutation + label Score() = %d, want 1", got)
+	}
+	if got := withCacheAndLabel.Severity(); got != SeverityMedium {
+		t.Fatalf("with cache mutation + label Severity() = %q, want %q", got, SeverityMedium)
 	}
 }
 
@@ -500,6 +662,39 @@ func TestDangerousTriggersCriticalRule(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			// Issue #469: permissions: contents: read does NOT block cache
+			// poisoning because cache writes use a runner-internal token.
+			// The mitigation score for permissions is suppressed when the
+			// workflow performs cache mutation, so this should fire critical.
+			name: "critical: pull_request_target with permissions+cache (issue #469)",
+			workflow: &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+						Pos:  &ast.Position{Line: 2, Col: 1},
+					},
+				},
+				Permissions: &ast.Permissions{
+					Scopes: map[string]*ast.PermissionScope{
+						"contents": {Name: &ast.String{Value: "contents"}, Value: &ast.String{Value: "read"}},
+					},
+				},
+				Jobs: map[string]*ast.Job{
+					"test": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/cache@v4"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "cache poisoning",
 		},
 		{
 			name: "medium (not critical): pull_request_target with label condition",
