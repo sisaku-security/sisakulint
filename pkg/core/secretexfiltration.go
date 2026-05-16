@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"regexp"
 	"sort"
@@ -36,9 +37,36 @@ type SecretExfiltrationRule struct {
 	// that remain false after VisitWorkflowPost are reported as "dead allow"
 	// warnings so the allowlist does not silently rot.
 	allowedHostUsed map[string]bool
+	// allowedHostSources records where each entry originated:
+	//   - "global"    : .github/sisakulint.yaml (repo-wide config)
+	//   - "directive" : per-workflow YAML comment directive
+	// Dead-allow warnings are emitted ONLY for "directive" entries because a
+	// global allowlist is intentionally shared across many workflows and may
+	// look "dead" from any single workflow's perspective.
+	allowedHostSources map[string]string
 	// allowedHostsPos points to a representative position used when emitting
 	// dead-allow warnings (workflow root if none better is available).
 	allowedHostsPos *ast.Position
+	// hasUnresolvableDestination is set when at least one network command in
+	// this workflow has a destination that cannot be statically resolved
+	// (e.g. fully variable URL like `$URL`). In that case dead-allow detection
+	// is suppressed because a legitimate allowlist entry may match a runtime
+	// value the analyzer cannot see.
+	hasUnresolvableDestination bool
+	// invalidAllowedHostEntries collects allowlist entries that failed
+	// validation in normalizeAllowedHost, together with the rejection reason
+	// and the originating source. Reported once per workflow in
+	// VisitWorkflowPost so users learn that an entry is silently inert.
+	invalidAllowedHostEntries []invalidAllowedHostEntry
+}
+
+// invalidAllowedHostEntry captures a rejected allowlist entry for diagnostic
+// reporting. raw is the original (pre-normalization) value, reason is the
+// human-readable rejection cause, and source is "global" or "directive".
+type invalidAllowedHostEntry struct {
+	raw    string
+	reason string
+	source string
 }
 
 // perWorkflowAllowedHostsDirective is the YAML comment marker that allows a
@@ -221,113 +249,203 @@ func (rule *SecretExfiltrationRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
 	rule.allowedHosts = nil
 	rule.allowedHostUsed = nil
+	rule.allowedHostSources = nil
 	rule.allowedHostsPos = nil
+	rule.hasUnresolvableDestination = false
+	rule.invalidAllowedHostEntries = nil
 
 	merged := map[string]bool{}
 	var ordered []string
-	add := func(h string) {
-		normalized := normalizeAllowedHost(h)
+	sources := map[string]string{}
+
+	add := func(h, source string) {
+		normalized, reason := normalizeAllowedHost(h)
+		if reason != "" {
+			rule.invalidAllowedHostEntries = append(rule.invalidAllowedHostEntries, invalidAllowedHostEntry{
+				raw:    strings.TrimSpace(h),
+				reason: reason,
+				source: source,
+			})
+			return
+		}
 		if normalized == "" || merged[normalized] {
 			return
 		}
 		merged[normalized] = true
 		ordered = append(ordered, normalized)
+		sources[normalized] = source
 	}
 
 	if rule.userConfig != nil {
 		for _, h := range rule.userConfig.SecretExfiltration.AllowedHosts {
-			add(h)
+			add(h, "global")
 		}
 	}
 	for _, h := range collectPerWorkflowAllowedHosts(node) {
-		add(h)
+		add(h, "directive")
 	}
 
 	if len(ordered) > 0 {
 		rule.allowedHosts = ordered
 		rule.allowedHostUsed = make(map[string]bool, len(ordered))
+		rule.allowedHostSources = sources
 		for _, h := range ordered {
 			rule.allowedHostUsed[h] = false
 		}
-		if node != nil && node.BaseNode != nil {
-			rule.allowedHostsPos = &ast.Position{Line: node.BaseNode.Line, Col: node.BaseNode.Column}
-		}
-		if rule.allowedHostsPos == nil {
-			rule.allowedHostsPos = &ast.Position{Line: 1, Col: 1}
-		}
+	}
+	if node != nil && node.BaseNode != nil {
+		rule.allowedHostsPos = &ast.Position{Line: node.BaseNode.Line, Col: node.BaseNode.Column}
+	}
+	if rule.allowedHostsPos == nil {
+		rule.allowedHostsPos = &ast.Position{Line: 1, Col: 1}
 	}
 	return nil
 }
 
-// VisitWorkflowPost emits "dead allow" warnings for any user-configured
-// allowed-hosts entry that did not match a single curl/wget/etc. destination
-// in this workflow. This prevents the allowlist from accumulating stale or
-// typo'd entries that silently widen the suppression scope.
+// VisitWorkflowPost emits two classes of diagnostics:
+//
+//  1. "invalid entry" warnings for any allowed-hosts entry that failed
+//     normalizeAllowedHost validation. These fire regardless of source —
+//     a silently dropped entry is always a misconfiguration that the user
+//     should learn about.
+//
+//  2. "dead allow" warnings for any per-workflow directive entry that did
+//     not match a single network command destination in this workflow.
+//     Global config entries are NEVER reported as dead from a single
+//     workflow's perspective because a repo-wide allowlist is intentionally
+//     shared and an entry used only by workflow A would otherwise be flagged
+//     dead in workflows B, C, … . Likewise, dead-allow detection is skipped
+//     for the whole workflow when at least one network command destination
+//     could not be statically resolved (e.g. a fully variable URL like
+//     `$URL`) — a legitimate allowlist entry could match the runtime value.
 func (rule *SecretExfiltrationRule) VisitWorkflowPost(_ *ast.Workflow) error {
-	if len(rule.allowedHosts) == 0 {
-		return nil
-	}
 	pos := rule.allowedHostsPos
 	if pos == nil {
 		pos = &ast.Position{Line: 1, Col: 1}
 	}
+
+	// Report invalid entries first so users always learn about silently
+	// dropped values, even when nothing else is configured.
+	for _, entry := range rule.invalidAllowedHostEntries {
+		rule.Errorf(
+			pos,
+			"secret-exfiltration allowed-hosts entry %q (from %s) is invalid and was ignored: %s. "+
+				"Supported forms are exact hostnames (\"api.example.com\") or single leading-wildcard suffixes (\"*.example.com\"). "+
+				"Schemes, paths, ports, and embedded wildcards are not accepted.",
+			entry.raw, entry.source, entry.reason,
+		)
+	}
+
+	if len(rule.allowedHosts) == 0 {
+		return nil
+	}
+	if rule.hasUnresolvableDestination {
+		// A destination we could not statically resolve might match any
+		// allowlist entry at runtime. Suppress dead-allow reporting for
+		// the whole workflow to avoid false positives.
+		return nil
+	}
+
 	// Sort dead entries for deterministic output regardless of map order.
 	var dead []string
 	for _, h := range rule.allowedHosts {
-		if !rule.allowedHostUsed[h] {
-			dead = append(dead, h)
+		if rule.allowedHostUsed[h] {
+			continue
 		}
+		if rule.allowedHostSources[h] != "directive" {
+			// Global config entries are out of scope for per-workflow
+			// dead-allow detection.
+			continue
+		}
+		dead = append(dead, h)
 	}
 	sort.Strings(dead)
 	for _, h := range dead {
 		rule.Errorf(
 			pos,
-			"secret-exfiltration allowed-hosts entry %q did not match any network command destination in this workflow. "+
-				"Remove it from the allowlist, or fix the typo. "+
-				"Dead allowlist entries silently widen the suppression scope and should be cleaned up.",
+			"secret-exfiltration allowed-hosts directive entry %q did not match any network command destination in this workflow. "+
+				"Remove it from the per-workflow directive, or fix the typo. "+
+				"Dead directive entries silently widen the suppression scope and should be cleaned up.",
 			h,
 		)
 	}
 	return nil
 }
 
-// normalizeAllowedHost validates and normalizes a single allowed-hosts entry.
-// Returns "" for entries that are empty, contain unsupported characters
-// (path, port, scheme), or contain an invalid wildcard. Supported forms:
-//   - "api.example.com"   (exact host)
-//   - "*.example.com"     (suffix wildcard — matches any subdomain of example.com)
+// normalizeAllowedHost validates and normalizes a single allowed-hosts
+// entry. On success it returns (normalized host, ""). On rejection it
+// returns ("", reason) so callers can surface a diagnostic instead of
+// silently dropping the entry.
 //
-// "*" alone, "**.x", "foo.*.bar", scheme://..., and host:port are rejected
-// to keep allowlist semantics auditable.
-func normalizeAllowedHost(entry string) string {
+// Supported forms:
+//   - "api.example.com"   (exact DNS host)
+//   - "*.example.com"     (suffix wildcard — matches any subdomain of example.com)
+//   - "::1" / "2001:db8::1"          (bracket-less IPv6 literal)
+//   - "[::1]" / "[2001:db8::1]"      (bracketed IPv6 literal, brackets stripped)
+//
+// "*" alone, "**.x", "foo.*.bar", scheme://..., bracketed forms with a
+// trailing port like "[::1]:443", and host:port are rejected to keep
+// allowlist semantics auditable.
+func normalizeAllowedHost(entry string) (string, string) {
 	value := strings.TrimSpace(strings.Trim(entry, `"'`))
 	if value == "" {
-		return ""
+		return "", "empty entry"
 	}
 	// Reject obvious scheme prefixes — entries are hostnames, not URLs.
 	if strings.Contains(value, "://") {
-		return ""
+		return "", "scheme prefix is not allowed (entries are hostnames, not URLs)"
 	}
 	if strings.ContainsAny(value, "/?#@ \t") {
-		return ""
+		return "", "path, query, fragment, userinfo, or whitespace characters are not allowed"
 	}
-	// Reject port specifications: matching is hostname-only.
-	if strings.LastIndex(value, ":") > strings.LastIndex(value, "]") {
-		return ""
+
+	// IPv6 in brackets: strip brackets only when nothing follows the closing
+	// bracket. "[::1]:443" carries a port and is rejected.
+	if strings.HasPrefix(value, "[") {
+		end := strings.Index(value, "]")
+		if end < 0 {
+			return "", "unbalanced \"[\" in IPv6 literal"
+		}
+		if end != len(value)-1 {
+			return "", "trailing characters after \"]\" are not allowed (ports are not supported)"
+		}
+		inner := value[1:end]
+		if ip := net.ParseIP(inner); ip == nil || ip.To4() != nil {
+			return "", "bracketed value is not a valid IPv6 address"
+		}
+		return strings.ToLower(inner), ""
+	}
+
+	// Unbracketed IPv6: detect any value containing "::" or two-or-more
+	// colons and validate via net.ParseIP. A single colon is rejected as a
+	// port specifier in step (3) below.
+	if strings.Contains(value, "::") || strings.Count(value, ":") >= 2 {
+		if ip := net.ParseIP(value); ip != nil && ip.To4() == nil {
+			return strings.ToLower(value), ""
+		}
+		return "", "value contains \":\" but is not a valid IPv6 address"
+	}
+
+	// Reject port specifications on DNS / IPv4 forms.
+	if strings.Contains(value, ":") {
+		return "", "port specifications are not allowed (matching is hostname-only)"
 	}
 	value = strings.ToLower(value)
 	// Validate wildcard form: it must be a single leading "*." prefix.
 	if strings.HasPrefix(value, "*.") {
 		rest := strings.TrimPrefix(value, "*.")
-		if rest == "" || strings.Contains(rest, "*") {
-			return ""
+		if rest == "" {
+			return "", "wildcard suffix is empty"
 		}
-		return "*." + rest
+		if strings.Contains(rest, "*") {
+			return "", "multiple wildcards are not allowed"
+		}
+		return "*." + rest, ""
 	}
 	if strings.Contains(value, "*") {
-		return ""
+		return "", "wildcard must appear only as a leading \"*.\" prefix"
 	}
-	return value
+	return value, ""
 }
 
 // userHostAllowlistMatch reports whether host (already lowercased) matches
@@ -407,25 +525,53 @@ func splitDirectivePayload(payload string) []string {
 	})
 }
 
-// walkYAMLComments invokes visit on every non-empty comment string attached
-// to any yaml.Node in the tree rooted at node. yaml.v3 attaches comments to
-// the nearest semantic node (Head/Line/Foot), so a workflow-level directive
-// at the top of the file lands on the document node's HeadComment.
+// walkYAMLComments invokes visit on comments at workflow-file top level only:
+// the document node, the root mapping node, and the immediate top-level keys
+// (and their immediate values) of that mapping. Deeper nodes — step names,
+// nested env blocks, individual job bodies — are intentionally NOT visited.
+//
+// Scoping the directive lookup to the top of the file makes the suppression
+// surface auditable: a reviewer scanning the workflow header sees every
+// allowed-hosts directive that affects the file, instead of having to grep
+// every comment in every step. Without this restriction a directive buried
+// next to a deep yaml node could silently widen the allowlist for the entire
+// workflow with no signal at the top.
 func walkYAMLComments(node *yaml.Node, visit func(string)) {
 	if node == nil {
 		return
 	}
-	if node.HeadComment != "" {
-		visit(node.HeadComment)
+	emit := func(n *yaml.Node) {
+		if n == nil {
+			return
+		}
+		if n.HeadComment != "" {
+			visit(n.HeadComment)
+		}
+		if n.LineComment != "" {
+			visit(n.LineComment)
+		}
+		if n.FootComment != "" {
+			visit(n.FootComment)
+		}
 	}
-	if node.LineComment != "" {
-		visit(node.LineComment)
+	// Document node carries the leading file comment.
+	emit(node)
+	root := node
+	if node.Kind == yaml.DocumentNode {
+		if len(node.Content) == 0 {
+			return
+		}
+		root = node.Content[0]
+		emit(root)
 	}
-	if node.FootComment != "" {
-		visit(node.FootComment)
+	if root == nil || root.Kind != yaml.MappingNode {
+		return
 	}
-	for _, child := range node.Content {
-		walkYAMLComments(child, visit)
+	// Visit comments on each immediate (key, value) pair of the top-level
+	// mapping. Do NOT recurse into the value's children.
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		emit(root.Content[i])
+		emit(root.Content[i+1])
 	}
 }
 
@@ -1138,6 +1284,17 @@ func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.Netwo
 		return false
 	}
 
+	// Track whether any destination is dynamic (cannot be resolved to a
+	// concrete hostname). VisitWorkflowPost uses this signal to suppress
+	// dead-allow false positives when the analyzer cannot see which
+	// hostname will actually be hit at runtime.
+	for _, arg := range destinationArgs {
+		if !destinationIsStaticallyResolvable(arg, script, maxOffset) {
+			rule.hasUnresolvableDestination = true
+			break
+		}
+	}
+
 	// Every destination arg must match either the built-in legit patterns or
 	// the user-configured allowlist for the call to be suppressed. This keeps
 	// commands with mixed destinations (one trusted, one not) from being
@@ -1152,6 +1309,38 @@ func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.Netwo
 		return false
 	}
 	return true
+}
+
+// destinationIsStaticallyResolvable reports whether the destination string
+// carried by arg yields at least one concrete (non-empty, non-template) host
+// when expanded with the script's shell-assignment context. Returns false
+// when the destination is fully variable (e.g. `$URL` with no resolvable
+// assignment) or carries an unresolved GitHub Actions expression.
+func destinationIsStaticallyResolvable(arg shell.CommandArg, script string, maxOffset int) bool {
+	for _, candidate := range destinationCandidatesForArg(arg, script, maxOffset) {
+		trimmed := strings.TrimSpace(strings.Trim(candidate, `"'`))
+		if trimmed == "" {
+			continue
+		}
+		// Unresolved shell var or GHA expression — skip; we want at least
+		// one fully literal candidate.
+		if strings.Contains(trimmed, "${{") || strings.HasPrefix(trimmed, "$") {
+			continue
+		}
+		host, _ := destinationHostAndPath(trimmed)
+		host = strings.TrimSpace(host)
+		if host == "" {
+			continue
+		}
+		// A host containing a leftover $ means a partial expansion (e.g.
+		// `api.$ENV.example.com` where $ENV did not resolve). Treat as
+		// dynamic.
+		if strings.Contains(host, "$") {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // argMatchesUserAllowedHosts checks whether the destination hostname carried
