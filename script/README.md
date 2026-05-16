@@ -47,8 +47,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `taint-scope-fn-vulnerable.yaml` | TaintTracker scope-aware (#447): 関数本体内 local 変数の secret-in-log 検出を示す |
 | `taint-args-vulnerable.yaml` | 関数引数経由の secret 漏洩 (`leak() { echo "$1"; }; leak "$TOKEN"`) — `secret-in-log` が検出 |
 | `taint-args-safe.yaml` | autofix 後の安全パターン (TOKEN= の直後に `::add-mask::$TOKEN` を挿入) |
-| `secret-exfiltration-allowed-hosts.yaml` | Demonstrates the `secret-exfiltration.allowed-hosts` config (#473) — paired with a `.github/sisakulint.yaml` listing vendor/internal hosts the rule should trust |
-| `secret-exfiltration-per-workflow-override.yaml` | Demonstrates the `# sisakulint:secret-exfiltration.allowed-hosts:` per-workflow comment directive (#473) for scoping extra trusted hosts to a single workflow |
+| `secret-exfiltration-allowed-hosts.yaml` | Demonstrates the `secret-exfiltration.allowed-hosts` config — paired with a `.github/sisakulint.yaml` listing vendor/internal hosts the rule should trust |
+| `secret-exfiltration-per-workflow-override.yaml` | Demonstrates the `# sisakulint:secret-exfiltration.allowed-hosts:` per-workflow comment directive for scoping extra trusted hosts to a single workflow |
 
 ### Usage
 
