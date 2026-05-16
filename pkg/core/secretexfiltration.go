@@ -75,9 +75,14 @@ type invalidAllowedHostEntry struct {
 //
 //	# sisakulint:secret-exfiltration.allowed-hosts: api.example.com, *.example.com
 //
-// The directive can appear on any YAML comment in the workflow file. Multiple
-// directives are merged. The override is additive — it never removes entries
-// configured globally.
+// The directive is only honored when attached to a top-level YAML node:
+// the document itself, the root mapping, or one of the immediate top-level
+// keys (`name:`, `on:`, `jobs:`, …). Comments on deeper nodes (e.g. a step's
+// LineComment) are intentionally ignored — see walkYAMLComments — so the
+// suppression surface remains auditable from the file header. Multiple
+// directives at the top level are merged. The override is additive: it
+// never removes globally configured entries but may add workflow-scoped
+// entries, so the effective allowlist for that file is `global ∪ directive`.
 const perWorkflowAllowedHostsDirective = "sisakulint:secret-exfiltration.allowed-hosts:"
 
 // networkCommand represents a network-related command that could be used for exfiltration

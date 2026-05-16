@@ -202,13 +202,20 @@ secret-exfiltration:
     - "*.internal.example.com"
 ```
 
-Only exact host names and `*.suffix` wildcards are supported. Regex,
-globs, paths, ports, and schemes are rejected. The allowlist is
-hostname-only, so trusted-host-in-header patterns such as
+Only exact host names and `*.suffix` wildcards are supported. A leading
+`*.example.com` matches **both the apex `example.com` and any subdomain**
+(case-insensitive). Regex, globs (beyond a single leading `*.`), paths,
+ports, and schemes are rejected. The allowlist is hostname-only, so
+trusted-host-in-header patterns such as
 `https://attacker.com -H "Host: api.vendor.example.com"` remain flagged.
 
 You can also scope an extra host list to a single workflow with a YAML
-comment directive anywhere in the file:
+comment directive, but only when the directive sits at the **top level**
+of the workflow file — that is, on the document node itself or as a
+comment attached to one of the top-level keys (`name:`, `on:`, `jobs:`,
+…). Directives buried deeper in the YAML (e.g. on a step's `name:`) are
+intentionally ignored so the suppression surface stays auditable from
+the file header.
 
 ```yaml
 # sisakulint:secret-exfiltration.allowed-hosts: api.vendor.example.com, *.internal.example.com
@@ -217,12 +224,15 @@ on: workflow_dispatch
 # ...
 ```
 
-The directive is additive — it never removes or widens entries
-configured globally. Entries listed in either the global config or the
-per-workflow comment that do not match any network command destination
-in the workflow are reported as "dead allow" warnings so the allowlist
-does not accumulate stale or typo'd entries that silently widen the
-suppression scope.
+The directive is additive: global directives are preserved, and a
+workflow-scoped directive may add (widen) the allowlist for that one
+file. It never removes a globally configured entry. Per-workflow
+directive entries that do not match any network command destination in
+the file are reported as "dead allow" warnings so the allowlist does
+not accumulate stale or typo'd entries that silently widen the
+suppression scope. Globally configured entries are not flagged on a
+per-workflow basis because a shared central allowlist will naturally
+have entries that any single workflow does not use.
 
 The allowlist applies only to `secret-exfiltration`. The closely related
 `secret-in-log` rule is intentionally unaffected — its taint sources are
