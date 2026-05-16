@@ -345,6 +345,13 @@ Two rules detect supply chain attacks:
    - Validates cache key construction
    - Identifies untrusted inputs in cache keys (e.g., `github.event.pull_request.head.ref`)
    - Prevents attackers from poisoning build caches
+   - **Issue #469 (TanStack supply-chain)**: composite action traversal now resolves `<owner>/<repo>/<path>@<ref>` remote composite actions via `RemoteActionsMetadataCache` (`pkg/core/metadata.go`) and flags `actions/cache` usage transitively reachable from an unsafe-checkout step. When the action is mutable (not a full commit SHA), the rule still reports a cache scope-crossing risk because historical transitive usage cannot be ruled out.
+
+### Cache Mutation Aware Dangerous-Triggers Mitigation (#469)
+
+`MitigationStatus.Score()` (`pkg/core/dangeroustriggersrule.go`) detects whether any job invokes `actions/cache`, `actions/cache/save`, `actions/cache/restore`, or an `actions/setup-*` step with `cache:` enabled, and stores the result in `HasCacheMutation`. When that flag is set, the `+3` credit normally awarded for `HasPermissionsRestriction` is suppressed, because GitHub Actions cache writes are signed by a runner-internal token outside the `permissions:` model. The dangerous-triggers-critical / -medium messages append a NOTE explaining the gap and recommend label/actor gating, environment protection, or splitting the cache-writing job out of the privileged trigger. The current implementation matches literal `uses:` strings; transitive cache mutation through remote composite actions is already covered by `CachePoisoningRule` via `RemoteActionsMetadataCache`.
+
+`refs/pull/` is now part of `unsafePatternsLower` (`pkg/core/cachepoisoningutil.go`) so the same helper drives both `CachePoisoningRule` and `UntrustedCheckoutRule` (no duplicate pattern list).
 
 ### Cross-File Taint Tracking for Reusable Workflows (#392)
 
