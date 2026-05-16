@@ -24,7 +24,7 @@ Contains example GitHub Actions workflow files that demonstrate various security
 |------|-------------|
 | `cache-poisoning.yaml` | Demonstrates cache poisoning vulnerabilities |
 | `cache-poisoning-composite-action.yaml` | TanStack-style cache poisoning via `pull_request_target`, unsafe PR merge checkout, and remote composite action cache usage |
-| `dangerous-triggers-cache-mutation.yaml` | Demonstrates that `permissions: contents: read` does NOT block cache poisoning (issue #469): cache writes use a runner-internal token outside the GITHUB_TOKEN scope, so the dangerous-triggers-critical rule still fires when the workflow performs cache mutation. |
+| `dangerous-triggers-cache-mutation.yaml` | Demonstrates that `permissions: contents: read` does NOT block cache poisoning: cache writes use a runner-internal token outside the GITHUB_TOKEN scope, so the dangerous-triggers-critical rule still fires when the workflow performs cache mutation. |
 | `cache-poisoning-safe.yaml` | Safe cache configuration example |
 | `credential.yaml` | Credential exposure patterns |
 | `issueinjection.yaml` | Script injection via GitHub context |
