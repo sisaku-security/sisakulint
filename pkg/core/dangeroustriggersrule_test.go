@@ -910,3 +910,116 @@ func TestDangerousTriggersMediumRule(t *testing.T) {
 		})
 	}
 }
+
+// TestDangerousTriggersCriticalRule_NoAutofixWhenCacheMutation locks in the
+// fix for the review finding that the critical rule used to register the
+// permissions:{} autofix unconditionally. When HasCacheMutation is true the
+// fix cannot raise the score (HasCacheMutation suppresses the permissions
+// credit), so the autofix would silently re-emit the same critical finding
+// on the next run.
+func TestDangerousTriggersCriticalRule_NoAutofixWhenCacheMutation(t *testing.T) {
+	t.Parallel()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+				Pos:  &ast.Position{Line: 2, Col: 1},
+			},
+		},
+		Jobs: map[string]*ast.Job{
+			"test": {
+				Steps: []*ast.Step{
+					{
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: "actions/cache@v4"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rule := NewDangerousTriggersCriticalRule()
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre returned error: %v", err)
+	}
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected critical finding for cache-mutation workflow")
+	}
+	if got := len(rule.AutoFixers()); got != 0 {
+		t.Errorf("expected no autofixer when cache mutation is present, got %d", got)
+	}
+}
+
+// TestDangerousTriggersCriticalRule_AutofixWhenNoCacheMutation guards the
+// negative case: when cache mutation is absent, permissions:{} is still a
+// real mitigation and the autofix should be registered.
+func TestDangerousTriggersCriticalRule_AutofixWhenNoCacheMutation(t *testing.T) {
+	t.Parallel()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+				Pos:  &ast.Position{Line: 2, Col: 1},
+			},
+		},
+		Jobs: map[string]*ast.Job{
+			"test": {
+				Steps: []*ast.Step{
+					{
+						Exec: &ast.ExecRun{Run: &ast.String{Value: "echo test"}},
+					},
+				},
+			},
+		},
+	}
+
+	rule := NewDangerousTriggersCriticalRule()
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre returned error: %v", err)
+	}
+	if len(rule.AutoFixers()) != 1 {
+		t.Errorf("expected exactly one autofixer when no cache mutation, got %d", len(rule.AutoFixers()))
+	}
+}
+
+// TestDangerousTriggersMediumRule_NoAutofixWhenCacheMutation mirrors the
+// critical case. With cache mutation the permissions credit is suppressed,
+// so permissions:{} would not change the medium severity.
+func TestDangerousTriggersMediumRule_NoAutofixWhenCacheMutation(t *testing.T) {
+	t.Parallel()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+				Pos:  &ast.Position{Line: 2, Col: 1},
+			},
+		},
+		Jobs: map[string]*ast.Job{
+			"test": {
+				If: &ast.String{Value: "contains(github.event.pull_request.labels.*.name, 'safe-to-test')"},
+				Steps: []*ast.Step{
+					{
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: "actions/cache@v4"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rule := NewDangerousTriggersMediumRule()
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre returned error: %v", err)
+	}
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected medium finding for cache-mutation workflow with label condition")
+	}
+	if got := len(rule.AutoFixers()); got != 0 {
+		t.Errorf("expected no autofixer when cache mutation is present, got %d", got)
+	}
+}

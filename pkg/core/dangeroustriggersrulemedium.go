@@ -79,8 +79,11 @@ func (rule *DangerousTriggersMediumRule) VisitWorkflowPre(node *ast.Workflow) er
 
 	rule.Errorf(pos, "%s", msg)
 
-	// Add auto-fixer if permissions are not already restricted
-	if !status.HasPermissionsRestriction {
+	// Add auto-fixer if permissions are not already restricted AND cache
+	// mutation is not in scope. With cache mutation, the permissions credit
+	// is suppressed so permissions:{} cannot raise the score; the autofix
+	// would silently produce no severity change and re-emit the same NOTE.
+	if !status.HasPermissionsRestriction && !status.HasCacheMutation {
 		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
 			return addEmptyPermissionsToWorkflow(node)
 		}))

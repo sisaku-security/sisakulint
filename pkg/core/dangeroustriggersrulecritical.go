@@ -76,10 +76,16 @@ func (rule *DangerousTriggersCriticalRule) VisitWorkflowPre(node *ast.Workflow) 
 
 	rule.Errorf(pos, "%s", msg)
 
-	// Add auto-fixer to add permissions: {} to the workflow
-	rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
-		return addEmptyPermissionsToWorkflow(node)
-	}))
+	// Add auto-fixer to add permissions: {} to the workflow.
+	// Skip when the workflow performs cache mutation: permissions:{} would not
+	// raise the mitigation score (HasCacheMutation suppresses the permissions
+	// credit) and the fix would silently re-emit the same critical finding,
+	// contradicting the NOTE in the message above.
+	if !status.HasCacheMutation {
+		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
+			return addEmptyPermissionsToWorkflow(node)
+		}))
+	}
 
 	return nil
 }
