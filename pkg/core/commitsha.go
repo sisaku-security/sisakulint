@@ -13,19 +13,11 @@ import (
 
 type CommitSha struct {
 	BaseRule
-	// githubToken carries the authenticated token resolved at command startup.
-	// Empty means the unauthenticated 60 req/h limit applies and -fix on may
-	// truncate silently on workflows with many actions (issue #474).
 	githubToken string
-	// clientOnce guards lazy construction so that workflows whose actions are
-	// already pinned never instantiate an HTTP client.
-	clientOnce sync.Once
-	client     *github.Client
+	clientOnce  sync.Once
+	client      *github.Client
 }
 
-// CommitShaRule constructs the commit-sha rule. The token is forwarded to the
-// GitHub client used by FixStep when sisakulint is invoked with -fix on; pass
-// "" when no token is available (the resolver will then run unauthenticated).
 func CommitShaRule(token string) *CommitSha {
 	return &CommitSha{
 		BaseRule: BaseRule{
@@ -93,11 +85,6 @@ func getLongVersion(cl *github.Client, owner, repo, sha string, expectedTag stri
 	return "", nil
 }
 
-// githubClient lazily constructs the *github.Client, wiring in the OAuth2
-// transport when a token was resolved at startup. Returning the client per
-// rule (rather than a package-level singleton) ensures different sisakulint
-// invocations in the same process — e.g. the test suite — pick up the
-// token configured for that run.
 func (rule *CommitSha) githubClient() *github.Client {
 	rule.clientOnce.Do(func() {
 		rule.client = NewGitHubClient(context.Background(), rule.githubToken)
@@ -142,10 +129,8 @@ func (rule *CommitSha) FixStep(step *ast.Step) error {
 	return nil
 }
 
-// wrapAPIError converts a go-github failure into a LintingError. Rate-limit
-// failures are additionally wrapped with ErrGitHubRateLimit so that
-// runAutofix can recognise the silent-truncation case and skip writing
-// any partially-fixed workflow file.
+// wrapAPIError wraps rate-limit failures with ErrGitHubRateLimit so the
+// caller can skip writing a partially-fixed workflow (issue #474).
 func (rule *CommitSha) wrapAPIError(step *ast.Step, prefix string, err error) error {
 	if IsGitHubRateLimitError(err) {
 		lintErr := FormattedError(step.Pos, rule.RuleName,

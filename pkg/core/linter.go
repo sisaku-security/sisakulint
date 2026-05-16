@@ -80,11 +80,8 @@ type LinterOptions struct {
 	// EnabledOptInRules は、CLI -enable-rule で指定された
 	// オプトインルール名のリスト。空の場合、opt-in なルールはすべて無効。
 	EnabledOptInRules []string
-	// GitHubToken は、commit-sha 自動修正で uses: 参照を SHA に解決する際に
-	// GitHub API へ提示するアクセストークン。空文字の場合は未認証で 60 req/h
-	// 制限が適用され、中規模以上のリポジトリで -fix on が途中で打ち切られる
-	// (issue #474)。command 層が SISAKULINT_GITHUB_TOKEN / GITHUB_TOKEN /
-	// GH_TOKEN / -github-token から優先順に解決して設定する。
+	// GitHubToken は commit-sha 自動修正で GitHub API に提示するトークン
+	// (issue #474)。空文字なら未認証 60 req/h 制限が適用される。
 	GitHubToken string
 }
 
@@ -116,7 +113,6 @@ type Linter struct {
 	isRemote bool
 	// enabledOptInRules は、有効化されたオプトインルール名のリスト。
 	enabledOptInRules []string
-	// gitHubToken は commit-sha 自動修正用の GitHub API トークン (issue #474)。
 	gitHubToken string
 }
 

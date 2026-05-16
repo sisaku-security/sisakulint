@@ -126,13 +126,9 @@ func (cmd *Command) runLint(args []string, linterOpts *LinterOptions, initConfig
 	return l.LintFiles(args, nil)
 }
 
-// runAutofix returns true if any fixer aborted because of a GitHub API
-// rate-limit. The caller uses that signal to surface a non-zero-exit
-// warning to the user instead of silently shipping a partially-fixed tree
-// (issue #474). Per-file rate-limit failures additionally suppress writing
-// that file, since the on-disk result would otherwise mix freshly-pinned
-// SHAs with leftover @vN tags and the user has no way to tell which is
-// which from the exit code alone.
+// runAutofix returns true if any fixer hit the GitHub API rate limit, so
+// Main can surface a non-zero exit and skip the affected file's write
+// (issue #474).
 func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) (rateLimited bool) {
 	for _, res := range results {
 		if len(res.AutoFixers) == 0 {
@@ -167,10 +163,6 @@ func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) (rateLi
 			continue
 		}
 		if fileRateLimited {
-			// Skip writing partial output. Some fixers in this file succeeded,
-			// but a rate-limited commit-sha resolver would leave a mix of
-			// SHA-pinned and tag-pinned actions on disk that is harder to
-			// recover from than the original file.
 			fmt.Fprintf(cmd.Stderr, "Skipping write for %s due to GitHub API rate limit; re-run after authenticating to complete the fix.\n", res.FilePath)
 			continue
 		}
@@ -281,11 +273,6 @@ func (cmd *Command) Main(args []string) int {
 	linterOpts.EnabledOptInRules = enabledRules
 	linterOpts.LogOutputDestination = cmd.Stderr
 
-	// Resolve the GitHub token used by commit-sha autofix. Even when the
-	// caller did not request -fix on, surfacing the source up-front (or the
-	// missing-token warning) keeps the behaviour observable: users discover
-	// the unauthenticated 60 req/h ceiling before it bites mid-fix
-	// (issue #474).
 	token, source := ResolveGitHubToken(githubTokenFlag, nil)
 	linterOpts.GitHubToken = token
 	enableAutofix := autoFixMode == "on" || autoFixMode == FileFixDryRun

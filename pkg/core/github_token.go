@@ -10,19 +10,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// GitHubTokenEnvVars lists the environment variables consulted for a GitHub
-// API token, in priority order. SISAKULINT_GITHUB_TOKEN takes precedence so
-// that a tool-specific token can override an ambient CI token whose scope is
-// inappropriate for sisakulint.
+// SISAKULINT_GITHUB_TOKEN is listed first so a tool-scoped token can override
+// an ambient CI token whose scope is inappropriate for sisakulint.
 var GitHubTokenEnvVars = []string{
 	"SISAKULINT_GITHUB_TOKEN",
 	"GITHUB_TOKEN",
 	"GH_TOKEN",
 }
 
-// ResolveGitHubToken returns the first non-empty token in (override,
-// SISAKULINT_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN) along with the source
-// label for diagnostics. An empty source means no token was found.
 func ResolveGitHubToken(override string, lookup func(string) (string, bool)) (token, source string) {
 	if override != "" {
 		return override, "-github-token"
@@ -38,11 +33,6 @@ func ResolveGitHubToken(override string, lookup func(string) (string, bool)) (to
 	return "", ""
 }
 
-// NewGitHubClient builds a *github.Client. When token is non-empty the
-// client is wrapped with an oauth2 source so every request carries
-// Authorization: Bearer <token>, lifting the unauthenticated 60 req/h limit
-// to the authenticated 5,000 req/h limit. An empty token returns a plain
-// client that uses http.DefaultClient.
 func NewGitHubClient(ctx context.Context, token string) *github.Client {
 	if token == "" {
 		return github.NewClient(http.DefaultClient)
@@ -51,17 +41,11 @@ func NewGitHubClient(ctx context.Context, token string) *github.Client {
 	return github.NewClient(oauth2.NewClient(ctx, src))
 }
 
-// ErrGitHubRateLimit is returned by autofixers that abort because the
-// GitHub API rate limit has been exhausted. Callers can match it with
-// errors.Is to distinguish the silent-truncation failure mode from a
-// per-action lookup failure (404, malformed ref, etc.) and skip writing
-// any partially-fixed file to disk.
 var ErrGitHubRateLimit = errors.New("github api rate limit exceeded")
 
-// IsGitHubRateLimitError reports whether err originates from a GitHub API
-// 403/429 rate-limit response. It accepts both go-github's typed
-// *github.RateLimitError / *github.AbuseRateLimitError and our sentinel
-// ErrGitHubRateLimit so callers can wrap freely.
+// IsGitHubRateLimitError covers both go-github's typed primary/secondary
+// limit errors and plain 429 ErrorResponse fall-throughs that go-github does
+// not classify (issue #474 codex review).
 func IsGitHubRateLimitError(err error) bool {
 	if err == nil {
 		return false
@@ -76,6 +60,17 @@ func IsGitHubRateLimitError(err error) bool {
 	var abuseErr *github.AbuseRateLimitError
 	if errors.As(err, &abuseErr) {
 		return true
+	}
+	var errResp *github.ErrorResponse
+	if errors.As(err, &errResp) && errResp.Response != nil {
+		switch errResp.Response.StatusCode {
+		case http.StatusTooManyRequests:
+			return true
+		case http.StatusForbidden:
+			if errResp.Response.Header.Get("X-RateLimit-Remaining") == "0" {
+				return true
+			}
+		}
 	}
 	return false
 }

@@ -142,6 +142,26 @@ func TestNewGitHubClient_NoTokenSendsNoAuthHeader(t *testing.T) {
 }
 
 func TestIsGitHubRateLimitError(t *testing.T) {
+	errResp429 := &github.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusTooManyRequests, Header: http.Header{}},
+		Message:  "rate limit",
+	}
+	errResp403Exhausted := &github.ErrorResponse{
+		Response: &http.Response{
+			StatusCode: http.StatusForbidden,
+			Header:     http.Header{"X-Ratelimit-Remaining": []string{"0"}},
+		},
+		Message: "rate limit",
+	}
+	errResp403Other := &github.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusForbidden, Header: http.Header{}},
+		Message:  "forbidden for some other reason",
+	}
+	errResp404 := &github.ErrorResponse{
+		Response: &http.Response{StatusCode: http.StatusNotFound, Header: http.Header{}},
+		Message:  "not found",
+	}
+
 	tests := []struct {
 		name string
 		err  error
@@ -154,6 +174,10 @@ func TestIsGitHubRateLimitError(t *testing.T) {
 		{name: "RateLimitError", err: &github.RateLimitError{Message: "rate limit"}, want: true},
 		{name: "wrapped RateLimitError", err: fmt.Errorf("context: %w", &github.RateLimitError{Message: "rate limit"}), want: true},
 		{name: "AbuseRateLimitError", err: &github.AbuseRateLimitError{Message: "abuse"}, want: true},
+		{name: "ErrorResponse 429", err: errResp429, want: true},
+		{name: "ErrorResponse 403 with X-RateLimit-Remaining: 0", err: errResp403Exhausted, want: true},
+		{name: "ErrorResponse 403 unrelated", err: errResp403Other, want: false},
+		{name: "ErrorResponse 404", err: errResp404, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
