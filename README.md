@@ -29,16 +29,18 @@ Find injection, credential leakage, supply-chain, and pipeline-poisoning bugs in
 
 ### How it compares
 
-|                                          | sisakulint    | actionlint | zizmor   |
-| ---------------------------------------- | :-----------: | :--------: | :------: |
-| Workflow syntax / shell linting          | ✅            | ✅         | partial  |
-| OWASP CI/CD Top-10 coverage              | full          | —          | partial  |
-| Cross-file taint for reusable workflows  | ✅            | —          | —        |
-| Cross-step / cross-job taint via `$GITHUB_ENV` | ✅      | —          | —        |
-| Shell-aware taint (incl. function args)  | ✅            | —          | —        |
-| AI agent action rules (Clinejection)     | ✅            | —          | —        |
-| Auto-fix                                 | 27+ rules     | —          | —        |
-| SARIF + reviewdog                        | ✅            | —          | ✅       |
+|                                                | sisakulint  | actionlint | zizmor  | StepSecurity   | CodeQL  |
+| ---------------------------------------------- | :---------: | :--------: | :-----: | :------------: | :-----: |
+| Workflow syntax / shell linting                | ✅          | ✅         | partial | —              | —       |
+| OWASP CI/CD Top-10 coverage                    | full        | —          | partial | runtime only   | partial |
+| Cross-file taint for reusable workflows        | ✅          | —          | —       | —              | ✅      |
+| Cross-step / cross-job taint via `$GITHUB_ENV` | ✅          | —          | —       | runtime        | ✅      |
+| Shell-aware taint (incl. function args)        | ✅          | —          | —       | —              | partial |
+| AI agent action rules (Clinejection)           | ✅          | —          | —       | —              | —       |
+| Auto-fix                                       | 27+ rules   | —          | —       | N/A            | ⚠️      |
+| SARIF + reviewdog                              | ✅          | —          | ✅      | ✅             | ✅      |
+
+Static-analysis tools sit upstream of runtime tools — sisakulint catches bugs at PR review time, before any workflow runs.
 
 ---
 
@@ -121,37 +123,60 @@ cd sisakulint
 go build ./cmd/sisakulint
 ```
 
-### As a GitHub Action (with reviewdog)
+### As a GitHub Action
+
+The easiest way to wire sisakulint into CI is the official [`sisaku-security/sisakulint-action`](https://github.com/sisaku-security/sisakulint-action). It installs the binary, runs the scan, renders findings as inline PR annotations, and (optionally) uploads SARIF to GitHub Code Scanning.
 
 ```yaml
-name: Lint workflows
-on: [pull_request]
+name: sisakulint
+on:
+  pull_request:
+    paths: [".github/workflows/**"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write    # inline PR annotations
+  security-events: write  # only if upload-sarif: true
 
 jobs:
-  sisakulint:
+  scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
 
-      - name: Install sisakulint
-        run: |
-          curl -sSL -o sisakulint \
-            https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
-          chmod +x sisakulint && sudo mv sisakulint /usr/local/bin/
-
-      - uses: reviewdog/action-setup@v1
-
-      - name: sisakulint + reviewdog
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sisakulint -format "{{sarif .}}" \
-          | reviewdog -f=sarif -reporter=github-pr-review -filter-mode=nofilter
+      - uses: sisaku-security/sisakulint-action@596af4ab15e8c5b232c74aa97525a0302e7b7af4 # v1.0.0
+        with:
+          fail-on: high        # none | low | medium | high | critical
+          upload-sarif: true   # send SARIF to GitHub Code Scanning
 ```
+
+Useful inputs: `version`, `working-directory`, `args`, `config-file`, `autofix` (`off` / `on` / `dry-run`), `fail-on`, `upload-sarif`, `sarif-file`. See the action's [README](https://github.com/sisaku-security/sisakulint-action) for the full list.
+
+<details>
+<summary><b>Alternative: pipe SARIF into reviewdog</b></summary>
+
+If you'd rather use reviewdog for inline PR review comments instead of GitHub annotations:
+
+```yaml
+- uses: reviewdog/action-setup@v1
+
+- name: sisakulint + reviewdog
+  env:
+    REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    curl -sSL -o sisakulint \
+      https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
+    chmod +x sisakulint
+    ./sisakulint -format "{{sarif .}}" \
+      | reviewdog -f=sarif -reporter=github-pr-review -filter-mode=nofilter
+```
+
+</details>
 
 ---
 
@@ -277,16 +302,32 @@ jobs:
         run: npm install && npm run build
 ```
 
-`sisakulint -enable-rule missing-timeout-minutes` flags every line that matters:
+`sisakulint -enable-rule missing-timeout-minutes` flags every line that matters, with a code snippet and a link to the rule docs:
 
 ```text
-.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block ... [permissions]
-.github/workflows/demo.yaml:4:3: dangerous trigger (critical): pull_request_target + issue_comment without any security mitigations ... [dangerous-triggers-critical]
-.github/workflows/demo.yaml:13:9: action ref should be a full-length commit SHA ... [commit-sha]
-.github/workflows/demo.yaml:13:9: actions/checkout without 'persist-credentials: false' ... [artipacked]
-.github/workflows/demo.yaml:15:16: checking out untrusted PR code in pull_request_target ... [untrusted-checkout]
-.github/workflows/demo.yaml:19:35: code injection (critical): github.event.pull_request.title in inline script ... [code-injection-critical]
-.github/workflows/demo.yaml:21:9: cache poisoning risk: 'Run build' runs untrusted code after checking out PR head ... [cache-poisoning-poisonable-step]
+.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block.
+Follow the principle of least privilege.
+See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
+   1 👈| name: PR Comment Handler
+
+.github/workflows/demo.yaml:4:3: dangerous trigger (critical): pull_request_target +
+issue_comment without any security mitigations.
+See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
+   4 👈|   pull_request_target:
+
+.github/workflows/demo.yaml:13:9: the action ref should be a full length commit SHA. [commit-sha]
+  13 👈|       - uses: actions/checkout@v4
+
+.github/workflows/demo.yaml:15:16: untrusted PR code checked out in pull_request_target context.
+See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ [untrusted-checkout]
+  15 👈|           ref: ${{ github.event.pull_request.head.sha }}
+
+.github/workflows/demo.yaml:19:35: code injection (critical): github.event.pull_request.title
+is interpolated into an inline script.
+See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
+  19 👈|           echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+[sisaku:🤔] Detected 7 errors in 1 file checked
 ```
 
 | Finding | OWASP | Severity | Auto-fix |
@@ -478,7 +519,11 @@ Add to your VS Code `settings.json`:
     <img src="https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/preview_slide_0.jpg?34808843" alt="sisakulint at BlackHat Arsenal 2025" width="600"/>
   </a>
 
-  **[▶️ Slides](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)** · **[📥 PDF](https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/BlackHatArsenal2025.pdf)** · **[📄 SecHack365 poster](https://sechack365.nict.go.jp/achievement/2023/pdf/14C.pdf)**
+  **[▶️ Slides](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)** · **[📥 PDF](https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/BlackHatArsenal2025.pdf)** · **[📄 SecHack365 poster](https://sechack365.nict.go.jp/achievement/2023/pdf/14C.pdf)** · **[📺 Talk recording](https://www.youtube.com/watch?v=DhgqKOmzLSk)**
+
+  <a href="https://www.youtube.com/watch?v=DhgqKOmzLSk">
+    <img src="https://img.youtube.com/vi/DhgqKOmzLSk/hqdefault.jpg" alt="Watch the sisakulint talk on YouTube" width="480"/>
+  </a>
 </div>
 
 sisakulint was showcased at **BlackHat Asia 2025 Arsenal**. The talk covers the SAST design, the semantic-analysis approach to GitHub Actions security, the auto-fix pipeline, and real-world OWASP CI/CD Top-10 case studies. Originally built as a [SecHack365](https://sechack365.nict.go.jp/) 2023 project under NICT.
