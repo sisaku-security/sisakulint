@@ -14,6 +14,14 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
+// loggedResolutions deduplicates the `resolved version for X -> Y` and
+// `found N vulnerabilities for X` debug lines across rule instances. Since the
+// rule is constructed once per workflow file, scanning a repository with the
+// same SHA referenced from multiple workflows would otherwise emit the same
+// line per file. Keyed by an arbitrary string built from (owner, repo, ref,
+// version) so callers don't accidentally collide across log types.
+var loggedKnownVulnLines sync.Map
+
 // VulnerabilityInfo holds information about a detected vulnerability
 type VulnerabilityInfo struct {
 	GHSAID              string
@@ -480,7 +488,10 @@ func (rule *KnownVulnerableActionsRule) VisitStep(step *ast.Step) error {
 		return nil
 	}
 
-	rule.Debug("resolved version for %s/%s@%s -> %s", owner, repo, ref, version)
+	resolveKey := fmt.Sprintf("resolve:%s/%s@%s->%s", owner, repo, ref, version)
+	if _, dup := loggedKnownVulnLines.LoadOrStore(resolveKey, struct{}{}); !dup {
+		rule.Debug("resolved version for %s/%s@%s -> %s", owner, repo, ref, version)
+	}
 
 	// Fetch and check for vulnerabilities
 	vulns, err := rule.fetchAdvisories(ctx, owner, repo, version)
@@ -491,7 +502,10 @@ func (rule *KnownVulnerableActionsRule) VisitStep(step *ast.Step) error {
 		return nil
 	}
 
-	rule.Debug("found %d vulnerabilities for %s/%s@%s", len(vulns), owner, repo, version)
+	vulnsKey := fmt.Sprintf("vulns:%s/%s@%s=%d", owner, repo, version, len(vulns))
+	if _, dup := loggedKnownVulnLines.LoadOrStore(vulnsKey, struct{}{}); !dup {
+		rule.Debug("found %d vulnerabilities for %s/%s@%s", len(vulns), owner, repo, version)
+	}
 
 	if len(vulns) == 0 {
 		return nil

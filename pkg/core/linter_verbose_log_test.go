@@ -51,10 +51,11 @@ jobs:
 				t.Errorf("verbose log 'parsed workflow in' has garbled format (expected 'in %%dms'): %q", line)
 			}
 		}
-		// "found N errors in" の行の検証: 現在のフォーマット "found %d errors in %dms" に一致することを確認
-		if strings.Contains(line, "found") && strings.Contains(line, "errors in") {
-			if matched, _ := regexp.MatchString(`found \d+ errors in \d+ms`, line); !matched {
-				t.Errorf("verbose log total errors line does not match 'found %%d errors in %%dms': %q", line)
+		// "found N error(s) in" の行の検証: 現在のフォーマット "found %d error(s) in %dms" に一致することを確認
+		// (1 error / N errors のどちらも受け入れる)
+		if strings.Contains(line, "found") && (strings.Contains(line, "errors in") || strings.Contains(line, "error in")) {
+			if matched, _ := regexp.MatchString(`found \d+ errors? in \d+ms`, line); !matched {
+				t.Errorf("verbose log total errors line does not match 'found %%d error(s) in %%dms': %q", line)
 			}
 		}
 	}
