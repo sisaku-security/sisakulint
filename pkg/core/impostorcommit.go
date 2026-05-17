@@ -2,12 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-github/v68/github"
@@ -28,6 +30,29 @@ const (
 // maxTagCompareCommits limits the number of per-tag CompareCommits API calls
 // to avoid exhausting rate limits.
 const maxTagCompareCommits = 10
+
+// loggedImpostorErrors deduplicates per-(owner/repo@sha) "Error verifying commit"
+// debug lines across rule instances (one rule is built per workflow file, so
+// without this the same SHA referenced from N workflows produces N identical
+// log lines). impostorRateLimitReported ensures we emit a single human-friendly
+// "rate limited, skipping further checks" notice instead of repeating the full
+// GitHub 403 response for every action in the run.
+var (
+	loggedImpostorErrors      sync.Map
+	impostorRateLimitReported atomic.Bool
+)
+
+// isGitHubRateLimitErr reports whether err is a GitHub rate-limit error
+// (primary or secondary/abuse). Used to collapse cascading 403s into a single
+// summary log line during a single linter run.
+func isGitHubRateLimitErr(err error) bool {
+	var rl *github.RateLimitError
+	if errors.As(err, &rl) {
+		return true
+	}
+	var ab *github.AbuseRateLimitError
+	return errors.As(err, &ab)
+}
 
 type ImpostorCommitRule struct {
 	BaseRule
@@ -114,8 +139,23 @@ func (rule *ImpostorCommitRule) VisitStep(step *ast.Step) error {
 
 	result := rule.verifyCommit(owner, repo, ref)
 	if result.err != nil {
-		// API errors should not fail the lint - just log and skip
-		rule.Debug("Error verifying commit %s/%s@%s: %v", owner, repo, ref, result.err)
+		// API errors should not fail the lint - just log and skip.
+		// Two layers of dedup:
+		//   - If it's a GitHub rate-limit error, emit one human-friendly
+		//     summary line for the whole run instead of repeating the full
+		//     403 response per action.
+		//   - Otherwise, suppress duplicates of the *same* (owner/repo@sha)
+		//     line across rule instances (one per workflow file).
+		if isGitHubRateLimitErr(result.err) {
+			if impostorRateLimitReported.CompareAndSwap(false, true) {
+				rule.Debug("GitHub API rate limit exceeded; skipping impostor commit verification for the rest of this run")
+			}
+		} else {
+			key := fmt.Sprintf("%s/%s@%s", owner, repo, ref)
+			if _, dup := loggedImpostorErrors.LoadOrStore(key, struct{}{}); !dup {
+				rule.Debug("Error verifying commit %s/%s@%s: %v", owner, repo, ref, result.err)
+			}
+		}
 		return nil //nolint:nilerr // Intentional: API errors are logged but don't fail linting
 	}
 
