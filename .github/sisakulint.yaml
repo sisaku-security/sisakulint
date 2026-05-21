@@ -10,6 +10,8 @@ action-list:
   - github/codeql-action/analyze@*
   - github/codeql-action/autobuild@*
   - github/codeql-action/init@*
+  - github/codeql-action/upload-sarif@*
   - goreleaser/goreleaser-action@*
+  - ossf/scorecard-action@*
   - reviewdog/action-setup@*
   - actions/*
