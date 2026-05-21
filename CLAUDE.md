@@ -235,8 +235,10 @@ sisakulint -enable-rule missing-timeout-minutes
 # -github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN.
 # Without a token, `-fix on` warns up-front and exits non-zero (skipping
 # partial writes) if the unauthenticated 60 req/h limit is hit.
-sisakulint -fix on -github-token "$(gh auth token)"
+# Prefer env-based auth so the token does not appear in process args (ps).
 GITHUB_TOKEN=$(gh auth token) sisakulint -fix on
+# CLI flag form (highest priority; visible in `ps`, prefer env for shared hosts).
+sisakulint -fix on -github-token "$(gh auth token)"
 ```
 
 ## Exit Codes

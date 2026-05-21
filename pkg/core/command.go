@@ -239,9 +239,9 @@ func (cmd *Command) Main(args []string) int {
 	flags.IntVar(&parallelism, "p", 3, "Number of parallel scans (-remote only)")
 	flags.IntVar(&limit, "l", 30, "Max repositories for search queries (-remote only)")
 	flags.StringVar(&githubTokenFlag, "github-token", "",
-		"GitHub API token used by -fix on to resolve commit SHAs. "+
+		"GitHub API token used by -fix on/-fix dry-run to resolve commit SHAs. "+
 			"Falls back to SISAKULINT_GITHUB_TOKEN, GITHUB_TOKEN, then GH_TOKEN. "+
-			"Without a token the unauthenticated 60 req/h limit may truncate fixes silently (issue #474)")
+			"Without a token, unauthenticated requests are limited to 60 req/h and may interrupt commit-sha autofix (issue #474)")
 
 	flags.Usage = func() {
 		printingUsageHeader(cmd.Stderr)

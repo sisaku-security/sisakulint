@@ -589,7 +589,7 @@ $ git diff .github/workflows/
 
 - **Always review changes**: Even though autofix is automated, always review the changes made to your workflow files before committing them
 - **Commit SHA fixes require internet**: The `commit-sha` rule needs to fetch commit information from GitHub, so it requires an active internet connection
-- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**, which silently truncates `-fix on` once exceeded. Set a token to lift the limit to 5,000 req/h:
+- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**. Set a token to lift the limit to 5,000 req/h:
    - `SISAKULINT_GITHUB_TOKEN` (preferred — scoped to this tool)
    - `GITHUB_TOKEN` (read from the process environment; inside a GitHub Actions step you must map it explicitly, e.g. `env: GITHUB_TOKEN: ${{ github.token }}` — the runner does not export `secrets.GITHUB_TOKEN` to `run:` steps automatically)
    - `GH_TOKEN` (set by `gh auth login`)
