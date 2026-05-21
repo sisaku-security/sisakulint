@@ -604,13 +604,12 @@ func TestCommitSha_FixStep_RateLimit(t *testing.T) {
 	defer srv.Close()
 
 	rule := CommitShaRule("")
-	// Force lazy initialisation so we can swap in the test base URL before
-	// any request is dispatched. clientOnce ensures FixStep reuses this
-	// client instead of constructing a fresh unauthenticated one.
+	// Inject the test base URL before any request is dispatched.
+	// githubClient() short-circuits when rule.client is already set, so the
+	// lazy NewGitHubClient constructor is skipped.
 	rule.client = github.NewClient(nil)
 	baseURL, _ := url.Parse(srv.URL + "/")
 	rule.client.BaseURL = baseURL
-	rule.clientOnce.Do(func() {})
 
 	step := &ast.Step{
 		ID: &ast.String{Value: "checkout"},
@@ -657,7 +656,6 @@ func TestCommitSha_FixStep_NonRateLimitError(t *testing.T) {
 	rule.client = github.NewClient(nil)
 	baseURL, _ := url.Parse(srv.URL + "/")
 	rule.client.BaseURL = baseURL
-	rule.clientOnce.Do(func() {})
 
 	step := &ast.Step{
 		ID: &ast.String{Value: "checkout"},

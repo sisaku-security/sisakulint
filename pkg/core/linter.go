@@ -113,6 +113,8 @@ type Linter struct {
 	isRemote bool
 	// enabledOptInRules は、有効化されたオプトインルール名のリスト。
 	enabledOptInRules []string
+	// gitHubToken は commit-sha 自動修正で GitHub API に提示するトークン (issue #474)。
+	// 空文字なら未認証 60 req/h 制限が適用される。
 	gitHubToken string
 }
 

@@ -11,8 +11,10 @@ import (
 )
 
 // SISAKULINT_GITHUB_TOKEN is listed first so a tool-scoped token can override
-// an ambient CI token whose scope is inappropriate for sisakulint.
-var GitHubTokenEnvVars = []string{
+// an ambient CI token whose scope is inappropriate for sisakulint. Fixed-size
+// array (unexported) so the resolution order is immutable from outside the
+// package — preventing accidental reordering or extension at runtime.
+var gitHubTokenEnvVars = [...]string{
 	"SISAKULINT_GITHUB_TOKEN",
 	"GITHUB_TOKEN",
 	"GH_TOKEN",
@@ -25,7 +27,7 @@ func ResolveGitHubToken(override string, lookup func(string) (string, bool)) (to
 	if lookup == nil {
 		lookup = os.LookupEnv
 	}
-	for _, name := range GitHubTokenEnvVars {
+	for _, name := range gitHubTokenEnvVars {
 		if v, ok := lookup(name); ok && v != "" {
 			return v, name
 		}

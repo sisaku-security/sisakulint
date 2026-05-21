@@ -246,7 +246,7 @@ sisakulint -fix on -github-token "$(gh auth token)"
 - **0** - Success, no problems found
 - **1** - Success, problems found
 - **2** - Invalid command-line options
-- **3** - Fatal error
+- **3** - Fatal error (also returned when `-fix on` aborts because the GitHub API rate limit was exceeded during commit-sha resolution; see issue #474)
 
 ## Project Structure
 

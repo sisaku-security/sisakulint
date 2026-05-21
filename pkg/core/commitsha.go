@@ -14,8 +14,12 @@ import (
 type CommitSha struct {
 	BaseRule
 	githubToken string
-	clientOnce  sync.Once
-	client      *github.Client
+	// clientMu guards lazy initialization of client. Using sync.Mutex + nil
+	// check (rather than sync.Once) keeps the test path simple: tests can
+	// assign a fake client directly and githubClient() will skip the lazy
+	// constructor instead of depending on sync.Once internals.
+	clientMu sync.Mutex
+	client   *github.Client
 }
 
 func CommitShaRule(token string) *CommitSha {
@@ -86,9 +90,11 @@ func getLongVersion(cl *github.Client, owner, repo, sha string, expectedTag stri
 }
 
 func (rule *CommitSha) githubClient() *github.Client {
-	rule.clientOnce.Do(func() {
+	rule.clientMu.Lock()
+	defer rule.clientMu.Unlock()
+	if rule.client == nil {
 		rule.client = NewGitHubClient(context.Background(), rule.githubToken)
-	})
+	}
 	return rule.client
 }
 
