@@ -493,8 +493,12 @@ func collectPerWorkflowAllowedHosts(workflow *ast.Workflow) []string {
 
 // parseAllowedHostsDirective extracts allowed-hosts entries from a single
 // comment string. The comment may contain the directive marker anywhere
-// (e.g. as part of a multi-line comment block). Entries are separated by
-// commas or whitespace; leading "#" markers are tolerated.
+// (e.g. as part of a multi-line comment block). Entries are comma-separated;
+// surrounding whitespace per entry is trimmed and leading "#" markers are
+// tolerated. Whitespace within an entry (e.g. a missing comma like
+// "a b.example.com") is NOT treated as a separator — the entry is passed
+// through to normalizeAllowedHost which rejects it with a diagnostic, so
+// typos cannot silently widen the allowlist.
 func parseAllowedHostsDirective(comment string) []string {
 	var results []string
 	for _, line := range strings.Split(comment, "\n") {
@@ -504,7 +508,10 @@ func parseAllowedHostsDirective(comment string) []string {
 			continue
 		}
 		payload := strings.TrimSpace(trimmed[idx+len(perWorkflowAllowedHostsDirective):])
-		// Allow comma or whitespace separation. Quotes are stripped per entry.
+		// Comma is the only separator. Per-entry surrounding whitespace is
+		// trimmed; embedded whitespace is preserved so normalizeAllowedHost
+		// can reject typos like "a b.example.com" instead of silently
+		// expanding them into two entries.
 		for _, raw := range splitDirectivePayload(payload) {
 			value := strings.TrimSpace(raw)
 			if value == "" {
@@ -516,18 +523,16 @@ func parseAllowedHostsDirective(comment string) []string {
 	return results
 }
 
+// splitDirectivePayload splits the directive payload on commas only. Earlier
+// drafts also accepted whitespace, but that allowed a missing comma typo
+// (e.g. "api.example.com other.example.com") to silently expand into two
+// allowlist entries — directly violating the dead-allow detection invariant
+// that "the allowlist should not silently widen suppression scope over time."
 func splitDirectivePayload(payload string) []string {
 	if payload == "" {
 		return nil
 	}
-	return strings.FieldsFunc(payload, func(r rune) bool {
-		switch r {
-		case ',', ' ', '\t':
-			return true
-		default:
-			return false
-		}
-	})
+	return strings.Split(payload, ",")
 }
 
 // walkYAMLComments invokes visit on comments at workflow-file top level only:

