@@ -146,8 +146,10 @@ action-list:
 # allowed-hosts suppresses findings whose destination hostname matches any
 # entry. Supported syntax:
 #   - "api.example.com"  -> exact host match (case-insensitive)
-#   - "*.example.com"    -> matches the apex (example.com) AND any subdomain
-#                          (sub.example.com) (case-insensitive)
+#   - "*.example.com"    -> matches any subdomain (sub.example.com,
+#                          api.sub.example.com) but NOT the apex
+#                          (example.com) (case-insensitive). To allow the
+#                          apex too, list "example.com" as a separate entry.
 # Only a leading "*." wildcard is supported. Other regex / glob syntax,
 # schemes, paths, and ports are rejected.
 # 🧠 Example:

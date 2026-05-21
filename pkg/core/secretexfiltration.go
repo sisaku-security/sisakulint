@@ -456,6 +456,15 @@ func normalizeAllowedHost(entry string) (string, string) {
 // userHostAllowlistMatch reports whether host (already lowercased) matches
 // one of the configured allowed-hosts entries. Returns the matched pattern
 // so callers can record usage and avoid dead-allow false positives.
+//
+// Wildcard semantics: "*.example.com" matches subdomains only
+// ("api.example.com", "sub.api.example.com") and intentionally does NOT
+// match the apex ("example.com"). This matches the conventional reading
+// of "*.suffix" in DNS wildcard records (RFC 4592) and TLS SAN wildcards
+// (RFC 6125) so security engineers reviewing an allowlist are not
+// surprised by an implicit apex inclusion. Users who need the apex on
+// the allowlist must list it explicitly as a separate entry — that way
+// the suppression surface is audit-visible from the config alone.
 func userHostAllowlistMatch(host string, allowed []string) (string, bool) {
 	host = strings.TrimSuffix(strings.TrimPrefix(strings.ToLower(host), "@"), ".")
 	if host == "" {
@@ -464,7 +473,7 @@ func userHostAllowlistMatch(host string, allowed []string) (string, bool) {
 	for _, pattern := range allowed {
 		if strings.HasPrefix(pattern, "*.") {
 			suffix := strings.TrimPrefix(pattern, "*.")
-			if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			if strings.HasSuffix(host, "."+suffix) {
 				return pattern, true
 			}
 			continue
