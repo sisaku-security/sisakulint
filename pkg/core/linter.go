@@ -81,6 +81,9 @@ type LinterOptions struct {
 	// EnabledOptInRules は、CLI -enable-rule で指定された
 	// オプトインルール名のリスト。空の場合、opt-in なルールはすべて無効。
 	EnabledOptInRules []string
+	// GitHubToken は commit-sha 自動修正で GitHub API に提示するトークン
+	// (issue #474)。空文字なら未認証 60 req/h 制限が適用される。
+	GitHubToken string
 }
 
 // Linterは、workflowをlintするための構造体
@@ -111,6 +114,9 @@ type Linter struct {
 	isRemote bool
 	// enabledOptInRules は、有効化されたオプトインルール名のリスト。
 	enabledOptInRules []string
+	// gitHubToken は commit-sha 自動修正で GitHub API に提示するトークン (issue #474)。
+	// 空文字なら未認証 60 req/h 制限が適用される。
+	gitHubToken string
 	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
 	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
 	loggedConfigs sync.Map
@@ -204,6 +210,7 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 		modifyCheckRules:         options.OnCheckRulesModified,
 		isRemote:                 options.IsRemote,
 		enabledOptInRules:        options.EnabledOptInRules,
+		gitHubToken:              options.GitHubToken,
 	}, nil
 }
 
@@ -564,7 +571,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	return result, nil
 }
 
-func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
 	// WorkflowTaintMap is shared between Critical and Medium variants of
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
@@ -597,7 +604,7 @@ func makeRules(filePath string, isRemote bool, localActions *LocalActionsMetadat
 		EnvPathInjectionMediumRule(),            // Detects PATH injection in normal workflow triggers
 		OutputClobberingCriticalRule(),          // Detects output clobbering in privileged workflow triggers
 		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
-		CommitShaRule(),
+		CommitShaRule(gitHubToken),
 		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
@@ -700,7 +707,7 @@ func (l *Linter) validate(
 	// dependabot config / composite action / unparseable workflow would
 	// silently skip the rule-name check and the user's CLI typo would not
 	// be reported until a parseable workflow happened to reach validate().
-	rules := makeRules(filePath, l.isRemote, localActions, localReusableWorkflow)
+	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow)
 	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
 	if optErr != nil {
 		return nil, optErr

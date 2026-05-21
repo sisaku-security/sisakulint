@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,14 +13,22 @@ import (
 
 type CommitSha struct {
 	BaseRule
+	githubToken string
+	// clientMu guards lazy initialization of client. Using sync.Mutex + nil
+	// check (rather than sync.Once) keeps the test path simple: tests can
+	// assign a fake client directly and githubClient() will skip the lazy
+	// constructor instead of depending on sync.Once internals.
+	clientMu sync.Mutex
+	client   *github.Client
 }
 
-func CommitShaRule() *CommitSha {
+func CommitShaRule(token string) *CommitSha {
 	return &CommitSha{
 		BaseRule: BaseRule{
 			RuleName: "commit-sha",
 			RuleDesc: "Warn if the action ref is not a full length commit SHA and not an official GitHub Action.",
 		},
+		githubToken: token,
 	}
 }
 
@@ -82,18 +89,20 @@ func getLongVersion(cl *github.Client, owner, repo, sha string, expectedTag stri
 	return "", nil
 }
 
-var ghOnce sync.Once
-var ghClient *github.Client
+func (rule *CommitSha) githubClient() *github.Client {
+	rule.clientMu.Lock()
+	defer rule.clientMu.Unlock()
+	if rule.client == nil {
+		rule.client = NewGitHubClient(context.Background(), rule.githubToken)
+	}
+	return rule.client
+}
 
 func (rule *CommitSha) FixStep(step *ast.Step) error {
 	// at here, we can assume that the action ref is not a full length commit SHA
 	action := step.Exec.(*ast.ExecAction)
 	usesValue := action.Uses.Value
-	ghOnce.Do(func() {
-		// TODO(on-keyday): make this configurable
-		ghClient = github.NewClient(http.DefaultClient)
-	})
-	gh := ghClient
+	gh := rule.githubClient()
 	splitTag := strings.Split(usesValue, "@")
 	if len(splitTag) != 2 {
 		// Create a LintingError with position information
@@ -112,22 +121,28 @@ func (rule *CommitSha) FixStep(step *ast.Step) error {
 	//tagComment := action.Uses.BaseNode.LineComment
 	sha, _, err := gh.Repositories.GetCommitSHA1(context.TODO(), ownerRepo[0], ownerRepo[1], tag, "")
 	if err != nil {
-		// Create a LintingError with position information
-		// Using error.Error() to include the full error message
-		lintErr := FormattedError(step.Pos, rule.RuleName, "failed to get commit SHA1: %s at step '%s'", err.Error(), step.String())
-		return lintErr
+		return rule.wrapAPIError(step, "failed to get commit SHA1", err)
 	}
 	if !isSemver && isShortTag {
 		longVersion, err := getLongVersion(gh, ownerRepo[0], ownerRepo[1], sha, splitTag[1])
 		if err != nil {
-			// Create a LintingError with position information
-			// Using error.Error() to include the full error message
-			lintErr := FormattedError(step.Pos, rule.RuleName, "failed to get long version: %s at step '%s'", err.Error(), step.String())
-			return lintErr
+			return rule.wrapAPIError(step, "failed to get long version", err)
 		}
 		tag = longVersion
 	}
 	action.Uses.BaseNode.Value = splitTag[0] + "@" + sha
 	action.Uses.BaseNode.LineComment = tag
 	return nil
+}
+
+// wrapAPIError wraps rate-limit failures with ErrGitHubRateLimit so the
+// caller can skip writing a partially-fixed workflow (issue #474).
+func (rule *CommitSha) wrapAPIError(step *ast.Step, prefix string, err error) error {
+	if IsGitHubRateLimitError(err) {
+		lintErr := FormattedError(step.Pos, rule.RuleName,
+			"%s: %s at step '%s' (set GITHUB_TOKEN, GH_TOKEN, SISAKULINT_GITHUB_TOKEN, or pass -github-token to lift the unauthenticated 60 req/h limit)",
+			prefix, err.Error(), step.String())
+		return fmt.Errorf("%w: %w", ErrGitHubRateLimit, lintErr)
+	}
+	return FormattedError(step.Pos, rule.RuleName, "%s: %s at step '%s'", prefix, err.Error(), step.String())
 }
