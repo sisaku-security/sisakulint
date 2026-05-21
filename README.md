@@ -1,67 +1,188 @@
+<div align="center">
+
+<img src="https://github.com/sisaku-security/homebrew-sisakulint/assets/67861004/e9801cbb-fbe1-4822-a5cd-d1daac33e90f" alt="sisakulint logo" width="160" height="160"/>
+
 # sisakulint
 
-Before moving on, please consider giving us a GitHub star ⭐️. Thank you!
+**A fast, security-first static analyzer with heuristic auto-fix for GitHub Actions workflows.**
 
-<img src="https://github.com/sisaku-security/homebrew-sisakulint/assets/67861004/e9801cbb-fbe1-4822-a5cd-d1daac33e90f" alt="sisakulint logo" width="160" height="160"/> 
+Find injection, credential leakage, supply-chain, and pipeline-poisoning bugs in `.github/workflows/` — and let `-fix` repair most of them for you.
 
-## what is this?
+[![Go Reference](https://pkg.go.dev/badge/github.com/sisaku-security/sisakulint.svg)](https://pkg.go.dev/github.com/sisaku-security/sisakulint)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sisaku-security/sisakulint)](https://goreportcard.com/report/github.com/sisaku-security/sisakulint)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/sisaku-security/sisakulint)](https://github.com/sisaku-security/sisakulint/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/sisaku-security/sisakulint?style=social)](https://github.com/sisaku-security/sisakulint/stargazers)
+[![BlackHat Arsenal 2025](https://img.shields.io/badge/BlackHat%20Arsenal-2025-black)](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)
 
-In recent years, attacks targeting the Web Application Platform have been increasing rapidly.
-sisakulint is **a static and fast SAST for GitHub Actions**. 
-
-This great tool can automatically validate yaml files according to the guidelines in the security-related documentation provided by GitHub!
-
-It also includes functionality as a static analysis tool that can check the policies of the guidelines that should be set for use in each organization.
-
-These checks also comply with [the Top 10 CI/CD Security Risks](https://owasp.org/www-project-top-10-ci-cd-security-risks/) provided by OWASP.
-
-It implements most of the functions that can automatically check whether a workflow that meets the [security features](https://docs.github.com/ja/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions) supported by github has been built to reduce the risk of malicious code being injected into the CI/CD pipeline or credentials such as tokens being stolen.
-
-It does not support inspections that cannot be expressed in YAML and "repository level settings" that can be set by GitHub organization administrators.
-
-It is intended to be used mainly by software developers and security personnel at user companies who work in blue teams. 
-
-It is easy to introduce because it can be installed from brew.
-
-It also implements an autofix function for errors related to security features as a lint.
-
-It supports the SARIF format, which is the output format for static analysis. This allows [reviewdog](https://github.com/reviewdog/reviewdog?tab=readme-ov-file#sarif-format) to provide a rich UI for error triage on GitHub.
+</div>
 
 ---
 
-## 🎤 Featured at BlackHat Arsenal
+## Why sisakulint
 
-<div align="center">
-  <a href="https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions">
-    <img src="https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/preview_slide_0.jpg?34808843" alt="sisakulint BlackHat Arsenal 2025 presentation slides" width="600"/>
-  </a>
+- **Security-first by design.** Full coverage of the [OWASP Top 10 CI/CD Security Risks](https://owasp.org/www-project-top-10-ci-cd-security-risks/) — code/env/path/output injection, untrusted checkouts, artifact & cache poisoning, ref confusion, impostor commits, and more.
+- **Semantic, not regex.** A real AST + expression parser + shell taint analyzer (`mvdan.cc/sh`) — not string matching. Cross-step and cross-file taint propagation through `$GITHUB_ENV`, reusable workflow boundaries, and shell function arguments.
+- **Auto-fix that ships PRs.** 27+ rules carry an auto-fixer. `sisakulint -fix on` rewrites the YAML in place; `-fix dry-run` previews the diff first.
+- **Built for CI.** SARIF output drops straight into [reviewdog](https://github.com/reviewdog/reviewdog) for inline PR review comments.
+- **AI-agent aware.** Detects prompt injection, dangerous tool exposure, unsafe sandbox flags, and execution-order issues in claude-code-action and similar AI agent integrations (the *Clinejection* attack class).
 
-  **[▶️ View Presentation](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)** | **[📥 Download PDF](https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/BlackHatArsenal2025.pdf)** | **[📄 Poster](https://sechack365.nict.go.jp/achievement/2023/pdf/14C.pdf)**
-</div>
+### How it compares
+
+|                                                | sisakulint  | actionlint | zizmor  | StepSecurity   | CodeQL  |
+| ---------------------------------------------- | :---------: | :--------: | :-----: | :------------: | :-----: |
+| Workflow syntax / shell linting                | ✅          | ✅         | partial | —              | —       |
+| OWASP CI/CD Top-10 coverage                    | full        | —          | partial | runtime only   | partial |
+| Cross-file taint for reusable workflows        | ✅          | —          | —       | —              | ✅      |
+| Cross-step / cross-job taint via `$GITHUB_ENV` | ✅          | —          | —       | runtime        | ✅      |
+| Shell-aware taint (incl. function args)        | ✅          | —          | —       | —              | partial |
+| AI agent action rules (Clinejection)           | ✅          | —          | —       | —              | —       |
+| Auto-fix                                       | 27+ rules   | —          | —       | N/A            | ⚠️      |
+| SARIF + reviewdog                              | ✅          | —          | ✅      | ✅             | ✅      |
+
+Static-analysis tools sit upstream of runtime tools — sisakulint catches bugs at PR review time, before any workflow runs.
+
+---
+
+## Table of contents
+
+- [Quick start](#quick-start)
+- [Installation](#installation)
+- [What it detects](#what-it-detects)
+- [Rule reference](#rule-reference)
+- [Example: detecting real vulnerabilities](#example-detecting-real-vulnerabilities)
+- [Auto-fix](#auto-fix)
+- [SARIF + reviewdog integration](#sarif--reviewdog-integration)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [BlackHat Arsenal 2025](#blackhat-arsenal-2025)
+- [Contributing](#contributing)
+- [License](#license)
+- [Citation](#citation)
+
+---
+
+## Quick start
+
+```bash
+# macOS
+brew tap sisaku-security/homebrew-sisakulint
+brew install sisakulint
+
+# Run in any repo with a .github/workflows/ directory
+sisakulint
+```
+
+Other ways to run:
+
+```bash
+sisakulint .github/workflows/release.yml   # one file
+sisakulint -fix dry-run                    # preview auto-fixes
+sisakulint -fix on                         # apply auto-fixes
+sisakulint -format "{{sarif .}}"           # SARIF for CI
+sisakulint -enable-rule missing-timeout-minutes   # opt-in rule
+```
+
+Exit codes: `0` = clean, `1` = findings, `2` = bad CLI args, `3` = fatal error.
+
+---
+
+## Installation
+
+### Homebrew (macOS / Linuxbrew)
+
+```bash
+brew tap sisaku-security/homebrew-sisakulint
+brew install sisakulint
+```
+
+### `go install`
+
+```bash
+go install github.com/sisaku-security/sisakulint/cmd/sisakulint@latest
+```
+
+Requires Go 1.25 or newer.
+
+### Pre-built binary (Linux / Windows)
+
+Download from the [releases page](https://github.com/sisaku-security/sisakulint/releases/latest) and place it on `$PATH`:
+
+```bash
+# Linux example
+curl -sSL -o sisakulint https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
+chmod +x sisakulint
+sudo mv sisakulint /usr/local/bin/
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/sisaku-security/sisakulint.git
+cd sisakulint
+go build ./cmd/sisakulint
+```
+
+### As a GitHub Action
+
+The easiest way to wire sisakulint into CI is the official [`sisaku-security/sisakulint-action`](https://github.com/sisaku-security/sisakulint-action). It installs the binary, runs the scan, renders findings as inline PR annotations, and (optionally) uploads SARIF to GitHub Code Scanning.
+
+```yaml
+name: sisakulint
+on:
+  pull_request:
+    paths: [".github/workflows/**"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+
+permissions:
+  contents: read
+  pull-requests: write    # inline PR annotations
+  security-events: write  # only if upload-sarif: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          persist-credentials: false
+
+      - uses: sisaku-security/sisakulint-action@596af4ab15e8c5b232c74aa97525a0302e7b7af4 # v1.0.0
+        with:
+          fail-on: high        # none | low | medium | high | critical
+          upload-sarif: true   # send SARIF to GitHub Code Scanning
+```
+
+Useful inputs: `version`, `working-directory`, `args`, `config-file`, `autofix` (`off` / `on` / `dry-run`), `fail-on`, `upload-sarif`, `sarif-file`. See the action's [README](https://github.com/sisaku-security/sisakulint-action) for the full list.
 
 <details>
-<summary><b>📖 About the Presentation</b></summary>
+<summary><b>Alternative: pipe SARIF into reviewdog</b></summary>
 
-<br>
+If you'd rather use reviewdog for inline PR review comments instead of GitHub annotations:
 
-sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's leading information security conferences. The presentation demonstrates how sisakulint addresses real-world CI/CD security challenges and helps development teams build more secure GitHub Actions workflows.
+```yaml
+- uses: reviewdog/action-setup@v1
 
-**Key topics covered:**
-- 🔒 Security challenges in GitHub Actions workflows
-- 🔍 SAST approach and semantic analysis techniques
-- ⚙️ Practical rule implementations with real-world examples
-- 🤖 Automated security testing and auto-fix capabilities
-- 🛡️ Defense strategies against OWASP Top 10 CI/CD Security Risks
+- name: sisakulint + reviewdog
+  env:
+    REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  run: |
+    curl -sSL -o sisakulint \
+      https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
+    chmod +x sisakulint
+    ./sisakulint -format "{{sarif .}}" \
+      | reviewdog -f=sarif -reporter=github-pr-review -filter-mode=nofilter
+```
 
 </details>
 
 ---
 
-## Tool features
+## What it detects
 
-**Full Documentation**: https://sisaku-security.github.io/lint/
-
-### OWASP Top 10 CI/CD Security Risks Coverage
+### OWASP Top 10 CI/CD Security Risks coverage
 
 | OWASP Risk | Description | sisakulint Rules |
 |:-----------|:------------|:-----------------|
@@ -69,25 +190,23 @@ sisakulint was showcased at **BlackHat Asia 2025 Arsenal**, one of the world's l
 | [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm] |
 | [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc], [reusable-workflow-taint][r-rwt] |
 | [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [dangerous-triggers-*][r-dt-c], [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [output-clobbering-*][r-oc], [argument-injection-*][r-ai], [untrusted-checkout-*][r-uco], [request-forgery-*][r-rf], [ai-action-prompt-injection][r-aapi] |
-| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr], [ai-action-excessive-tools][r-aaet] |
-| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si] |
+| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr], [ai-action-excessive-tools][r-aaet], [ai-action-unsafe-sandbox][r-aaus], [ai-action-execution-order][r-aaeo] |
+| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si], [secret-in-log][r-sil] |
 | [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc], [cache-bloat][r-cb] |
-| [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui] |
+| [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui], [dependabot-github-actions][r-dga] |
 | [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
 | [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob] |
 
-### Severity Summary
+**Full documentation:** <https://sisaku-security.github.io/lint/>
 
-sisakulint categorizes rules by severity based on CVSS scores, attack impact, and exploitability:
+---
 
-| Severity | Count | CVSS Range | Description |
-|:---------|:-----:|:-----------|:------------|
-| **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
-| **High** | 19 | 7.0-8.9 | Significant risk, enables serious attacks |
-| **Medium** | 14 | 4.0-6.9 | Moderate risk, requires specific conditions |
-| **Low** | 6 | 0.1-3.9 | Best practices, minimal direct security impact |
+## Rule reference
 
-### Complete Rule Reference
+50+ rules across syntax, configuration, credentials, injection, checkout, supply chain, poisoning, access control, and AI-agent action security.
+
+<details>
+<summary><b>Click to expand the full rule list</b></summary>
 
 | Category | Rule | Severity | Description | Fix | Docs |
 |:---------|:-----|:--------:|:------------|:---:|:----:|
@@ -99,7 +218,7 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | | expression | Medium | Expression syntax validation | | [docs][r-expr] |
 | | cond | Medium | Conditional expression validation | Yes | [docs][r-cond] |
 | | deprecated-commands | High | Deprecated workflow commands detection | | [docs][r-dc] |
-| **Config** | timeout-minutes | Low | Ensures timeout-minutes is set | Yes | [docs][r-tm] |
+| **Config** | timeout-minutes | Low | Ensures timeout-minutes is set (opt-in) | Yes | [docs][r-tm] |
 | | cache-bloat | Low | Cache bloat with restore/save pair | Yes | [docs][r-cb] |
 | **Credentials** | credentials | High | Hardcoded credentials detection | Yes | [docs][r-cred] |
 | | secret-exposure | High | Excessive secrets exposure detection | Yes | [docs][r-se] |
@@ -108,6 +227,7 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | | secrets-in-artifacts | High | Sensitive data in artifact uploads | Yes | [docs][r-sia] |
 | | secrets-inherit | High | Excessive secrets inheritance | Yes | [docs][r-si] |
 | | secret-exfiltration | Critical | Secret exfiltration via network commands | | [docs][r-sef] |
+| | secret-in-log | Critical | Secret values printed to build logs (taint-tracked) | Yes | [docs][r-sil] |
 | **Injection** | code-injection-critical | Critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] |
 | | code-injection-medium | Medium | Untrusted input in normal triggers | Yes | [docs][r-cim] |
 | | envvar-injection-critical | Critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] |
@@ -128,6 +248,7 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | | known-vulnerable-actions | Varies | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] |
 | | archived-uses | Medium | Archived action/workflow detection | | [docs][r-au] |
 | | unpinned-images | Medium | Container image digest pinning | | [docs][r-ui] |
+| | dependabot-github-actions | Medium | Missing github-actions ecosystem in dependabot.yaml | Yes | [docs][r-dga] |
 | | reusable-workflow-taint | Critical | Untrusted inputs in reusable workflow calls | Yes | [docs][r-rwt] |
 | **Poisoning** | artifact-poisoning-critical | Critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] |
 | | artifact-poisoning-medium | Medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] |
@@ -136,15 +257,324 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 | **Access Control** | improper-access-control | High | Label-based approval and synchronize events | Yes | [docs][r-iac] |
 | | bot-conditions | High | Spoofable bot detection conditions | Yes | [docs][r-bot] |
 | | unsound-contains | Medium | Bypassable contains() in conditions | Yes | [docs][r-uc] |
-| | dangerous-triggers-critical | Critical | Privileged triggers without mitigations | | [docs][r-dt-c] |
-| | dangerous-triggers-medium | Medium | Privileged triggers with partial mitigations | | [docs][r-dt-m] |
+| | dangerous-triggers-critical | Critical | Privileged triggers without mitigations | Yes | [docs][r-dt-c] |
+| | dangerous-triggers-medium | Medium | Privileged triggers with partial mitigations | Yes | [docs][r-dt-m] |
 | **Other** | obfuscation | High | Obfuscated workflow pattern detection | Yes | [docs][r-ob] |
 | | self-hosted-runners | High | Self-hosted runner security risks | | [docs][r-shr] |
 | | request-forgery-critical | Critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] |
 | | request-forgery-medium | Medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] |
-| **AI Actions** | ai-action-unrestricted-trigger | High | AI agent actions with `allowed_non_write_users: "*"`| | [docs][r-aaut] |
-| | ai-action-excessive-tools | High | Dangerous tools (Bash/Write/Edit) in AI agents with untrusted triggers | | [docs][r-aaet] |
-| | ai-action-prompt-injection | High | Untrusted input interpolated into AI agent prompt parameters | | [docs][r-aapi] |
+| **AI Actions** | ai-action-unrestricted-trigger | High | AI agent actions with `allowed_non_write_users: "*"` | | [docs][r-aaut] |
+| | ai-action-excessive-tools | High | Dangerous tools (Bash/Write/Edit) under untrusted triggers | | [docs][r-aaet] |
+| | ai-action-prompt-injection | High | Untrusted input interpolated into AI agent prompts | | [docs][r-aapi] |
+| | ai-action-unsafe-sandbox | High | Unsafe sandbox / safety-strategy settings | | [docs][r-aaus] |
+| | ai-action-execution-order | Medium | AI agent action not the last step in a job | | [docs][r-aaeo] |
+
+</details>
+
+---
+
+## Example: detecting real vulnerabilities
+
+Given a workflow with several common security mistakes:
+
+```yaml
+name: PR Comment Handler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  process-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Echo PR title
+        run: |
+          echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+      - name: Run build
+        run: npm install && npm run build
+```
+
+`sisakulint -enable-rule missing-timeout-minutes` flags every line that matters, with a code snippet and a link to the rule docs:
+
+```text
+.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block.
+Follow the principle of least privilege.
+See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
+   1 👈| name: PR Comment Handler
+
+.github/workflows/demo.yaml:4:3: dangerous trigger (critical): pull_request_target +
+issue_comment without any security mitigations.
+See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
+   4 👈|   pull_request_target:
+
+.github/workflows/demo.yaml:13:9: the action ref should be a full length commit SHA. [commit-sha]
+  13 👈|       - uses: actions/checkout@v4
+
+.github/workflows/demo.yaml:15:16: untrusted PR code checked out in pull_request_target context.
+See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ [untrusted-checkout]
+  15 👈|           ref: ${{ github.event.pull_request.head.sha }}
+
+.github/workflows/demo.yaml:19:35: code injection (critical): github.event.pull_request.title
+is interpolated into an inline script.
+See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
+  19 👈|           echo "Processing PR: ${{ github.event.pull_request.title }}"
+
+[sisaku:🤔] Detected 7 errors in 1 file checked
+```
+
+| Finding | OWASP | Severity | Auto-fix |
+|:--------|:------|:---------|:--------:|
+| Missing permissions block | CICD-SEC-02 | High | Yes |
+| Dangerous privileged triggers | CICD-SEC-01 | Critical | Yes |
+| Action not pinned to SHA | CICD-SEC-08 | High | Yes |
+| Credential exposure (persist-credentials) | CICD-SEC-06 | Critical | Yes |
+| Untrusted checkout | CICD-SEC-04 | Critical | Yes |
+| Code injection | CICD-SEC-04 | Critical | Yes |
+| Cache poisoning | CICD-SEC-09 | High | Yes |
+
+Run `sisakulint -fix on` and most of these are repaired in place.
+
+---
+
+## Auto-fix
+
+27+ rules ship with an auto-fixer. Two modes:
+
+```bash
+sisakulint -fix dry-run   # show diff, don't write
+sisakulint -fix on        # apply changes to YAML files
+```
+
+Auto-fix-capable rules currently include: `timeout-minutes`, `commit-sha`, `credentials`, `code-injection-*`, `envvar-injection-*`, `envpath-injection-*`, `output-clobbering-*`, `argument-injection-*`, `request-forgery-*`, `untrusted-checkout`, `untrusted-checkout-toctou-*`, `artifact-poisoning-*`, `cache-poisoning`, `cache-poisoning-poisonable-step`, `cache-bloat`, `artipacked`, `secrets-in-artifacts`, `secrets-inherit`, `secret-in-log`, `secret-exposure`, `unmasked-secret-exposure`, `improper-access-control`, `bot-conditions`, `unsound-contains`, `obfuscation`, `ref-confusion`, `impostor-commit`, `known-vulnerable-actions`, `dangerous-triggers-*`, `cond`, `permissions`, `dependabot-github-actions`, `reusable-workflow-taint` (cross-file `ChainFixer` lifts callee `${{ inputs.X }}` into a step-level `env:`).
+
+A few representative fixes:
+
+<details>
+<summary><b>Code injection — move untrusted input into <code>env:</code></b></summary>
+
+Before:
+
+```yaml
+- run: echo "Processing PR: ${{ github.event.pull_request.title }}"
+```
+
+After:
+
+```yaml
+- env:
+    PR_TITLE: ${{ github.event.pull_request.title }}
+  run: echo "Processing PR: $PR_TITLE"
+```
+
+</details>
+
+<details>
+<summary><b>commit-sha — pin action tags to full SHA, preserve original tag as comment</b></summary>
+
+Before:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: actions/setup-node@v3
+```
+
+After:
+
+```yaml
+- uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+- uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v3
+```
+
+</details>
+
+<details>
+<summary><b>untrusted-checkout — add explicit ref in privileged contexts</b></summary>
+
+Before:
+
+```yaml
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+```
+
+After:
+
+```yaml
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+```
+
+</details>
+
+> **Notes**
+> - Always review the diff (or use `-fix dry-run`) before committing.
+> - `commit-sha` calls the GitHub API to resolve tags; unauthenticated requests are limited to 60/hr.
+> - A handful of rules (e.g. `expression`, `secret-exfiltration`, `self-hosted-runners`, `action-list`, AI-action rules) are warning-only because the right fix depends on the user's policy.
+
+---
+
+## SARIF + reviewdog integration
+
+```bash
+sisakulint -format "{{sarif .}}"                  # stdout
+sisakulint -format "{{sarif .}}" > results.sarif  # to file
+sisakulint -format "{{sarif .}}" | reviewdog -f=sarif -reporter=github-pr-review
+```
+
+<div align="center">
+  <img width="700" alt="reviewdog showing sisakulint findings inline on a GitHub PR" src="https://github.com/user-attachments/assets/66e34b76-63f9-4d30-95b5-206bec0f7d41" />
+  <p><i>sisakulint findings rendered inline on a GitHub PR via reviewdog</i></p>
+</div>
+
+A complete GitHub Actions recipe is in [Installation → As a GitHub Action](#as-a-github-action-with-reviewdog).
+
+---
+
+## Configuration
+
+Generate a starter config:
+
+```bash
+sisakulint -init   # writes .github/action.yaml
+```
+
+The config file lets you set per-repo allowlists, block lists, and rule overrides. Useful flags:
+
+```bash
+sisakulint -ignore "permissions" -ignore "SC2086"   # mute specific rules / patterns
+sisakulint -enable-rule missing-timeout-minutes     # enable an opt-in rule
+sisakulint -boilerplate                             # print a hardened workflow skeleton
+sisakulint -debug                                   # dump AST traversal + rule decisions
+```
+
+### JSON schema for editor autocompletion
+
+Add to your VS Code `settings.json`:
+
+```json
+"yaml.schemas": {
+  "https://github.com/sisaku-security/homebrew-sisakulint/raw/main/settings.json": "/.github/workflows/*.{yml,yaml}"
+}
+```
+
+---
+
+- **Always review changes**: Even though autofix is automated, always review the changes made to your workflow files before committing them
+- **Commit SHA fixes require internet**: The `commit-sha` rule needs to fetch commit information from GitHub, so it requires an active internet connection
+- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**. Set a token to lift the limit to 5,000 req/h:
+   - `SISAKULINT_GITHUB_TOKEN` (preferred — scoped to this tool)
+   - `GITHUB_TOKEN` (read from the process environment; inside a GitHub Actions step you must map it explicitly, e.g. `env: GITHUB_TOKEN: ${{ github.token }}` — the runner does not export `secrets.GITHUB_TOKEN` to `run:` steps automatically)
+   - `GH_TOKEN` (set by `gh auth login`)
+   - `-github-token "$(gh auth token)"` (CLI flag, highest priority)
+
+   A fine-grained PAT with `public_repo` (or just `Metadata: Read-only` on the targets you pin) is sufficient. When sisakulint detects no token at startup, it now prints a warning. If the rate limit is exhausted mid-run, sisakulint aborts with a non-zero exit and skips writing partial output for the affected file rather than leaving a mix of pinned and unpinned actions on disk.
+- **Backup your files**: Consider committing your changes or backing up your workflow files before running autofix
+- **Not all rules support autofix**: Some rules like `expression`, `permissions`, `issue-injection`, `cache-poisoning`, and `deprecated-commands` require manual fixes as they depend on your specific use case
+- **Auto-fix capabilities**: Currently, `timeout-minutes`, `commit-sha`, `credentials`, `untrusted-checkout`, and `artifact-poisoning` rules support auto-fix. More rules will support auto-fix in future releases
+
+## Architecture
+
+
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/4c6fa378-5878-48af-b95f-8b987b3cf7ef" alt="sisakulint architecture diagram" width="600"/>
+</div>
+
+```
+.github/workflows/*.yml
+        │
+        ▼
+[ AST parser ]  ──► [ Expression parser (${{ }}) ]
+        │                       │
+        ▼                       ▼
+[ Shell parser (mvdan.cc/sh) ]  [ Taint propagator ]
+        │                       │
+        └───────────► [ Rule engine ] ◄───── 50+ rules
+                              │
+                ┌─────────────┴─────────────┐
+                ▼                           ▼
+        [ Error formatter ]          [ Auto-fixer ]
+                │                           │
+                ▼                           ▼
+        SARIF / pretty text         in-place YAML rewrite
+```
+
+- **AST parser** — `pkg/ast`, `pkg/core/parse_*.go`
+- **Expression parser** — `pkg/expressions` (full GitHub Actions `${{ }}` grammar)
+- **Shell parser & taint** — `pkg/shell` (scope-aware bash semantics, function-arg propagation)
+- **Rule engine** — `pkg/core/*rule.go` implementing the visitor pattern
+- **Auto-fixer** — `pkg/core/autofixer.go`
+
+---
+
+## BlackHat Arsenal 2025
+
+<div align="center">
+  <a href="https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions">
+    <img src="https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/preview_slide_0.jpg?34808843" alt="sisakulint at BlackHat Arsenal 2025" width="600"/>
+  </a>
+
+  **[▶️ Slides](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)** · **[📥 PDF](https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/BlackHatArsenal2025.pdf)** · **[📄 SecHack365 poster](https://sechack365.nict.go.jp/achievement/2023/pdf/14C.pdf)** · **[📺 Talk recording](https://www.youtube.com/watch?v=DhgqKOmzLSk)**
+
+  <a href="https://www.youtube.com/watch?v=DhgqKOmzLSk">
+    <img src="https://img.youtube.com/vi/DhgqKOmzLSk/hqdefault.jpg" alt="Watch the sisakulint talk on YouTube" width="480"/>
+  </a>
+</div>
+
+sisakulint was showcased at **BlackHat Asia 2025 Arsenal**. The talk covers the SAST design, the semantic-analysis approach to GitHub Actions security, the auto-fix pipeline, and real-world OWASP CI/CD Top-10 case studies. Originally built as a [SecHack365](https://sechack365.nict.go.jp/) 2023 project under NICT.
+
+---
+
+## Contributing
+
+Bug reports, rule proposals, and PRs are very welcome.
+
+- File issues at <https://github.com/sisaku-security/sisakulint/issues>
+- Adding a new rule: see [`docs/RULES_GUIDE.md`](docs/RULES_GUIDE.md) and the example workflows under [`script/actions/`](script/actions/)
+- Run the test suite: `go test ./...`
+- Run against the bundled examples: `sisakulint script/actions/`
+
+If sisakulint helps you keep a workflow safe, please ⭐️ the repo — it makes it much easier for other security teams to find.
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE) © sisaku-security contributors.
+
+## Citation
+
+If you reference sisakulint in academic or industry work:
+
+```bibtex
+@software{sisakulint,
+  title  = {sisakulint: CI-friendly static linter with SAST semantic analysis for GitHub Actions},
+  author = {sisaku-security contributors},
+  year   = {2025},
+  url    = {https://github.com/sisaku-security/sisakulint}
+}
+```
+
+---
 
 <!-- OWASP Links -->
 [owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
@@ -176,6 +606,7 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 [r-sia]: https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/
 [r-si]: https://sisaku-security.github.io/lint/docs/rules/secretsinherit/
 [r-sef]: https://sisaku-security.github.io/lint/docs/rules/secretexfiltration/
+[r-sil]: https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/
 [r-ci]: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
 [r-cim]: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
 [r-evi]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
@@ -194,6 +625,7 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 [r-kva]: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
 [r-au]: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
 [r-ui]: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
+[r-dga]: https://sisaku-security.github.io/lint/docs/rules/dependabotgithubactions/
 [r-rwt]: https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/
 [r-apc]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
 [r-apm]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
@@ -210,401 +642,5 @@ sisakulint categorizes rules by severity based on CVSS scores, attack impact, an
 [r-aaut]: https://sisaku-security.github.io/lint/docs/rules/aiactionunrestrictedtrigger/
 [r-aaet]: https://sisaku-security.github.io/lint/docs/rules/aiactionexcessivetools/
 [r-aapi]: https://sisaku-security.github.io/lint/docs/rules/aiactionpromptinjection/
-
-<!-- GitHub Reference Links -->
-[gh-shell]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-a-specific-shell
-[gh-perm]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#permissions
-[gh-reuse]: https://docs.github.com/en/actions/sharing-automations/reusing-workflows
-[gh-cmd]: https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
-[gh-timeout]: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idtimeout-minutes
-[gh-inject]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
-[gh-pwn]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/keeping-your-github-actions-and-workflows-secure-preventing-pwn-requests
-[gh-3p]: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
-
-## install for macOS user
-
-```bash
-$ brew tap sisaku-security/homebrew-sisakulint
-$ brew install sisakulint
-```
-
-## install from release page for Linux user
-
-```bash
-# visit release page of this repository and download for yours.
-$ cd <directory where sisakulint binary is located>
-$ mv ./sisakulint /usr/local/bin/sisakulint
-```
-
-## Architecture
-
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/4c6fa378-5878-48af-b95f-8b987b3cf7ef" alt="sisakulint architecture diagram" width="600"/>
-</div>
-
-sisakulint automatically searches for YAML files in the `.github/workflows` directory. The parser builds an Abstract Syntax Tree (AST) and traverses it to apply various security and best practice rules. Results are output using a custom error formatter, with support for SARIF format for integration with tools like reviewdog.
-
-**Key components:**
-- 📁 **Workflow Discovery** - Automatic detection of GitHub Actions workflow files
-- 🔍 **AST Parser** - Converts YAML into a structured tree representation
-- ⚖️ **Rule Engine** - Applies security and best practice validation rules
-- 📊 **Output Formatters** - Custom error format and SARIF support for CI/CD integration
-
-## Quick Start
-
-```bash
-# Run in your repository (auto-detects .github/workflows/)
-$ sisakulint
-
-# Analyze specific file
-$ sisakulint .github/workflows/ci.yaml
-
-# Preview auto-fixes without modifying files
-$ sisakulint -fix dry-run
-
-# Apply auto-fixes
-$ sisakulint -fix on
-
-# Output in SARIF format for CI/CD integration
-$ sisakulint -format "{{sarif .}}"
-
-# Enable an opt-in rule (e.g. missing-timeout-minutes is opt-in)
-$ sisakulint -enable-rule missing-timeout-minutes
-```
-
-## Example: Detecting Security Vulnerabilities
-
-Given a workflow file with common security issues:
-
-```yaml
-name: PR Comment Handler
-
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-  issue_comment:
-    types: [created]
-
-jobs:
-  process-pr:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Echo PR title
-        run: |
-          echo "Processing PR: ${{ github.event.pull_request.title }}"
-
-      - name: Run build
-        run: npm install && npm run build
-```
-
-Running `sisakulint -enable-rule missing-timeout-minutes` detects multiple security issues (the `-enable-rule` flag enables the opt-in `missing-timeout-minutes` rule shown in the output below):
-
-```
-.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block. Without explicit permissions, the workflow uses the default repository permissions which may be overly broad. Add a 'permissions:' block to follow the principle of least privilege. See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
-      1 👈|name: PR Comment Handler
-
-.github/workflows/demo.yaml:4:3: dangerous trigger (critical): workflow uses privileged trigger(s) [pull_request_target, issue_comment] without any security mitigations. These triggers grant write access and secrets access to potentially untrusted code. Add at least one mitigation: restrict permissions (permissions: read-all or permissions: {}), use environment protection, add label conditions, or check github.actor. See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
-      4 👈|  pull_request_target:
-
-.github/workflows/demo.yaml:10:3: timeout-minutes is not set for job process-pr; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
-       10 👈|  process-pr:
-
-.github/workflows/demo.yaml:13:9: timeout-minutes is not set for step <unnamed>; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
-       13 👈|      - uses: actions/checkout@v4
-
-.github/workflows/demo.yaml:13:9: the action ref in 'uses' for step '<unnamed>' should be a full length commit SHA for immutability and security. See https://sisaku-security.github.io/lint/docs/rules/commitsharule/ [commit-sha]
-       13 👈|      - uses: actions/checkout@v4
-
-.github/workflows/demo.yaml:13:9: [Medium] actions/checkout without 'persist-credentials: false' at step "<unnamed>". Credentials are stored in .git/config. While no dangerous upload-artifact was found in this job, consider adding 'persist-credentials: false' to prevent credential exposure. See https://unit42.paloaltonetworks.com/github-repo-artifacts-leak-tokens/ [artipacked]
-       13 👈|      - uses: actions/checkout@v4
-
-.github/workflows/demo.yaml:15:16: checking out untrusted code from pull request in workflow with privileged trigger 'pull_request_target' (line 4). This allows potentially malicious code from external contributors to execute with access to repository secrets. Use 'pull_request' trigger instead, or avoid checking out PR code when using 'pull_request_target'. See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details [untrusted-checkout]
-       15 👈|          ref: ${{ github.event.pull_request.head.sha }}
-
-.github/workflows/demo.yaml:17:9: timeout-minutes is not set for step Echo PR title; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
-       17 👈|      - name: Echo PR title
-
-.github/workflows/demo.yaml:19:35: code injection (critical): "github.event.pull_request.title" is potentially untrusted and used in a workflow with privileged triggers. Avoid using it directly in inline scripts. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
-       19 👈|          echo "Processing PR: ${{ github.event.pull_request.title }}"
-
-.github/workflows/demo.yaml:21:9: timeout-minutes is not set for step Run build; see https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/ for more details. [missing-timeout-minutes]
-       21 👈|      - name: Run build
-
-.github/workflows/demo.yaml:21:9: cache poisoning risk via build command: 'Run build' runs untrusted code after checking out PR head (triggers: pull_request_target, issue_comment). Attacker can steal cache tokens [cache-poisoning-poisonable-step]
-       21 👈|      - name: Run build
-```
-
-### What sisakulint detected
-
-| Finding | OWASP Risk | Severity | Auto-fix |
-|:--------|:-----------|:---------|:--------:|
-| Missing permissions block | CICD-SEC-02 | Medium | |
-| Dangerous privileged triggers | CICD-SEC-01 | Critical | |
-| Missing timeout-minutes | CICD-SEC-07 | Low | Yes |
-| Action not pinned to SHA | CICD-SEC-08 | Medium | Yes |
-| Credential exposure risk | CICD-SEC-06 | Medium | Yes |
-| Untrusted checkout | CICD-SEC-04 | Critical | Yes |
-| Code injection | CICD-SEC-04 | Critical | Yes |
-| Cache poisoning | CICD-SEC-09 | High | Yes |
-
-## SARIF Output & Integration with reviewdog
-
-sisakulint supports SARIF (Static Analysis Results Interchange Format) output, which enables seamless integration with [reviewdog](https://github.com/reviewdog/reviewdog) for enhanced code review workflows on GitHub.
-
-### Why SARIF + reviewdog?
-
-SARIF format allows sisakulint to provide:
-- **Rich GitHub UI integration** - Errors appear directly in pull request reviews
-- **Inline annotations** - Issues are shown at the exact file location
-- **Automatic triage** - Easy filtering and management of findings
-- **CI/CD pipeline integration** - Automated security checks in your workflow
-
-### Visual Example
-
-<div align="center">
-  <img width="926" height="482" alt="reviewdog integration showing sisakulint findings in GitHub PR" src="https://github.com/user-attachments/assets/66e34b76-63f9-4d30-95b5-206bec0f7d41" />
-  <p><i>sisakulint findings displayed directly in GitHub pull request using reviewdog</i></p>
-</div>
-
-### How to integrate
-
-Add the following step to your GitHub Actions workflow:
-
-```yaml
-name: Lint GitHub Actions Workflows
-on: [pull_request]
-
-jobs:
-  sisakulint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install sisakulint
-        run: |
-          # Download from release page or install via brew
-          # Example: wget https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
-
-      - name: Run sisakulint with reviewdog
-        env:
-          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sisakulint -format "{{sarif .}}" | \
-          reviewdog -f=sarif -reporter=github-pr-review -filter-mode=nofilter
-```
-
-### SARIF format usage
-
-To output results in SARIF format
-
-```bash
-# Output to stdout
-$ sisakulint -format "{{sarif .}}"
-
-# Save to file
-$ sisakulint -format "{{sarif .}}" > results.sarif
-
-# Pipe to reviewdog
-$ sisakulint -format "{{sarif .}}" | reviewdog -f=sarif -reporter=github-pr-review
-```
-
-### Benefits in CI/CD
-
-- ✅ **Automated security reviews** - Every PR is automatically checked
-- ✅ **Early detection** - Find issues before merging
-- ✅ **Clear feedback** - Developers see exactly what needs to be fixed
-- ✅ **Consistent standards** - Enforce security policies across all workflows
-- ✅ **Integration with existing tools** - Works with your current GitHub workflow
-
-## Using autofix features
-
-sisakulint provides an automated fix feature that can automatically resolve certain types of security issues and best practice violations. This feature saves time and ensures consistent fixes across your workflow files.
-
-### Available modes
-
-- **`-fix dry-run`**: Show what changes would be made without actually modifying files
-- **`-fix on`**: Automatically fix issues and save changes to files
-
-### Rules that support autofix
-
-The following rules support automatic fixes:
-
-#### 1. missing-timeout-minutes (timeout-minutes)
-Automatically adds `timeout-minutes: 5` to jobs and steps that don't have it set.
-
-**Before:**
-```yaml
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-```
-
-**After:**
-```yaml
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-```
-
-#### 2. commit-sha (commitsha)
-Converts action references from tags to full-length commit SHAs for enhanced security. The original tag is preserved as a comment.
-
-**Before:**
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-node@v3
-```
-
-**After:**
-```yaml
-steps:
-  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-  - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v3
-```
-
-#### 3. credentials
-Removes hardcoded passwords from container configurations.
-
-**Before:**
-```yaml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    container:
-      image: myregistry/myimage
-      credentials:
-        username: ${{ secrets.REGISTRY_USERNAME }}
-        password: my-hardcoded-password
-```
-
-**After:**
-```yaml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    container:
-      image: myregistry/myimage
-      credentials:
-        username: ${{ secrets.REGISTRY_USERNAME }}
-```
-
-#### 4. untrusted-checkout
-Adds explicit ref specifications to checkout actions in privileged workflow contexts to prevent checking out untrusted PR code.
-
-**Before:**
-```yaml
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm install
-```
-
-**After:**
-```yaml
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.ref }}
-      - run: npm install
-```
-
-#### 5. artifact-poisoning
-Adds validation steps to artifact download operations to prevent path traversal and poisoning attacks.
-
-**Before:**
-```yaml
-steps:
-  - uses: actions/download-artifact@v4
-    with:
-      name: build-output
-  - run: bash ./scripts/deploy.sh
-```
-
-**After:**
-```yaml
-steps:
-  - uses: actions/download-artifact@v4
-    with:
-      name: build-output
-  - name: Validate artifact paths
-    run: |
-      # Validate no path traversal attempts
-      find . -name ".." -o -name "../*" | grep . && exit 1 || true
-  - run: bash ./scripts/deploy.sh
-```
-
-### Usage examples
-
-#### 1. Check what would be fixed (dry-run mode)
-```bash
-$ sisakulint -fix dry-run
-```
-This will show all the changes that would be made without actually modifying your files. Use this to preview changes before applying them.
-
-#### 2. Automatically fix issues
-```bash
-$ sisakulint -fix on
-```
-This will automatically fix all supported issues and save the changes to your workflow files.
-
-#### 3. Typical workflow
-```bash
-# First, run without fix to see all issues
-$ sisakulint
-
-# Preview what autofix would change
-$ sisakulint -fix dry-run
-
-# Apply the fixes
-$ sisakulint -fix on
-
-# Verify the changes
-$ git diff .github/workflows/
-```
-
-### Important notes
-
-- **Always review changes**: Even though autofix is automated, always review the changes made to your workflow files before committing them
-- **Commit SHA fixes require internet**: The `commit-sha` rule needs to fetch commit information from GitHub, so it requires an active internet connection
-- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**. Set a token to lift the limit to 5,000 req/h:
-   - `SISAKULINT_GITHUB_TOKEN` (preferred — scoped to this tool)
-   - `GITHUB_TOKEN` (read from the process environment; inside a GitHub Actions step you must map it explicitly, e.g. `env: GITHUB_TOKEN: ${{ github.token }}` — the runner does not export `secrets.GITHUB_TOKEN` to `run:` steps automatically)
-   - `GH_TOKEN` (set by `gh auth login`)
-   - `-github-token "$(gh auth token)"` (CLI flag, highest priority)
-
-   A fine-grained PAT with `public_repo` (or just `Metadata: Read-only` on the targets you pin) is sufficient. When sisakulint detects no token at startup, it now prints a warning. If the rate limit is exhausted mid-run, sisakulint aborts with a non-zero exit and skips writing partial output for the affected file rather than leaving a mix of pinned and unpinned actions on disk.
-- **Backup your files**: Consider committing your changes or backing up your workflow files before running autofix
-- **Not all rules support autofix**: Some rules like `expression`, `permissions`, `issue-injection`, `cache-poisoning`, and `deprecated-commands` require manual fixes as they depend on your specific use case
-- **Auto-fix capabilities**: Currently, `timeout-minutes`, `commit-sha`, `credentials`, `untrusted-checkout`, and `artifact-poisoning` rules support auto-fix. More rules will support auto-fix in future releases
-
-## JSON schema for GitHub Actions syntax
-paste into your `settings.json`:
-
-```json
- "yaml.schemas": {
-     "https://github.com/sisaku-security/homebrew-sisakulint/raw/main/settings.json": "/.github/workflows/*.{yml,yaml}"
- }
-```
+[r-aaus]: https://sisaku-security.github.io/lint/docs/rules/aiactionunsafesandbox/
+[r-aaeo]: https://sisaku-security.github.io/lint/docs/rules/aiactionexecutionorder/

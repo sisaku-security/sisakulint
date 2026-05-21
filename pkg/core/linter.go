@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -116,6 +117,9 @@ type Linter struct {
 	// gitHubToken は commit-sha 自動修正で GitHub API に提示するトークン (issue #474)。
 	// 空文字なら未認証 60 req/h 制限が適用される。
 	gitHubToken string
+	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
+	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
+	loggedConfigs sync.Map
 }
 
 // NewLinterは新しいLinterインスタンスを作成する
@@ -211,6 +215,15 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 }
 
 // logはlog levelがDetailedOutput以上の場合にログを出力する
+// pluralize returns singular when n == 1, otherwise plural. Used to render
+// human-readable log messages such as "1 yaml file" / "4 yaml files".
+func pluralize(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
+	}
+	return plural
+}
+
 func (l *Linter) log(args ...interface{}) {
 	if l.loggingLevel < LogLevelDetailedOutput {
 		return
@@ -323,7 +336,7 @@ func (l *Linter) LintDir(dir string, project *Project) ([]*ValidateResult, error
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no yaml files found in %q", dir)
 	}
-	l.log("the number of corrected yaml file", len(files), "yaml files")
+	l.log("collected", len(files), pluralize(len(files), "yaml file", "yaml files"))
 
 	//sort order of filepaths
 	sort.Strings(files)
@@ -346,7 +359,7 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		return []*ValidateResult{result}, nil
 	}
 
-	l.log("linting", fileCount, "getting started linting workflows...files")
+	l.log("getting started linting", fileCount, pluralize(fileCount, "workflow file...", "workflow files..."))
 
 	currentDir := l.currentWorkingDirectory
 	proc := NewConcurrentExecutor(runtime.NumCPU()) //process.go
@@ -450,7 +463,15 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 			//allAutoFixers = append(allAutoFixers, ws.result.AutoFixers...)
 		}
 	}
-	l.log("Detected", totalErrors, "errors in", fileCount, "files checked")
+	l.log(
+		"Detected",
+		totalErrors,
+		pluralize(totalErrors, "error", "errors"),
+		"in",
+		fileCount,
+		pluralize(fileCount, "file", "files"),
+		"checked",
+	)
 
 	return allResult, nil
 }
@@ -464,6 +485,9 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 			return nil, err
 		}
 		project = pa
+		if project != nil {
+			l.log("Detected project:", project.RootDirectory())
+		}
 	}
 	source, err := os.ReadFile(file)
 	if err != nil {
@@ -719,9 +743,6 @@ func (l *Linter) validate(
 	}
 
 	l.log("validating workflow...", filePath)
-	if project != nil {
-		l.log("Detected project:", project.RootDirectory())
-	}
 
 	var cfg *Config
 	if l.defaultConfiguration != nil {
@@ -730,9 +751,13 @@ func (l *Linter) validate(
 		cfg = project.ProjectConfig()
 	}
 	if cfg != nil {
-		l.debug("setting configuration: %v", cfg)
+		if _, dup := l.loggedConfigs.LoadOrStore(cfg, struct{}{}); !dup {
+			l.debug("setting configuration: %v", cfg)
+		}
 	} else {
-		l.debug("no configuration file")
+		if _, dup := l.loggedConfigs.LoadOrStore((*Config)(nil), struct{}{}); !dup {
+			l.debug("no configuration file")
+		}
 	}
 
 	parsedWorkflow, allErrors := Parse(content)
@@ -771,12 +796,20 @@ func (l *Linter) validate(
 			return nil, err
 		}
 
+		silentRules := 0
 		for _, rule := range rules {
 			errs := rule.Errors()
-			l.debug("%s found %d errors", rule.RuleNames(), len(errs))
+			if n := len(errs); n > 0 {
+				l.debug("%s found %d %s", rule.RuleNames(), n, pluralize(n, "error", "errors"))
+			} else {
+				silentRules++
+			}
 			allErrors = append(allErrors, errs...)
 			autoFixers := rule.AutoFixers()
 			allAutoFixers = append(allAutoFixers, autoFixers...)
+		}
+		if silentRules > 0 {
+			l.debug("%d %s found no errors", silentRules, pluralize(silentRules, "rule", "rules"))
 		}
 
 		if l.errorFormatter != nil {
@@ -842,7 +875,8 @@ func (l *Linter) filterAndLogErrors(filePath string, allErrors *[]*LintingError,
 
 	if l.loggingLevel >= LogLevelDetailedOutput {
 		elapsed := time.Since(validationStart)
-		l.log(fmt.Sprintf("found %d errors in %dms", len(*allErrors), elapsed.Milliseconds()), filePath)
+		errCount := len(*allErrors)
+		l.log(fmt.Sprintf("found %d %s in %dms", errCount, pluralize(errCount, "error", "errors"), elapsed.Milliseconds()), filePath)
 	}
 }
 

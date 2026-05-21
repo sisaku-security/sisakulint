@@ -151,7 +151,7 @@ func (s *SyntaxTreeVisitor) visitStep(node *ast.Step) error {
 	}
 
 	if s.debugW != nil {
-		stepName := node.Pos.String()
+		stepName := "<unnamed>"
 		if node.Name != nil && node.Name.Value != "" {
 			stepName = node.Name.Value
 		} else if node.ID != nil && node.ID.Value != "" {
