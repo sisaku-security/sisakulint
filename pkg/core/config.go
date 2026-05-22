@@ -23,7 +23,20 @@ type Config struct {
 	// ActionList は許可アクションのリストを管理する設定
 	ActionList []string `yaml:"action-list"`
 
+	// SecretExfiltration はsecret-exfiltrationルールのオプションを持つ
+	// AllowedHosts は誤検知を抑制するためのhost allowlist (exact match or "*." suffix wildcard, case-insensitive)
+	SecretExfiltration SecretExfiltrationConfig `yaml:"secret-exfiltration"`
+
 	actionListRegex []*regexp.Regexp
+}
+
+// SecretExfiltrationConfig holds rule-specific configuration for the
+// secret-exfiltration rule. AllowedHosts accepts exact host names
+// (e.g. "api.example.com") and suffix wildcards of the form "*.example.com".
+// Regex / glob syntax is intentionally not supported; this keeps the
+// allowlist semantics easy to reason about and audit.
+type SecretExfiltrationConfig struct {
+	AllowedHosts []string `yaml:"allowed-hosts"`
 }
 
 // Stringはfmt.Stringerインターフェースを実装し、Configを読みやすい形式で出力する
@@ -40,6 +53,10 @@ func (c *Config) String() string {
 
 	if len(c.ActionList) > 0 {
 		parts = append(parts, fmt.Sprintf("action-list: %v", c.ActionList))
+	}
+
+	if len(c.SecretExfiltration.AllowedHosts) > 0 {
+		parts = append(parts, fmt.Sprintf("secret-exfiltration.allowed-hosts: %v", c.SecretExfiltration.AllowedHosts))
 	}
 
 	if len(parts) == 0 {
@@ -124,6 +141,24 @@ action-list:
   blacklist:
     - untrusted/*@*
     - suspicious/*@*
+
+# secret-exfiltration section configures the secret-exfiltration rule.
+# allowed-hosts suppresses findings whose destination hostname matches any
+# entry. Supported syntax:
+#   - "api.example.com"  -> exact host match (case-insensitive)
+#   - "*.example.com"    -> matches any subdomain (sub.example.com,
+#                          api.sub.example.com) but NOT the apex
+#                          (example.com) (case-insensitive). To allow the
+#                          apex too, list "example.com" as a separate entry.
+# Only a leading "*." wildcard is supported. Other regex / glob syntax,
+# schemes, paths, and ports are rejected.
+# 🧠 Example:
+# secret-exfiltration:
+#   allowed-hosts:
+#     - api.example.com
+#     - "*.example.com"
+secret-exfiltration:
+  allowed-hosts: []
 
 # Add other optional settings below.
 # 🧠 Example: some-option: value

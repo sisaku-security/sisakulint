@@ -188,6 +188,32 @@ mentioned in a header, request body, or attacker-controlled suffix such as
 - Infrastructure: `app.terraform.io`, `hashicorp.com`
 - Artifact Management: `jfrog.io`, `sonatype.org`
 
+### User-configurable allowlist (`allowed-hosts`)
+
+Add extra trusted hosts in `.github/sisakulint.yaml`:
+
+```yaml
+secret-exfiltration:
+  allowed-hosts:
+    - api.vendor.example.com      # exact host
+    - "*.internal.example.com"    # any subdomain (NOT the apex)
+    - internal.example.com        # add the apex explicitly if needed
+```
+
+Only exact hosts and a single leading `*.` wildcard are accepted (case-insensitive). The wildcard matches any subdomain but intentionally does NOT match the apex — this is the same semantics as TLS service-identity wildcards (RFC 9525, which obsoletes RFC 6125) and DNS wildcard records (RFC 4592), so the allowlist reads predictably for security reviewers. List the apex as a separate entry when you need it. Regex, paths, ports, and schemes are rejected. Matching is hostname-only, so `https://attacker.com -H "Host: api.vendor.example.com"` stays flagged.
+
+A single workflow can widen the list with a top-level comment directive (attached to the document or to `name:`/`on:`/`jobs:` — directives deeper in the file are ignored):
+
+```yaml
+# sisakulint:secret-exfiltration.allowed-hosts: api.vendor.example.com, *.internal.example.com
+name: Deploy
+on: workflow_dispatch
+```
+
+Per-workflow entries are additive; they never remove global ones. Per-workflow entries unused in the file are reported as "dead allow" warnings. Global entries are exempt from this check (a shared list will naturally contain entries unused by any single workflow).
+
+Applies only to `secret-exfiltration`; `secret-in-log` is unaffected.
+
 ## Why This Rule Matters
 
 1. **Data Theft**: Attackers with write access to workflows can add steps that exfiltrate secrets to their servers
