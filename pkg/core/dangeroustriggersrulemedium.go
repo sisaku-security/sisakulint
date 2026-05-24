@@ -64,14 +64,19 @@ func (rule *DangerousTriggersMediumRule) VisitWorkflowPre(node *ast.Workflow) er
 		triggerList,
 		mitigationList,
 	)
+	if status.HasCacheWriteAction {
+		msg += " Note: permissions restrictions do not prevent GitHub Actions cache writes or cache scope crossing; cache usage under privileged triggers needs cache-specific isolation."
+	}
 
 	// Report error at the position of the first privileged trigger
 	pos := getEventPosition(triggerEvents, node)
 
 	rule.Errorf(pos, "%s", msg)
 
-	// Add auto-fixer if permissions are not already restricted
-	if !status.HasPermissionsRestriction {
+	// Add auto-fixer if permissions are not already restricted. Cache-write
+	// workflows intentionally do not get this fixer because permissions do not
+	// control GitHub Actions cache writes.
+	if !status.HasPermissionsRestriction && !status.HasCacheWriteAction {
 		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
 			return addEmptyPermissionsToWorkflow(node)
 		}))

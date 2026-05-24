@@ -19,6 +19,15 @@ type MitigationStatus struct {
 	// HasPermissionsRestriction indicates if workflow permissions are explicitly restricted
 	// (not set to write-all). This is the most important mitigation. (+3 points)
 	HasPermissionsRestriction bool
+	// HasCacheWriteAction indicates that the workflow contains an action that can
+	// write GitHub Actions cache entries. GITHUB_TOKEN permissions do not control
+	// cache writes, so permissions restrictions must not be scored as a mitigation
+	// in this context.
+	HasCacheWriteAction bool
+	// PermissionsIgnoredForCache indicates that permissions restrictions were
+	// present but intentionally excluded from scoring because cache write actions
+	// are present.
+	PermissionsIgnoredForCache bool
 
 	// HasEnvironmentProtection indicates if the job uses environment protection rules.
 	// Environment protection provides an additional approval gate. (+2 points)
@@ -53,7 +62,7 @@ type MitigationStatus struct {
 func (m *MitigationStatus) Score() int {
 	score := 0
 
-	if m.HasPermissionsRestriction {
+	if m.HasPermissionsRestriction && !m.PermissionsIgnoredForCache {
 		score += 3
 	}
 	if m.HasEnvironmentProtection {
@@ -109,7 +118,7 @@ func (m *MitigationStatus) Severity() string {
 func (m *MitigationStatus) FoundMitigations() []string {
 	var mitigations []string
 
-	if m.HasPermissionsRestriction {
+	if m.HasPermissionsRestriction && !m.PermissionsIgnoredForCache {
 		mitigations = append(mitigations, "permissions restriction")
 	}
 	if m.HasEnvironmentProtection {
@@ -152,6 +161,7 @@ func CheckMitigations(workflow *ast.Workflow) MitigationStatus {
 	}
 
 	status := MitigationStatus{}
+	status.HasCacheWriteAction = workflowHasCacheWriteAction(workflow)
 
 	// Check workflow-level permissions
 	if hasPermissionsRestriction(workflow.Permissions) {
@@ -187,8 +197,61 @@ func CheckMitigations(workflow *ast.Workflow) MitigationStatus {
 			checkConditionForMitigations(step.If.Value, &status)
 		}
 	}
+	if status.HasCacheWriteAction && status.HasPermissionsRestriction {
+		status.PermissionsIgnoredForCache = true
+	}
 
 	return status
+}
+
+func workflowHasCacheWriteAction(workflow *ast.Workflow) bool {
+	if workflow == nil {
+		return false
+	}
+	for _, job := range workflow.Jobs {
+		if job == nil {
+			continue
+		}
+		for _, step := range job.Steps {
+			if stepUsesCacheWriteAction(step) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func stepUsesCacheWriteAction(step *ast.Step) bool {
+	if step == nil {
+		return false
+	}
+	action, ok := step.Exec.(*ast.ExecAction)
+	if !ok || action.Uses == nil {
+		return false
+	}
+	return isCacheWriteAction(action.Uses.Value, action.Inputs)
+}
+
+func isCacheWriteAction(uses string, inputs map[string]*ast.Input) bool {
+	if uses == "" {
+		return false
+	}
+	actionName := uses
+	if idx := strings.Index(uses, "@"); idx != -1 {
+		actionName = uses[:idx]
+	}
+	switch actionName {
+	case "actions/cache", "actions/cache/save":
+		return true
+	case "actions/cache/restore":
+		return false
+	}
+	if strings.HasPrefix(actionName, "actions/setup-") {
+		cacheInput, ok := inputs["cache"]
+		return ok && cacheInput != nil && cacheInput.Value != nil &&
+			cacheInput.Value.Value != "" && cacheInput.Value.Value != ExprFalseValue
+	}
+	return false
 }
 
 // hasPermissionsRestriction checks if permissions are explicitly set and not write-all.

@@ -235,7 +235,7 @@ jobs:
       - run: pnpm nx run @benchmarks/bundle-size:build
 ```
 
-This pattern is risky even with `permissions: contents: read`. GitHub Actions cache writes are not controlled by the workflow `GITHUB_TOKEN` permissions in the same way as repository API access.
+This pattern is risky even with `permissions: contents: read`. GitHub Actions cache writes are not controlled by the workflow `GITHUB_TOKEN` permissions in the same way as repository API access. For the same reason, the `dangerous-triggers-*` rules do not count permissions restrictions as a mitigation when cache write actions are present.
 
 ### Example Output
 

@@ -479,6 +479,39 @@ func TestDangerousTriggersCriticalRule(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "critical: permissions restriction does not mitigate cache poisoning",
+			workflow: &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+						Pos:  &ast.Position{Line: 2, Col: 1},
+					},
+				},
+				Permissions: &ast.Permissions{
+					Scopes: map[string]*ast.PermissionScope{
+						"contents": {Name: &ast.String{Value: "contents"}, Value: &ast.String{Value: "read"}},
+					},
+				},
+				Jobs: map[string]*ast.Job{
+					"test": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecAction{
+									Uses: &ast.String{Value: "actions/cache@v4"},
+									Inputs: map[string]*ast.Input{
+										"path": {Value: &ast.String{Value: "~/.npm"}},
+										"key":  {Value: &ast.String{Value: "npm-${{ hashFiles('package-lock.json') }}"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "permissions restrictions do not prevent GitHub Actions cache writes",
+		},
+		{
 			name: "safe: normal trigger (pull_request)",
 			workflow: &ast.Workflow{
 				On: []ast.Event{
@@ -545,6 +578,9 @@ func TestDangerousTriggersCriticalRule(t *testing.T) {
 				}
 				if !strings.Contains(errs[0].Description, tt.errMsg) {
 					t.Errorf("error message = %q, want to contain %q", errs[0].Description, tt.errMsg)
+				}
+				if strings.Contains(tt.name, "cache poisoning") && len(rule.AutoFixers()) != 0 {
+					t.Errorf("expected no permissions auto-fixer for cache poisoning context, got %d", len(rule.AutoFixers()))
 				}
 			} else {
 				if len(errs) > 0 {

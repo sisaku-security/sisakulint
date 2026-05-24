@@ -61,16 +61,23 @@ func (rule *DangerousTriggersCriticalRule) VisitWorkflowPre(node *ast.Workflow) 
 			"See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/",
 		triggerList,
 	)
+	if status.HasCacheWriteAction {
+		msg += " Note: permissions restrictions do not prevent GitHub Actions cache writes or cache scope crossing; cache usage under privileged triggers needs cache-specific isolation."
+	}
 
 	// Report error at the position of the first privileged trigger
 	pos := getEventPosition(triggerEvents, node)
 
 	rule.Errorf(pos, "%s", msg)
 
-	// Add auto-fixer to add permissions: {} to the workflow
-	rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
-		return addEmptyPermissionsToWorkflow(node)
-	}))
+	if !status.HasCacheWriteAction {
+		// Add auto-fixer to add permissions: {} to the workflow. Cache-write
+		// workflows intentionally do not get this fixer because permissions do not
+		// control GitHub Actions cache writes.
+		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
+			return addEmptyPermissionsToWorkflow(node)
+		}))
+	}
 
 	return nil
 }

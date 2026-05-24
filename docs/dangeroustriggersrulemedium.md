@@ -26,13 +26,19 @@ The rule uses a scoring system to evaluate mitigations:
 
 | Mitigation | Points | Description |
 |------------|--------|-------------|
-| Permissions Restriction | +3 | `permissions: read-all` or `permissions: {}` |
+| Permissions Restriction | +3 | `permissions: read-all` or `permissions: {}`. Not counted when the workflow contains cache write actions, because permissions do not control GitHub Actions cache writes. |
 | Environment Protection | +2 | Using protected environments with approval |
 | Label Condition | +1 | Checking for approved labels |
 | Actor Restriction | +1 | Checking `github.actor` |
 | Fork Check | +1 | Checking `github.event.pull_request.head.repo.fork` |
 
 **Medium severity** is reported when the total score is **1-2 points**.
+
+#### Cache Write Exception
+
+`permissions:` restrictions reduce `GITHUB_TOKEN` access, but they do not prevent GitHub Actions cache writes or cache scope crossing. If a privileged workflow contains `actions/cache`, `actions/cache/save`, or a setup action with caching enabled, this rule does not count `permissions: read-all`, `permissions: {}`, or scoped read permissions as mitigation points for the cache risk.
+
+Use cache-specific mitigations instead: avoid cache writes in privileged PR jobs, use read-only restore paths where possible, scope cache keys to PRs, or move cache-writing work to a non-privileged workflow.
 
 ### Example Partially Mitigated Workflow
 
@@ -161,6 +167,8 @@ sisakulint -fix dry-run
 sisakulint -fix on
 ```
 
+Auto-fix is not offered when the finding involves cache write actions, because adding `permissions: {}` would not prevent cache writes or cache scope crossing.
+
 ### Mitigation Strategies Comparison
 
 | Strategy | Points | Pros | Cons |
@@ -199,7 +207,7 @@ sisakulint -fix on
 | Score | 0 | 1-2 |
 | Mitigations | None | Partial |
 | Risk | Immediate exploitation | Reduced but present |
-| Auto-fix | Always applied | Applied if no permissions |
+| Auto-fix | Applied unless cache write actions are present | Applied if no permissions and no cache write actions are present |
 | Recommendation | Must fix immediately | Improve for defense in depth |
 
 ### Related Rules
@@ -207,6 +215,7 @@ sisakulint -fix on
 - [dangerous-triggers-critical]({{< ref "dangeroustriggersrulecritical.md" >}}): Workflows with no mitigations
 - [code-injection-critical]({{< ref "codeinjectioncritical.md" >}}): Direct code injection in privileged contexts
 - [untrusted-checkout]({{< ref "untrustedcheckout.md" >}}): Dangerous checkout patterns
+- [cache-poisoning]({{< ref "cachepoisoningrule.md" >}}): Cache writes after unsafe checkout or untrusted cache inputs
 - [permissions]({{< ref "permissions.md" >}}): Permission configuration issues
 
 ### References

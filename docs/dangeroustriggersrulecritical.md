@@ -38,7 +38,7 @@ The rule checks for privileged triggers and analyzes security mitigations using 
 
 | Mitigation | Points | Description |
 |------------|--------|-------------|
-| Permissions Restriction | +3 | `permissions: read-all` or `permissions: {}` |
+| Permissions Restriction | +3 | `permissions: read-all` or `permissions: {}`. Not counted when the workflow contains cache write actions, because permissions do not control GitHub Actions cache writes. |
 | Environment Protection | +2 | Using protected environments with approval |
 | Label Condition | +1 | Checking for approved labels like "safe-to-run" |
 | Actor Restriction | +1 | Checking `github.actor` or `github.triggering_actor` |
@@ -48,6 +48,12 @@ The rule checks for privileged triggers and analyzes security mitigations using 
 - **Critical** (score = 0): No mitigations - immediate risk
 - **Medium** (score = 1-2): Minimal mitigations - needs improvement
 - **Acceptable** (score >= 3): Adequate mitigations
+
+#### Cache Write Exception
+
+`permissions:` restrictions reduce `GITHUB_TOKEN` access, but they do not prevent GitHub Actions cache writes or cache scope crossing. If a privileged workflow contains `actions/cache`, `actions/cache/save`, or a setup action with caching enabled, this rule does not count `permissions: read-all`, `permissions: {}`, or scoped read permissions as a mitigation for the cache risk.
+
+Use cache-specific mitigations instead: avoid cache writes in privileged PR jobs, use read-only restore paths where possible, scope cache keys to PRs, or move cache-writing work to a non-privileged workflow.
 
 ### Example Vulnerable Workflow
 
@@ -194,6 +200,8 @@ jobs:
     runs-on: ubuntu-latest
 ```
 
+Auto-fix is not offered when the finding involves cache write actions, because adding `permissions: {}` would not prevent cache writes or cache scope crossing.
+
 **After (auto-fixed):**
 ```yaml
 on:
@@ -233,6 +241,7 @@ jobs:
 - [dangerous-triggers-medium]({{< ref "dangeroustriggersrulemedium.md" >}}): Workflows with partial mitigations
 - [code-injection-critical]({{< ref "codeinjectioncritical.md" >}}): Direct code injection in privileged contexts
 - [untrusted-checkout]({{< ref "untrustedcheckout.md" >}}): Dangerous checkout patterns
+- [cache-poisoning]({{< ref "cachepoisoningrule.md" >}}): Cache writes after unsafe checkout or untrusted cache inputs
 - [permissions]({{< ref "permissions.md" >}}): Permission configuration issues
 
 ### References
