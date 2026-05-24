@@ -231,10 +231,16 @@ sisakulint -boilerplate
 # Enable an opt-in rule (currently available: missing-timeout-minutes)
 sisakulint -enable-rule missing-timeout-minutes
 
-# Authenticate the commit-sha resolver (issue #474). Priority order:
+# Authenticate the GitHub API rules (issues #474 and #484). Priority order:
 # -github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN.
-# Without a token, `-fix on` warns up-front and exits non-zero (skipping
-# partial writes) if the unauthenticated 60 req/h limit is hit.
+# Used by both the commit-sha autofix and the known-vulnerable-actions rule
+# (advisory lookups). Without a token, sisakulint prints an up-front warning
+# at lint start, `-fix on` exits non-zero (skipping partial writes) if the
+# unauthenticated 60 req/h limit is hit during commit-sha resolution, and
+# advisory lookups for the known-vulnerable-actions rule are silently
+# skipped beyond that limit (per-run, with one debug line).
+# `gh auth token` / `git credential fill` are no longer probed implicitly;
+# pass the token via env or -github-token explicitly (issue #484).
 # Prefer env-based auth so the token does not appear in process args (ps).
 GITHUB_TOKEN=$(gh auth token) sisakulint -fix on
 # CLI flag form (highest priority; visible in `ps`, prefer env for shared hosts).

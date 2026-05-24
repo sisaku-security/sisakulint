@@ -81,8 +81,8 @@ type LinterOptions struct {
 	// EnabledOptInRules は、CLI -enable-rule で指定された
 	// オプトインルール名のリスト。空の場合、opt-in なルールはすべて無効。
 	EnabledOptInRules []string
-	// GitHubToken は commit-sha 自動修正で GitHub API に提示するトークン
-	// (issue #474)。空文字なら未認証 60 req/h 制限が適用される。
+	// GitHubToken は GitHub API を呼ぶルールに提示するトークン。
+	// 空文字なら未認証 60 req/h 制限が適用される。
 	GitHubToken string
 }
 
@@ -114,7 +114,7 @@ type Linter struct {
 	isRemote bool
 	// enabledOptInRules は、有効化されたオプトインルール名のリスト。
 	enabledOptInRules []string
-	// gitHubToken は commit-sha 自動修正で GitHub API に提示するトークン (issue #474)。
+	// gitHubToken は GitHub API を呼ぶルールに提示するトークン。
 	// 空文字なら未認証 60 req/h 制限が適用される。
 	gitHubToken string
 	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
@@ -359,6 +359,8 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		return []*ValidateResult{result}, nil
 	}
 
+	resetKnownVulnerableActionsRunState()
+
 	l.log("getting started linting", fileCount, pluralize(fileCount, "workflow file...", "workflow files..."))
 
 	currentDir := l.currentWorkingDirectory
@@ -479,6 +481,8 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 // LintFileは、指定されたyaml workflowをlintしてエラーを返す
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error) {
+	resetKnownVulnerableActionsRunState()
+
 	if project == nil {
 		pa, err := l.projectInformation.GetProjectForPath(file)
 		if err != nil {
@@ -535,6 +539,8 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 // pathパラメタに<stdin>を入力すると出力がSTDINから来たことを示す
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) Lint(filepath string, content []byte, project *Project) (*ValidateResult, error) {
+	resetKnownVulnerableActionsRunState()
+
 	if project == nil && filepath != "<stdin>" {
 		if _, err := os.Stat(filepath); !errors.Is(err, fs.ErrNotExist) {
 			p, err := l.projectInformation.GetProjectForPath(filepath)
@@ -620,7 +626,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUntrustedCheckoutTOCTOUHighRule(),                          // Detects TOCTOU with deployment environment and mutable refs
 		NewRefConfusionRule(),                                         // Detects ref confusion attacks (same name branch and tag)
 		NewObfuscationRule(),                                          // Detects obfuscated workflow patterns
-		NewKnownVulnerableActionsRule(),                               // Detects actions with known security vulnerabilities
+		NewKnownVulnerableActionsRule(gitHubToken),                    // Detects actions with known security vulnerabilities
 		NewBotConditionsRule(),                                        // Detects spoofable bot detection conditions
 		NewArtipackedRule(),                                           // Detects credential leakage via artifact upload
 		NewUnsoundContainsRule(),                                      // Detects bypassable contains() function usage in conditions

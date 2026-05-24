@@ -239,9 +239,9 @@ func (cmd *Command) Main(args []string) int {
 	flags.IntVar(&parallelism, "p", 3, "Number of parallel scans (-remote only)")
 	flags.IntVar(&limit, "l", 30, "Max repositories for search queries (-remote only)")
 	flags.StringVar(&githubTokenFlag, "github-token", "",
-		"GitHub API token used by -fix on/-fix dry-run to resolve commit SHAs. "+
+		"GitHub API token used by rules that call the GitHub API, including commit-sha autofix and known-vulnerable-actions. "+
 			"Falls back to SISAKULINT_GITHUB_TOKEN, GITHUB_TOKEN, then GH_TOKEN. "+
-			"Without a token, unauthenticated requests are limited to 60 req/h and may interrupt commit-sha autofix (issue #474)")
+			"Without a token, unauthenticated requests are limited to 60 req/h and may interrupt GitHub API checks")
 
 	flags.Usage = func() {
 		printingUsageHeader(cmd.Stderr)
@@ -276,15 +276,6 @@ func (cmd *Command) Main(args []string) int {
 	token, source := ResolveGitHubToken(githubTokenFlag, nil)
 	linterOpts.GitHubToken = token
 	enableAutofix := autoFixMode == "on" || autoFixMode == FileFixDryRun
-	if enableAutofix {
-		if token == "" {
-			fmt.Fprintln(cmd.Stderr,
-				"sisakulint: no GitHub token detected; commit-sha resolution limited to 60 req/h. "+
-					"Set GITHUB_TOKEN, GH_TOKEN, SISAKULINT_GITHUB_TOKEN, or pass -github-token to lift the limit.")
-		} else if linterOpts.IsVerboseOutputEnabled {
-			fmt.Fprintf(cmd.Stderr, "sisakulint: using GitHub token from %s for commit-sha resolution.\n", source)
-		}
-	}
 
 	if generateActionList {
 		if err := GenerateActionListConfig("."); err != nil {
@@ -292,6 +283,14 @@ func (cmd *Command) Main(args []string) int {
 			return ExitStatusFailure
 		}
 		return ExitStatusSuccessNoProblem
+	}
+
+	if token == "" {
+		fmt.Fprintln(cmd.Stderr,
+			"sisakulint: no GitHub token detected; GitHub API checks (known-vulnerable-actions, commit-sha autofix) limited to 60 req/h. "+
+				"Set GITHUB_TOKEN, GH_TOKEN, SISAKULINT_GITHUB_TOKEN, or pass -github-token to lift the limit.")
+	} else if linterOpts.IsVerboseOutputEnabled {
+		fmt.Fprintf(cmd.Stderr, "sisakulint: using GitHub token from %s for GitHub API checks.\n", source)
 	}
 
 	if remoteInput != "" {
