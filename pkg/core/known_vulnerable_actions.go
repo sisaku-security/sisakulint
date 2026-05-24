@@ -21,6 +21,21 @@ import (
 var loggedKnownVulnLines sync.Map
 var knownVulnerableRateLimitReported atomic.Bool
 
+// resetKnownVulnerableActionsRunState clears the package-global dedupe state
+// used by KnownVulnerableActionsRule. Callers must invoke this at the start
+// of each public Lint entry so that library users with repeated Lint() calls
+// in one process keep seeing per-run diagnostics — without a reset, a single
+// rate-limit hit suppresses the warning for the remaining lifetime of the
+// process (and `loggedKnownVulnLines` suppresses every action it has already
+// resolved). Tests rely on the same reset to isolate runs.
+func resetKnownVulnerableActionsRunState() {
+	knownVulnerableRateLimitReported.Store(false)
+	loggedKnownVulnLines.Range(func(key, _ any) bool {
+		loggedKnownVulnLines.Delete(key)
+		return true
+	})
+}
+
 // VulnerabilityInfo holds information about a detected vulnerability
 type VulnerabilityInfo struct {
 	GHSAID              string

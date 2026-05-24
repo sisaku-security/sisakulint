@@ -359,6 +359,8 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		return []*ValidateResult{result}, nil
 	}
 
+	resetKnownVulnerableActionsRunState()
+
 	l.log("getting started linting", fileCount, pluralize(fileCount, "workflow file...", "workflow files..."))
 
 	currentDir := l.currentWorkingDirectory
@@ -479,6 +481,8 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 // LintFileは、指定されたyaml workflowをlintしてエラーを返す
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error) {
+	resetKnownVulnerableActionsRunState()
+
 	if project == nil {
 		pa, err := l.projectInformation.GetProjectForPath(file)
 		if err != nil {
@@ -535,6 +539,8 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 // pathパラメタに<stdin>を入力すると出力がSTDINから来たことを示す
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) Lint(filepath string, content []byte, project *Project) (*ValidateResult, error) {
+	resetKnownVulnerableActionsRunState()
+
 	if project == nil && filepath != "<stdin>" {
 		if _, err := os.Stat(filepath); !errors.Is(err, fs.ErrNotExist) {
 			p, err := l.projectInformation.GetProjectForPath(filepath)

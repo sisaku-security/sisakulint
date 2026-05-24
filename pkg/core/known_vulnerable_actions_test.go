@@ -128,6 +128,39 @@ func TestKnownVulnerableActionsRuleClassifiesRateLimitErrors(t *testing.T) {
 	}
 }
 
+func TestResetKnownVulnerableActionsRunStateClearsDedupeAcrossRuns(t *testing.T) {
+	t.Cleanup(func() {
+		knownVulnerableRateLimitReported.Store(false)
+		loggedKnownVulnLines.Range(func(key, _ any) bool {
+			loggedKnownVulnLines.Delete(key)
+			return true
+		})
+	})
+
+	knownVulnerableRateLimitReported.Store(true)
+	loggedKnownVulnLines.Store("resolve:owner/repo@v1->v1", struct{}{})
+
+	resetKnownVulnerableActionsRunState()
+
+	if knownVulnerableRateLimitReported.Load() {
+		t.Fatal("knownVulnerableRateLimitReported should be reset to false")
+	}
+	if _, ok := loggedKnownVulnLines.Load("resolve:owner/repo@v1->v1"); ok {
+		t.Fatal("loggedKnownVulnLines should be cleared after reset")
+	}
+
+	// Simulate a second run: the rate-limit diagnostic must fire again
+	// instead of being suppressed by the previous run's state.
+	var buf bytes.Buffer
+	rule := NewKnownVulnerableActionsRule()
+	rule.EnableDebugOutput(&buf)
+	rule.debugGitHubAPIError("failed to fetch advisories for actions/checkout", fmt.Errorf("wrapped: %w", ErrGitHubRateLimit))
+
+	if !strings.Contains(buf.String(), "GitHub API rate limit exceeded") {
+		t.Fatalf("after reset, expected rate-limit diagnostic in second run, got %q", buf.String())
+	}
+}
+
 func TestParseActionRef(t *testing.T) {
 	tests := []struct {
 		name      string
