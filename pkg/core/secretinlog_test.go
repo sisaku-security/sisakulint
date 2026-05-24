@@ -1389,11 +1389,10 @@ func TestSecretInLog_CrossStep_NoIDStepOutputDoesNotPropagate(t *testing.T) {
 	}
 }
 
-// TestSecretInLog_CrossStep_NeedsOutputsNotFlagged は cross-job propagation
-// （needs.<job>.outputs.<name>）が現在は範囲外であることをピン留めする。
-// resolveTaintedStepOutputExpr が `parts[0] != "steps"` を弾くロジック
-// （line 1184）が誤って needs を受け入れるよう拡張された場合、このテストが落ちる。
-func TestSecretInLog_CrossStep_NeedsOutputsNotFlagged(t *testing.T) {
+// TestSecretInLog_CrossJob_NeedsOutputsDirectExpressionLeak は、producer job が
+// secret-derived な値を $GITHUB_OUTPUT と job outputs で公開し、consumer job が
+// needs.<job>.outputs.<name> を直接 echo した場合に検出されることを保証する。
+func TestSecretInLog_CrossJob_NeedsOutputsDirectExpressionLeak(t *testing.T) {
 	t.Parallel()
 
 	step1 := mkRunStepForTest(t,
@@ -1401,16 +1400,238 @@ func TestSecretInLog_CrossStep_NeedsOutputsNotFlagged(t *testing.T) {
 		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
 	)
 	step1.ID = &ast.String{Value: "derive"}
-	// downstream は needs.<job>.outputs.* を expand している想定。
-	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
-	job := &ast.Job{Steps: []*ast.Step{step1, step2}}
-
-	rule := NewSecretInLogRule()
-	if err := rule.VisitJobPre(job); err != nil {
-		t.Fatalf("VisitJobPre: %v", err)
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
 	}
-	if got := len(rule.Errors()); got != 0 {
-		t.Errorf("needs.*.outputs.* is out of scope; got %d unexpected errors: %v", got, rule.Errors())
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	rule := NewSecretInLogRuleWithTaintMap(NewWorkflowSecretTaintMap())
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 cross-job needs output leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "needs.upstream.outputs.token") {
+		t.Errorf("message should mention the tainted needs output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossJob_NeedsOutputsEnvExpressionLeak(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ needs.upstream.outputs.token }}"},
+		`echo "$TOKEN"`,
+	)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	rule := NewSecretInLogRuleWithTaintMap(NewWorkflowSecretTaintMap())
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 cross-job needs output env leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "needs.upstream.outputs.token") {
+		t.Errorf("message should mention the tainted needs output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossJob_NeedsOutputsDirectExpressionLeak_ReverseJobOrder(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	rule := NewSecretInLogRuleWithTaintMap(NewWorkflowSecretTaintMap())
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitWorkflowPost(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPost: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 reverse-order cross-job needs output leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "needs.upstream.outputs.token") {
+		t.Errorf("message should mention the tainted needs output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossJob_NeedsOutputsEnvExpressionLeak_ReverseJobOrder(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ needs.upstream.outputs.token }}"},
+		`echo "$TOKEN"`,
+	)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	rule := NewSecretInLogRuleWithTaintMap(NewWorkflowSecretTaintMap())
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitWorkflowPost(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPost: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 reverse-order cross-job needs output env leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "needs.upstream.outputs.token") {
+		t.Errorf("message should mention the tainted needs output, got: %s", msg)
+	}
+}
+
+func TestSecretInLog_CrossJob_NeedsOutputsMultiHop_ReverseJobOrder(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	forwarder := &ast.Job{
+		ID:    &ast.String{Value: "forwarder"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Outputs: map[string]*ast.Output{
+			"forwarded": {
+				Name:  &ast.String{Value: "forwarded"},
+				Value: &ast.String{Value: "${{ needs.upstream.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.forwarder.outputs.forwarded }}"`)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "forwarder"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	rule := NewSecretInLogRuleWithTaintMap(NewWorkflowSecretTaintMap())
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if err := rule.VisitJobPre(forwarder); err != nil {
+		t.Fatalf("VisitJobPre(forwarder): %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitWorkflowPost(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPost: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("expected 1 reverse-order multi-hop needs output leak, got %d: %v", got, rule.Errors())
+	}
+	if msg := rule.Errors()[0].Description; !strings.Contains(msg, "needs.forwarder.outputs.forwarded") {
+		t.Errorf("message should mention the tainted needs output, got: %s", msg)
 	}
 }
 
