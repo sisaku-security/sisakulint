@@ -582,6 +582,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
 	wfTaintMap := NewWorkflowTaintMap()
+	wfSecretTaintMap := NewWorkflowSecretTaintMap()
 	var debugOut io.Writer
 	if localActions != nil {
 		debugOut = localActions.dbg
@@ -635,7 +636,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUnpinnedImagesRule(),                                       // Detects container images not pinned by SHA256 digest
 		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
-		NewSecretInLogRule(),                                          // Detects secret values printed to build logs via echo/printf of derived shell vars (single-step scope; cross-job follow-up tracked separately)
+		NewSecretInLogRuleWithTaintMap(wfSecretTaintMap),              // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs
 		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
 		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
 		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations

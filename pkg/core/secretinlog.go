@@ -28,24 +28,31 @@ func bareAddMaskRegex(varName string) *regexp.Regexp {
 
 type SecretInLogRule struct {
 	BaseRule
-	workflowEnvSecrets map[string]string // populated in VisitWorkflowPre from workflow-level env:
-	jobEnvSecrets      map[string]string // populated in VisitJobPre from job-level env:
+	workflowSecretTaintMap *WorkflowSecretTaintMap
+	workflowEnvSecrets     map[string]string // populated in VisitWorkflowPre from workflow-level env:
+	jobEnvSecrets          map[string]string // populated in VisitJobPre from job-level env:
 	// crossStepEnv は同一 Job 内で前 step が `$GITHUB_ENV` 経由で書き出した tainted な
 	// 環境変数を、後続 step の初期 taint source として引き継ぐためのマップ。
 	// VisitJobPre の冒頭でリセットされ、各 step 処理後に $GITHUB_ENV 書き込みから
-	// 追加される。クロスジョブ伝播は範囲外（follow-up issue）。
+	// 追加される。
 	crossStepEnv map[string]string
 	// crossStepOutputs は同一 Job 内で前 step が `$GITHUB_OUTPUT` 経由で書き出した
 	// tainted な step output を、後続 step の `${{ steps.<id>.outputs.<name> }}`
 	// 参照に引き継ぐためのマップ。
 	crossStepOutputs map[string]map[string]string
+	// pendingNeedsSteps は、consumer job が producer job より先に現れた場合に、
+	// needs.*.outputs.* の解決を VisitWorkflowPost まで遅延するための step 集合。
+	pendingNeedsSteps []*ast.Step
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
-// NOTE: クロスジョブ伝播対応時（follow-up issue #432）は新しいコンストラクタシグネチャを追加し、
-// この関数はそれに nil を渡すラッパへ段階移行する。
 func NewSecretInLogRule() *SecretInLogRule {
+	return NewSecretInLogRuleWithTaintMap(nil)
+}
+
+func NewSecretInLogRuleWithTaintMap(workflowSecretTaintMap *WorkflowSecretTaintMap) *SecretInLogRule {
 	return &SecretInLogRule{
+		workflowSecretTaintMap: workflowSecretTaintMap,
 		BaseRule: BaseRule{
 			RuleName: "secret-in-log",
 			RuleDesc: "Detects secret values being printed to build logs via echo/printf of " +
@@ -321,7 +328,7 @@ func (rule *SecretInLogRule) collectLeakedVars(
 }
 
 func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr *ast.String) []stepOutputLeakOccurrence {
-	if script == "" || len(rule.crossStepOutputs) == 0 {
+	if script == "" || (len(rule.crossStepOutputs) == 0 && rule.workflowSecretTaintMap == nil) {
 		return nil
 	}
 	sanitized, exprMap := sanitizeForShellParse(script)
@@ -363,6 +370,49 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 		return true
 	})
 	return leaks
+}
+
+func (rule *SecretInLogRule) stepHasUnregisteredNeedsOutputReference(step *ast.Step, script string) bool {
+	if rule.workflowSecretTaintMap == nil {
+		return false
+	}
+	if containsUnregisteredNeedsOutput(script, rule.workflowSecretTaintMap) {
+		return true
+	}
+	if step == nil || step.Env == nil || step.Env.Vars == nil {
+		return false
+	}
+	for _, envVar := range step.Env.Vars {
+		if envVar == nil || envVar.Value == nil {
+			continue
+		}
+		if containsUnregisteredNeedsOutput(envVar.Value.Value, rule.workflowSecretTaintMap) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsUnregisteredNeedsOutput(value string, workflowSecretTaintMap *WorkflowSecretTaintMap) bool {
+	return containsUnregisteredSecretNeedsOutput(value, workflowSecretTaintMap)
+}
+
+func containsUnregisteredSecretNeedsOutput(value string, workflowSecretTaintMap *WorkflowSecretTaintMap) bool {
+	if value == "" || workflowSecretTaintMap == nil {
+		return false
+	}
+	for _, exprContent := range extractExpressionsFromString(value) {
+		path := normalizeStepOutputExprPath(exprContent)
+		parts := strings.Split(path, ".")
+		if len(parts) < 4 || parts[0] != "needs" || parts[2] != "outputs" {
+			continue
+		}
+		outputName := strings.Join(parts[3:], ".")
+		if _, registered := workflowSecretTaintMap.IsSecretNeedsOutput(parts[1], outputName); !registered {
+			return true
+		}
+	}
+	return false
 }
 
 func (rule *SecretInLogRule) collectLeakedStepOutputExprs(
@@ -430,12 +480,13 @@ func expressionOffsetsByPlaceholder(script string) map[string]int {
 // beforeOffset 以下なら true を返す。beforeOffset に負の値を渡すと位置制約なし。
 //
 // "current-occurrence mask" 不変条件:
-//   GitHub Actions の `::add-mask::` は発行 *後* のログ出力にのみ適用されるため、
-//   sink occurrence より前に置かれた mask 行のみが保護として機能する。
-//   同じ表現が script 内に複数回出現する場合、最初の occurrence が mask 行の前に
-//   置かれていても（例: `: "${{ X }}"; echo "::add-mask::${{ X }}"; echo "${{ X }}"`)、
-//   2 回目以降の occurrence は mask 後のものなので保護される。判定は「mask 行の
-//   位置が *この* sink occurrence （beforeOffset）以下か」で行う必要がある。
+//
+//	GitHub Actions の `::add-mask::` は発行 *後* のログ出力にのみ適用されるため、
+//	sink occurrence より前に置かれた mask 行のみが保護として機能する。
+//	同じ表現が script 内に複数回出現する場合、最初の occurrence が mask 行の前に
+//	置かれていても（例: `: "${{ X }}"; echo "::add-mask::${{ X }}"; echo "${{ X }}"`)、
+//	2 回目以降の occurrence は mask 後のものなので保護される。判定は「mask 行の
+//	位置が *この* sink occurrence （beforeOffset）以下か」で行う必要がある。
 //
 // `exprStart <= beforeOffset` は等号を許容することで `beforeOffset == exprStart`
 // （mask 行自身を sink として誤検出しないための再帰的な保護）も拾う。
@@ -523,6 +574,10 @@ func offsetToPosition(runStr *ast.String, script string, offset int) *ast.Positi
 
 // VisitWorkflowPre はワークフロールートの env: から secret taint 種を収集する。
 func (rule *SecretInLogRule) VisitWorkflowPre(node *ast.Workflow) error {
+	if rule.workflowSecretTaintMap != nil {
+		rule.workflowSecretTaintMap.Reset()
+	}
+	rule.pendingNeedsSteps = nil
 	rule.workflowEnvSecrets = rule.collectSecretEnvVars(node.Env)
 	return nil
 }
@@ -537,6 +592,30 @@ func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
 	for _, step := range node.Steps {
 		rule.checkStep(step)
 	}
+	if rule.workflowSecretTaintMap != nil && node.ID != nil && node.ID.Value != "" {
+		rule.workflowSecretTaintMap.RegisterJobOutputs(node.ID.Value, rule.crossStepOutputs, node.Outputs)
+	}
+	return nil
+}
+
+func (rule *SecretInLogRule) VisitWorkflowPost(node *ast.Workflow) error {
+	if rule.workflowSecretTaintMap == nil {
+		return nil
+	}
+	rule.workflowSecretTaintMap.ResolvePendingJobOutputs()
+	if len(rule.pendingNeedsSteps) == 0 {
+		return nil
+	}
+	savedCrossStepOutputs := rule.crossStepOutputs
+	rule.crossStepOutputs = nil
+	defer func() {
+		rule.crossStepOutputs = savedCrossStepOutputs
+	}()
+
+	for _, step := range rule.pendingNeedsSteps {
+		rule.checkPendingNeedsStep(step)
+	}
+	rule.pendingNeedsSteps = nil
 	return nil
 }
 
@@ -552,6 +631,9 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	script := execRun.Run.Value
 	if script == "" {
 		return
+	}
+	if rule.stepHasUnregisteredNeedsOutputReference(step, script) {
+		rule.pendingNeedsSteps = append(rule.pendingNeedsSteps, step)
 	}
 
 	// 初期 taint 集合を構築: workflow env, job env, crossStepEnv, step env の順で merge。
@@ -614,6 +696,43 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 	}
 }
 
+func (rule *SecretInLogRule) checkPendingNeedsStep(step *ast.Step) {
+	if step == nil || step.Exec == nil {
+		return
+	}
+	execRun, ok := step.Exec.(*ast.ExecRun)
+	if !ok || execRun.Run == nil {
+		return
+	}
+	script := execRun.Run.Value
+	if script == "" {
+		return
+	}
+
+	for _, leak := range rule.findStepOutputExpressionLeaks(script, execRun.Run) {
+		rule.reportStepOutputLeak(leak)
+	}
+
+	initialTainted := make(map[string]shell.Entry)
+	for k, v := range rule.collectTaintedStepOutputEnvVars(step.Env) {
+		initialTainted[k] = shell.Entry{Sources: []string{v}, Offset: -1}
+	}
+	if len(initialTainted) == 0 {
+		return
+	}
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(script), "")
+	if err != nil || file == nil {
+		return
+	}
+	scoped := shell.PropagateTaint(file, initialTainted)
+	for _, leak := range rule.findEchoLeaks(file, scoped, script, execRun.Run) {
+		rule.reportLeak(leak)
+		rule.addAutoFixerForLeak(step, leak)
+	}
+}
+
 // reportLeak は echoLeakOccurrence をエラーとして記録する。
 // 診断メッセージの suggestion 部分は resolveMaskTarget を使って決定する (#448 review I-2):
 //   - positional ($1) かつ upstream shellvar が分かる場合は upstream var (TOKEN) をマスクするよう提案
@@ -657,7 +776,7 @@ func (rule *SecretInLogRule) reportStepOutputLeak(leak stepOutputLeakOccurrence)
 		leak.Position,
 		"secret in log: step output %s (origin: %s) is printed via '%s' without masking. "+
 			"Values written to $GITHUB_OUTPUT are not automatically masked when later expanded "+
-			"through steps.*.outputs.* and can appear in plaintext in build logs. "+
+			"through steps.*.outputs.* or needs.*.outputs.* and can appear in plaintext in build logs. "+
 			"Pass the output through an environment variable and mask it before printing, or avoid printing the value. "+
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
 		leak.Expr, leak.Origin, leak.Command,
@@ -1166,7 +1285,7 @@ func (rule *SecretInLogRule) collectSecretEnvVars(env *ast.Env) map[string]strin
 
 func (rule *SecretInLogRule) collectTaintedStepOutputEnvVars(env *ast.Env) map[string]string {
 	result := make(map[string]string)
-	if env == nil || env.Vars == nil || len(rule.crossStepOutputs) == 0 {
+	if env == nil || env.Vars == nil || (len(rule.crossStepOutputs) == 0 && rule.workflowSecretTaintMap == nil) {
 		return result
 	}
 	for key, envVar := range env.Vars {
@@ -1199,14 +1318,24 @@ func (rule *SecretInLogRule) resolveTaintedStepOutputExpr(exprStr string) (strin
 		return "", "", false
 	}
 	parts := strings.Split(path, ".")
-	if len(parts) < 4 || parts[0] != "steps" || parts[2] != "outputs" {
+	if len(parts) < 4 || parts[2] != "outputs" {
 		return "", "", false
 	}
-	stepID := parts[1]
 	outputName := strings.Join(parts[3:], ".")
-	if outputs := rule.crossStepOutputs[stepID]; outputs != nil {
-		if origin, ok := outputs[outputName]; ok {
-			return path, origin, true
+	switch parts[0] {
+	case "steps":
+		stepID := parts[1]
+		if outputs := rule.crossStepOutputs[stepID]; outputs != nil {
+			if origin, ok := outputs[outputName]; ok {
+				return path, origin, true
+			}
+		}
+	case "needs":
+		if rule.workflowSecretTaintMap == nil {
+			return "", "", false
+		}
+		if needsPath, origin, ok := rule.workflowSecretTaintMap.ResolveFromExprStr(path); ok {
+			return needsPath, origin, true
 		}
 	}
 	return "", "", false
