@@ -3,12 +3,10 @@ package core
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/go-github/v68/github"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -21,6 +19,7 @@ import (
 // line per file. Keyed by an arbitrary string built from (owner, repo, ref,
 // version) so callers don't accidentally collide across log types.
 var loggedKnownVulnLines sync.Map
+var knownVulnerableRateLimitReported atomic.Bool
 
 // VulnerabilityInfo holds information about a detected vulnerability
 type VulnerabilityInfo struct {
@@ -37,86 +36,51 @@ type KnownVulnerableActionsRule struct {
 	BaseRule
 	client        *github.Client
 	clientOnce    sync.Once
+	gitHubToken   string
 	advisoryCache map[string][]*VulnerabilityInfo
 	cacheMu       sync.RWMutex
 }
 
 // NewKnownVulnerableActionsRule creates a new instance of KnownVulnerableActionsRule
-func NewKnownVulnerableActionsRule() *KnownVulnerableActionsRule {
+func NewKnownVulnerableActionsRule(gitHubToken ...string) *KnownVulnerableActionsRule {
+	var token string
+	if len(gitHubToken) > 0 {
+		token = gitHubToken[0]
+	}
 	return &KnownVulnerableActionsRule{
 		BaseRule: BaseRule{
 			RuleName: "known-vulnerable-actions",
 			RuleDesc: "Detects GitHub Actions with known security vulnerabilities using GitHub Security Advisories database.",
 		},
+		gitHubToken:   token,
 		advisoryCache: make(map[string][]*VulnerabilityInfo),
 	}
 }
 
-// getGitHubToken retrieves authentication token using a fallback chain
-// Priority: environment variable → gh CLI → git credential
-func getGitHubToken() string {
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
-		return token
-	}
-	if token := os.Getenv("GH_TOKEN"); token != "" {
-		return token
-	}
-	if token, err := getTokenFromGhCLI(); err == nil && token != "" {
-		return token
-	}
-	if token, err := getTokenFromGitCredential(); err == nil && token != "" {
-		return token
-	}
-	return ""
-}
-
-func getTokenFromGhCLI() (string, error) {
-	cmd := exec.CommandContext(context.Background(), "gh", "auth", "token")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func getTokenFromGitCredential() (string, error) {
-	cmd := exec.CommandContext(context.Background(), "git", "credential", "fill")
-	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(output), "\n") {
-		if strings.HasPrefix(line, "password=") {
-			return strings.TrimPrefix(line, "password="), nil
-		}
-	}
-	return "", fmt.Errorf("credential not found")
-}
-
-// tokenTransport is a Transport that adds token to GitHub API requests
-type tokenTransport struct {
-	token string
-}
-
-func (t *tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	clonedReq := req.Clone(req.Context())
-	clonedReq.Header.Set("Authorization", "Bearer "+t.token)
-	return http.DefaultTransport.RoundTrip(clonedReq)
+func getKnownVulnerableActionsGitHubToken(override string) string {
+	token, _ := ResolveGitHubToken(override, nil)
+	return token
 }
 
 // getClient initializes the GitHub client with authentication
 func (rule *KnownVulnerableActionsRule) getClient() *github.Client {
 	rule.clientOnce.Do(func() {
-		var httpClient *http.Client
-		if token := getGitHubToken(); token != "" {
-			httpClient = &http.Client{
-				Transport: &tokenTransport{token: token},
-			}
-		}
-		rule.client = github.NewClient(httpClient)
+		token := getKnownVulnerableActionsGitHubToken(rule.gitHubToken)
+		rule.client = NewGitHubClient(context.Background(), token)
 	})
 	return rule.client
+}
+
+func (rule *KnownVulnerableActionsRule) debugGitHubAPIError(format string, args ...interface{}) {
+	if len(args) > 0 {
+		if err, ok := args[len(args)-1].(error); ok && IsGitHubRateLimitError(err) {
+			if knownVulnerableRateLimitReported.CompareAndSwap(false, true) {
+				rule.Debug("GitHub API rate limit exceeded; skipping known vulnerable action checks for the rest of this run")
+			}
+			return
+		}
+	}
+	rule.Debug(format, args...)
 }
 
 // parseActionRef parses an action reference like "owner/repo@ref" or "owner/repo/path@ref"
@@ -484,7 +448,7 @@ func (rule *KnownVulnerableActionsRule) VisitStep(step *ast.Step) error {
 	if err != nil {
 		// Log as debug and skip (similar to commitsha.go pattern)
 		// This can happen for private repos, rate limiting, network errors, etc.
-		rule.Debug("failed to resolve version for %s/%s@%s: %v", owner, repo, ref, err)
+		rule.debugGitHubAPIError("failed to resolve version for %s/%s@%s: %v", owner, repo, ref, err)
 		return nil
 	}
 
@@ -498,7 +462,7 @@ func (rule *KnownVulnerableActionsRule) VisitStep(step *ast.Step) error {
 	if err != nil {
 		// Log as debug and skip (similar to commitsha.go pattern)
 		// This can happen for rate limiting, network errors, etc.
-		rule.Debug("failed to fetch advisories for %s/%s: %v", owner, repo, err)
+		rule.debugGitHubAPIError("failed to fetch advisories for %s/%s: %v", owner, repo, err)
 		return nil
 	}
 

@@ -1,6 +1,13 @@
 package core
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -12,6 +19,112 @@ func TestNewKnownVulnerableActionsRule(t *testing.T) {
 	}
 	if rule.RuleDesc == "" {
 		t.Error("RuleDesc should not be empty")
+	}
+}
+
+func TestKnownVulnerableActionsRuleUsesUnifiedGitHubTokenResolution(t *testing.T) {
+	t.Setenv("SISAKULINT_GITHUB_TOKEN", "sisaku-token")
+	t.Setenv("GITHUB_TOKEN", "ci-token")
+	t.Setenv("GH_TOKEN", "gh-token")
+
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	rule := NewKnownVulnerableActionsRule()
+	client := rule.getClient()
+	baseURL, err := url.Parse(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	client.BaseURL = baseURL
+
+	req, err := client.NewRequest(http.MethodGet, "rate_limit", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if _, err := client.Do(context.Background(), req, nil); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+
+	if gotAuth != "Bearer sisaku-token" {
+		t.Errorf("Authorization header = %q, want %q", gotAuth, "Bearer sisaku-token")
+	}
+}
+
+func TestKnownVulnerableActionsRuleExplicitTokenOverridesEnvironment(t *testing.T) {
+	t.Setenv("SISAKULINT_GITHUB_TOKEN", "sisaku-token")
+	t.Setenv("GITHUB_TOKEN", "ci-token")
+	t.Setenv("GH_TOKEN", "gh-token")
+
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	rule := NewKnownVulnerableActionsRule("flag-token")
+	client := rule.getClient()
+	baseURL, err := url.Parse(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	client.BaseURL = baseURL
+
+	req, err := client.NewRequest(http.MethodGet, "rate_limit", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if _, err := client.Do(context.Background(), req, nil); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+
+	if gotAuth != "Bearer flag-token" {
+		t.Errorf("Authorization header = %q, want %q", gotAuth, "Bearer flag-token")
+	}
+}
+
+func TestMakeRulesPassesGitHubTokenToKnownVulnerableActionsRule(t *testing.T) {
+	rules := makeRules(".github/workflows/ci.yml", false, "flag-token", nil, nil)
+
+	for _, rule := range rules {
+		known, ok := rule.(*KnownVulnerableActionsRule)
+		if !ok {
+			continue
+		}
+		if known.gitHubToken != "flag-token" {
+			t.Fatalf("KnownVulnerableActionsRule gitHubToken = %q, want %q", known.gitHubToken, "flag-token")
+		}
+		return
+	}
+
+	t.Fatal("KnownVulnerableActionsRule not found in makeRules output")
+}
+
+func TestKnownVulnerableActionsRuleClassifiesRateLimitErrors(t *testing.T) {
+	knownVulnerableRateLimitReported.Store(false)
+	t.Cleanup(func() {
+		knownVulnerableRateLimitReported.Store(false)
+	})
+
+	var buf bytes.Buffer
+	rule := NewKnownVulnerableActionsRule()
+	rule.EnableDebugOutput(&buf)
+
+	rule.debugGitHubAPIError("failed to fetch advisories for actions/checkout", fmt.Errorf("wrapped: %w", ErrGitHubRateLimit))
+
+	got := buf.String()
+	if !strings.Contains(got, "GitHub API rate limit exceeded") {
+		t.Fatalf("debug output = %q, want rate-limit message", got)
+	}
+	if strings.Contains(got, "failed to fetch advisories") {
+		t.Fatalf("debug output = %q, should not use generic error message for rate limits", got)
 	}
 }
 
