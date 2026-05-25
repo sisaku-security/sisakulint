@@ -25,6 +25,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `cache-poisoning.yaml` | Demonstrates cache poisoning vulnerabilities |
 | `cache-poisoning-composite-action.yaml` | TanStack-style cache poisoning via `pull_request_target`, unsafe PR merge checkout, and remote composite action cache usage |
 | `cache-poisoning-safe.yaml` | Safe cache configuration example |
+| `cache-poisoning-write.yaml` | Direct writes into package-manager cache directories (`~/.npm`, `~/.cache/yarn`, `~/.local/share/pnpm/store` …). Reports tagged `(critical)` when followed by `actions/cache*` / `actions/setup-*` (`cache:` enabled) in the same job, `(suspicious)` otherwise. |
+| `cache-poisoning-write-safe.yaml` | Safe counterparts: read-only access, package-manager-managed caches, sibling-prefix paths, and writes outside any cache root. |
 | `credential.yaml` | Credential exposure patterns |
 | `issueinjection.yaml` | Script injection via GitHub context |
 | `issueinjection-multiline.yaml` | Multi-line injection patterns |

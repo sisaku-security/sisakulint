@@ -133,17 +133,55 @@ The rule triggers when untrusted input is used in cache configuration, regardles
 
 #### Package Cache Directory Writes
 
-The rule also checks `run:` scripts for direct writes to package manager cache directories. This catches cases where a workflow creates or modifies dependency cache content outside the package manager, then persists it with `actions/cache/save`.
+The rule also checks `run:` scripts for direct writes to package manager cache directories. The bash `run:` body is parsed via the shared `pkg/shell` AST helpers (the same code path used by `secret-in-log` and the cross-step taint tracker), so detection is robust to wrappers (`sudo`, `env`, `nohup`, `timeout`, ...), inline scripts (`bash -c '...'`), pipelines, redirections, and `&&` / `||` chains.
 
-Detected cache directories include:
-- npm: `~/.npm/_cacache/`
-- pip: `~/.cache/pip/`
-- Cargo: `~/.cargo/registry/`
-- Gradle: `~/.gradle/caches/`
-- Maven: `~/.m2/repository/`
-- Go modules: `~/go/pkg/mod/cache/`
+Severity is split based on whether a cache action persists the directory in the same job:
 
-The rule reports direct write commands such as `mkdir`, `cp`, `mv`, `install`, `touch`, `tee`, and shell redirection with `> / >>` when the write target is one of these cache directories. Package manager commands such as `npm cache verify` or `pip cache dir` are excluded.
+| Tier | Trigger | Wording |
+|------|---------|---------|
+| **Critical** | The job has a cache action — `actions/cache`, `actions/cache/save`, `actions/cache/restore`, or `actions/setup-*` with `cache:` enabled. The cache action will persist whatever sits under the cache path at job end. | `cache poisoning via package manager cache directory write (critical): … and a cache action in the same job will persist this directory …` |
+| **Suspicious** | No cache action follows in the same job. The write only persists for the duration of the run, but is still surfaced as defense-in-depth. | `cache poisoning via package manager cache directory write (suspicious): … prefer package manager commands or avoid saving caches after these writes` |
+
+Reports are deferred to `VisitJobPost` so the severity tier reflects the entire job, regardless of whether the cache action appears before or after the write step.
+
+Detected cache directory roots (each match is path-boundary aware: `~/.npm-old` does not match `~/.npm`, but `~/.npm` and `~/.npm/_cacache` both do):
+
+| Ecosystem | Roots |
+|-----------|-------|
+| JavaScript / Node | `~/.npm`, `~/.cache/yarn`, `~/.yarn/cache`, `~/.local/share/pnpm/store`, `~/.cache/pnpm` |
+| Python | `~/.cache/pip`, `~/.cache/pypoetry` |
+| Rust | `~/.cargo` |
+| JVM | `~/.gradle`, `~/.m2` |
+| Go | `~/go/pkg/mod` |
+| Ruby | `~/.bundle/cache`, `vendor/bundle` |
+| PHP | `~/.composer/cache`, `~/.cache/composer` |
+| .NET | `~/.nuget/packages` |
+
+Path normalization rewrites `$HOME/`, `${HOME}/`, `/home/runner/`, `/Users/runner/`, and `/root/` to `~/` before matching, so all of these resolve to the same canonical root.
+
+Recognized write commands (other commands and pure reads are not flagged):
+
+| Command | Detection |
+|---------|-----------|
+| `mkdir`, `touch`, `rm`, `chmod`, `chown` | Any cache-directory positional argument. |
+| `cp`, `mv`, `install`, `rsync` | Last non-flag positional argument (the destination). |
+| `tee` | Every non-flag positional argument. |
+| `tar` | Only when extracting (`-x` / `--extract`); destination via `-C` / `--directory`. |
+| `unzip` | Destination via `-d`. |
+| `sed` | Only with `-i` (in-place edit). |
+| `curl` | Destination via `-o` / `--output` (`-O` is not flagged because it depends on cwd). |
+| `wget` | Destination via `-O` / `--output-document=`. |
+| `git clone` | Second positional argument after `clone`. |
+| `dd` | `of=` argument. |
+| Stdout redirection | `>`, `>>`, `&>`, `&>>`, `>|`, and zsh-clobber variants. |
+
+Wrappers stripped before command identification: `sudo`, `env`, `nohup`, `time`, `timeout`, `stdbuf`, `unbuffer`, `ionice`, `nice`, `command`. Inline shells (`sh -c '...'`, `bash -c '...'`) are recursively parsed and walked.
+
+Package manager front-ends (`npm`, `npx`, `pnpm`, `yarn`, `pip`, `pip3`, `python`, `python3`, `poetry`, `cargo`, `gradle`, `mvn`, `bundle`, `bundler`, `composer`, `dotnet`, `nuget`) are excluded — the rule trusts the tool to manage its own cache. `go` is intentionally **not** in this exclusion list: `go install` legitimately populates `~/go/pkg/mod`, but `go run ./scripts/poison.go ~/go/pkg/mod` cannot be told apart from a single token, and the rule prefers detecting hand-rolled writes to silently allowing every `go` invocation.
+
+**Suppression:** add `-ignore "cache-poisoning"` (or `# sisakulint:disable=cache-poisoning` if available in your config) to silence this rule for known-good workflows. Suppressing the rule disables every cache-poisoning sub-check, not just the directory-write tier.
+
+**Known limitation:** detection works on shell AST tokens, so paths computed at runtime through external shell variables (e.g. `mkdir -p "$CACHE_ROOT/.npm"`) are not resolved and will be missed. Literal-path writes like `mkdir -p ~/.npm`, `${HOME}/.npm`, `"/home/runner/.npm"`, and writes nested under `bash -c '...'` wrappers are detected.
 
 ### Example Vulnerable Workflows
 
@@ -317,14 +355,22 @@ $ sisakulint ./bundle-size.yaml
 
 #### Package Cache Directory Write Output
 
+When a cache action follows the write in the same job (critical):
+
 ```bash
-$ sisakulint ./cache-directory-write.yaml
+$ sisakulint ./cache-poisoning-write.yaml
 
-./cache-directory-write.yaml:11:9: cache poisoning via package manager cache directory write: command writes directly to ~/.npm/_cacache. Direct writes to dependency cache directories can poison later actions/cache/save entries; use package manager commands or avoid saving this cache after untrusted writes [cache-poisoning]
+./cache-poisoning-write.yaml:11:9: cache poisoning via package manager cache directory write (critical): command writes directly to ~/.npm and a cache action in the same job will persist this directory (~/.npm). This persists attacker-controlled dependency cache content for later workflow runs; avoid writing under cache directories or remove the cache action [cache-poisoning]
       11 👈|          mkdir -p ~/.npm/_cacache/content-v2/sha512
+```
 
-./cache-directory-write.yaml:16:9: cache poisoning risk (critical): actions/cache/save follows direct writes to package manager cache directories (~/.npm/_cacache). This can persist attacker-controlled dependency cache content for later workflow runs; avoid saving caches after direct cache directory writes [cache-poisoning]
-      16 👈|      - uses: actions/cache/save@v4
+When no cache action follows in the same job (suspicious):
+
+```bash
+$ sisakulint ./cache-poisoning-write.yaml
+
+./cache-poisoning-write.yaml:11:9: cache poisoning via package manager cache directory write (suspicious): command writes directly to ~/.gradle. Direct writes to dependency cache directories can poison later actions/cache/save entries; prefer package manager commands or avoid saving caches after these writes [cache-poisoning]
+      11 👈|          touch ~/.gradle/caches/modules-2/files-2.1/payload
 ```
 
 ### Safe Patterns
