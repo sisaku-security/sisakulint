@@ -33,6 +33,7 @@ type CachePoisoningRule struct {
 	hasExternalTrigger     bool // workflow_dispatch, schedule, repository_dispatch
 	cacheActionCount       int
 	workflowTriggers       []string
+	directCacheDirWrites   []directCacheDirectoryWriteInfo
 }
 
 // directCacheFixInfo stores information needed for auto-fixing direct cache poisoning
@@ -40,6 +41,10 @@ type directCacheFixInfo struct {
 	step      *ast.Step
 	inputName string // "key", "restore-keys", or "path"
 	expr      string // the untrusted expression
+}
+
+type directCacheDirectoryWriteInfo struct {
+	cacheDir string
 }
 
 // NewCachePoisoningRule creates a new cache poisoning detection rule.
@@ -94,6 +99,7 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.hasExternalTrigger = false
 	rule.cacheActionCount = 0
 	rule.workflowTriggers = nil
+	rule.directCacheDirWrites = nil
 
 	for _, event := range node.On {
 		switch e := event.(type) {
@@ -196,6 +202,7 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.unsafeCheckoutStep = nil
 	rule.autoFixerRegistered = false
 	rule.jobUnsafeTriggers = nil
+	rule.directCacheDirWrites = nil
 
 	if len(rule.unsafeTriggers) == 0 {
 		return nil
@@ -224,6 +231,11 @@ func (rule *CachePoisoningRule) VisitJobPost(node *ast.Job) error {
 }
 
 func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
+	if run, ok := node.Exec.(*ast.ExecRun); ok {
+		rule.checkDirectCacheDirectoryWrite(run)
+		return nil
+	}
+
 	action, ok := node.Exec.(*ast.ExecAction)
 	if !ok || action.Uses == nil {
 		return nil
@@ -260,6 +272,10 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	// This applies to any trigger (including pull_request, push, etc.)
 	if actionName == "actions/cache" {
 		rule.checkDirectCachePoisoning(node, action)
+	}
+
+	if actionName == "actions/cache/save" {
+		rule.reportCacheSaveAfterDirectCacheDirectoryWrite(node)
 	}
 
 	// Check for cache actions
@@ -307,6 +323,235 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	}
 
 	return nil
+}
+
+var packageManagerCacheDirs = []string{
+	"~/.npm/_cacache",
+	"$home/.npm/_cacache",
+	"${home}/.npm/_cacache",
+	"/home/runner/.npm/_cacache",
+	"~/.cache/pip",
+	"$home/.cache/pip",
+	"${home}/.cache/pip",
+	"/home/runner/.cache/pip",
+	"~/.cargo/registry",
+	"$home/.cargo/registry",
+	"${home}/.cargo/registry",
+	"/home/runner/.cargo/registry",
+	"~/.gradle/caches",
+	"$home/.gradle/caches",
+	"${home}/.gradle/caches",
+	"/home/runner/.gradle/caches",
+	"~/.m2/repository",
+	"$home/.m2/repository",
+	"${home}/.m2/repository",
+	"/home/runner/.m2/repository",
+	"~/go/pkg/mod/cache",
+	"$home/go/pkg/mod/cache",
+	"${home}/go/pkg/mod/cache",
+	"/home/runner/go/pkg/mod/cache",
+}
+
+var packageManagerCommands = map[string]bool{
+	"npm":     true,
+	"npx":     true,
+	"pnpm":    true,
+	"yarn":    true,
+	"pip":     true,
+	"pip3":    true,
+	"python":  true,
+	"python3": true,
+	"cargo":   true,
+	"gradle":  true,
+	"mvn":     true,
+	"go":      true,
+}
+
+var cacheDirectoryWriteCommands = map[string]bool{
+	"cat":     true,
+	"cp":      true,
+	"echo":    true,
+	"install": true,
+	"mkdir":   true,
+	"mv":      true,
+	"printf":  true,
+	"tee":     true,
+	"touch":   true,
+}
+
+func (rule *CachePoisoningRule) checkDirectCacheDirectoryWrite(run *ast.ExecRun) {
+	if run == nil || run.Run == nil {
+		return
+	}
+
+	lines := strings.Split(run.Run.Value, "\n")
+	for idx, line := range lines {
+		matchedDir, ok := cacheDirectoryInLine(line)
+		if !ok || !isDirectCacheDirectoryWrite(line) {
+			continue
+		}
+
+		pos := run.Run.Pos
+		if pos != nil {
+			pos = &ast.Position{Line: pos.Line + idx, Col: pos.Col}
+			if run.Run.Literal {
+				pos.Line++
+			}
+		}
+		rule.Errorf(
+			pos,
+			"cache poisoning via package manager cache directory write: command writes directly to %s. "+
+				"Direct writes to dependency cache directories can poison later actions/cache/save entries; use package manager commands or avoid saving this cache after untrusted writes",
+			matchedDir,
+		)
+		rule.directCacheDirWrites = append(rule.directCacheDirWrites, directCacheDirectoryWriteInfo{
+			cacheDir: matchedDir,
+		})
+	}
+}
+
+func (rule *CachePoisoningRule) reportCacheSaveAfterDirectCacheDirectoryWrite(node *ast.Step) {
+	if len(rule.directCacheDirWrites) == 0 {
+		return
+	}
+
+	dirs := make([]string, 0, len(rule.directCacheDirWrites))
+	seen := make(map[string]bool, len(rule.directCacheDirWrites))
+	for _, write := range rule.directCacheDirWrites {
+		if seen[write.cacheDir] {
+			continue
+		}
+		seen[write.cacheDir] = true
+		dirs = append(dirs, write.cacheDir)
+	}
+
+	rule.Errorf(
+		node.Pos,
+		"cache poisoning risk (critical): actions/cache/save follows direct writes to package manager cache directories (%s). "+
+			"This can persist attacker-controlled dependency cache content for later workflow runs; avoid saving caches after direct cache directory writes",
+		strings.Join(dirs, ", "),
+	)
+}
+
+func cacheDirectoryInLine(line string) (string, bool) {
+	lower := strings.ToLower(line)
+	for _, dir := range packageManagerCacheDirs {
+		if cacheDirectoryPatternInLine(lower, dir) {
+			return dir, true
+		}
+	}
+	return "", false
+}
+
+func cacheDirectoryPatternInLine(line string, dir string) bool {
+	start := 0
+	for {
+		idx := strings.Index(line[start:], dir)
+		if idx == -1 {
+			return false
+		}
+		end := start + idx + len(dir)
+		if end == len(line) || isCacheDirectoryBoundary(line[end]) {
+			return true
+		}
+		start = end
+	}
+}
+
+func isCacheDirectoryBoundary(ch byte) bool {
+	return ch == '/' || ch == '\\' || ch == '\'' || ch == '"' ||
+		ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+		ch == ';' || ch == ')' || ch == ']' || ch == '}'
+}
+
+func isDirectCacheDirectoryWrite(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		return false
+	}
+
+	command := firstShellCommandToken(trimmed)
+	if command == "" || packageManagerCommands[command] {
+		return false
+	}
+
+	if redirectsToCacheDirectory(trimmed) {
+		return true
+	}
+
+	switch command {
+	case "mkdir", "touch":
+		return true
+	case "cp", "install", "mv":
+		return containsCacheDirectory(lastShellArgument(trimmed))
+	case "tee":
+		return anyShellArgumentContainsCacheDirectory(trimmed)
+	default:
+		return cacheDirectoryWriteCommands[command] && redirectsToCacheDirectory(trimmed)
+	}
+}
+
+func firstShellCommandToken(line string) string {
+	fields := strings.Fields(line)
+	for _, field := range fields {
+		token := strings.Trim(field, "'\"(){}[];")
+		if token == "" {
+			continue
+		}
+		if strings.Contains(token, "=") && !strings.HasPrefix(token, ">") {
+			continue
+		}
+		return strings.ToLower(token)
+	}
+	return ""
+}
+
+func redirectsToCacheDirectory(line string) bool {
+	for _, op := range []string{">>", ">"} {
+		idx := strings.Index(line, op)
+		if idx == -1 {
+			continue
+		}
+		if containsCacheDirectory(line[idx+len(op):]) {
+			return true
+		}
+	}
+	return false
+}
+
+func lastShellArgument(line string) string {
+	fields := strings.Fields(line)
+	for i := len(fields) - 1; i >= 0; i-- {
+		arg := cleanShellToken(fields[i])
+		if arg == "" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg
+	}
+	return ""
+}
+
+func anyShellArgumentContainsCacheDirectory(line string) bool {
+	fields := strings.Fields(line)
+	for _, field := range fields[1:] {
+		arg := cleanShellToken(field)
+		if arg == "" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		if containsCacheDirectory(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsCacheDirectory(value string) bool {
+	_, ok := cacheDirectoryInLine(value)
+	return ok
+}
+
+func cleanShellToken(token string) string {
+	return strings.Trim(token, "'\"(){}[];,")
 }
 
 func isMutableRemoteAction(uses string) bool {
