@@ -99,6 +99,37 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 	return false
 }
 
+// isCachePersistingAction reports whether a cache action actually persists the
+// cache directory at job end. This is a strict subset of isCacheAction:
+// actions/cache (registers a post-job save), actions/cache/save, and
+// actions/setup-* with cache: enabled all persist; actions/cache/restore is
+// restore-only and never saves, so a restore-only job must not be treated as a
+// persistence vector when escalating direct-write reports to "(critical)".
+func isCachePersistingAction(uses string, inputs map[string]*ast.Input) bool {
+	if uses == "" {
+		return false
+	}
+
+	actionName := uses
+	if idx := strings.Index(uses, "@"); idx != -1 {
+		actionName = uses[:idx]
+	}
+
+	if actionName == "actions/cache" || actionName == "actions/cache/save" {
+		return true
+	}
+
+	if strings.HasPrefix(actionName, "actions/setup-") {
+		if cacheInput, ok := inputs["cache"]; ok && cacheInput != nil {
+			if cacheInput.Value != nil && cacheInput.Value.Value != "" && cacheInput.Value.Value != ExprFalseValue {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.unsafeTriggers = nil
 	rule.directCacheFixSteps = make([]*directCacheFixInfo, 0)
@@ -343,11 +374,15 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 
 	// Check for cache actions
 	if isCacheAction(uses, action.Inputs) {
-		// Any cache action (actions/cache, actions/cache/save, actions/cache/restore,
-		// or actions/setup-* with cache: enabled) can persist whatever sits under the
+		// Only save-capable cache steps (actions/cache, actions/cache/save, or
+		// actions/setup-* with cache: enabled) persist whatever sits under the
 		// cache path at job end. Track that a save will happen so deferred direct
-		// cache directory write reports can be upgraded to critical in VisitJobPost.
-		rule.jobHasCacheSaveStep = true
+		// cache directory write reports can be upgraded to critical in
+		// VisitJobPost. actions/cache/restore is restore-only and must not flip
+		// this flag, otherwise restore-only jobs are over-escalated to critical.
+		if isCachePersistingAction(uses, action.Inputs) {
+			rule.jobHasCacheSaveStep = true
+		}
 		rule.cacheActionCount++
 
 		// Check cache hierarchy exploitation risk
@@ -779,8 +814,12 @@ func unwrapCommandPrefixes(call *syntax.CallExpr) (string, int, bool) {
 				if isLikelyFlagToken(next) || isVarAssignmentWord(next) {
 					continue
 				}
-				// `timeout 5s curl` — skip a non-flag duration arg following timeout/etc.
-				if (lower == "timeout" || lower == "nice" || lower == "ionice") && !isLikelyFlagToken(next) {
+				// `timeout 5s curl` / `nice 10 curl` — skip the wrapper's
+				// positional value (a duration or numeric priority) but only when
+				// it actually looks like one. A bare command such as `mkdir` in
+				// `timeout mkdir` must NOT be consumed here, otherwise the real
+				// command is skipped and the write goes undetected.
+				if (lower == "timeout" || lower == "nice" || lower == "ionice") && isLikelyWrapperArg(next) {
 					i = j
 					continue
 				}
@@ -832,14 +871,16 @@ func (rule *CachePoisoningRule) walkInlineShellScript(call *syntax.CallExpr, arg
 			case *syntax.CallExpr:
 				rule.checkCallExprForInlineWrapper(x, fallbackPos, script, runStr)
 			case *syntax.Stmt:
-				if x.Cmd == nil {
-					for _, r := range x.Redirs {
-						if r == nil || r.Word == nil || !isOutputRedirect(r.Op) {
-							continue
-						}
-						if dir, ok := matchCacheDirectoryArg(r.Word); ok {
-							rule.recordCacheDirectoryWrite(dir, fallbackPos, script, runStr)
-						}
+				// Inspect redirects regardless of whether the statement also has
+				// a command, mirroring the top-level walkShellAST handling.
+				// `bash -c 'echo x > ~/.npm/foo'` has both a command (echo) and a
+				// redirect; gating on x.Cmd == nil here would miss the redirect.
+				for _, r := range x.Redirs {
+					if r == nil || r.Word == nil || !isOutputRedirect(r.Op) {
+						continue
+					}
+					if dir, ok := matchCacheDirectoryArg(r.Word); ok {
+						rule.recordCacheDirectoryWrite(dir, fallbackPos, script, runStr)
 					}
 				}
 			}
@@ -960,9 +1001,12 @@ func matchCacheDirectoryPath(p string) (string, bool) {
 }
 
 // normalizeCachePath strips surrounding quotes and rewrites the home prefix
-// to "~". Returns "" when the path doesn't start with a recognized prefix.
-// Lower-cases the prefix portion only (paths under home are case-sensitive
-// on Linux runners). Trailing slashes are trimmed except for the root "/".
+// to "~". Home-prefixed forms ($HOME/, /home/runner/, …) collapse to "~/…";
+// "~" alone stays "~". Paths without a recognized home prefix are preserved
+// verbatim (trailing slash trimmed) so relative cache roots such as
+// "vendor/bundle" still match; absolute or unrelated paths fall through here
+// too but match no catalog root. Lower-cases the prefix portion only (paths
+// under home are case-sensitive on Linux runners).
 func normalizeCachePath(p string) string {
 	p = strings.TrimSpace(p)
 	p = strings.Trim(p, `"'`)
@@ -985,7 +1029,7 @@ func normalizeCachePath(p string) string {
 	if p == "~" {
 		return "~"
 	}
-	return ""
+	return strings.TrimRight(p, "/")
 }
 
 // bashWordLiteral concatenates literal segments of a Word. Returns the empty
@@ -1060,6 +1104,40 @@ func isLikelyFlagWord(word *syntax.Word) bool {
 // isLikelyFlagToken is the string analogue of isLikelyFlagWord.
 func isLikelyFlagToken(token string) bool {
 	return strings.HasPrefix(token, "-") && token != "-" && token != "--"
+}
+
+// isLikelyWrapperArg reports whether token looks like a positional value
+// consumed by timeout/nice/ionice — a duration such as "5s" / "1.5m" / "30" or
+// a bare numeric priority — rather than the wrapped command itself. This keeps
+// `timeout 5s mkdir …` consuming "5s" while still returning "mkdir", and stops
+// `timeout mkdir …` from swallowing the real command.
+func isLikelyWrapperArg(token string) bool {
+	if token == "" {
+		return false
+	}
+	// Optional trailing duration unit accepted by timeout (s/m/h/d).
+	body := token
+	switch body[len(body)-1] {
+	case 's', 'm', 'h', 'd':
+		body = body[:len(body)-1]
+	}
+	if body == "" {
+		return false
+	}
+	dotSeen := false
+	for _, ch := range body {
+		if ch == '.' {
+			if dotSeen {
+				return false
+			}
+			dotSeen = true
+			continue
+		}
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // isVarAssignmentWord reports whether token is a leading shell var assignment

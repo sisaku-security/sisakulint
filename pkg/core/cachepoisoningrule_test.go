@@ -1518,6 +1518,36 @@ PAYLOAD`,
 			wantErrors:    0,
 			wantSubstring: "",
 		},
+		{
+			name:          "cp writes relative bundler vendor cache",
+			script:        `cp payload.gem vendor/bundle/ruby/3.0.0/cache/payload.gem`,
+			wantErrors:    1,
+			wantSubstring: "vendor/bundle",
+		},
+		{
+			name:          "sibling of relative bundler vendor cache is not flagged",
+			script:        `mkdir -p vendor/bundle-old/cache`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "inline bash -c redirect writes npm cache directory",
+			script:        `bash -c 'echo payload > ~/.npm/_cacache/content-v2/sha512/malicious'`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "timeout with duration still writes npm cache directory",
+			script:        `timeout 5s mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "timeout without duration still writes npm cache directory",
+			script:        `timeout mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1553,13 +1583,17 @@ PAYLOAD`,
 				t.Fatalf("Expected %d errors, got %d: %#v", tt.wantErrors, len(errors), errors)
 			}
 			if tt.wantSubstring != "" {
-				if !strings.Contains(errors[0].Description, tt.wantSubstring) {
-					t.Fatalf("Expected error to contain %q, got %q", tt.wantSubstring, errors[0].Description)
-				}
-				// No cache-save step in this case → reports must be the
-				// softer "(suspicious)" tier.
-				if !strings.Contains(errors[0].Description, "(suspicious)") {
-					t.Fatalf("Expected error to be tagged (suspicious), got %q", errors[0].Description)
+				// Validate every reported error, not just the first: cases that
+				// expect multiple writes (wantErrors > 1) must all match.
+				for i, e := range errors {
+					if !strings.Contains(e.Description, tt.wantSubstring) {
+						t.Fatalf("Expected error %d to contain %q, got %q", i, tt.wantSubstring, e.Description)
+					}
+					// No cache-save step in these cases → reports must be the
+					// softer "(suspicious)" tier.
+					if !strings.Contains(e.Description, "(suspicious)") {
+						t.Fatalf("Expected error %d to be tagged (suspicious), got %q", i, e.Description)
+					}
 				}
 			}
 		})
@@ -1615,6 +1649,59 @@ func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCacheSave(t *testing.
 	}
 	if !strings.Contains(errors[0].Description, "cache action in the same job") {
 		t.Fatalf("Expected report to explain the persistence vector, got %q", errors[0].Description)
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWriteWithRestoreOnly verifies that
+// a restore-only cache step (actions/cache/restore) does NOT escalate a direct
+// cache directory write to "(critical)": restore-only never persists at job
+// end, so the write stays in the softer "(suspicious)" tier.
+func TestCachePoisoningRule_DirectCacheDirectoryWriteWithRestoreOnly(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	restoreStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/restore@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 11, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 12, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(restoreStep)
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 13, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious`,
+				Pos:   &ast.Position{Line: 14, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 write report, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(suspicious)") {
+		t.Fatalf("Expected restore-only write to stay (suspicious), got %q", errors[0].Description)
+	}
+	if strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("restore-only must not escalate to (critical), got %q", errors[0].Description)
 	}
 }
 

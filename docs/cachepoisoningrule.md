@@ -133,13 +133,13 @@ The rule triggers when untrusted input is used in cache configuration, regardles
 
 #### Package Cache Directory Writes
 
-The rule also checks `run:` scripts for direct writes to package manager cache directories. The bash `run:` body is parsed via the shared `pkg/shell` AST helpers (the same code path used by `secret-in-log` and the cross-step taint tracker), so detection is robust to wrappers (`sudo`, `env`, `nohup`, `timeout`, ...), inline scripts (`bash -c '...'`), pipelines, redirections, and `&&` / `||` chains.
+The rule also checks `run:` scripts for direct writes to package manager cache directories. In `pkg/core/cachepoisoningrule.go` the bash `run:` body is parsed into an AST with `syntax.NewParser(...)` (the `mvdan.cc/sh/v3/syntax` library, after `sanitizeForShellParse` neutralizes any `${{ ... }}` substitutions), so detection is robust to wrappers (`sudo`, `env`, `nohup`, `timeout`, ...), inline scripts (`bash -c '...'`), pipelines, redirections, and `&&` / `||` chains.
 
 Severity is split based on whether a cache action persists the directory in the same job:
 
 | Tier | Trigger | Wording |
 |------|---------|---------|
-| **Critical** | The job has a cache action — `actions/cache`, `actions/cache/save`, `actions/cache/restore`, or `actions/setup-*` with `cache:` enabled. The cache action will persist whatever sits under the cache path at job end. | `cache poisoning via package manager cache directory write (critical): … and a cache action in the same job will persist this directory …` |
+| **Critical** | The job has a save-capable cache action — `actions/cache`, `actions/cache/save`, or `actions/setup-*` with `cache:` enabled. The cache action will persist whatever sits under the cache path at job end. (`actions/cache/restore` is restore-only and does not persist, so it does not raise the tier to critical on its own.) | `cache poisoning via package manager cache directory write (critical): … and a cache action in the same job will persist this directory …` |
 | **Suspicious** | No cache action follows in the same job. The write only persists for the duration of the run, but is still surfaced as defense-in-depth. | `cache poisoning via package manager cache directory write (suspicious): … prefer package manager commands or avoid saving caches after these writes` |
 
 Reports are deferred to `VisitJobPost` so the severity tier reflects the entire job, regardless of whether the cache action appears before or after the write step.
@@ -173,7 +173,7 @@ Recognized write commands (other commands and pure reads are not flagged):
 | `wget` | Destination via `-O` / `--output-document=`. |
 | `git clone` | Second positional argument after `clone`. |
 | `dd` | `of=` argument. |
-| Stdout redirection | `>`, `>>`, `&>`, `&>>`, `>|`, and zsh-clobber variants. |
+| Stdout redirection | `>`, `>>`, `&>`, `&>>`, `>\|`, and zsh-clobber variants. |
 
 Wrappers stripped before command identification: `sudo`, `env`, `nohup`, `time`, `timeout`, `stdbuf`, `unbuffer`, `ionice`, `nice`, `command`. Inline shells (`sh -c '...'`, `bash -c '...'`) are recursively parsed and walked.
 
