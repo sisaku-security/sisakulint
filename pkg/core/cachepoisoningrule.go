@@ -379,6 +379,14 @@ var cacheDirectoryWriteCommands = map[string]bool{
 	"touch":   true,
 }
 
+var shellPrefixCommands = map[string]bool{
+	"command": true,
+	"env":     true,
+	"nohup":   true,
+	"sudo":    true,
+	"time":    true,
+}
+
 func (rule *CachePoisoningRule) checkDirectCacheDirectoryWrite(run *ast.ExecRun) {
 	if run == nil || run.Run == nil {
 		return
@@ -470,12 +478,33 @@ func isDirectCacheDirectoryWrite(line string) bool {
 		return false
 	}
 
-	command := firstShellCommandToken(trimmed)
+	for _, segment := range shellCommandSegments(trimmed) {
+		if isDirectCacheDirectoryWriteSegment(segment) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDirectCacheDirectoryWriteSegment(segment string) bool {
+	segment = strings.TrimSpace(segment)
+	if segment == "" || strings.HasPrefix(segment, "#") {
+		return false
+	}
+
+	if nested, ok := shellCCommand(segment); ok {
+		return isDirectCacheDirectoryWrite(nested)
+	}
+	if _, ok := cacheDirectoryInLine(segment); !ok {
+		return false
+	}
+
+	command := firstShellCommandToken(segment)
 	if command == "" || packageManagerCommands[command] {
 		return false
 	}
 
-	if redirectsToCacheDirectory(trimmed) {
+	if redirectsToCacheDirectory(segment) {
 		return true
 	}
 
@@ -483,25 +512,81 @@ func isDirectCacheDirectoryWrite(line string) bool {
 	case "mkdir", "touch":
 		return true
 	case "cp", "install", "mv":
-		return containsCacheDirectory(lastShellArgument(trimmed))
+		return containsCacheDirectory(lastShellArgument(segment))
 	case "tee":
-		return anyShellArgumentContainsCacheDirectory(trimmed)
+		return anyShellArgumentContainsCacheDirectory(segment)
 	default:
-		return cacheDirectoryWriteCommands[command] && redirectsToCacheDirectory(trimmed)
+		return cacheDirectoryWriteCommands[command] && redirectsToCacheDirectory(segment)
 	}
+}
+
+func shellCommandSegments(line string) []string {
+	var segments []string
+	start := 0
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ';', '|':
+			segments = append(segments, line[start:i])
+			start = i + 1
+		case '&':
+			if i+1 < len(line) && line[i+1] == '&' {
+				segments = append(segments, line[start:i])
+				i++
+				start = i + 1
+			}
+		}
+	}
+	segments = append(segments, line[start:])
+	return segments
+}
+
+func shellCCommand(segment string) (string, bool) {
+	command := firstShellCommandToken(segment)
+	if command != "sh" && command != "bash" && command != "zsh" {
+		return "", false
+	}
+
+	idx := strings.Index(segment, "-c")
+	if idx == -1 {
+		return "", false
+	}
+	rest := strings.TrimSpace(segment[idx+len("-c"):])
+	if rest == "" {
+		return "", false
+	}
+	if rest[0] != '\'' && rest[0] != '"' {
+		return cleanShellToken(rest), true
+	}
+
+	quote := rest[0]
+	for i := 1; i < len(rest); i++ {
+		if rest[i] == quote && rest[i-1] != '\\' {
+			return rest[1:i], true
+		}
+	}
+	return strings.Trim(rest[1:], string(quote)), true
 }
 
 func firstShellCommandToken(line string) string {
 	fields := strings.Fields(line)
+	skipPrefixOptions := false
 	for _, field := range fields {
-		token := strings.Trim(field, "'\"(){}[];")
+		token := cleanShellToken(field)
 		if token == "" {
+			continue
+		}
+		if skipPrefixOptions && strings.HasPrefix(token, "-") {
 			continue
 		}
 		if strings.Contains(token, "=") && !strings.HasPrefix(token, ">") {
 			continue
 		}
-		return strings.ToLower(token)
+		token = strings.ToLower(token)
+		if shellPrefixCommands[token] {
+			skipPrefixOptions = true
+			continue
+		}
+		return token
 	}
 	return ""
 }

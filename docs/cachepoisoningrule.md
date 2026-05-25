@@ -34,9 +34,9 @@ This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-9: Improper 
 The rule detects five types of cache poisoning attacks:
 1. **Indirect Cache Poisoning**: Untrusted triggers + unsafe checkout + cache actions
 2. **Composite Action Cache Poisoning**: Untrusted triggers + unsafe checkout + local or remote composite actions that use cache
-3. **Package Cache Directory Writes**: Direct writes to package manager cache directories from `run:` scripts
-4. **Cache Hierarchy Exploitation**: Workflows that can write to default branch cache via external triggers
-5. **Cache Eviction Risk**: Multiple cache actions that could enable cache flooding attacks
+3. **Direct Cache Poisoning**: Untrusted actors directly writing to cache entries through unsafe cache configuration or exposed cache paths
+4. **Package Cache Directory Writes**: Direct writes to package manager cache directories from `run:` scripts
+5. **Cache Lifecycle Abuse**: Cache hierarchy exploitation or excessive cache actions that could enable cache flooding attacks
 
 #### Key Features
 
