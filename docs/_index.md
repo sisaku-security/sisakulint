@@ -41,7 +41,7 @@ sisakulint categorizes security rules by severity based on CVSS scores, attack i
 |----------|-------|------------|-------------|
 | **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
 | **High** | 17 | 7.0-8.9 | Significant risk, enables serious attacks |
-| **Medium** | 13 | 4.0-6.9 | Moderate risk, requires specific conditions |
+| **Medium** | 14 | 4.0-6.9 | Moderate risk, requires specific conditions |
 | **Low** | 5 | 0.1-3.9 | Best practices, minimal direct security impact |
 
 ### Critical Severity Rules (9.0-10.0)
@@ -102,6 +102,7 @@ sisakulint categorizes security rules by severity based on CVSS scores, attack i
 | [unsound-contains]({{< ref "unsoundcontains.md" >}}) | 6/10 | Detects bypassable contains() function usage | Yes |
 | [archived-uses]({{< ref "archiveduses.md" >}}) | 5/10 | Detects usage of archived actions | No |
 | [unpinned-images]({{< ref "unpinnedimages.md" >}}) | 6/10 | Container images not pinned by SHA256 digest | No |
+| [dependency-review-settings]({{< ref "dependencyreviewsettings.md" >}}) | Medium | Detects dependency-review-action comment summaries without pull-requests write permission | No |
 
 ### Low Severity Rules (0.1-3.9)
 
