@@ -1,0 +1,72 @@
+# Cache Directory Write Vulnerability Example
+# Demonstrates direct writes into package-manager cache directories from
+# `run:` scripts. The CachePoisoningRule reports each write at one of two
+# severities:
+#
+# - "(suspicious)" — the job has no cache action, so the write only persists
+#   for the duration of this run. Defense-in-depth surfaces the pattern
+#   without overstating the severity.
+# - "(critical)" — the job has a cache action (`actions/cache`,
+#   `actions/cache/save`, `actions/cache/restore`, or `actions/setup-*` with
+#   `cache:` enabled). The cache action will persist whatever sits under the
+#   cache path at job end, so the write is treated as a real persistence
+#   vector for later workflow runs.
+name: Cache Directory Write Vulnerability
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # CRITICAL: write to ~/.npm followed by actions/cache/save.
+  npm-write-then-save:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plant payload into npm cache
+        run: |
+          # VULNERABLE: writes attacker-controlled bytes under ~/.npm before
+          # the save step persists the directory for later runs.
+          mkdir -p ~/.npm/_cacache/content-v2/sha512
+          echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.sha }}
+
+  # CRITICAL: setup-node with cache: npm counts as a cache action; any write
+  # under ~/.npm earlier in the job will be persisted.
+  setup-node-cache-with-prior-write:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mutate npm cache
+        run: cp ./payload ~/.npm/_cacache/content-v2/sha512/payload
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+  # CRITICAL: yarn cache directory write before actions/cache.
+  yarn-write-then-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Plant into yarn cache
+        run: tar -xf payload.tar -C ~/.yarn/cache
+      - uses: actions/cache@v4
+        with:
+          path: ~/.yarn/cache
+          key: yarn-${{ github.sha }}
+
+  # SUSPICIOUS: writes into a cache directory but no cache action persists it.
+  # The rule still surfaces the pattern as defense-in-depth — the directory
+  # may be saved by a downstream workflow that reads from this job's outputs.
+  suspicious-write-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mutate gradle cache without persistence
+        run: |
+          # SUSPICIOUS: written but not saved by this job.
+          touch ~/.gradle/caches/modules-2/files-2.1/payload

@@ -1,0 +1,66 @@
+# Safe counterpart to cache-poisoning-write.yaml.
+#
+# Demonstrates the patterns the CachePoisoningRule does NOT flag:
+#
+# 1. Reads from the cache directory (no write).
+# 2. Writes through the package manager front-end itself (npm/pip/cargo/...).
+# 3. Writes to a sibling directory whose name happens to share a prefix with
+#    a cache root.
+# 4. Writes to non-cache locations even when a cache action is present.
+name: Safe Cache Directory Patterns
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  read-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # SAFE: reading from the cache directory is not a write.
+      - name: Inspect npm cache
+        run: ls ~/.npm/_cacache/content-v2/sha512
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.sha }}
+
+  package-manager-managed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # SAFE: the rule trusts the package manager to manage its own cache.
+      - name: Verify npm cache integrity
+        run: npm cache verify
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.sha }}
+
+  sibling-prefix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # SAFE: ~/.npm-staging is NOT a cache directory; the rule's prefix
+      # match is path-boundary aware so this does not flag.
+      - name: Build into staging directory
+        run: mkdir -p ~/.npm-staging/build
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm-staging
+          key: staging-${{ github.sha }}
+
+  workspace-write:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # SAFE: write target lives outside any package-manager cache root.
+      - name: Build artifacts
+        run: |
+          mkdir -p ./dist
+          cp ./out/payload ./dist/payload
+      - uses: actions/cache@v4
+        with:
+          path: ./dist
+          key: dist-${{ github.sha }}

