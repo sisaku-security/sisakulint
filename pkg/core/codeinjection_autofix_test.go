@@ -284,7 +284,7 @@ func TestCodeInjectionMedium_AutoFix_DependencyReviewOutput(t *testing.T) {
 	if !strings.Contains(yamlOutput, "${{ steps.review.outputs.dependency-changes }}") {
 		t.Fatalf("YAML output should preserve original expression as env value, got:\n%s", yamlOutput)
 	}
-	if !strings.Contains(yamlOutput, "echo '$DEPENDENCY_CHANGES'") {
+	if !strings.Contains(yamlOutput, `echo "$DEPENDENCY_CHANGES"`) {
 		t.Fatalf("YAML output should replace direct interpolation with env var reference, got:\n%s", yamlOutput)
 	}
 }
