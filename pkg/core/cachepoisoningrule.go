@@ -1067,9 +1067,18 @@ func (rule *CachePoisoningRule) checkCallExprWritesLockfile(call *syntax.CallExp
 	}
 
 	switch cmdName {
-	case "cp", "mv", "install":
+	case "cp", "install":
 		if dest, lockfilePath, ok := lastNonFlagWithLockfile(call.Args[argStart+1:]); ok {
 			rule.recordLockfileWrite(lockfilePath, dest.Pos(), script, runStr)
+		}
+	case "mv":
+		for _, arg := range call.Args[argStart+1:] {
+			if isLikelyFlagWord(arg) {
+				continue
+			}
+			if lockfilePath, ok := matchLockfileArg(arg); ok {
+				rule.recordLockfileWrite(lockfilePath, arg.Pos(), script, runStr)
+			}
 		}
 	case "rm", "touch", "tee":
 		for _, arg := range call.Args[argStart+1:] {
@@ -1317,46 +1326,48 @@ func (rule *CachePoisoningRule) checkLockfileHashFilesCacheSave(action *ast.Exec
 		return
 	}
 
-	globs := rule.hashFilesGlobs(keyInput.Value)
-	if len(globs) == 0 {
+	globSets := rule.hashFilesGlobSets(keyInput.Value)
+	if len(globSets) == 0 {
 		return
 	}
 
 	reported := make(map[string]bool)
 	for _, write := range rule.jobLockfileWrites {
-		matchedGlob, ok := lockfileMatchesHashFilesGlobs(globs, write.path)
-		if !ok {
-			continue
+		for _, globs := range globSets {
+			matchedGlob, ok := lockfileMatchesHashFilesGlobs(globs, write.path)
+			if !ok {
+				continue
+			}
+			key := write.path + "\x00" + matchedGlob
+			if reported[key] {
+				continue
+			}
+			reported[key] = true
+			severity := "medium"
+			if rule.isPullRequestEvent {
+				severity = "high"
+			}
+			pos := write.pos
+			if pos == nil {
+				pos = keyInput.Value.Pos
+			}
+			rule.Errorf(
+				pos,
+				"cache poisoning via lockfile-controlled cache key (%s): run step modifies lockfile %q before actions/cache/save uses hashFiles(%q) in its key. "+
+					"An attacker can alter the saved cache key and persist poisoned dependency cache content; avoid modifying hashed lockfiles before saving caches or include an immutable trusted key component",
+				severity,
+				write.path,
+				matchedGlob,
+			)
 		}
-		key := write.path + "\x00" + matchedGlob
-		if reported[key] {
-			continue
-		}
-		reported[key] = true
-		severity := "medium"
-		if rule.isPullRequestEvent {
-			severity = "high"
-		}
-		pos := write.pos
-		if pos == nil {
-			pos = keyInput.Value.Pos
-		}
-		rule.Errorf(
-			pos,
-			"cache poisoning via lockfile-controlled cache key (%s): run step modifies lockfile %q before actions/cache/save uses hashFiles(%q) in its key. "+
-				"An attacker can alter the saved cache key and persist poisoned dependency cache content; avoid modifying hashed lockfiles before saving caches or include an immutable trusted key component",
-			severity,
-			write.path,
-			matchedGlob,
-		)
 	}
 }
 
-func (rule *CachePoisoningRule) hashFilesGlobs(value *ast.String) []string {
+func (rule *CachePoisoningRule) hashFilesGlobSets(value *ast.String) [][]string {
 	if value == nil {
 		return nil
 	}
-	var globs []string
+	var globSets [][]string
 	for _, expr := range rule.extractAndParseExpressions(value) {
 		expressions.VisitExprNode(expr.node, func(node, _ expressions.ExprNode, entering bool) {
 			if !entering {
@@ -1366,6 +1377,7 @@ func (rule *CachePoisoningRule) hashFilesGlobs(value *ast.String) []string {
 			if !ok || strings.ToLower(call.Callee) != "hashfiles" {
 				return
 			}
+			var globs []string
 			for _, arg := range call.Args {
 				str, ok := arg.(*expressions.StringNode)
 				if !ok {
@@ -1375,9 +1387,12 @@ func (rule *CachePoisoningRule) hashFilesGlobs(value *ast.String) []string {
 					globs = append(globs, glob)
 				}
 			}
+			if len(globs) > 0 {
+				globSets = append(globSets, uniqueStrings(globs))
+			}
 		})
 	}
-	return uniqueStrings(globs)
+	return globSets
 }
 
 func matchLockfileArg(word *syntax.Word) (string, bool) {

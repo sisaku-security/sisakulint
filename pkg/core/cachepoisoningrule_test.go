@@ -2335,6 +2335,26 @@ jobs:
 	}
 }
 
+func TestCachePoisoningRule_LockfileWriteEvaluatesHashFilesCallsIndependently(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('!**/package-lock.json', 'README.md') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
 func TestCachePoisoningRule_LockfileWriteMatchesRootAnchoredHashFiles(t *testing.T) {
 	t.Parallel()
 
@@ -2350,6 +2370,26 @@ jobs:
         with:
           path: ~/.npm
           key: npm-${{ hashFiles('/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
+func TestCachePoisoningRule_LockfileWriteDetectsMvFromLockfile(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: mv package-lock.json /tmp/package-lock.bak
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
 `
 	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
 	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")

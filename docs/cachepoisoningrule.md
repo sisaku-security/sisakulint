@@ -215,11 +215,11 @@ Detected lockfile writes include explicit file writes such as:
 | Command shape | Example |
 |---------------|---------|
 | Stdout redirection | `printf '%s\n' payload >> package-lock.json` |
-| File utilities | `touch Cargo.lock`, `sed -i 's/a/b/' poetry.lock`, `tee requirements.txt` |
+| File utilities | `touch Cargo.lock`, `mv package-lock.json /tmp/package-lock.bak`, `sed -i 's/a/b/' poetry.lock`, `tee requirements.txt` |
 | Download/output commands | `curl -o package-lock.json ...`, `wget -O go.sum ...`, `dd of=pom.xml ...` |
 | Package manager lockfile commands | `npm install --package-lock-only`, `pnpm install --lockfile-only`, `yarn install`, `poetry lock`, `pipenv lock`, `go mod tidy`, `cargo update`, `bundle lock`, `composer update`, `mvn versions:lock-snapshots`, `gradle --write-locks` |
 
-`hashFiles()` pattern matching handles recursive globs, root-anchored patterns, and exclusions. For example, `hashFiles('/package-lock.json')` matches a write to `package-lock.json`, while `hashFiles('**/package-lock.json', '!package-lock.json')` does not report because the lockfile is explicitly excluded.
+`hashFiles()` pattern matching handles recursive globs, root-anchored patterns, and exclusions within each `hashFiles()` call. For example, `hashFiles('/package-lock.json')` matches a write to `package-lock.json`, while `hashFiles('**/package-lock.json', '!package-lock.json')` does not report because the lockfile is explicitly excluded in that call.
 
 **Scope:** this check is intentionally limited to a single job. Cross-job propagation and reusable workflow propagation are not analyzed by this rule.
 
