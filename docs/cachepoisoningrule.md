@@ -26,17 +26,14 @@ Cache poisoning vulnerabilities pose significant risks to CI/CD pipeline integri
 
 This vulnerability aligns with **OWASP CI/CD Security Risk CICD-SEC-9: Improper Artifact Integrity Validation**.
 
-1. **Indirect Cache Poisoning**: Dangerous combinations of untrusted triggers with unsafe checkout and cache operations
-2. **Composite Action Cache Poisoning**: Unsafe checkout followed by a composite action that invokes `actions/cache` or a setup action with caching enabled
-3. **Direct Cache Poisoning**: Untrusted input in cache configuration (key, restore-keys, path) that can be exploited regardless of trigger type
-4. **Package Cache Directory Writes**: Direct writes to package manager cache directories that can be persisted by later cache save steps
+The rule detects six types of cache poisoning attacks:
 
-The rule detects five types of cache poisoning attacks:
 1. **Indirect Cache Poisoning**: Untrusted triggers + unsafe checkout + cache actions
 2. **Composite Action Cache Poisoning**: Untrusted triggers + unsafe checkout + local or remote composite actions that use cache
 3. **Direct Cache Poisoning**: Untrusted actors directly writing to cache entries through unsafe cache configuration or exposed cache paths
 4. **Package Cache Directory Writes**: Direct writes to package manager cache directories from `run:` scripts
-5. **Cache Lifecycle Abuse**: Cache hierarchy exploitation or excessive cache actions that could enable cache flooding attacks
+5. **Lockfile-Controlled Cache Save Keys**: Same-job lockfile writes followed by `actions/cache/save` keys derived from the modified lockfile
+6. **Cache Lifecycle Abuse**: Cache hierarchy exploitation or excessive cache actions that could enable cache flooding attacks
 
 #### Key Features
 
@@ -47,6 +44,7 @@ The rule detects five types of cache poisoning attacks:
 - **Job-Level Trigger Scoping**: Honors job-level `if:` filters such as `github.event_name == 'push'` to avoid applying workflow-level unsafe triggers to jobs that cannot run on them
 - **Direct Cache Input Validation**: Checks for untrusted expressions in `key`, `restore-keys`, and `path` inputs
 - **Package Cache Directory Write Detection**: Detects `run:` scripts that write directly into npm, pip, Cargo, Gradle, Maven, or Go cache directories
+- **Lockfile-Controlled Cache Save Detection**: Detects `run:` scripts that modify dependency lockfiles before a later same-job `actions/cache/save` hashes the same lockfile in `with.key`
 - **Job Isolation**: Correctly scopes detection to individual jobs
 - **Smart Checkout Tracking**: Resets unsafe state when a safe checkout follows an unsafe one
 - **Conservative Pattern Matching**: Detects direct, indirect, and unknown expression patterns
@@ -182,6 +180,48 @@ Package manager front-ends (`npm`, `npx`, `pnpm`, `yarn`, `pip`, `pip3`, `python
 **Suppression:** add `-ignore "cache-poisoning"` (or `# sisakulint:disable=cache-poisoning` if available in your config) to silence this rule for known-good workflows. Suppressing the rule disables every cache-poisoning sub-check, not just the directory-write tier.
 
 **Known limitation:** detection works on shell AST tokens, so paths computed at runtime through external shell variables (e.g. `mkdir -p "$CACHE_ROOT/.npm"`) are not resolved and will be missed. Literal-path writes like `mkdir -p ~/.npm`, `${HOME}/.npm`, `"/home/runner/.npm"`, and writes nested under `bash -c '...'` wrappers are detected.
+
+#### Lockfile-Controlled Cache Save Keys
+
+The rule also detects same-job flows where a `run:` step modifies a dependency lockfile and a later `actions/cache/save` step derives its cache key from that same lockfile with `hashFiles()`. This matters because an attacker who can change the lockfile can also influence the cache key that receives the saved dependency cache.
+
+The rule reports when all conditions are met:
+
+1. A `run:` step modifies a known dependency lockfile.
+2. A later step in the same job uses `actions/cache/save`.
+3. `with.key` contains `hashFiles()` with a pattern set that includes the modified lockfile.
+
+Severity is split by trigger:
+
+| Tier | Trigger |
+|------|---------|
+| **High** | PR-related triggers: `pull_request`, `pull_request_target`, `pull_request_review`, `pull_request_review_comment` |
+| **Medium** | Other triggers |
+
+Recognized lockfiles include:
+
+| Ecosystem | Lockfiles |
+|-----------|-----------|
+| JavaScript / Node | `package-lock.json`, `npm-shrinkwrap.json`, `pnpm-lock.yaml`, `yarn.lock` |
+| Python | `requirements.txt`, `poetry.lock`, `Pipfile.lock` |
+| Rust | `Cargo.lock` |
+| Ruby | `Gemfile.lock` |
+| PHP | `composer.lock` |
+| Go | `go.sum` |
+| JVM | `pom.xml`, `build.gradle`, `build.gradle.kts`, `gradle.lockfile` |
+
+Detected lockfile writes include explicit file writes such as:
+
+| Command shape | Example |
+|---------------|---------|
+| Stdout redirection | `printf '%s\n' payload >> package-lock.json` |
+| File utilities | `touch Cargo.lock`, `mv package-lock.json /tmp/package-lock.bak`, `sed -i 's/a/b/' poetry.lock`, `tee requirements.txt` |
+| Download/output commands | `curl -o package-lock.json ...`, `wget -O go.sum ...`, `dd of=pom.xml ...` |
+| Package manager lockfile commands | `npm install --package-lock-only`, `pnpm install --lockfile-only`, `yarn install`, `poetry lock`, `pipenv lock`, `go mod tidy`, `cargo update`, `bundle lock`, `composer update`, `mvn versions:lock-snapshots`, `gradle --write-locks` |
+
+`hashFiles()` pattern matching handles recursive globs, root-anchored patterns, and exclusions within each `hashFiles()` call. For example, `hashFiles('/package-lock.json')` matches a write to `package-lock.json`, while `hashFiles('**/package-lock.json', '!package-lock.json')` does not report because the lockfile is explicitly excluded in that call.
+
+**Scope:** this check is intentionally limited to a single job. Cross-job propagation and reusable workflow propagation are not analyzed by this rule.
 
 ### Example Vulnerable Workflows
 

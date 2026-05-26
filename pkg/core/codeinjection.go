@@ -407,39 +407,36 @@ func (rule *CodeInjectionRule) FixStep(step *ast.Step) error {
 
 		if untrustedInfo.isInRunScript {
 			// For run: scripts, use $ENV_VAR
-			runReplacements[fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)] = fmt.Sprintf("$%s", envVarName)
-			runReplacements[fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)] = fmt.Sprintf("$%s", envVarName)
-
-			// Also update AST
-			run := step.Exec.(*ast.ExecRun)
-			if run.Run != nil {
-				run.Run.Value = strings.ReplaceAll(
-					run.Run.Value,
-					fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw),
-					fmt.Sprintf("$%s", envVarName),
-				)
-				run.Run.Value = strings.ReplaceAll(
-					run.Run.Value,
-					fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw),
-					fmt.Sprintf("$%s", envVarName),
-				)
-			}
+			shellRef := fmt.Sprintf("$%s", envVarName)
+			quotedShellRef := fmt.Sprintf("\"%s\"", shellRef)
+			spacedExpr := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
+			compactExpr := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
+			runReplacements[fmt.Sprintf("'%s'", spacedExpr)] = quotedShellRef
+			runReplacements[fmt.Sprintf("'%s'", compactExpr)] = quotedShellRef
+			runReplacements[spacedExpr] = shellRef
+			runReplacements[compactExpr] = shellRef
 		} else {
 			// For github-script, use process.env.ENV_VAR
 			scriptReplacements[fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
 			scriptReplacements[fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
+		}
+	}
 
-			// Also update AST
+	// Also update the parsed AST values in memory.
+	if len(runReplacements) > 0 {
+		if run, ok := step.Exec.(*ast.ExecRun); ok && run.Run != nil {
+			run.Run.Value = applyStringReplacements(run.Run.Value, runReplacements)
+		}
+	}
+	if len(scriptReplacements) > 0 {
+		for _, untrustedInfo := range stepInfo.untrustedExprs {
+			if untrustedInfo.isInRunScript {
+				continue
+			}
 			if untrustedInfo.scriptInput != nil && untrustedInfo.scriptInput.Value != nil {
-				untrustedInfo.scriptInput.Value.Value = strings.ReplaceAll(
+				untrustedInfo.scriptInput.Value.Value = applyStringReplacements(
 					untrustedInfo.scriptInput.Value.Value,
-					fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw),
-					fmt.Sprintf("process.env.%s", envVarName),
-				)
-				untrustedInfo.scriptInput.Value.Value = strings.ReplaceAll(
-					untrustedInfo.scriptInput.Value.Value,
-					fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw),
-					fmt.Sprintf("process.env.%s", envVarName),
+					scriptReplacements,
 				)
 			}
 		}

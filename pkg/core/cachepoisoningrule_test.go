@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -2034,6 +2035,466 @@ jobs:
 	}
 	if !foundCriticalDirectWrite {
 		t.Fatalf("Expected composite cache save to promote direct write to critical, got %#v", rule.Errors())
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteBeforeCacheSaveHashFiles(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 lockfile cache-save finding, got %d: %#v", len(errors), errors)
+	}
+	for _, want := range []string{
+		"lockfile",
+		"package-lock.json",
+		"actions/cache/save",
+		"hashFiles",
+		"(high)",
+	} {
+		if !strings.Contains(errors[0].Description, want) {
+			t.Fatalf("Expected finding to contain %q, got %q", want, errors[0].Description)
+		}
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteBeforeCacheSaveHashFilesNonPR(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'h1 example.com' >> go.sum
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-${{ hashFiles('**/go.sum') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 lockfile cache-save finding, got %d: %#v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Description, "(medium)") {
+		t.Fatalf("Expected non-PR workflow finding to stay medium, got %q", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteDetectsExplicitOutputCommands(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		run      string
+		lockfile string
+		cacheKey string
+	}{
+		{
+			name:     "curl output",
+			run:      "curl -fsSL https://example.invalid/package-lock.json -o package-lock.json",
+			lockfile: "package-lock.json",
+			cacheKey: "npm-${{ hashFiles('**/package-lock.json') }}",
+		},
+		{
+			name:     "wget output",
+			run:      "wget https://example.invalid/go.sum -O go.sum",
+			lockfile: "go.sum",
+			cacheKey: "go-${{ hashFiles('**/go.sum') }}",
+		},
+		{
+			name:     "dd output",
+			run:      "dd if=/tmp/pom.xml of=pom.xml",
+			lockfile: "pom.xml",
+			cacheKey: "maven-${{ hashFiles('**/pom.xml') }}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workflowYAML := fmt.Sprintf(`
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: %q
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.cache
+          key: %s
+`, tt.run, tt.cacheKey)
+			rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+			assertOneLockfileFinding(t, rule, tt.lockfile, "(high)")
+		})
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteDetectsPackageManagerCommands(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		run      string
+		lockfile string
+		cacheKey string
+	}{
+		{
+			name:     "npm package lock only",
+			run:      "npm install --package-lock-only",
+			lockfile: "package-lock.json",
+			cacheKey: "npm-${{ hashFiles('**/package-lock.json') }}",
+		},
+		{
+			name:     "pnpm lockfile only",
+			run:      "pnpm install --lockfile-only",
+			lockfile: "pnpm-lock.yaml",
+			cacheKey: "pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}",
+		},
+		{
+			name:     "yarn install updates lock",
+			run:      "yarn install",
+			lockfile: "yarn.lock",
+			cacheKey: "yarn-${{ hashFiles('**/yarn.lock') }}",
+		},
+		{
+			name:     "poetry lock",
+			run:      "poetry lock",
+			lockfile: "poetry.lock",
+			cacheKey: "poetry-${{ hashFiles('**/poetry.lock') }}",
+		},
+		{
+			name:     "go mod tidy",
+			run:      "go mod tidy",
+			lockfile: "go.sum",
+			cacheKey: "go-${{ hashFiles('**/go.sum') }}",
+		},
+		{
+			name:     "cargo update",
+			run:      "cargo update",
+			lockfile: "Cargo.lock",
+			cacheKey: "cargo-${{ hashFiles('**/Cargo.lock') }}",
+		},
+		{
+			name:     "bundle lock",
+			run:      "bundle lock",
+			lockfile: "Gemfile.lock",
+			cacheKey: "ruby-${{ hashFiles('**/Gemfile.lock') }}",
+		},
+		{
+			name:     "composer update",
+			run:      "composer update",
+			lockfile: "composer.lock",
+			cacheKey: "composer-${{ hashFiles('**/composer.lock') }}",
+		},
+		{
+			name:     "maven versions lock snapshots",
+			run:      "mvn versions:lock-snapshots",
+			lockfile: "pom.xml",
+			cacheKey: "maven-${{ hashFiles('**/pom.xml') }}",
+		},
+		{
+			name:     "gradle dependency lock",
+			run:      "gradle dependencies --write-locks",
+			lockfile: "gradle.lockfile",
+			cacheKey: "gradle-${{ hashFiles('**/gradle.lockfile') }}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workflowYAML := fmt.Sprintf(`
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: %q
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.cache
+          key: %s
+`, tt.run, tt.cacheKey)
+			rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+			assertOneLockfileFinding(t, rule, tt.lockfile, "(high)")
+		})
+	}
+}
+
+func TestCachePoisoningRule_LockfileWritePullRequestReviewIsHigh(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request_review
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
+func TestCachePoisoningRule_LockfileWriteRequiresPriorModification(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "building"
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("Expected no finding without a lockfile modification, got %d: %#v", got, rule.Errors())
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteIgnoresUnrelatedHashFiles(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: go-${{ hashFiles('**/go.sum') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("Expected unrelated hashFiles glob to stay quiet, got %d: %#v", got, rule.Errors())
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteRespectsHashFilesExclusions(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json', '!package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("Expected excluded hashFiles lockfile to stay quiet, got %d: %#v", got, rule.Errors())
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteEvaluatesHashFilesCallsIndependently(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('!**/package-lock.json', 'README.md') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
+func TestCachePoisoningRule_LockfileWriteMatchesRootAnchoredHashFiles(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
+func TestCachePoisoningRule_LockfileWriteDetectsMvFromLockfile(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: mv package-lock.json /tmp/package-lock.bak
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+	assertOneLockfileFinding(t, rule, "package-lock.json", "(high)")
+}
+
+func TestCachePoisoningRule_LockfileWritePackageManagerCommandsSkipOptionValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		run      string
+		lockfile string
+		cacheKey string
+	}{
+		{
+			name:     "npm prefix before install",
+			run:      "npm --prefix ./app install --package-lock-only",
+			lockfile: "package-lock.json",
+			cacheKey: "npm-${{ hashFiles('**/package-lock.json') }}",
+		},
+		{
+			name:     "pnpm dir before update",
+			run:      "pnpm --dir ./app update",
+			lockfile: "pnpm-lock.yaml",
+			cacheKey: "pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workflowYAML := fmt.Sprintf(`
+name: w
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: %q
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.cache
+          key: %s
+`, tt.run, tt.cacheKey)
+			rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+			assertOneLockfileFinding(t, rule, tt.lockfile, "(high)")
+		})
+	}
+}
+
+func TestCachePoisoningRule_LockfileWriteCrossJobOutOfScope(t *testing.T) {
+	t.Parallel()
+
+	workflowYAML := `
+name: w
+on: pull_request
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s\n' malicious >> package-lock.json
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('**/package-lock.json') }}
+`
+	rule := runCachePoisoningRuleForWorkflow(t, workflowYAML)
+
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("Expected cross-job lockfile/cache-save flow to stay out of scope, got %d: %#v", got, rule.Errors())
+	}
+}
+
+func runCachePoisoningRuleForWorkflow(t *testing.T, workflowYAML string) *CachePoisoningRule {
+	t.Helper()
+
+	workflow, parseErrs := Parse([]byte(workflowYAML))
+	if len(parseErrs) > 0 {
+		t.Fatalf("Parse returned errors: %v", parseErrs)
+	}
+
+	rule := NewCachePoisoningRule()
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("VisitTree returned error: %v", err)
+	}
+	return rule
+}
+
+func assertOneLockfileFinding(t *testing.T, rule *CachePoisoningRule, lockfile string, severity string) {
+	t.Helper()
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected exactly 1 lockfile cache-save finding, got %d: %#v", len(errors), errors)
+	}
+	for _, want := range []string{"lockfile", lockfile, severity} {
+		if !strings.Contains(errors[0].Description, want) {
+			t.Fatalf("Expected finding to contain %q, got %q", want, errors[0].Description)
+		}
 	}
 }
 

@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -85,9 +86,7 @@ func ReplaceInRunScript(stepNode *yaml.Node, replacements map[string]string) err
 			runNode := stepNode.Content[i+1]
 			if runNode.Kind == yaml.ScalarNode {
 				// Apply all replacements
-				for oldExpr, newExpr := range replacements {
-					runNode.Value = strings.ReplaceAll(runNode.Value, oldExpr, newExpr)
-				}
+				runNode.Value = applyStringReplacements(runNode.Value, replacements)
 			}
 			return nil
 		}
@@ -116,9 +115,7 @@ func ReplaceInGitHubScript(stepNode *yaml.Node, replacements map[string]string) 
 					scriptNode := withNode.Content[j+1]
 					if scriptNode.Kind == yaml.ScalarNode {
 						// Apply all replacements
-						for oldExpr, newExpr := range replacements {
-							scriptNode.Value = strings.ReplaceAll(scriptNode.Value, oldExpr, newExpr)
-						}
+						scriptNode.Value = applyStringReplacements(scriptNode.Value, replacements)
 					}
 					return nil
 				}
@@ -128,4 +125,18 @@ func ReplaceInGitHubScript(stepNode *yaml.Node, replacements map[string]string) 
 	}
 
 	return fmt.Errorf("with section not found in step node")
+}
+
+func applyStringReplacements(value string, replacements map[string]string) string {
+	keys := make([]string, 0, len(replacements))
+	for oldExpr := range replacements {
+		keys = append(keys, oldExpr)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return len(keys[i]) > len(keys[j])
+	})
+	for _, oldExpr := range keys {
+		value = strings.ReplaceAll(value, oldExpr, replacements[oldExpr])
+	}
+	return value
 }
