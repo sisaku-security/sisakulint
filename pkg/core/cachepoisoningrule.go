@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -35,6 +36,7 @@ type CachePoisoningRule struct {
 	cacheActionCount       int
 	workflowTriggers       []string
 	directCacheDirWrites   []directCacheDirectoryWriteInfo
+	jobLockfileWrites      []lockfileWriteInfo
 	// jobPostJobCacheSaveDirs tracks cache roots persisted by a post-job save
 	// step (actions/cache@v* or actions/setup-* with cache: enabled). Those
 	// persist matching roots at job end, so every recorded write under a
@@ -69,6 +71,11 @@ type directCacheFixInfo struct {
 type directCacheDirectoryWriteInfo struct {
 	cacheDir string
 	pos      *ast.Position
+}
+
+type lockfileWriteInfo struct {
+	path string
+	pos  *ast.Position
 }
 
 // NewCachePoisoningRule creates a new cache poisoning detection rule.
@@ -323,6 +330,7 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.cacheActionCount = 0
 	rule.workflowTriggers = nil
 	rule.directCacheDirWrites = nil
+	rule.jobLockfileWrites = nil
 
 	for _, event := range node.On {
 		switch e := event.(type) {
@@ -342,7 +350,7 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 				}
 
 				// Check for PR workflows (cache scope concern)
-				if triggerName == EventPullRequest || triggerName == EventPullRequestTarget {
+				if isPRRelatedTrigger(triggerName) {
 					rule.isPullRequestEvent = true
 				}
 
@@ -428,6 +436,7 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.directCacheDirWrites = nil
 	rule.jobPostJobCacheSaveDirs = nil
 	rule.jobCacheSaveCutoffs = nil
+	rule.jobLockfileWrites = nil
 
 	if len(rule.unsafeTriggers) == 0 {
 		return nil
@@ -529,6 +538,7 @@ func uniqueCacheDirs(writes []directCacheDirectoryWriteInfo) []string {
 func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	if run, ok := node.Exec.(*ast.ExecRun); ok {
 		rule.checkDirectCacheDirectoryWrite(run)
+		rule.checkLockfileWrite(run)
 		return nil
 	}
 
@@ -568,6 +578,10 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	// This applies to any trigger (including pull_request, push, etc.)
 	if actionName == "actions/cache" {
 		rule.checkDirectCachePoisoning(node, action)
+	}
+
+	if actionName == "actions/cache/save" {
+		rule.checkLockfileHashFilesCacheSave(action)
 	}
 
 	// Check for cache actions
@@ -973,6 +987,581 @@ func shellPosToASTPos(pos syntax.Pos, script string, runStr *ast.String) *ast.Po
 		return &out
 	}
 	return &ast.Position{Line: 1, Col: 1}
+}
+
+var dependencyLockfileNames = map[string]bool{
+	"package-lock.json":   true,
+	"npm-shrinkwrap.json": true,
+	"pnpm-lock.yaml":      true,
+	"yarn.lock":           true,
+	"requirements.txt":    true,
+	"poetry.lock":         true,
+	"pipfile.lock":        true,
+	"cargo.lock":          true,
+	"gemfile.lock":        true,
+	"composer.lock":       true,
+	"go.sum":              true,
+	"pom.xml":             true,
+	"build.gradle":        true,
+	"build.gradle.kts":    true,
+	"gradle.lockfile":     true,
+}
+
+func isPRRelatedTrigger(eventName string) bool {
+	switch eventName {
+	case EventPullRequest, EventPullRequestTarget, "pull_request_review", "pull_request_review_comment":
+		return true
+	}
+	return false
+}
+
+func (rule *CachePoisoningRule) checkLockfileWrite(run *ast.ExecRun) {
+	if run == nil || run.Run == nil {
+		return
+	}
+
+	script := run.Run.Value
+	sanitized, _ := sanitizeForShellParse(script)
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return
+	}
+
+	rule.walkLockfileShellAST(file, sanitized, run.Run)
+}
+
+func (rule *CachePoisoningRule) walkLockfileShellAST(file *syntax.File, script string, runStr *ast.String) {
+	syntax.Walk(file, func(node syntax.Node) bool {
+		switch x := node.(type) {
+		case *syntax.CallExpr:
+			rule.checkCallExprWritesLockfile(x, script, runStr)
+		case *syntax.Stmt:
+			rule.recordLockfileWritesFromRedirects(x.Redirs, script, runStr)
+		}
+		return true
+	})
+}
+
+func (rule *CachePoisoningRule) checkCallExprWritesLockfile(call *syntax.CallExpr, script string, runStr *ast.String) {
+	if len(call.Args) == 0 {
+		return
+	}
+
+	cmdName, argStart, ok := unwrapCommandPrefixes(call)
+	if !ok {
+		return
+	}
+
+	if isInlineShellWrapper(cmdName) {
+		rule.walkInlineShellScriptForLockfiles(call, argStart, syntax.Pos{}, script, runStr)
+		return
+	}
+
+	if lockfiles := lockfilesWrittenByPackageManager(cmdName, call.Args[argStart+1:]); len(lockfiles) > 0 {
+		pos := call.Args[argStart].Pos()
+		for _, lockfilePath := range lockfiles {
+			rule.recordLockfileWrite(lockfilePath, pos, script, runStr)
+		}
+		return
+	}
+
+	switch cmdName {
+	case "cp", "mv", "install":
+		if dest, lockfilePath, ok := lastNonFlagWithLockfile(call.Args[argStart+1:]); ok {
+			rule.recordLockfileWrite(lockfilePath, dest.Pos(), script, runStr)
+		}
+	case "rm", "touch", "tee":
+		for _, arg := range call.Args[argStart+1:] {
+			if isLikelyFlagWord(arg) {
+				continue
+			}
+			if lockfilePath, ok := matchLockfileArg(arg); ok {
+				rule.recordLockfileWrite(lockfilePath, arg.Pos(), script, runStr)
+			}
+		}
+	case "sed":
+		if !hasFlagWord(call.Args[argStart+1:], "-i") {
+			return
+		}
+		for _, arg := range call.Args[argStart+1:] {
+			if isLikelyFlagWord(arg) {
+				continue
+			}
+			if lockfilePath, ok := matchLockfileArg(arg); ok {
+				rule.recordLockfileWrite(lockfilePath, arg.Pos(), script, runStr)
+			}
+		}
+	case "curl":
+		if dest, pos, ok := curlOutputLockfileDest(call.Args[argStart+1:]); ok {
+			rule.recordLockfileWrite(dest, pos, script, runStr)
+		}
+	case "wget":
+		if dest, pos, ok := wgetOutputLockfileDest(call.Args[argStart+1:]); ok {
+			rule.recordLockfileWrite(dest, pos, script, runStr)
+		}
+	case "dd":
+		if dest, pos, ok := ddOutputLockfileDest(call.Args[argStart+1:]); ok {
+			rule.recordLockfileWrite(dest, pos, script, runStr)
+		}
+	}
+}
+
+func (rule *CachePoisoningRule) walkInlineShellScriptForLockfiles(call *syntax.CallExpr, argStart int, outerFallbackPos syntax.Pos, script string, runStr *ast.String) {
+	args := call.Args[argStart+1:]
+	for i, arg := range args {
+		token := bashWordLiteral(arg)
+		if token != "-c" || i+1 >= len(args) {
+			continue
+		}
+		inner := bashWordLiteral(args[i+1])
+		if inner == "" {
+			return
+		}
+		parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+		innerFile, err := parser.Parse(strings.NewReader(inner), "")
+		if err != nil || innerFile == nil {
+			return
+		}
+		fallbackPos := args[i+1].Pos()
+		if outerFallbackPos.IsValid() {
+			fallbackPos = outerFallbackPos
+		}
+		syntax.Walk(innerFile, func(node syntax.Node) bool {
+			switch x := node.(type) {
+			case *syntax.CallExpr:
+				rule.checkCallExprWritesLockfileWithFallback(x, fallbackPos, script, runStr)
+			case *syntax.Stmt:
+				for _, r := range x.Redirs {
+					if r == nil || r.Word == nil || !isOutputRedirect(r.Op) {
+						continue
+					}
+					if lockfilePath, ok := matchLockfileArg(r.Word); ok {
+						rule.recordLockfileWrite(lockfilePath, fallbackPos, script, runStr)
+					}
+				}
+			}
+			return true
+		})
+		return
+	}
+}
+
+func (rule *CachePoisoningRule) checkCallExprWritesLockfileWithFallback(call *syntax.CallExpr, fallbackPos syntax.Pos, script string, runStr *ast.String) {
+	before := len(rule.jobLockfileWrites)
+	rule.checkCallExprWritesLockfile(call, script, runStr)
+	for i := before; i < len(rule.jobLockfileWrites); i++ {
+		rule.jobLockfileWrites[i].pos = shellPosToASTPos(fallbackPos, script, runStr)
+	}
+}
+
+func (rule *CachePoisoningRule) recordLockfileWritesFromRedirects(redirs []*syntax.Redirect, script string, runStr *ast.String) {
+	for _, r := range redirs {
+		if r == nil || r.Word == nil || !isOutputRedirect(r.Op) {
+			continue
+		}
+		if lockfilePath, ok := matchLockfileArg(r.Word); ok {
+			rule.recordLockfileWrite(lockfilePath, r.Word.Pos(), script, runStr)
+		}
+	}
+}
+
+func (rule *CachePoisoningRule) recordLockfileWrite(lockfilePath string, pos syntax.Pos, script string, runStr *ast.String) {
+	rule.jobLockfileWrites = append(rule.jobLockfileWrites, lockfileWriteInfo{
+		path: lockfilePath,
+		pos:  shellPosToASTPos(pos, script, runStr),
+	})
+}
+
+func lockfilesWrittenByPackageManager(cmdName string, args []*syntax.Word) []string {
+	tokens := shellWordTokens(args)
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	switch cmdName {
+	case "npm":
+		if commandHasSubcommand(tokens, "update") ||
+			(commandHasSubcommand(tokens, "install") && hasToken(tokens, "--package-lock-only")) {
+			return []string{"package-lock.json"}
+		}
+	case "pnpm":
+		if commandHasSubcommand(tokens, "update") ||
+			(commandHasSubcommand(tokens, "install") && hasToken(tokens, "--lockfile-only")) {
+			return []string{"pnpm-lock.yaml"}
+		}
+	case "yarn":
+		if hasAnyToken(tokens, "--immutable", "--frozen-lockfile") {
+			return nil
+		}
+		if commandHasAnySubcommand(tokens, "install", "add", "up", "upgrade") {
+			return []string{"yarn.lock"}
+		}
+	case "poetry":
+		if commandHasAnySubcommand(tokens, "lock", "update") {
+			return []string{"poetry.lock"}
+		}
+	case "pipenv":
+		if commandHasSubcommand(tokens, "lock") {
+			return []string{"Pipfile.lock"}
+		}
+	case "go":
+		if len(tokens) >= 2 && tokens[0] == "mod" && (tokens[1] == "tidy" || tokens[1] == "download") {
+			return []string{"go.sum"}
+		}
+	case "cargo":
+		if commandHasAnySubcommand(tokens, "update", "generate-lockfile") {
+			return []string{"Cargo.lock"}
+		}
+	case "bundle", "bundler":
+		if commandHasAnySubcommand(tokens, "lock", "update") {
+			return []string{"Gemfile.lock"}
+		}
+	case "composer":
+		if commandHasSubcommand(tokens, "update") {
+			return []string{"composer.lock"}
+		}
+	case "mvn", "mvnw", "./mvnw":
+		if hasTokenPrefix(tokens, "versions:") {
+			return []string{"pom.xml"}
+		}
+	case "gradle", "gradlew", "./gradlew":
+		if hasAnyToken(tokens, "--write-locks", "--write-verification-metadata") {
+			return []string{"gradle.lockfile"}
+		}
+	}
+
+	return nil
+}
+
+func shellWordTokens(args []*syntax.Word) []string {
+	tokens := make([]string, 0, len(args))
+	for _, arg := range args {
+		token := strings.ToLower(bashWordLiteral(arg))
+		if token != "" {
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens
+}
+
+func commandHasSubcommand(tokens []string, subcommand string) bool {
+	return commandHasAnySubcommand(tokens, subcommand)
+}
+
+func commandHasAnySubcommand(tokens []string, subcommands ...string) bool {
+	for i := 0; i < len(tokens); i++ {
+		token := tokens[i]
+		if commandOptionConsumesValue(token) {
+			i++
+			continue
+		}
+		if isLikelyFlagToken(token) {
+			continue
+		}
+		for _, subcommand := range subcommands {
+			if token == subcommand {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+func commandOptionConsumesValue(token string) bool {
+	switch token {
+	case "-C", "-c", "-p", "-w",
+		"--prefix", "--workspace", "--filter", "--dir", "--cwd", "--project", "--config",
+		"--cache", "--registry", "--global-folder", "--modules-dir", "--lockfile-dir",
+		"--manifest", "--file", "--settings", "--build-file", "--project-dir":
+		return true
+	}
+	return false
+}
+
+func hasToken(tokens []string, want string) bool {
+	for _, token := range tokens {
+		if token == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnyToken(tokens []string, wants ...string) bool {
+	for _, want := range wants {
+		if hasToken(tokens, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTokenPrefix(tokens []string, prefix string) bool {
+	for _, token := range tokens {
+		if strings.HasPrefix(token, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (rule *CachePoisoningRule) checkLockfileHashFilesCacheSave(action *ast.ExecAction) {
+	if len(rule.jobLockfileWrites) == 0 || action == nil || action.Inputs == nil {
+		return
+	}
+
+	keyInput := action.Inputs["key"]
+	if keyInput == nil || keyInput.Value == nil {
+		return
+	}
+
+	globs := rule.hashFilesGlobs(keyInput.Value)
+	if len(globs) == 0 {
+		return
+	}
+
+	reported := make(map[string]bool)
+	for _, write := range rule.jobLockfileWrites {
+		matchedGlob, ok := lockfileMatchesHashFilesGlobs(globs, write.path)
+		if !ok {
+			continue
+		}
+		key := write.path + "\x00" + matchedGlob
+		if reported[key] {
+			continue
+		}
+		reported[key] = true
+		severity := "medium"
+		if rule.isPullRequestEvent {
+			severity = "high"
+		}
+		pos := write.pos
+		if pos == nil {
+			pos = keyInput.Value.Pos
+		}
+		rule.Errorf(
+			pos,
+			"cache poisoning via lockfile-controlled cache key (%s): run step modifies lockfile %q before actions/cache/save uses hashFiles(%q) in its key. "+
+				"An attacker can alter the saved cache key and persist poisoned dependency cache content; avoid modifying hashed lockfiles before saving caches or include an immutable trusted key component",
+			severity,
+			write.path,
+			matchedGlob,
+		)
+	}
+}
+
+func (rule *CachePoisoningRule) hashFilesGlobs(value *ast.String) []string {
+	if value == nil {
+		return nil
+	}
+	var globs []string
+	for _, expr := range rule.extractAndParseExpressions(value) {
+		expressions.VisitExprNode(expr.node, func(node, _ expressions.ExprNode, entering bool) {
+			if !entering {
+				return
+			}
+			call, ok := node.(*expressions.FuncCallNode)
+			if !ok || strings.ToLower(call.Callee) != "hashfiles" {
+				return
+			}
+			for _, arg := range call.Args {
+				str, ok := arg.(*expressions.StringNode)
+				if !ok {
+					continue
+				}
+				if glob := normalizeHashFilesPattern(str.Value); glob != "" {
+					globs = append(globs, glob)
+				}
+			}
+		})
+	}
+	return uniqueStrings(globs)
+}
+
+func matchLockfileArg(word *syntax.Word) (string, bool) {
+	if word == nil {
+		return "", false
+	}
+	return matchLockfilePath(bashWordLiteral(word))
+}
+
+func matchLockfilePath(p string) (string, bool) {
+	normalized := normalizeLockfilePath(p)
+	if normalized == "" {
+		return "", false
+	}
+	if dependencyLockfileNames[strings.ToLower(path.Base(normalized))] {
+		return normalized, true
+	}
+	return "", false
+}
+
+func normalizeLockfilePath(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.Trim(p, `"'`)
+	if p == "" || strings.Contains(p, "$") {
+		return ""
+	}
+	p = strings.ReplaceAll(p, "\\", "/")
+	for strings.HasPrefix(p, "./") {
+		p = strings.TrimPrefix(p, "./")
+	}
+	cleaned := path.Clean(p)
+	if cleaned == "." {
+		return ""
+	}
+	return strings.TrimPrefix(cleaned, "./")
+}
+
+func normalizeHashFilesPattern(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.Trim(p, `"'`)
+	if p == "" || strings.Contains(p, "$") {
+		return ""
+	}
+	negated := false
+	if strings.HasPrefix(p, "!") {
+		negated = true
+		p = strings.TrimSpace(strings.TrimPrefix(p, "!"))
+	}
+	p = strings.ReplaceAll(p, "\\", "/")
+	for strings.HasPrefix(p, "./") {
+		p = strings.TrimPrefix(p, "./")
+	}
+	p = strings.TrimPrefix(p, "/")
+	cleaned := path.Clean(p)
+	if cleaned == "." {
+		return ""
+	}
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	if negated {
+		return "!" + cleaned
+	}
+	return cleaned
+}
+
+func lockfileMatchesHashFilesGlobs(globs []string, lockfilePath string) (string, bool) {
+	var matched string
+	for _, glob := range globs {
+		excluded := strings.HasPrefix(glob, "!")
+		pattern := strings.TrimPrefix(glob, "!")
+		if !lockfileGlobMatchesPath(pattern, lockfilePath) {
+			continue
+		}
+		if excluded {
+			matched = ""
+			continue
+		}
+		matched = pattern
+	}
+	return matched, matched != ""
+}
+
+func lockfileGlobMatchesPath(glob, lockfilePath string) bool {
+	glob = normalizeHashFilesPattern(glob)
+	lockfilePath = normalizeLockfilePath(lockfilePath)
+	if glob == "" || lockfilePath == "" {
+		return false
+	}
+	if glob == lockfilePath {
+		return true
+	}
+	if !strings.ContainsAny(glob, "*?[") {
+		return false
+	}
+	if strings.HasPrefix(glob, "**/") {
+		suffix := strings.TrimPrefix(glob, "**/")
+		return lockfilePath == suffix || strings.HasSuffix(lockfilePath, "/"+suffix)
+	}
+	if idx := strings.Index(glob, "/**/"); idx != -1 {
+		prefix := glob[:idx]
+		suffix := glob[idx+4:]
+		return strings.HasPrefix(lockfilePath, prefix+"/") &&
+			(lockfilePath == prefix+"/"+suffix || strings.HasSuffix(lockfilePath, "/"+suffix))
+	}
+	matched, err := path.Match(glob, lockfilePath)
+	return err == nil && matched
+}
+
+func lastNonFlagWithLockfile(args []*syntax.Word) (*syntax.Word, string, bool) {
+	for i := len(args) - 1; i >= 0; i-- {
+		w := args[i]
+		if w == nil || isLikelyFlagWord(w) {
+			continue
+		}
+		if lockfilePath, ok := matchLockfileArg(w); ok {
+			return w, lockfilePath, true
+		}
+		return nil, "", false
+	}
+	return nil, "", false
+}
+
+func ddOutputLockfileDest(args []*syntax.Word) (string, syntax.Pos, bool) {
+	if dest, pos, ok := ddOutputPath(args); ok {
+		if lockfilePath, matched := matchLockfilePath(dest); matched {
+			return lockfilePath, pos, true
+		}
+	}
+	return "", syntax.Pos{}, false
+}
+
+func curlOutputLockfileDest(args []*syntax.Word) (string, syntax.Pos, bool) {
+	if dest, pos, ok := curlOutputPath(args); ok {
+		if lockfilePath, matched := matchLockfilePath(dest); matched {
+			return lockfilePath, pos, true
+		}
+	}
+	return "", syntax.Pos{}, false
+}
+
+func wgetOutputLockfileDest(args []*syntax.Word) (string, syntax.Pos, bool) {
+	if dest, pos, ok := wgetOutputPath(args); ok {
+		if lockfilePath, matched := matchLockfilePath(dest); matched {
+			return lockfilePath, pos, true
+		}
+	}
+	return "", syntax.Pos{}, false
+}
+
+func curlOutputPath(args []*syntax.Word) (string, syntax.Pos, bool) {
+	for i, w := range args {
+		t := bashWordLiteral(w)
+		if (t == "-o" || t == "--output") && i+1 < len(args) {
+			dest := args[i+1]
+			return bashWordLiteral(dest), dest.Pos(), true
+		}
+		if strings.HasPrefix(t, "--output=") {
+			return strings.TrimPrefix(t, "--output="), w.Pos(), true
+		}
+	}
+	return "", syntax.Pos{}, false
+}
+
+func wgetOutputPath(args []*syntax.Word) (string, syntax.Pos, bool) {
+	for i, w := range args {
+		t := bashWordLiteral(w)
+		if t == "-O" && i+1 < len(args) {
+			dest := args[i+1]
+			return bashWordLiteral(dest), dest.Pos(), true
+		}
+		if strings.HasPrefix(t, "--output-document=") {
+			return strings.TrimPrefix(t, "--output-document="), w.Pos(), true
+		}
+	}
+	return "", syntax.Pos{}, false
+}
+
+func ddOutputPath(args []*syntax.Word) (string, syntax.Pos, bool) {
+	for _, w := range args {
+		t := bashWordLiteral(w)
+		if strings.HasPrefix(t, "of=") {
+			return strings.TrimPrefix(t, "of="), w.Pos(), true
+		}
+	}
+	return "", syntax.Pos{}, false
 }
 
 // unwrapCommandPrefixes resolves the effective command name past sudo/env/
