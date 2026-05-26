@@ -218,6 +218,82 @@ echo "${{ github.event.pull_request.body }}"`,
 	}
 }
 
+func TestCodeInjectionMedium_DependencyReviewActionOutput(t *testing.T) {
+	tests := []struct {
+		name       string
+		actionUses string
+		stepEnv    *ast.Env
+		runScript  string
+		wantErrors int
+	}{
+		{
+			name:       "known dependency review output directly interpolated in run script",
+			actionUses: "actions/dependency-review-action@v4",
+			runScript:  `echo '${{ steps.review.outputs.dependency-changes }}'`,
+			wantErrors: 1,
+		},
+		{
+			name:       "dependency review output passed through env",
+			actionUses: "actions/dependency-review-action@v4",
+			stepEnv: &ast.Env{
+				Vars: map[string]*ast.EnvVar{
+					"changes": {
+						Name:  &ast.String{Value: "CHANGES"},
+						Value: &ast.String{Value: "${{ steps.review.outputs.dependency-changes }}"},
+					},
+				},
+			},
+			runScript:  `printf '%s\n' "$CHANGES"`,
+			wantErrors: 0,
+		},
+		{
+			name:       "unknown action output remains out of scope",
+			actionUses: "example/unknown-action@v1",
+			runScript:  `echo '${{ steps.review.outputs.dependency-changes }}'`,
+			wantErrors: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := CodeInjectionMediumRule(nil)
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "pull_request"},
+					},
+				},
+			}
+			job := &ast.Job{
+				Steps: []*ast.Step{
+					{
+						ID: &ast.String{Value: "review"},
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: tt.actionUses},
+						},
+					},
+					{
+						Env: tt.stepEnv,
+						Exec: &ast.ExecRun{
+							Run: &ast.String{
+								Value: tt.runScript,
+								Pos:   &ast.Position{Line: 10, Col: 1},
+							},
+						},
+					},
+				},
+			}
+
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
+
+			if gotErrors := len(rule.Errors()); gotErrors != tt.wantErrors {
+				t.Fatalf("got %d errors, want %d: %v", gotErrors, tt.wantErrors, rule.Errors())
+			}
+		})
+	}
+}
+
 func TestCodeInjectionMedium_GitHubScript(t *testing.T) {
 	tests := []struct {
 		name        string

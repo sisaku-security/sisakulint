@@ -445,6 +445,7 @@ The code-injection-critical rule detects:
     - `gotson/pull-request-comment-branch` - exposes `head_ref`, `head_sha`, `base_ref`, `base_sha`
     - `xt0rted/pull-request-comment-branch` - same outputs as above
     - `peter-evans/find-comment` - exposes `comment-body`, `comment-author`
+    - `actions/dependency-review-action` - exposes dependency diff outputs such as `dependency-changes` and `comment-content`
 
 ### Safe Patterns
 

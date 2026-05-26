@@ -470,6 +470,7 @@ func (rule *CodeInjectionRule) FixStep(step *ast.Step) error {
 
 // generateEnvVarName generates an environment variable name from an untrusted path
 func (rule *CodeInjectionRule) generateEnvVarName(path string) string {
+	path = stripTaintAnnotation(path)
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
 		return "UNTRUSTED_INPUT"
@@ -482,19 +483,67 @@ func (rule *CodeInjectionRule) generateEnvVarName(path string) string {
 
 		// Convert to uppercase and join
 		categoryUpper := strings.ToUpper(strings.ReplaceAll(category, "_", ""))
-		fieldUpper := strings.ToUpper(field)
+		fieldUpper := sanitizeEnvVarNameComponent(field)
 
 		// Create readable name
 		if categoryUpper == EventCategoryPR {
 			categoryUpper = "PR"
 		}
 
-		return fmt.Sprintf("%s_%s", categoryUpper, fieldUpper)
+		return sanitizeEnvVarNameComponent(fmt.Sprintf("%s_%s", categoryUpper, fieldUpper))
 	}
 
 	// Fallback: use last part
 	lastPart := parts[len(parts)-1]
-	return strings.ToUpper(lastPart)
+	if name := sanitizeEnvVarNameComponent(lastPart); name != "" {
+		return name
+	}
+	return "UNTRUSTED_INPUT"
+}
+
+func stripTaintAnnotation(path string) string {
+	if before, _, ok := strings.Cut(path, " (tainted via "); ok {
+		return before
+	}
+	return path
+}
+
+func sanitizeEnvVarNameComponent(value string) string {
+	var sb strings.Builder
+	lastUnderscore := false
+	for _, r := range value {
+		var out rune
+		switch {
+		case r >= 'a' && r <= 'z':
+			out = r - ('a' - 'A')
+		case r >= 'A' && r <= 'Z':
+			out = r
+		case r >= '0' && r <= '9':
+			out = r
+		default:
+			out = '_'
+		}
+
+		if out == '_' {
+			if sb.Len() == 0 || lastUnderscore {
+				continue
+			}
+			lastUnderscore = true
+			sb.WriteRune(out)
+			continue
+		}
+		lastUnderscore = false
+		sb.WriteRune(out)
+	}
+
+	name := strings.TrimRight(sb.String(), "_")
+	if name == "" {
+		return ""
+	}
+	if name[0] >= '0' && name[0] <= '9' {
+		name = "INPUT_" + name
+	}
+	return name
 }
 
 // extractAndParseExpressions extracts all expressions from string and parses them
