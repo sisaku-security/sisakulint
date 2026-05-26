@@ -12,7 +12,6 @@ import (
 )
 
 // CachePoisoningRule detects potential cache poisoning vulnerabilities in GitHub Actions workflows.
-// It checks for:
 // 1. Indirect cache poisoning: Untrusted triggers + unsafe checkout + cache actions
 // 2. Direct cache poisoning: Untrusted input in cache key/restore-keys/path (any trigger)
 // 3. Predictable cache keys: Cache keys using only hashFiles() without unique prefix
@@ -36,7 +35,19 @@ type CachePoisoningRule struct {
 	cacheActionCount       int
 	workflowTriggers       []string
 	directCacheDirWrites   []directCacheDirectoryWriteInfo
-	jobHasCacheSaveStep    bool
+	// jobPostJobCacheSaveSeen tracks whether the job uses a cache action whose
+	// persistence happens via a post-job save step (actions/cache@v* or
+	// actions/setup-* with cache: enabled). Those persist whatever sits under
+	// the cache path at job end, so every recorded write is escalated to
+	// "(critical)" regardless of step order.
+	jobPostJobCacheSaveSeen bool
+	// jobCacheSaveCutoffs records, for each actions/cache/save@v* step seen in
+	// the job, the number of direct cache-directory writes recorded BEFORE that
+	// step. actions/cache/save persists at the moment the step executes, so
+	// only writes whose index is < cutoff are persisted by it. Writes recorded
+	// after a save step stay in the softer "(suspicious)" tier unless a
+	// post-job save (jobPostJobCacheSaveSeen) also runs in the same job.
+	jobCacheSaveCutoffs []int
 }
 
 // directCacheFixInfo stores information needed for auto-fixing direct cache poisoning
@@ -243,7 +254,8 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.autoFixerRegistered = false
 	rule.jobUnsafeTriggers = nil
 	rule.directCacheDirWrites = nil
-	rule.jobHasCacheSaveStep = false
+	rule.jobPostJobCacheSaveSeen = false
+	rule.jobCacheSaveCutoffs = nil
 
 	if len(rule.unsafeTriggers) == 0 {
 		return nil
@@ -273,21 +285,39 @@ func (rule *CachePoisoningRule) VisitJobPost(node *ast.Job) error {
 }
 
 // flushDirectCacheDirectoryWriteReports emits per-write diagnostics deferred
-// from VisitStep. Severity is split: when a cache-save / setup-* with cache
-// followed in the same job, every write is escalated to "(critical)" because
-// the persistence vector is real. Without a save in the same job, writes are
-// reported as a softer "suspicious" warning so defense-in-depth still surfaces
-// the pattern without overstating severity.
+// from VisitStep. Severity is split per write according to whether an
+// applicable cache-save action will persist that particular write:
+//   - A post-job save (actions/cache@v* or actions/setup-* with cache enabled)
+//     persists every write recorded in the job, so all writes escalate.
+//   - actions/cache/save@v* persists only writes recorded BEFORE the save
+//     step executes; writes recorded after stay in the softer "(suspicious)"
+//     tier unless a post-job save also runs.
+//
+// Without any persisting cache action in the same job, every write is the
+// softer "suspicious" warning so defense-in-depth still surfaces the pattern
+// without overstating severity.
 func (rule *CachePoisoningRule) flushDirectCacheDirectoryWriteReports() {
 	if len(rule.directCacheDirWrites) == 0 {
 		return
 	}
 	defer func() { rule.directCacheDirWrites = nil }()
 
-	if rule.jobHasCacheSaveStep {
-		dirs := uniqueCacheDirs(rule.directCacheDirWrites)
-		joined := strings.Join(dirs, ", ")
-		for _, w := range rule.directCacheDirWrites {
+	dirs := uniqueCacheDirs(rule.directCacheDirWrites)
+	joined := strings.Join(dirs, ", ")
+
+	// maxCutoff is the largest pre-save write index covered by any
+	// actions/cache/save step. A write at index i is persisted by such a step
+	// iff i < maxCutoff.
+	maxCutoff := 0
+	for _, c := range rule.jobCacheSaveCutoffs {
+		if c > maxCutoff {
+			maxCutoff = c
+		}
+	}
+
+	for i, w := range rule.directCacheDirWrites {
+		persisted := rule.jobPostJobCacheSaveSeen || i < maxCutoff
+		if persisted {
 			rule.Errorf(
 				w.pos,
 				"cache poisoning via package manager cache directory write (critical): "+
@@ -297,11 +327,8 @@ func (rule *CachePoisoningRule) flushDirectCacheDirectoryWriteReports() {
 				w.cacheDir,
 				joined,
 			)
+			continue
 		}
-		return
-	}
-
-	for _, w := range rule.directCacheDirWrites {
 		rule.Errorf(
 			w.pos,
 			"cache poisoning via package manager cache directory write (suspicious): "+
@@ -374,14 +401,22 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 
 	// Check for cache actions
 	if isCacheAction(uses, action.Inputs) {
-		// Only save-capable cache steps (actions/cache, actions/cache/save, or
-		// actions/setup-* with cache: enabled) persist whatever sits under the
-		// cache path at job end. Track that a save will happen so deferred direct
-		// cache directory write reports can be upgraded to critical in
-		// VisitJobPost. actions/cache/restore is restore-only and must not flip
-		// this flag, otherwise restore-only jobs are over-escalated to critical.
-		if isCachePersistingAction(uses, action.Inputs) {
-			rule.jobHasCacheSaveStep = true
+		// Persistence model differs between cache action shapes:
+		//   - actions/cache@v* and actions/setup-* with cache: enabled register
+		//     a post-job save step that persists whatever sits under the cache
+		//     path at job END. They escalate every recorded write regardless of
+		//     where in the job the cache step appears.
+		//   - actions/cache/save@v* persists at the moment the step executes,
+		//     so only writes recorded BEFORE that step are persisted by it.
+		// actions/cache/restore@v* is restore-only and never persists, so it
+		// must not flip either flag — otherwise restore-only jobs are
+		// over-escalated to critical.
+		if actionName == "actions/cache/save" {
+			// Snapshot the write count at this point: writes recorded later in
+			// the job are not persisted by this particular save step.
+			rule.jobCacheSaveCutoffs = append(rule.jobCacheSaveCutoffs, len(rule.directCacheDirWrites))
+		} else if isCachePersistingAction(uses, action.Inputs) {
+			rule.jobPostJobCacheSaveSeen = true
 		}
 		rule.cacheActionCount++
 
@@ -441,14 +476,14 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 // directory that the cache action then persists wholesale.
 var packageManagerCacheRoots = []string{
 	// JavaScript ecosystem
-	"~/.npm",                   // actions/setup-node default
-	"~/.cache/yarn",            // yarn classic / berry global cache
-	"~/.yarn/cache",            // yarn berry workspace cache
+	"~/.npm",                    // actions/setup-node default
+	"~/.cache/yarn",             // yarn classic / berry global cache
+	"~/.yarn/cache",             // yarn berry workspace cache
 	"~/.local/share/pnpm/store", // pnpm linux/mac default
-	"~/.cache/pnpm",            // pnpm alt store-dir
+	"~/.cache/pnpm",             // pnpm alt store-dir
 	// Python ecosystem
-	"~/.cache/pip",         // pip default
-	"~/.cache/pypoetry",    // poetry default
+	"~/.cache/pip",      // pip default
+	"~/.cache/pypoetry", // poetry default
 	// Rust
 	"~/.cargo",
 	// JVM
@@ -491,21 +526,21 @@ var cacheRootPathPrefixes = []string{
 var packageManagerCommands = map[string]bool{
 	"npm":      true,
 	"npx":      true,
-	"pnpm":    true,
-	"yarn":    true,
-	"pip":     true,
-	"pip3":    true,
-	"python":  true,
-	"python3": true,
-	"poetry":  true,
-	"cargo":   true,
-	"gradle":  true,
-	"mvn":     true,
-	"bundle":  true,
-	"bundler": true,
+	"pnpm":     true,
+	"yarn":     true,
+	"pip":      true,
+	"pip3":     true,
+	"python":   true,
+	"python3":  true,
+	"poetry":   true,
+	"cargo":    true,
+	"gradle":   true,
+	"mvn":      true,
+	"bundle":   true,
+	"bundler":  true,
 	"composer": true,
-	"dotnet":  true,
-	"nuget":   true,
+	"dotnet":   true,
+	"nuget":    true,
 }
 
 // cacheDirectoryWriteCommands enumerates utilities whose primary purpose is
@@ -541,16 +576,16 @@ var cacheDirectoryWriteCommands = map[string]bool{
 // `sh` / `bash` / `zsh` are NOT here: those wrap an inline script which the
 // AST walker recurses into separately (see walkInlineShellScript).
 var shellPrefixCommands = map[string]bool{
-	"command":   true,
-	"env":       true,
-	"nohup":     true,
-	"sudo":      true,
-	"time":      true,
-	"timeout":   true,
-	"stdbuf":    true,
-	"unbuffer":  true,
-	"ionice":    true,
-	"nice":      true,
+	"command":  true,
+	"env":      true,
+	"nohup":    true,
+	"sudo":     true,
+	"time":     true,
+	"timeout":  true,
+	"stdbuf":   true,
+	"unbuffer": true,
+	"ionice":   true,
+	"nice":     true,
 }
 
 // checkDirectCacheDirectoryWrite scans a `run:` script for direct writes to
@@ -1340,11 +1375,11 @@ func ddOutputDest(args []*syntax.Word) (string, syntax.Pos, bool) {
 func isOutputRedirect(op syntax.RedirOperator) bool {
 	switch op {
 	case syntax.RdrOut, // >
-		syntax.AppOut,    // >>
-		syntax.RdrAll,    // &>
-		syntax.AppAll,    // &>>
-		syntax.RdrClob,   // >|
-		syntax.AppClob,   // >>| (zsh)
+		syntax.AppOut,     // >>
+		syntax.RdrAll,     // &>
+		syntax.AppAll,     // &>>
+		syntax.RdrClob,    // >|
+		syntax.AppClob,    // >>| (zsh)
 		syntax.RdrAllClob, // &>| (zsh)
 		syntax.AppAllClob: // &>>| (zsh)
 		return true
