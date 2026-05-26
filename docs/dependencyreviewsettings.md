@@ -5,21 +5,24 @@ weight: 1
 
 ### Dependency Review Settings Rule Overview
 
-This rule detects `actions/dependency-review-action` configurations that request pull request comment summaries without granting the permission needed to write those comments.
+This rule detects `actions/dependency-review-action` configurations that weaken dependency review enforcement, omit recommended gate settings, or request pull request comment summaries without granting the permission needed to write those comments.
 
 #### Key Features
 
+- **Security Gate Checks**: Reports `warn-only: true`, `vulnerability-check: false`, and `license-check: false`
+- **Recommended Setting Checks**: Reports missing `fail-on-severity`, missing `fail-on-scopes`, and missing license policy configuration
+- **Allow-list Abuse Checks**: Reports large `allow-ghsas` and `allow-dependencies-licenses` exception lists
 - **Permission Consistency Check**: Reports `comment-summary-in-pr: always` and `comment-summary-in-pr: on-failure` when the effective permissions do not include `pull-requests: write`
 - **Job Override Awareness**: Follows GitHub Actions semantics where job-level `permissions:` override workflow-level `permissions:`
-- **Focused Scope**: Ignores `comment-summary-in-pr: never`, missing settings, and unrelated actions
+- **Focused Scope**: Checks scalar `with:` values on `actions/dependency-review-action` steps and ignores unrelated actions
 
 ### Security and Reliability Impact
 
 **Severity: Medium**
 
-`actions/dependency-review-action` can post a summary comment on pull requests. When comment summaries are enabled without `pull-requests: write`, the workflow configuration is internally inconsistent: the action is configured to write a PR comment, but the `GITHUB_TOKEN` permissions do not allow it.
+`actions/dependency-review-action` is often used as a security gate for pull requests. Settings such as `warn-only: true` or `vulnerability-check: false` can make the gate non-enforcing, while large exception lists can normalize broad bypasses.
 
-This can cause dependency review feedback to be missing from the pull request even though the workflow appears to be configured for reviewer-facing summaries.
+The rule also checks reliability issues around PR comments. When comment summaries are enabled without `pull-requests: write`, the workflow configuration is internally inconsistent: the action is configured to write a PR comment, but the `GITHUB_TOKEN` permissions do not allow it.
 
 ### Example Vulnerable Workflow
 
@@ -37,6 +40,9 @@ jobs:
     steps:
       - uses: actions/dependency-review-action@v4
         with:
+          warn-only: true
+          vulnerability-check: false
+          allow-ghsas: GHSA-1111-2222-3333, GHSA-2222-3333-4444, GHSA-3333-4444-5555, GHSA-4444-5555-6666, GHSA-5555-6666-7777
           comment-summary-in-pr: always
 ```
 
@@ -61,6 +67,12 @@ jobs:
     steps:
       - uses: actions/dependency-review-action@v4
         with:
+          warn-only: false
+          vulnerability-check: true
+          license-check: true
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          allow-licenses: MIT, Apache-2.0
           comment-summary-in-pr: always
 ```
 
@@ -72,6 +84,62 @@ with:
 ```
 
 ### What the Rule Detects
+
+#### `warn-only: true`
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      warn-only: true
+```
+
+#### `vulnerability-check: false`
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      vulnerability-check: false
+```
+
+#### `license-check: false`
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      license-check: false
+```
+
+#### Missing gate settings
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      warn-only: false
+```
+
+This reports missing `fail-on-severity`, missing `fail-on-scopes`, and missing license policy configuration when neither `allow-licenses` nor `deny-licenses` is set.
+
+#### Large vulnerability allow-list
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      allow-ghsas: GHSA-1111-2222-3333, GHSA-2222-3333-4444, GHSA-3333-4444-5555, GHSA-4444-5555-6666, GHSA-5555-6666-7777
+```
+
+#### Large dependency/license exception list
+
+```yaml
+steps:
+  - uses: actions/dependency-review-action@v4
+    with:
+      allow-dependencies-licenses: pkg:npm/a@1.0.0, pkg:npm/b@1.0.0, pkg:npm/c@1.0.0, pkg:npm/d@1.0.0, pkg:npm/e@1.0.0
+```
 
 #### `comment-summary-in-pr: always`
 
@@ -106,5 +174,7 @@ jobs:
 ### Limitations
 
 - Dynamic expressions in `permissions:` are not evaluated.
-- The rule checks scalar `with.comment-summary-in-pr` values only.
+- The rule checks scalar `with:` values only. Dynamic expressions such as `${{ ... }}` are treated conservatively for value-specific checks.
+- When `config-file` is set, missing inline recommendations such as `fail-on-severity`, `fail-on-scopes`, and license policy are not reported because the external config file may define them.
+- Large allow-list detection currently uses a threshold of 5 or more entries.
 - Repository default token permissions are not inferred; add explicit `pull-requests: write` when PR comments are required.
