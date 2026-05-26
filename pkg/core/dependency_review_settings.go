@@ -85,17 +85,19 @@ func (rule *DependencyReviewSettingsRule) checkSecurityGateSettings(step *ast.St
 		)
 	}
 
-	if dependencyReviewInputEquals(action, "vulnerability-check", "disable") {
+	if value, ok := dependencyReviewDisabledInputValue(action, "vulnerability-check"); ok {
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "vulnerability-check"),
-			"(warning) actions/dependency-review-action sets vulnerability-check: disable, so vulnerable dependencies will not be checked. Enable vulnerability-check for an enforcing security gate. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
+			"(warning) actions/dependency-review-action sets vulnerability-check: %s, so vulnerable dependencies will not be checked. Enable vulnerability-check for an enforcing security gate. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
+			value,
 		)
 	}
 
-	if dependencyReviewInputEquals(action, "license-check", "disable") {
+	if value, ok := dependencyReviewDisabledInputValue(action, "license-check"); ok {
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "license-check"),
-			"(info) actions/dependency-review-action sets license-check: disable. Enable license-check when license policy enforcement is expected. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
+			"(info) actions/dependency-review-action sets license-check: %s. Enable license-check when license policy enforcement is expected. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
+			value,
 		)
 	}
 
@@ -166,6 +168,18 @@ func dependencyReviewInputEquals(action *ast.ExecAction, name string, want strin
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(value), want)
+}
+
+func dependencyReviewDisabledInputValue(action *ast.ExecAction, name string) (string, bool) {
+	value, ok := dependencyReviewScalarInput(action, name)
+	if !ok || dependencyReviewHasExpression(value) {
+		return "", false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "false" || normalized == "disable" {
+		return normalized, true
+	}
+	return "", false
 }
 
 func dependencyReviewInputMissing(action *ast.ExecAction, name string) bool {

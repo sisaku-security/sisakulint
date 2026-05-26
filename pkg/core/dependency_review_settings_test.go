@@ -270,8 +270,32 @@ jobs:
 	rule := runDependencyReviewSettingsRule(t, workflow)
 
 	assertDependencyReviewFinding(t, rule, "warn-only", "warning")
-	assertDependencyReviewFinding(t, rule, "vulnerability-check", "warning")
-	assertDependencyReviewFinding(t, rule, "license-check", "info")
+	assertDependencyReviewFinding(t, rule, "vulnerability-check", "disable", "warning")
+	assertDependencyReviewFinding(t, rule, "license-check", "disable", "info")
+}
+
+func TestDependencyReviewSettingsRule_DetectsFalseSecurityGates(t *testing.T) {
+	t.Parallel()
+
+	workflow := `
+name: dependency review
+on: pull_request
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/dependency-review-action@v4
+        with:
+          vulnerability-check: false
+          license-check: false
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          allow-licenses: MIT
+`
+	rule := runDependencyReviewSettingsRule(t, workflow)
+
+	assertDependencyReviewFinding(t, rule, "vulnerability-check", "false", "warning")
+	assertDependencyReviewFinding(t, rule, "license-check", "false", "info")
 }
 
 func TestDependencyReviewSettingsRule_DetectsMissingRecommendedSettings(t *testing.T) {
