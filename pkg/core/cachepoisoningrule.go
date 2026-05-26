@@ -35,19 +35,23 @@ type CachePoisoningRule struct {
 	cacheActionCount       int
 	workflowTriggers       []string
 	directCacheDirWrites   []directCacheDirectoryWriteInfo
-	// jobPostJobCacheSaveSeen tracks whether the job uses a cache action whose
-	// persistence happens via a post-job save step (actions/cache@v* or
-	// actions/setup-* with cache: enabled). Those persist whatever sits under
-	// the cache path at job end, so every recorded write is escalated to
-	// "(critical)" regardless of step order.
-	jobPostJobCacheSaveSeen bool
+	// jobPostJobCacheSaveDirs tracks cache roots persisted by a post-job save
+	// step (actions/cache@v* or actions/setup-* with cache: enabled). Those
+	// persist matching roots at job end, so every recorded write under a
+	// matching root is escalated to "(critical)" regardless of step order.
+	jobPostJobCacheSaveDirs map[string]bool
 	// jobCacheSaveCutoffs records, for each actions/cache/save@v* step seen in
 	// the job, the number of direct cache-directory writes recorded BEFORE that
 	// step. actions/cache/save persists at the moment the step executes, so
 	// only writes whose index is < cutoff are persisted by it. Writes recorded
 	// after a save step stay in the softer "(suspicious)" tier unless a
-	// post-job save (jobPostJobCacheSaveSeen) also runs in the same job.
-	jobCacheSaveCutoffs []int
+	// matching post-job save also runs in the same job.
+	jobCacheSaveCutoffs []cacheSaveCutoff
+}
+
+type cacheSaveCutoff struct {
+	cutoff int
+	dirs   map[string]bool
 }
 
 // directCacheFixInfo stores information needed for auto-fixing direct cache poisoning
@@ -139,6 +143,174 @@ func isCachePersistingAction(uses string, inputs map[string]*ast.Input) bool {
 	}
 
 	return false
+}
+
+func (rule *CachePoisoningRule) recordCachePersistence(uses string, inputs map[string]*ast.Input) {
+	roots := persistedCacheRootsForAction(uses, inputs)
+	if len(roots) == 0 {
+		return
+	}
+
+	actionName := cacheActionName(uses)
+	if actionName == "actions/cache/save" {
+		rule.jobCacheSaveCutoffs = append(rule.jobCacheSaveCutoffs, cacheSaveCutoff{
+			cutoff: len(rule.directCacheDirWrites),
+			dirs:   stringSet(roots),
+		})
+		return
+	}
+
+	if !isCachePersistingAction(uses, inputs) {
+		return
+	}
+	if rule.jobPostJobCacheSaveDirs == nil {
+		rule.jobPostJobCacheSaveDirs = make(map[string]bool)
+	}
+	for _, root := range roots {
+		rule.jobPostJobCacheSaveDirs[root] = true
+	}
+}
+
+func persistedCacheRootsForAction(uses string, inputs map[string]*ast.Input) []string {
+	actionName := cacheActionName(uses)
+	switch {
+	case actionName == "actions/cache" || actionName == "actions/cache/save":
+		return cacheRootsFromPathInputs(inputs)
+	case strings.HasPrefix(actionName, "actions/setup-"):
+		return setupActionCacheRoots(actionName, inputs)
+	default:
+		return nil
+	}
+}
+
+func cacheActionName(uses string) string {
+	if idx := strings.Index(uses, "@"); idx != -1 {
+		return uses[:idx]
+	}
+	return uses
+}
+
+func cacheRootsFromPathInputs(inputs map[string]*ast.Input) []string {
+	if len(inputs) == 0 {
+		return nil
+	}
+
+	var roots []string
+	for _, key := range []string{"path", "paths", "cache-path", "cache-paths"} {
+		input := inputs[key]
+		if input == nil || input.Value == nil {
+			continue
+		}
+		for _, p := range splitCachePathInput(input.Value.Value) {
+			for _, root := range packageManagerCacheRoots {
+				if cachePathIntersectsRoot(p, root) {
+					roots = append(roots, root)
+				}
+			}
+		}
+	}
+	return uniqueStrings(roots)
+}
+
+func splitCachePathInput(value string) []string {
+	var out []string
+	for _, p := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == '\n' || r == '\r' || r == ','
+	}) {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func cachePathIntersectsRoot(path, root string) bool {
+	normalizedPath := normalizeCachePath(path)
+	normalizedRoot := normalizeCachePath(root)
+	if normalizedPath == "" || normalizedRoot == "" {
+		return false
+	}
+	return sameOrChildPath(normalizedPath, normalizedRoot) || sameOrChildPath(normalizedRoot, normalizedPath)
+}
+
+func sameOrChildPath(child, parent string) bool {
+	if child == parent {
+		return true
+	}
+	if parent == "~" {
+		return strings.HasPrefix(child, "~/")
+	}
+	return strings.HasPrefix(child, parent+"/")
+}
+
+func setupActionCacheRoots(actionName string, inputs map[string]*ast.Input) []string {
+	if len(inputs) == 0 {
+		return nil
+	}
+	cacheInput := inputs["cache"]
+	if cacheInput == nil || cacheInput.Value == nil {
+		return nil
+	}
+	cacheName := strings.ToLower(strings.TrimSpace(cacheInput.Value.Value))
+	if cacheName == "" || cacheName == ExprFalseValue {
+		return nil
+	}
+
+	switch actionName {
+	case "actions/setup-node":
+		switch cacheName {
+		case "npm":
+			return []string{"~/.npm"}
+		case "yarn":
+			return []string{"~/.cache/yarn", "~/.yarn/cache"}
+		case "pnpm":
+			return []string{"~/.local/share/pnpm/store", "~/.cache/pnpm"}
+		}
+	case "actions/setup-python":
+		switch cacheName {
+		case "pip", "pipenv":
+			return []string{"~/.cache/pip"}
+		case "poetry":
+			return []string{"~/.cache/pypoetry"}
+		}
+	case "actions/setup-go":
+		return []string{"~/go/pkg/mod"}
+	case "actions/setup-java":
+		switch cacheName {
+		case "gradle":
+			return []string{"~/.gradle"}
+		case "maven":
+			return []string{"~/.m2"}
+		}
+	case "actions/setup-dotnet":
+		return []string{"~/.nuget/packages"}
+	}
+	return nil
+}
+
+func stringSet(values []string) map[string]bool {
+	out := make(map[string]bool, len(values))
+	for _, value := range values {
+		out[value] = true
+	}
+	return out
+}
+
+func uniqueStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(values))
+	var out []string
+	for _, value := range values {
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
@@ -254,7 +426,7 @@ func (rule *CachePoisoningRule) VisitJobPre(node *ast.Job) error {
 	rule.autoFixerRegistered = false
 	rule.jobUnsafeTriggers = nil
 	rule.directCacheDirWrites = nil
-	rule.jobPostJobCacheSaveSeen = false
+	rule.jobPostJobCacheSaveDirs = nil
 	rule.jobCacheSaveCutoffs = nil
 
 	if len(rule.unsafeTriggers) == 0 {
@@ -288,10 +460,11 @@ func (rule *CachePoisoningRule) VisitJobPost(node *ast.Job) error {
 // from VisitStep. Severity is split per write according to whether an
 // applicable cache-save action will persist that particular write:
 //   - A post-job save (actions/cache@v* or actions/setup-* with cache enabled)
-//     persists every write recorded in the job, so all writes escalate.
+//     persists every write recorded in the job under matching roots, so those
+//     writes escalate.
 //   - actions/cache/save@v* persists only writes recorded BEFORE the save
 //     step executes; writes recorded after stay in the softer "(suspicious)"
-//     tier unless a post-job save also runs.
+//     tier unless a matching post-job save also runs.
 //
 // Without any persisting cache action in the same job, every write is the
 // softer "suspicious" warning so defense-in-depth still surfaces the pattern
@@ -305,18 +478,16 @@ func (rule *CachePoisoningRule) flushDirectCacheDirectoryWriteReports() {
 	dirs := uniqueCacheDirs(rule.directCacheDirWrites)
 	joined := strings.Join(dirs, ", ")
 
-	// maxCutoff is the largest pre-save write index covered by any
-	// actions/cache/save step. A write at index i is persisted by such a step
-	// iff i < maxCutoff.
-	maxCutoff := 0
-	for _, c := range rule.jobCacheSaveCutoffs {
-		if c > maxCutoff {
-			maxCutoff = c
-		}
-	}
-
 	for i, w := range rule.directCacheDirWrites {
-		persisted := rule.jobPostJobCacheSaveSeen || i < maxCutoff
+		persisted := rule.jobPostJobCacheSaveDirs[w.cacheDir]
+		if !persisted {
+			for _, c := range rule.jobCacheSaveCutoffs {
+				if i < c.cutoff && c.dirs[w.cacheDir] {
+					persisted = true
+					break
+				}
+			}
+		}
 		if persisted {
 			rule.Errorf(
 				w.pos,
@@ -401,23 +572,7 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 
 	// Check for cache actions
 	if isCacheAction(uses, action.Inputs) {
-		// Persistence model differs between cache action shapes:
-		//   - actions/cache@v* and actions/setup-* with cache: enabled register
-		//     a post-job save step that persists whatever sits under the cache
-		//     path at job END. They escalate every recorded write regardless of
-		//     where in the job the cache step appears.
-		//   - actions/cache/save@v* persists at the moment the step executes,
-		//     so only writes recorded BEFORE that step are persisted by it.
-		// actions/cache/restore@v* is restore-only and never persists, so it
-		// must not flip either flag — otherwise restore-only jobs are
-		// over-escalated to critical.
-		if actionName == "actions/cache/save" {
-			// Snapshot the write count at this point: writes recorded later in
-			// the job are not persisted by this particular save step.
-			rule.jobCacheSaveCutoffs = append(rule.jobCacheSaveCutoffs, len(rule.directCacheDirWrites))
-		} else if isCachePersistingAction(uses, action.Inputs) {
-			rule.jobPostJobCacheSaveSeen = true
-		}
+		rule.recordCachePersistence(uses, action.Inputs)
 		rule.cacheActionCount++
 
 		// Check cache hierarchy exploitation risk
@@ -431,11 +586,12 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 		return nil
 	}
 
-	if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
-		inspection := rule.inspectCompositeAction(uses)
-		if inspection.cacheFound {
-			rule.cacheActionCount++
-			rule.checkCacheHierarchyExploitation(node, inspection.cacheUses)
+	inspection := rule.inspectCompositeAction(uses)
+	if inspection.cacheFound {
+		rule.recordCachePersistence(inspection.cacheUses, inspection.cacheInputs)
+		rule.cacheActionCount++
+		rule.checkCacheHierarchyExploitation(node, inspection.cacheUses)
+		if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
 			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
@@ -447,7 +603,9 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 				strings.Join(inspection.chain, " -> "),
 			)
 			rule.registerIndirectCachePoisoningFixer()
-		} else if inspection.resolvedComposite && isMutableRemoteAction(uses) {
+		}
+	} else if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
+		if inspection.resolvedComposite && isMutableRemoteAction(uses) {
 			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")
 			rule.Errorf(
 				node.Pos,
@@ -882,6 +1040,10 @@ func isInlineShellWrapper(cmdName string) bool {
 // writes. Position information for findings is best-effort — it points back
 // to the wrapper call's position so reports remain near the user's source.
 func (rule *CachePoisoningRule) walkInlineShellScript(call *syntax.CallExpr, argStart int, script string, runStr *ast.String) {
+	rule.walkInlineShellScriptWithFallback(call, argStart, syntax.Pos{}, script, runStr)
+}
+
+func (rule *CachePoisoningRule) walkInlineShellScriptWithFallback(call *syntax.CallExpr, argStart int, outerFallbackPos syntax.Pos, script string, runStr *ast.String) {
 	// Find -c followed by the inline script.
 	args := call.Args[argStart+1:]
 	for i, arg := range args {
@@ -901,6 +1063,9 @@ func (rule *CachePoisoningRule) walkInlineShellScript(call *syntax.CallExpr, arg
 		// Use the wrapper call's position as the report position so the
 		// finding maps to a meaningful spot in the workflow file.
 		fallbackPos := args[i+1].Pos()
+		if outerFallbackPos.IsValid() {
+			fallbackPos = outerFallbackPos
+		}
 		syntax.Walk(innerFile, func(node syntax.Node) bool {
 			switch x := node.(type) {
 			case *syntax.CallExpr:
@@ -933,9 +1098,14 @@ func (rule *CachePoisoningRule) checkCallExprForInlineWrapper(call *syntax.CallE
 		return
 	}
 	cmdName, argStart, ok := unwrapCommandPrefixes(call)
-	if !ok || !cacheDirectoryWriteCommands[cmdName] {
-		// Don't recurse further into nested wrappers from inside an inline
-		// wrapper to keep depth bounded; deeper nests are rare in practice.
+	if !ok {
+		return
+	}
+	if isInlineShellWrapper(cmdName) {
+		rule.walkInlineShellScriptWithFallback(call, argStart, fallbackPos, script, runStr)
+		return
+	}
+	if !cacheDirectoryWriteCommands[cmdName] {
 		return
 	}
 	if packageManagerCommands[cmdName] {
@@ -1423,6 +1593,7 @@ const maxCompositeActionDepth = 4
 
 type compositeActionInspection struct {
 	cacheUses         string
+	cacheInputs       map[string]*ast.Input
 	chain             []string
 	cacheFound        bool
 	resolvedComposite bool
@@ -1459,9 +1630,11 @@ func (rule *CachePoisoningRule) inspectCompositeActionRecursive(uses string, cha
 		if step == nil || step.Uses == "" {
 			continue
 		}
-		if isCacheAction(step.Uses, metadataStepInputs(step.With)) {
+		inputs := metadataStepInputs(step.With)
+		if isCacheAction(step.Uses, inputs) {
 			return compositeActionInspection{
 				cacheUses:         step.Uses,
+				cacheInputs:       inputs,
 				chain:             append(append([]string{}, nextChain...), step.Uses),
 				cacheFound:        true,
 				resolvedComposite: true,
