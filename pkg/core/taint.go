@@ -171,6 +171,17 @@ func (t *TaintTracker) initKnownTaintedActions() {
 		{OutputName: "other_modified_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
 		{OutputName: "other_deleted_files", TaintSource: "PR filenames (attacker-controlled via pull request)"},
 	}
+
+	// actions/dependency-review-action - outputs are derived from dependency
+	// diff content and can contain JSON/text influenced by the pull request.
+	// Direct interpolation into run: scripts can therefore become shell input.
+	t.knownTaintedActions["actions/dependency-review-action"] = []KnownTaintedOutput{
+		{OutputName: "vulnerable-changes", TaintSource: "dependency review diff output"},
+		{OutputName: "dependency-changes", TaintSource: "dependency review diff output"},
+		{OutputName: "invalid-license-changes", TaintSource: "dependency review diff output"},
+		{OutputName: "denied-changes", TaintSource: "dependency review diff output"},
+		{OutputName: "comment-content", TaintSource: "dependency review diff output"},
+	}
 }
 
 // AnalyzeStep analyzes a step for $GITHUB_OUTPUT writes with tainted values.

@@ -219,6 +219,76 @@ func TestCodeInjectionMedium_AutoFix_YAMLOutput(t *testing.T) {
 	}
 }
 
+func TestCodeInjectionMedium_AutoFix_DependencyReviewOutput(t *testing.T) {
+	rule := CodeInjectionMediumRule(nil)
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request"},
+			},
+		},
+	}
+	runScript := `echo '${{ steps.review.outputs.dependency-changes }}'`
+	runStep := &ast.Step{
+		Name: &ast.String{Value: "Use review output"},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: runScript,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+		BaseNode: &yaml.Node{
+			Kind: yaml.MappingNode,
+			Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Value: "name"},
+				{Kind: yaml.ScalarNode, Value: "Use review output"},
+				{Kind: yaml.ScalarNode, Value: "run"},
+				{Kind: yaml.ScalarNode, Value: runScript},
+			},
+		},
+	}
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{
+				ID: &ast.String{Value: "review"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/dependency-review-action@v4"},
+				},
+			},
+			runStep,
+		},
+	}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+
+	if len(rule.Errors()) == 0 {
+		t.Fatal("Expected errors but got none")
+	}
+	if err := rule.FixStep(runStep); err != nil {
+		t.Fatalf("FixStep() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	if err := enc.Encode(runStep.BaseNode); err != nil {
+		t.Fatalf("Failed to encode YAML: %v", err)
+	}
+	yamlOutput := buf.String()
+	if !strings.Contains(yamlOutput, "DEPENDENCY_CHANGES:") {
+		t.Fatalf("YAML output should contain sanitized env var DEPENDENCY_CHANGES, got:\n%s", yamlOutput)
+	}
+	if strings.Contains(yamlOutput, "TAINTED") || strings.Contains(yamlOutput, "dependency-changes:") {
+		t.Fatalf("YAML output should not derive env var name from taint annotation or raw hyphenated output, got:\n%s", yamlOutput)
+	}
+	if !strings.Contains(yamlOutput, "${{ steps.review.outputs.dependency-changes }}") {
+		t.Fatalf("YAML output should preserve original expression as env value, got:\n%s", yamlOutput)
+	}
+	if !strings.Contains(yamlOutput, "echo '$DEPENDENCY_CHANGES'") {
+		t.Fatalf("YAML output should replace direct interpolation with env var reference, got:\n%s", yamlOutput)
+	}
+}
+
 func TestCodeInjectionCritical_AutoFix_GitHubScript_YAMLOutput(t *testing.T) {
 	rule := CodeInjectionCriticalRule(nil)
 

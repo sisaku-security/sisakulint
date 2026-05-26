@@ -159,6 +159,37 @@ func TestTaintTracker_AnalyzeStep_SafeOutput(t *testing.T) {
 	}
 }
 
+func TestTaintTracker_AnalyzeStep_DependencyReviewActionOutputs(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTaintTracker()
+	step := &ast.Step{
+		ID: &ast.String{Value: "review"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/dependency-review-action@v4"},
+		},
+	}
+
+	tracker.AnalyzeStep(step)
+
+	outputs := tracker.taintedOutputs["review"]
+	for _, outputName := range []string{
+		"vulnerable-changes",
+		"dependency-changes",
+		"invalid-license-changes",
+		"denied-changes",
+		"comment-content",
+	} {
+		sources, ok := outputs[outputName]
+		if !ok {
+			t.Fatalf("dependency-review-action output %q should be tainted", outputName)
+		}
+		if !slices.Contains(sources, "dependency review diff output") {
+			t.Fatalf("output %q sources = %v, want dependency review diff output", outputName, sources)
+		}
+	}
+}
+
 func TestTaintTracker_IsTainted(t *testing.T) {
 	t.Parallel()
 
@@ -982,7 +1013,7 @@ func TestAssignmentValueText_SglQuoted(t *testing.T) {
 			want:   "hello",
 		},
 		{
-			name:   "single_quoted_with_placeholder",
+			name: "single_quoted_with_placeholder",
 			// SglQuoted.Value がそのまま戻り値に含まれること。
 			// SglQuoted ケースが無いと "" になる。
 			script: `X='${{ github.event.issue.title }}'`,
