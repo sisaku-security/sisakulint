@@ -102,7 +102,7 @@ sisakulint categorizes security rules by severity based on CVSS scores, attack i
 | [unsound-contains]({{< ref "unsoundcontains.md" >}}) | 6/10 | Detects bypassable contains() function usage | Yes |
 | [archived-uses]({{< ref "archiveduses.md" >}}) | 5/10 | Detects usage of archived actions | No |
 | [unpinned-images]({{< ref "unpinnedimages.md" >}}) | 6/10 | Container images not pinned by SHA256 digest | No |
-| [dependency-review-settings]({{< ref "dependencyreviewsettings.md" >}}) | Medium | Detects dependency-review-action comment summaries without pull-requests write permission | No |
+| [dependency-review-settings]({{< ref "dependencyreviewsettings.md" >}}) | Medium | Detects weakened dependency-review-action gates and PR comment permission mismatches | No |
 
 ### Low Severity Rules (0.1-3.9)
 

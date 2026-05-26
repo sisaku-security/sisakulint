@@ -78,6 +78,10 @@ func (rule *DependencyReviewSettingsRule) VisitStep(step *ast.Step) error {
 }
 
 func (rule *DependencyReviewSettingsRule) checkSecurityGateSettings(step *ast.Step, action *ast.ExecAction) {
+	hasConfigFile := !dependencyReviewInputMissing(action, "config-file")
+	vulnerabilityDisabled := false
+	licenseDisabled := false
+
 	if dependencyReviewInputEquals(action, "warn-only", "true") {
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "warn-only"),
@@ -86,6 +90,7 @@ func (rule *DependencyReviewSettingsRule) checkSecurityGateSettings(step *ast.St
 	}
 
 	if value, ok := dependencyReviewDisabledInputValue(action, "vulnerability-check"); ok {
+		vulnerabilityDisabled = true
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "vulnerability-check"),
 			"(warning) actions/dependency-review-action sets vulnerability-check: %s, so vulnerable dependencies will not be checked. Enable vulnerability-check for an enforcing security gate. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
@@ -94,6 +99,7 @@ func (rule *DependencyReviewSettingsRule) checkSecurityGateSettings(step *ast.St
 	}
 
 	if value, ok := dependencyReviewDisabledInputValue(action, "license-check"); ok {
+		licenseDisabled = true
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "license-check"),
 			"(info) actions/dependency-review-action sets license-check: %s. Enable license-check when license policy enforcement is expected. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
@@ -101,21 +107,21 @@ func (rule *DependencyReviewSettingsRule) checkSecurityGateSettings(step *ast.St
 		)
 	}
 
-	if dependencyReviewInputMissing(action, "fail-on-severity") {
+	if !hasConfigFile && !vulnerabilityDisabled && dependencyReviewInputMissing(action, "fail-on-severity") {
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "fail-on-severity"),
 			"(info) actions/dependency-review-action does not set fail-on-severity. Set an explicit vulnerability severity threshold for the dependency review gate. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
 		)
 	}
 
-	if dependencyReviewInputMissing(action, "fail-on-scopes") {
+	if !hasConfigFile && !vulnerabilityDisabled && dependencyReviewInputMissing(action, "fail-on-scopes") {
 		rule.Errorf(
 			dependencyReviewInputPos(step, action, "fail-on-scopes"),
 			"(info) actions/dependency-review-action does not set fail-on-scopes. Set explicit dependency scopes for the dependency review gate. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",
 		)
 	}
 
-	if dependencyReviewInputMissing(action, "allow-licenses") && dependencyReviewInputMissing(action, "deny-licenses") {
+	if !hasConfigFile && !licenseDisabled && dependencyReviewInputMissing(action, "allow-licenses") && dependencyReviewInputMissing(action, "deny-licenses") {
 		rule.Errorf(
 			step.Pos,
 			"(info) actions/dependency-review-action does not define a license policy with allow-licenses or deny-licenses. Configure one of them when license review is expected. See https://sisaku-security.github.io/lint/docs/rules/dependencyreviewsettings/",

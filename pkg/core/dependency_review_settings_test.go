@@ -298,6 +298,53 @@ jobs:
 	assertDependencyReviewFinding(t, rule, "license-check", "false", "info")
 }
 
+func TestDependencyReviewSettingsRule_ConfigFileSkipsMissingInlineRecommendations(t *testing.T) {
+	t.Parallel()
+
+	workflow := `
+name: dependency review
+on: pull_request
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/dependency-review-action@v4
+        with:
+          config-file: ./.github/dependency-review.yml
+          warn-only: true
+`
+	rule := runDependencyReviewSettingsRule(t, workflow)
+
+	assertDependencyReviewFinding(t, rule, "warn-only", "warning")
+	assertNoDependencyReviewFinding(t, rule, "fail-on-severity")
+	assertNoDependencyReviewFinding(t, rule, "fail-on-scopes")
+	assertNoDependencyReviewFinding(t, rule, "does not define a license policy")
+}
+
+func TestDependencyReviewSettingsRule_DisabledGatesSkipRelatedMissingRecommendations(t *testing.T) {
+	t.Parallel()
+
+	workflow := `
+name: dependency review
+on: pull_request
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/dependency-review-action@v4
+        with:
+          vulnerability-check: false
+          license-check: false
+`
+	rule := runDependencyReviewSettingsRule(t, workflow)
+
+	assertDependencyReviewFinding(t, rule, "vulnerability-check", "false", "warning")
+	assertDependencyReviewFinding(t, rule, "license-check", "false", "info")
+	assertNoDependencyReviewFinding(t, rule, "fail-on-severity")
+	assertNoDependencyReviewFinding(t, rule, "fail-on-scopes")
+	assertNoDependencyReviewFinding(t, rule, "does not define a license policy")
+}
+
 func TestDependencyReviewSettingsRule_DetectsMissingRecommendedSettings(t *testing.T) {
 	t.Parallel()
 
@@ -476,4 +523,24 @@ func assertDependencyReviewFinding(t *testing.T, rule *DependencyReviewSettingsR
 		}
 	}
 	t.Fatalf("expected dependency-review-settings finding containing %v, got errors = %v", contains, rule.Errors())
+}
+
+func assertNoDependencyReviewFinding(t *testing.T, rule *DependencyReviewSettingsRule, contains ...string) {
+	t.Helper()
+
+	for _, err := range rule.Errors() {
+		if err.Type != "dependency-review-settings" {
+			continue
+		}
+		matches := true
+		for _, want := range contains {
+			if !strings.Contains(err.Description, want) {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			t.Fatalf("expected no dependency-review-settings finding containing %v, got errors = %v", contains, rule.Errors())
+		}
+	}
 }

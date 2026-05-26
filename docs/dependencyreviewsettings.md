@@ -175,5 +175,6 @@ jobs:
 
 - Dynamic expressions in `permissions:` are not evaluated.
 - The rule checks scalar `with:` values only. Dynamic expressions such as `${{ ... }}` are treated conservatively for value-specific checks.
+- When `config-file` is set, missing inline recommendations such as `fail-on-severity`, `fail-on-scopes`, and license policy are not reported because the external config file may define them.
 - Large allow-list detection currently uses a threshold of 5 or more entries.
 - Repository default token permissions are not inferred; add explicit `pull-requests: write` when PR comments are required.
