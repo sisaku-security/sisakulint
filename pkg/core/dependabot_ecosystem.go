@@ -23,8 +23,8 @@ type DependabotEcosystemRule struct {
 }
 
 // ecosystemRequirement represents a detected need for one or more dependabot ecosystems.
-// accepts has size 1 for unambiguous signals and size 2 for ambiguous ones (setup-java
-// implies {maven, gradle}). pos is the anchor for the warning; nil means project-level
+// accepts has size 1 for unambiguous signals and is larger for ambiguous ones (setup-java
+// implies {maven, gradle, sbt}). pos is the anchor for the warning; nil means project-level
 // (Position{1,1}).
 type ecosystemRequirement struct {
 	accepts []string
@@ -83,7 +83,8 @@ func (rule *DependabotEcosystemRule) VisitJobPre(_ *ast.Job) error { return nil 
 func (rule *DependabotEcosystemRule) VisitJobPost(_ *ast.Job) error { return nil }
 
 // setupActionEcosystems maps a setup-action `uses` prefix to the ecosystems it implies.
-// setup-java is ambiguous and accepts either maven or gradle.
+// setup-java is ambiguous and is satisfied by maven, gradle, or sbt (Dependabot added
+// sbt support on 2026-05-26).
 var setupActionEcosystems = []struct {
 	prefix  string
 	accepts []string
@@ -91,7 +92,7 @@ var setupActionEcosystems = []struct {
 	{"actions/setup-node", []string{"npm"}},
 	{"actions/setup-go", []string{"gomod"}},
 	{"actions/setup-python", []string{"pip"}},
-	{"actions/setup-java", []string{"maven", "gradle"}},
+	{"actions/setup-java", []string{"maven", "gradle", "sbt"}},
 	{"ruby/setup-ruby", []string{"bundler"}},
 }
 
@@ -144,13 +145,16 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		return nil
 	}
 
+	// Evaluate setup-action requirements before lockfile requirements: when the same
+	// ecosystem is implied by both, dedup keeps the first occurrence, and setup-action
+	// requirements carry a precise step anchor while lockfile requirements anchor at line 1.
 	var reqs []ecosystemRequirement
+	reqs = append(reqs, rule.setupActionReqs...)
 	for _, lf := range lockfileEcosystems {
 		if _, err := os.Stat(filepath.Join(rule.projectRoot, lf.file)); err == nil {
 			reqs = append(reqs, ecosystemRequirement{accepts: []string{lf.ecosystem}, label: lf.file})
 		}
 	}
-	reqs = append(reqs, rule.setupActionReqs...)
 	if len(reqs) == 0 {
 		return nil
 	}

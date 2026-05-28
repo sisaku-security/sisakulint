@@ -159,6 +159,9 @@ updates:
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 deduped npm error, got %d: %v", len(errs), errs)
 	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected the deduped warning to keep the setup-action anchor (line 7), got line %d", errs[0].LineNumber)
+	}
 }
 
 func TestDependabotEcosystem_SetupNodeSatisfied(t *testing.T) {
@@ -254,6 +257,30 @@ updates:
 	errs := runEcosystemRule(t, rule, step)
 	if len(errs) != 0 {
 		t.Fatalf("expected 0 errors (gradle satisfies setup-java), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupJavaSbtSatisfies(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "sbt"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (sbt satisfies setup-java), got %d: %v", len(errs), errs)
 	}
 }
 
