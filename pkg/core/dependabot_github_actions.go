@@ -172,49 +172,12 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 
 // findProjectRoot finds the project root directory by looking for .github directory.
 func (rule *DependabotGitHubActionsRule) findProjectRoot(workflowPath string) string {
-	absPath, err := filepath.Abs(workflowPath)
-	if err != nil {
-		return ""
-	}
-
-	dir := filepath.Dir(absPath)
-
-	// If the workflow directory doesn't exist on the local filesystem (e.g. remote
-	// scan virtual paths like "owner/repo/.github/workflows/ci.yml"), skip the check.
-	if _, err := os.Stat(dir); err != nil {
-		return ""
-	}
-	for {
-		// Check if .github directory exists
-		githubDir := filepath.Join(dir, ".github")
-		if info, err := os.Stat(githubDir); err == nil && info.IsDir() {
-			return dir
-		}
-
-		// Move to parent directory
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			// Reached root
-			break
-		}
-		dir = parent
-	}
-	return ""
+	return dependabotFindProjectRoot(workflowPath)
 }
 
 // findDependabotFile finds the dependabot configuration file.
 func (rule *DependabotGitHubActionsRule) findDependabotFile(projectRoot string) string {
-	yamlPath := filepath.Join(projectRoot, ".github", "dependabot.yaml")
-	if _, err := os.Stat(yamlPath); err == nil {
-		return yamlPath
-	}
-
-	ymlPath := filepath.Join(projectRoot, ".github", "dependabot.yml")
-	if _, err := os.Stat(ymlPath); err == nil {
-		return ymlPath
-	}
-
-	return ""
+	return dependabotFindConfigFile(projectRoot)
 }
 
 // renovateConfig represents the partial structure of a renovate.json configuration file
@@ -230,16 +193,7 @@ type renovateConfig struct {
 // GitHub Actions. Returns true if Renovate is configured as an equivalent replacement for
 // the dependabot github-actions ecosystem.
 func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(projectRoot string) bool {
-	candidates := []string{
-		filepath.Join(projectRoot, ".github", "renovate.json"),
-		filepath.Join(projectRoot, ".github", "renovate.json5"),
-		filepath.Join(projectRoot, "renovate.json"),
-		filepath.Join(projectRoot, "renovate.json5"),
-		filepath.Join(projectRoot, ".renovaterc"),
-		filepath.Join(projectRoot, ".renovaterc.json"),
-	}
-
-	for _, path := range candidates {
+	for _, path := range renovateConfigCandidates(projectRoot) {
 		if _, err := os.Stat(path); err != nil {
 			continue
 		}
@@ -294,23 +248,11 @@ func renovateManagesGitHubActions(data []byte) bool {
 
 // checkDependabotConfig checks if the dependabot config has github-actions ecosystem.
 func (rule *DependabotGitHubActionsRule) checkDependabotConfig(path string) (bool, error) {
-	data, err := os.ReadFile(path)
+	eco, err := dependabotConfiguredEcosystems(path)
 	if err != nil {
 		return false, err
 	}
-
-	var config dependabotConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return false, err
-	}
-
-	for _, update := range config.Updates {
-		if update.PackageEcosystem == "github-actions" {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return eco["github-actions"], nil
 }
 
 // createDependabotFile creates a new dependabot.yaml file with github-actions ecosystem.

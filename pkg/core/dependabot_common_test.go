@@ -1,0 +1,57 @@
+package core
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDependabotConfiguredEcosystems(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "dependabot.yaml")
+	content := `version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	got, err := dependabotConfiguredEcosystems(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got["npm"] || !got["gomod"] {
+		t.Errorf("expected npm and gomod, got %v", got)
+	}
+	if got["pip"] {
+		t.Errorf("pip should not be present, got %v", got)
+	}
+}
+
+func TestRenovateManagesDependencies(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	renovate := `{ "extends": ["config:recommended"] }`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	if !renovateManagesDependencies(tmp) {
+		t.Errorf("expected renovate with config:recommended to be detected")
+	}
+}
