@@ -256,3 +256,34 @@ updates:
 		t.Fatalf("expected 0 errors (gradle satisfies setup-java), got %d: %v", len(errs), errs)
 	}
 }
+
+func TestDependabotEcosystem_NoConfigWarnsForLockfile(t *testing.T) {
+	t.Parallel()
+
+	// No dependabot config at all; a root lockfile is present.
+	wfPath := writeEcosystemFixture(t, "", "package-lock.json")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (npm, no dependabot config), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_RenovateBroadPresetSkips(t *testing.T) {
+	t.Parallel()
+
+	wfPath := writeEcosystemFixture(t, "", "package-lock.json")
+	// Place a Renovate config with a broad preset at the project root's .github dir.
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath))) // <tmp> from <tmp>/.github/workflows/test.yaml
+	renovate := `{ "extends": ["config:recommended"] }`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (renovate manages deps), got %d: %v", len(errs), errs)
+	}
+}

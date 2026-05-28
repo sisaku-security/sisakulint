@@ -138,6 +138,12 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		return nil
 	}
 
+	// Renovate managing dependencies is an accepted alternative to Dependabot.
+	if renovateManagesDependencies(rule.projectRoot) {
+		rule.Debug("renovate config managing dependencies found, skipping dependabot-ecosystem check (path: %s)", rule.workflowPath)
+		return nil
+	}
+
 	var reqs []ecosystemRequirement
 	for _, lf := range lockfileEcosystems {
 		if _, err := os.Stat(filepath.Join(rule.projectRoot, lf.file)); err == nil {
