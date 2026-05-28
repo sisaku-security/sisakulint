@@ -109,3 +109,78 @@ updates:
 		t.Fatalf("expected 0 errors in remote scan mode, got %d: %v", len(errs), errs)
 	}
 }
+
+func TestDependabotEcosystem_SetupPythonMissingPip(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_LockfileAndSetupSameEcosystemDeduped(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "package-lock.json")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 deduped npm error, got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeSatisfied(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (npm configured), got %d: %v", len(errs), errs)
+	}
+}

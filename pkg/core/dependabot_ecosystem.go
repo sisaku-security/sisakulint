@@ -82,8 +82,50 @@ func (rule *DependabotEcosystemRule) VisitJobPre(_ *ast.Job) error { return nil 
 // VisitJobPost is a no-op for this rule.
 func (rule *DependabotEcosystemRule) VisitJobPost(_ *ast.Job) error { return nil }
 
-// VisitStep is a no-op until setup-action detection is added in a later task.
-func (rule *DependabotEcosystemRule) VisitStep(_ *ast.Step) error { return nil }
+// setupActionEcosystems maps a setup-action `uses` prefix to the ecosystems it implies.
+// setup-java is ambiguous and accepts either maven or gradle.
+var setupActionEcosystems = []struct {
+	prefix  string
+	accepts []string
+}{
+	{"actions/setup-node", []string{"npm"}},
+	{"actions/setup-go", []string{"gomod"}},
+	{"actions/setup-python", []string{"pip"}},
+	{"actions/setup-java", []string{"maven", "gradle"}},
+	{"ruby/setup-ruby", []string{"bundler"}},
+}
+
+// VisitStep records ecosystem requirements implied by setup actions in the workflow.
+func (rule *DependabotEcosystemRule) VisitStep(step *ast.Step) error {
+	action, ok := step.Exec.(*ast.ExecAction)
+	if !ok || action.Uses == nil {
+		return nil
+	}
+	uses := action.Uses.Value
+	for _, m := range setupActionEcosystems {
+		if matchesUsesPrefix(uses, m.prefix) {
+			rule.setupActionReqs = append(rule.setupActionReqs, ecosystemRequirement{
+				accepts: m.accepts,
+				label:   m.prefix,
+				pos:     action.Uses.Pos,
+			})
+		}
+	}
+	return nil
+}
+
+// matchesUsesPrefix reports whether a `uses` value refers to the given action, i.e. it is
+// exactly the prefix or the prefix followed by '@' (version) or '/' (subpath). This avoids
+// matching unrelated actions like "actions/setup-node-extra".
+func matchesUsesPrefix(uses, prefix string) bool {
+	if uses == prefix {
+		return true
+	}
+	if strings.HasPrefix(uses, prefix) {
+		return uses[len(prefix)] == '@' || uses[len(prefix)] == '/'
+	}
+	return false
+}
 
 // VisitWorkflowPost collects ecosystem requirements from root lockfiles and the workflow's
 // setup actions, then warns for each requirement not satisfied by the dependabot config.
