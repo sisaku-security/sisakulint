@@ -184,3 +184,75 @@ updates:
 		t.Fatalf("expected 0 errors (npm configured), got %d: %v", len(errs), errs)
 	}
 }
+
+func TestDependabotEcosystem_SetupJavaNeitherMavenNorGradle(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (neither maven nor gradle), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupJavaMavenSatisfies(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (maven satisfies setup-java), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupJavaGradleSatisfies(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (gradle satisfies setup-java), got %d: %v", len(errs), errs)
+	}
+}
