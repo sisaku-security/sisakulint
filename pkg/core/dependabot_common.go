@@ -80,11 +80,36 @@ func renovateConfigCandidates(projectRoot string) []string {
 	}
 }
 
-// renovateManagesDependencies reports whether a Renovate config exists that manages package
-// dependencies, via a broad preset (config:recommended / config:base / config:best-practices)
-// or any packageRules.matchManagers entry. Best-effort skip condition for
-// DependabotEcosystemRule.
-func renovateManagesDependencies(projectRoot string) bool {
+// renovateManagerToEcosystem maps Renovate manager names to the dependabot package-ecosystem
+// they correspond to. Only managers relevant to DependabotEcosystemRule are listed; managers
+// that do not map to a checked ecosystem (e.g. github-actions, dockerfile, nvm) are ignored so
+// they do not suppress unrelated ecosystems.
+var renovateManagerToEcosystem = map[string]string{
+	"npm":              "npm",
+	"gomod":            "gomod",
+	"cargo":            "cargo",
+	"bundler":          "bundler",
+	"composer":         "composer",
+	"pip_requirements": "pip",
+	"pip_setup":        "pip",
+	"pip-compile":      "pip",
+	"poetry":           "pip",
+	"pep621":           "pip",
+	"setup-cfg":        "pip",
+	"maven":            "maven",
+	"maven-wrapper":    "maven",
+	"gradle":           "gradle",
+	"gradle-wrapper":   "gradle",
+	"sbt":              "sbt",
+}
+
+// renovateManagedEcosystems inspects Renovate configs in projectRoot and returns the set of
+// dependabot ecosystems that Renovate manages via packageRules.matchManagers. The all return
+// value is true when a broad preset (config:recommended / config:base / config:best-practices)
+// is extended, which enables every manager. Best-effort: unrecognized managers are ignored so
+// a Renovate rule scoped to one ecosystem does not suppress warnings for the others.
+func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all bool) {
+	managed = map[string]bool{}
 	knownPresets := []string{"config:recommended", "config:base", "config:best-practices"}
 	for _, path := range renovateConfigCandidates(projectRoot) {
 		data, err := os.ReadFile(path)
@@ -95,18 +120,20 @@ func renovateManagesDependencies(projectRoot string) bool {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			continue
 		}
-		for _, r := range cfg.PackageRules {
-			if len(r.MatchManagers) > 0 {
-				return true
-			}
-		}
 		for _, ext := range cfg.Extends {
 			for _, preset := range knownPresets {
 				if ext == preset {
-					return true
+					all = true
+				}
+			}
+		}
+		for _, r := range cfg.PackageRules {
+			for _, m := range r.MatchManagers {
+				if eco, ok := renovateManagerToEcosystem[m]; ok {
+					managed[eco] = true
 				}
 			}
 		}
 	}
-	return false
+	return managed, all
 }

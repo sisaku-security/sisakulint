@@ -314,3 +314,41 @@ func TestDependabotEcosystem_RenovateBroadPresetSkips(t *testing.T) {
 		t.Fatalf("expected 0 errors (renovate manages deps), got %d: %v", len(errs), errs)
 	}
 }
+
+func TestDependabotEcosystem_RenovateScopedManagerDoesNotSuppressOthers(t *testing.T) {
+	t.Parallel()
+
+	// Cargo.lock present, no dependabot config, Renovate scoped to npm only.
+	// The missing cargo coverage must still be reported.
+	wfPath := writeEcosystemFixture(t, "", "Cargo.lock")
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	renovate := `{ "packageRules": [{ "matchManagers": ["npm"] }] }`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (cargo not managed by npm-scoped renovate), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_RenovateScopedManagerSuppressesMatch(t *testing.T) {
+	t.Parallel()
+
+	// Cargo.lock present, no dependabot config, Renovate scoped to cargo.
+	// The cargo requirement is covered by Renovate, so no warning is expected.
+	wfPath := writeEcosystemFixture(t, "", "Cargo.lock")
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	renovate := `{ "packageRules": [{ "matchManagers": ["cargo"] }] }`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (cargo managed by renovate), got %d: %v", len(errs), errs)
+	}
+}

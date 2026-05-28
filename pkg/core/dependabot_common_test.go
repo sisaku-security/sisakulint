@@ -38,7 +38,7 @@ updates:
 	}
 }
 
-func TestRenovateManagesDependencies(t *testing.T) {
+func TestRenovateManagedEcosystems_BroadPreset(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
@@ -51,7 +51,34 @@ func TestRenovateManagesDependencies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !renovateManagesDependencies(tmp) {
-		t.Errorf("expected renovate with config:recommended to be detected")
+	_, all := renovateManagedEcosystems(tmp)
+	if !all {
+		t.Errorf("expected config:recommended to enable all managers (all=true)")
+	}
+}
+
+func TestRenovateManagedEcosystems_SpecificManagers(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Renovate scoped to npm only; gomod manager maps to the gomod ecosystem.
+	renovate := `{ "packageRules": [{ "matchManagers": ["npm", "gomod"] }] }`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false when only specific matchManagers are set")
+	}
+	if !managed["npm"] || !managed["gomod"] {
+		t.Errorf("expected npm and gomod managed, got %v", managed)
+	}
+	if managed["cargo"] {
+		t.Errorf("cargo should not be managed, got %v", managed)
 	}
 }

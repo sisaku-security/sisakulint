@@ -139,9 +139,13 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		return nil
 	}
 
-	// Renovate managing dependencies is an accepted alternative to Dependabot.
-	if renovateManagesDependencies(rule.projectRoot) {
-		rule.Debug("renovate config managing dependencies found, skipping dependabot-ecosystem check (path: %s)", rule.workflowPath)
+	// Renovate is an accepted alternative to Dependabot. A broad preset enables every
+	// manager, so the check is skipped entirely; otherwise only the ecosystems Renovate
+	// actually manages are treated as covered (a Renovate rule scoped to npm must not
+	// suppress a missing cargo warning).
+	renovateManaged, renovateAll := renovateManagedEcosystems(rule.projectRoot)
+	if renovateAll {
+		rule.Debug("renovate broad preset manages all ecosystems, skipping dependabot-ecosystem check (path: %s)", rule.workflowPath)
 		return nil
 	}
 
@@ -159,19 +163,25 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		return nil
 	}
 
-	configured := map[string]bool{}
+	// An ecosystem is covered when the dependabot config declares it or Renovate manages it.
+	covered := make(map[string]bool, len(renovateManaged))
+	for eco := range renovateManaged {
+		covered[eco] = true
+	}
 	if configPath := dependabotFindConfigFile(rule.projectRoot); configPath != "" {
 		eco, err := dependabotConfiguredEcosystems(configPath)
 		if err != nil {
 			rule.Debug("failed to parse dependabot config: %v", err)
 			return nil
 		}
-		configured = eco
+		for e := range eco {
+			covered[e] = true
+		}
 	}
 
 	seen := map[string]bool{}
 	for _, req := range reqs {
-		if requirementSatisfied(req, configured) {
+		if requirementSatisfied(req, covered) {
 			continue
 		}
 		key := strings.Join(req.accepts, "|")
