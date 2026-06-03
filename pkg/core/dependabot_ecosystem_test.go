@@ -334,6 +334,26 @@ func TestDependabotEcosystem_RenovateScopedManagerDoesNotSuppressOthers(t *testi
 	}
 }
 
+func TestDependabotEcosystem_RenovateEnabledManagersDoesNotSkipUnlistedEcosystems(t *testing.T) {
+	t.Parallel()
+
+	// Repo with a root package-lock.json but no dependabot config. Renovate extends a
+	// broad preset and sets enabledManagers:["github-actions"], so Renovate will NOT
+	// update npm — the rule must still surface the missing npm coverage.
+	wfPath := writeEcosystemFixture(t, "", "package-lock.json")
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	renovate := `{ "extends": ["config:recommended"], "enabledManagers": ["github-actions"] }`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 npm warning (enabledManagers narrowed renovate to github-actions only), got %d: %v", len(errs), errs)
+	}
+}
+
 func TestDependabotEcosystem_RootLockfileWarningDedupedAcrossWorkflows(t *testing.T) {
 	// Repository with one root lockfile and several workflow files must produce a
 	// single project-level warning, not one warning per workflow file. This test

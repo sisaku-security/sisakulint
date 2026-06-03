@@ -117,6 +117,66 @@ func TestRenovateManagedEcosystems_JSON5SpecificManagers(t *testing.T) {
 	}
 }
 
+func TestRenovateManagedEcosystems_EnabledManagersOverridesBroadPreset(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// extends a broad preset but limits Renovate to github-actions only. Per Renovate
+	// docs, enabledManagers disables every manager not in the list, so npm/cargo/...
+	// must NOT be treated as managed. The "all" return value must be false.
+	renovate := `{
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions"]
+}`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false when enabledManagers narrows the broad preset")
+	}
+	// github-actions is intentionally outside renovateManagerToEcosystem (it's handled
+	// by DependabotGitHubActionsRule), so the managed set stays empty for npm/cargo/etc.
+	if managed["npm"] || managed["cargo"] {
+		t.Errorf("expected npm/cargo to remain unmanaged under enabledManagers=[github-actions], got %v", managed)
+	}
+}
+
+func TestRenovateManagedEcosystems_EnabledManagersListsEcosystem(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// extends + enabledManagers:["npm"] limits Renovate to npm only. The broad preset
+	// no longer implies all=true, but npm itself must be reported as managed.
+	renovate := `{
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm"]
+}`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false when enabledManagers is set, got all=true")
+	}
+	if !managed["npm"] {
+		t.Errorf("expected npm to be managed via enabledManagers, got %v", managed)
+	}
+	if managed["cargo"] {
+		t.Errorf("cargo should NOT be managed when enabledManagers=[npm], got %v", managed)
+	}
+}
+
 func TestStripJSON5Sugar_PreservesStrings(t *testing.T) {
 	t.Parallel()
 

@@ -104,13 +104,19 @@ var renovateManagerToEcosystem = map[string]string{
 }
 
 // renovateManagedEcosystems inspects Renovate configs in projectRoot and returns the set of
-// dependabot ecosystems that Renovate manages via packageRules.matchManagers. The all return
-// value is true when a broad preset (config:recommended / config:base / config:best-practices)
-// is extended, which enables every manager. Best-effort: unrecognized managers are ignored so
-// a Renovate rule scoped to one ecosystem does not suppress warnings for the others.
+// dependabot ecosystems that Renovate manages via packageRules.matchManagers and
+// enabledManagers. The all return value is true when a broad preset (config:recommended /
+// config:base / config:best-practices) is extended *and* the config does not narrow that
+// scope via enabledManagers, which Renovate documents as restricting active managers to
+// only those listed. Best-effort: unrecognized managers are ignored so a Renovate rule
+// scoped to one ecosystem does not suppress warnings for the others.
 func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all bool) {
 	managed = map[string]bool{}
 	knownPresets := []string{"config:recommended", "config:base", "config:best-practices"}
+	var (
+		hasBroadPreset            bool
+		enabledManagersConstrains bool
+	)
 	for _, path := range renovateConfigCandidates(projectRoot) {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -130,7 +136,19 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		for _, ext := range cfg.Extends {
 			for _, preset := range knownPresets {
 				if ext == preset {
-					all = true
+					hasBroadPreset = true
+				}
+			}
+		}
+		// enabledManagers restricts Renovate to the listed managers and disables the rest,
+		// so the "broad preset enables every manager" assumption no longer holds. Record
+		// each listed manager's ecosystem so a config like `enabledManagers: ["npm"]` still
+		// suppresses npm warnings while leaving sibling ecosystems (cargo, etc.) to surface.
+		if len(cfg.EnabledManagers) > 0 {
+			enabledManagersConstrains = true
+			for _, m := range cfg.EnabledManagers {
+				if eco, ok := renovateManagerToEcosystem[m]; ok {
+					managed[eco] = true
 				}
 			}
 		}
@@ -142,6 +160,7 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 			}
 		}
 	}
+	all = hasBroadPreset && !enabledManagersConstrains
 	return managed, all
 }
 

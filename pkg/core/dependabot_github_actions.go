@@ -183,8 +183,9 @@ func (rule *DependabotGitHubActionsRule) findDependabotFile(projectRoot string) 
 // renovateConfig represents the partial structure of a renovate.json configuration file
 // used to check if the github-actions manager is enabled.
 type renovateConfig struct {
-	Extends      []string `json:"extends" yaml:"extends"`
-	PackageRules []struct {
+	Extends         []string `json:"extends" yaml:"extends"`
+	EnabledManagers []string `json:"enabledManagers" yaml:"enabledManagers"`
+	PackageRules    []struct {
 		MatchManagers []string `json:"matchManagers" yaml:"matchManagers"`
 	} `json:"packageRules" yaml:"packageRules"`
 }
