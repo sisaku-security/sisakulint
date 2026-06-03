@@ -93,6 +93,7 @@ var renovateManagerToEcosystem = map[string]string{
 	"pip_requirements": "pip",
 	"pip_setup":        "pip",
 	"pip-compile":      "pip",
+	"pipenv":           "pip",
 	"poetry":           "pip",
 	"pep621":           "pip",
 	"setup-cfg":        "pip",

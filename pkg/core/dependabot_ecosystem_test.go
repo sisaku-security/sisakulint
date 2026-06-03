@@ -334,6 +334,26 @@ func TestDependabotEcosystem_RenovateScopedManagerDoesNotSuppressOthers(t *testi
 	}
 }
 
+func TestDependabotEcosystem_RenovatePipenvManagesPip(t *testing.T) {
+	t.Parallel()
+
+	// Repo with root Pipfile.lock and a Renovate config scoped to the pipenv manager
+	// (Renovate's manager for Pipfile / Pipfile.lock). pipenv maps to Dependabot's
+	// "pip" ecosystem, so the rule must treat pip as covered and emit no warning.
+	wfPath := writeEcosystemFixture(t, "", "Pipfile.lock")
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	renovate := `{ "enabledManagers": ["pipenv"] }`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (pipenv manages Pipfile.lock → pip ecosystem), got %d: %v", len(errs), errs)
+	}
+}
+
 func TestDependabotEcosystem_RenovateEnabledManagersDoesNotSkipUnlistedEcosystems(t *testing.T) {
 	t.Parallel()
 
