@@ -233,6 +233,27 @@ func stripJSON5Sugar(data []byte) []byte {
 					j++
 					continue
 				}
+				// Skip line comments between the comma and the bracket so trailing-
+				// comma removal still triggers for `, // ...\n]` and `, /* ... */ ]`.
+				if w == '/' && j+1 < n && data[j+1] == '/' {
+					j += 2
+					for j < n && data[j] != '\n' {
+						j++
+					}
+					continue
+				}
+				if w == '/' && j+1 < n && data[j+1] == '*' {
+					j += 2
+					for j+1 < n && !(data[j] == '*' && data[j+1] == '/') {
+						j++
+					}
+					if j+1 < n {
+						j += 2
+					} else {
+						j = n
+					}
+					continue
+				}
 				break
 			}
 			if j < n && (data[j] == ']' || data[j] == '}') {

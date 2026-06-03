@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestDependabotConfiguredEcosystems(t *testing.T) {
@@ -213,6 +215,61 @@ func TestStripJSON5Sugar_PreservesStrings(t *testing.T) {
 	want := `{"k": "a // not a comment, still a string", "x": [1, 2]}`
 	if out != want {
 		t.Errorf("stripJSON5Sugar mismatch:\n  got:  %q\n  want: %q", out, want)
+	}
+}
+
+// TestStripJSON5Sugar_TrailingCommaWithCommentsRemoved exercises the comma+comment
+// interleaving the original lookahead missed: trailing commas followed by a line or
+// block comment before the closing bracket. The trailing comma must be dropped (not
+// just have its neighbouring comment stripped) so the output is valid strict JSON.
+func TestStripJSON5Sugar_TrailingCommaWithCommentsRemoved(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{
+			name: "block comment between trailing comma and bracket",
+			in:   `{"x": ["cargo", /* trailing */ ]}`,
+		},
+		{
+			name: "line comment between trailing comma and bracket",
+			in:   "{\"x\": [\"cargo\", // trailing\n]}",
+		},
+		{
+			name: "block comment between trailing comma and brace",
+			in:   `{"x": "y", /* trailing */ }`,
+		},
+		{
+			name: "consecutive block comments after trailing comma",
+			in:   `{"x": ["cargo", /* a */ /* b */ ]}`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out := string(stripJSON5Sugar([]byte(tc.in)))
+			// After stripping, no "," may immediately precede a closing bracket
+			// (allowing whitespace in between, but not non-stripped content).
+			for i := 0; i < len(out)-1; i++ {
+				if out[i] != ',' {
+					continue
+				}
+				j := i + 1
+				for j < len(out) && (out[j] == ' ' || out[j] == '\t' || out[j] == '\r' || out[j] == '\n') {
+					j++
+				}
+				if j < len(out) && (out[j] == ']' || out[j] == '}') {
+					t.Fatalf("trailing comma still present after strip:\n  input:  %q\n  output: %q", tc.in, out)
+				}
+			}
+			// And the result must parse as strict JSON.
+			var got any
+			if err := yaml.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatalf("stripped output failed to parse: %v\n  input:  %q\n  output: %q", err, tc.in, out)
+			}
+		})
 	}
 }
 
