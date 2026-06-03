@@ -360,6 +360,7 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 	}
 
 	resetKnownVulnerableActionsRunState()
+	resetDependabotEcosystemRunState()
 
 	l.log("getting started linting", fileCount, pluralize(fileCount, "workflow file...", "workflow files..."))
 
@@ -482,6 +483,7 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error) {
 	resetKnownVulnerableActionsRunState()
+	resetDependabotEcosystemRunState()
 
 	if project == nil {
 		pa, err := l.projectInformation.GetProjectForPath(file)
@@ -540,6 +542,7 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 // projectパラメタはnilにできる。その場合、ファイルパスからプロジェクトが検出される
 func (l *Linter) Lint(filepath string, content []byte, project *Project) (*ValidateResult, error) {
 	resetKnownVulnerableActionsRunState()
+	resetDependabotEcosystemRunState()
 
 	if project == nil && filepath != "<stdin>" {
 		if _, err := os.Stat(filepath); !errors.Is(err, fs.ErrNotExist) {

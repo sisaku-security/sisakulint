@@ -57,6 +57,78 @@ func TestRenovateManagedEcosystems_BroadPreset(t *testing.T) {
 	}
 }
 
+func TestRenovateManagedEcosystems_JSON5BroadPreset(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// renovate.json5 with // line comments, a /* */ block comment, and a trailing
+	// comma. yaml.Unmarshal alone rejects all three; the JSON5 strip path must
+	// recover so the broad preset is detected and "all" is reported as true.
+	renovate := `{
+  // Inherit the broad preset that enables every manager.
+  "extends": [
+    "config:recommended", /* trailing comma below is JSON5-only */
+  ],
+}
+`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json5"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	_, all := renovateManagedEcosystems(tmp)
+	if !all {
+		t.Errorf("expected JSON5 renovate config with config:recommended to enable all managers (all=true)")
+	}
+}
+
+func TestRenovateManagedEcosystems_JSON5SpecificManagers(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// String literals containing "//" must not be treated as comments.
+	renovate := `{
+  // scoped to cargo only
+  "packageRules": [
+    {
+      "description": "see https://example.com//docs",
+      "matchManagers": ["cargo",],
+    },
+  ],
+}
+`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json5"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false when only specific matchManagers are set")
+	}
+	if !managed["cargo"] {
+		t.Errorf("expected cargo to be managed from JSON5 renovate config, got %v", managed)
+	}
+}
+
+func TestStripJSON5Sugar_PreservesStrings(t *testing.T) {
+	t.Parallel()
+
+	in := []byte(`{"k": "a // not a comment, still a string", "x": [1, 2,],}`)
+	out := string(stripJSON5Sugar(in))
+	// Trailing commas before ] and } must be removed; string content must be intact.
+	want := `{"k": "a // not a comment, still a string", "x": [1, 2]}`
+	if out != want {
+		t.Errorf("stripJSON5Sugar mismatch:\n  got:  %q\n  want: %q", out, want)
+	}
+}
+
 func TestRenovateManagedEcosystems_SpecificManagers(t *testing.T) {
 	t.Parallel()
 

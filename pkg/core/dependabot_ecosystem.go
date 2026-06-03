@@ -4,9 +4,29 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
+
+// dependabotEcosystemReported deduplicates project-level (root-lockfile) warnings across
+// workflow files in a single Lint run. LintFiles constructs a fresh DependabotEcosystemRule
+// per workflow, so without this guard the same missing-root-lockfile warning would repeat
+// at line 1 of every workflow file in the repo. The key is the project root joined with
+// the lockfile label and the ecosystem signature, so distinct lockfiles in the same repo
+// still surface independently. Setup-action requirements are anchored to a step position
+// and are not deduplicated through this map — they are inherently per-workflow.
+var dependabotEcosystemReported sync.Map
+
+// resetDependabotEcosystemRunState clears the cross-workflow dedupe map. The Linter calls
+// this at the start of each public Lint / LintFiles entry so that library users running
+// multiple Lint passes in one process keep seeing warnings, and tests can isolate runs.
+func resetDependabotEcosystemRunState() {
+	dependabotEcosystemReported.Range(func(key, _ any) bool {
+		dependabotEcosystemReported.Delete(key)
+		return true
+	})
+}
 
 // DependabotEcosystemRule detects package ecosystems (npm/gomod/pip/cargo/bundler/composer/
 // maven/gradle) inferred from root-level lockfiles and workflow setup actions that are
@@ -189,6 +209,18 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 			continue
 		}
 		seen[key] = true
+
+		// Project-level findings (pos == nil) come from root lockfiles, which are a
+		// repository attribute, not a per-workflow one. Report each (projectRoot,
+		// lockfile, ecosystem) combination at most once per Lint run so a repo with N
+		// workflow files does not emit the same line-1 warning N times. Setup-action
+		// findings carry a step anchor and stay per-workflow.
+		if req.pos == nil {
+			repoKey := rule.projectRoot + "\x00" + req.label + "\x00" + key
+			if _, loaded := dependabotEcosystemReported.LoadOrStore(repoKey, struct{}{}); loaded {
+				continue
+			}
+		}
 
 		pos := req.pos
 		if pos == nil {

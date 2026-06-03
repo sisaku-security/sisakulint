@@ -334,6 +334,76 @@ func TestDependabotEcosystem_RenovateScopedManagerDoesNotSuppressOthers(t *testi
 	}
 }
 
+func TestDependabotEcosystem_RootLockfileWarningDedupedAcrossWorkflows(t *testing.T) {
+	// Repository with one root lockfile and several workflow files must produce a
+	// single project-level warning, not one warning per workflow file. This test
+	// shares dependabotEcosystemReported with parallel tests, so it cannot use
+	// t.Parallel; it resets the dedupe state at start to keep ordering hermetic.
+	resetDependabotEcosystemRunState()
+	t.Cleanup(resetDependabotEcosystemRunState)
+
+	tmp := t.TempDir()
+	wfDir := filepath.Join(tmp, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "package-lock.json"), []byte("x"), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	wfPaths := []string{
+		filepath.Join(wfDir, "ci.yaml"),
+		filepath.Join(wfDir, "release.yaml"),
+		filepath.Join(wfDir, "nightly.yaml"),
+	}
+
+	totalErrs := 0
+	for _, wfPath := range wfPaths {
+		rule := NewDependabotEcosystemRule(wfPath, false)
+		errs := runEcosystemRule(t, rule)
+		totalErrs += len(errs)
+	}
+
+	if totalErrs != 1 {
+		t.Fatalf("expected the root-lockfile npm warning to be reported once across %d workflows, got %d", len(wfPaths), totalErrs)
+	}
+}
+
+func TestDependabotEcosystem_SetupActionWarningNotDedupedAcrossWorkflows(t *testing.T) {
+	// Setup-action requirements are anchored to a step position and remain per-workflow
+	// even when the repo-level dedupe map is shared. This guards against accidentally
+	// suppressing them along with project-level findings.
+	resetDependabotEcosystemRunState()
+	t.Cleanup(resetDependabotEcosystemRunState)
+
+	tmp := t.TempDir()
+	wfDir := filepath.Join(tmp, ".github", "workflows")
+	if err := os.MkdirAll(wfDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	wfPaths := []string{
+		filepath.Join(wfDir, "ci.yaml"),
+		filepath.Join(wfDir, "release.yaml"),
+	}
+
+	totalErrs := 0
+	for _, wfPath := range wfPaths {
+		rule := NewDependabotEcosystemRule(wfPath, false)
+		step := &ast.Step{
+			Exec: &ast.ExecAction{
+				Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+			},
+		}
+		errs := runEcosystemRule(t, rule, step)
+		totalErrs += len(errs)
+	}
+
+	if totalErrs != len(wfPaths) {
+		t.Fatalf("expected %d setup-action warnings (one per workflow), got %d", len(wfPaths), totalErrs)
+	}
+}
+
 func TestDependabotEcosystem_RenovateScopedManagerSuppressesMatch(t *testing.T) {
 	t.Parallel()
 

@@ -118,7 +118,14 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		}
 		var cfg renovateConfig
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			continue
+			// Renovate accepts JSON5 (renovate.json5 and, in practice, .json/.renovaterc
+			// files with // comments or trailing commas). yaml.v3 reads JSON but rejects
+			// those JSON5 specifics, which would silently skip a broad-preset config and
+			// produce false positives. Strip the JSON5 sugar and retry before giving up.
+			cleaned := stripJSON5Sugar(data)
+			if err := yaml.Unmarshal(cleaned, &cfg); err != nil {
+				continue
+			}
 		}
 		for _, ext := range cfg.Extends {
 			for _, preset := range knownPresets {
@@ -136,4 +143,76 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		}
 	}
 	return managed, all
+}
+
+// stripJSON5Sugar removes JSON5-specific syntax — // line comments, /* */ block comments,
+// and trailing commas before ']' or '}' — from data so the result can be parsed by a JSON
+// (or YAML-as-JSON-superset) parser. String literals delimited by " or ' are preserved
+// verbatim, including escape sequences, so syntax inside strings is never touched.
+// Best-effort: unquoted keys and other JSON5 features the YAML parser already tolerates
+// are not normalized here.
+func stripJSON5Sugar(data []byte) []byte {
+	out := make([]byte, 0, len(data))
+	n := len(data)
+	inStr := false
+	var strDelim byte
+	for i := 0; i < n; {
+		c := data[i]
+		if inStr {
+			out = append(out, c)
+			if c == '\\' && i+1 < n {
+				out = append(out, data[i+1])
+				i += 2
+				continue
+			}
+			if c == strDelim {
+				inStr = false
+			}
+			i++
+			continue
+		}
+		if c == '"' || c == '\'' {
+			inStr = true
+			strDelim = c
+			out = append(out, c)
+			i++
+			continue
+		}
+		if c == '/' && i+1 < n && data[i+1] == '/' {
+			for i < n && data[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if c == '/' && i+1 < n && data[i+1] == '*' {
+			i += 2
+			for i+1 < n && !(data[i] == '*' && data[i+1] == '/') {
+				i++
+			}
+			if i+1 < n {
+				i += 2
+			} else {
+				i = n
+			}
+			continue
+		}
+		if c == ',' {
+			j := i + 1
+			for j < n {
+				w := data[j]
+				if w == ' ' || w == '\t' || w == '\r' || w == '\n' {
+					j++
+					continue
+				}
+				break
+			}
+			if j < n && (data[j] == ']' || data[j] == '}') {
+				i++
+				continue
+			}
+		}
+		out = append(out, c)
+		i++
+	}
+	return out
 }
