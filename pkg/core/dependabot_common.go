@@ -145,9 +145,15 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		// so the "broad preset enables every manager" assumption no longer holds. Record
 		// each listed manager's ecosystem so a config like `enabledManagers: ["npm"]` still
 		// suppresses npm warnings while leaving sibling ecosystems (cargo, etc.) to surface.
+		// Build a per-file enabled set so packageRules in the same config can be filtered:
+		// Renovate ignores packageRules whose matchManagers refer to managers it has globally
+		// disabled via enabledManagers.
+		var enabled map[string]bool
 		if len(cfg.EnabledManagers) > 0 {
 			enabledManagersConstrains = true
+			enabled = make(map[string]bool, len(cfg.EnabledManagers))
 			for _, m := range cfg.EnabledManagers {
+				enabled[m] = true
 				if eco, ok := renovateManagerToEcosystem[m]; ok {
 					managed[eco] = true
 				}
@@ -155,6 +161,9 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		}
 		for _, r := range cfg.PackageRules {
 			for _, m := range r.MatchManagers {
+				if enabled != nil && !enabled[m] {
+					continue
+				}
 				if eco, ok := renovateManagerToEcosystem[m]; ok {
 					managed[eco] = true
 				}

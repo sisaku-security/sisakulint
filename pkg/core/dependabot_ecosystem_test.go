@@ -334,6 +334,31 @@ func TestDependabotEcosystem_RenovateScopedManagerDoesNotSuppressOthers(t *testi
 	}
 }
 
+func TestDependabotEcosystem_PackageRulesIgnoredWhenEnabledManagersExcludes(t *testing.T) {
+	t.Parallel()
+
+	// Root package-lock.json + Renovate config that globally disables npm via
+	// enabledManagers:["github-actions"] but still references npm under packageRules.
+	// Per Renovate behavior, the npm packageRule never runs; the missing npm coverage
+	// must be reported.
+	wfPath := writeEcosystemFixture(t, "", "package-lock.json")
+	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	renovate := `{
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions"],
+  "packageRules": [{ "matchManagers": ["npm"] }]
+}`
+	if err := os.WriteFile(filepath.Join(projectRoot, ".github", "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 npm warning (packageRule for disabled npm manager must not suppress it), got %d: %v", len(errs), errs)
+	}
+}
+
 func TestDependabotEcosystem_RenovatePipenvManagesPip(t *testing.T) {
 	t.Parallel()
 

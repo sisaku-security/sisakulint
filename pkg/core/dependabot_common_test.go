@@ -177,6 +177,33 @@ func TestRenovateManagedEcosystems_EnabledManagersListsEcosystem(t *testing.T) {
 	}
 }
 
+func TestRenovateManagedEcosystems_PackageRulesIgnoredForDisabledManagers(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// enabledManagers globally disables every manager except github-actions, so the
+	// packageRules entry targeting "npm" must be ignored — Renovate would not run it.
+	renovate := `{
+  "enabledManagers": ["github-actions"],
+  "packageRules": [{ "matchManagers": ["npm"] }]
+}`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false when enabledManagers is set, got all=true")
+	}
+	if managed["npm"] {
+		t.Errorf("expected npm to be ignored — its packageRule manager is globally disabled, got managed=%v", managed)
+	}
+}
+
 func TestStripJSON5Sugar_PreservesStrings(t *testing.T) {
 	t.Parallel()
 
