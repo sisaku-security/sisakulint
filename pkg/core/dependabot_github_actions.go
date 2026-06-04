@@ -180,8 +180,9 @@ func (rule *DependabotGitHubActionsRule) findDependabotFile(projectRoot string) 
 	return dependabotFindConfigFile(projectRoot)
 }
 
-// renovateConfig represents the partial structure of a renovate.json configuration file
-// used to check if the github-actions manager is enabled.
+// renovateConfig represents the partial structure of a renovate.json / renovate.json5
+// configuration file. Shared by DependabotGitHubActionsRule and DependabotEcosystemRule;
+// each rule projects the fields it needs (Extends / EnabledManagers / PackageRules).
 type renovateConfig struct {
 	Extends         []string `json:"extends" yaml:"extends"`
 	EnabledManagers []string `json:"enabledManagers" yaml:"enabledManagers"`
@@ -220,6 +221,23 @@ func renovateManagesGitHubActions(data []byte) bool {
 	var cfg renovateConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return false
+	}
+
+	// enabledManagers narrows Renovate to the listed managers; if it is set and does
+	// not include "github-actions", Renovate disables the github-actions manager
+	// regardless of any preset or packageRule, so this config does NOT replace the
+	// dependabot github-actions ecosystem.
+	if len(cfg.EnabledManagers) > 0 {
+		enabled := false
+		for _, m := range cfg.EnabledManagers {
+			if m == "github-actions" {
+				enabled = true
+				break
+			}
+		}
+		if !enabled {
+			return false
+		}
 	}
 
 	for _, rule := range cfg.PackageRules {

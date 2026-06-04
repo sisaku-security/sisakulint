@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -16,6 +17,14 @@ import (
 // the lockfile label and the ecosystem signature, so distinct lockfiles in the same repo
 // still surface independently. Setup-action requirements are anchored to a step position
 // and are not deduplicated through this map — they are inherently per-workflow.
+//
+// Concurrency: this is a process-wide global, reset at the start of each public Lint
+// entrypoint via resetDependabotEcosystemRunState. Individual sync.Map ops are atomic,
+// but the dedupe semantics break under concurrent Lint() / LintFile() / LintFiles()
+// calls from the same process — a reset from one in-flight run can clear entries that
+// another in-flight run depends on, re-emitting the same project-level warning. CLI
+// usage is single-threaded and unaffected; library users that need per-run isolation
+// must serialize their Lint calls (or wrap them in their own mutex).
 var dependabotEcosystemReported sync.Map
 
 // resetDependabotEcosystemRunState clears the cross-workflow dedupe map. The Linter calls
@@ -172,8 +181,7 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 	// Evaluate setup-action requirements before lockfile requirements: when the same
 	// ecosystem is implied by both, dedup keeps the first occurrence, and setup-action
 	// requirements carry a precise step anchor while lockfile requirements anchor at line 1.
-	var reqs []ecosystemRequirement
-	reqs = append(reqs, rule.setupActionReqs...)
+	reqs := slices.Clone(rule.setupActionReqs)
 	for _, lf := range lockfileEcosystems {
 		if _, err := os.Stat(filepath.Join(rule.projectRoot, lf.file)); err == nil {
 			reqs = append(reqs, ecosystemRequirement{accepts: []string{lf.ecosystem}, label: lf.file})

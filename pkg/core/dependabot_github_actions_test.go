@@ -502,6 +502,36 @@ func TestRenovateManagesGitHubActions(t *testing.T) {
 }`,
 			expected: true,
 		},
+		{
+			// enabledManagers narrows Renovate to the listed managers; the broad
+			// preset alone must NOT mark github-actions as managed when the manager
+			// is globally disabled.
+			name: "broad preset but enabledManagers excludes github-actions",
+			content: `{
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm"]
+}`,
+			expected: false,
+		},
+		{
+			name: "enabledManagers explicitly includes github-actions",
+			content: `{
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions"]
+}`,
+			expected: true,
+		},
+		{
+			// A packageRule targeting github-actions does not save a config that
+			// globally disables the github-actions manager — Renovate would skip
+			// the rule entirely.
+			name: "packageRules target github-actions but enabledManagers excludes it",
+			content: `{
+  "enabledManagers": ["npm"],
+  "packageRules": [{ "matchManagers": ["github-actions"] }]
+}`,
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
