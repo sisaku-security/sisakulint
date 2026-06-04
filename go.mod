@@ -6,7 +6,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/haya14busa/go-sarif v0.0.0-20240630170108-a3ba8d79599f
-	github.com/mattn/go-colorable v0.1.14
+	github.com/mattn/go-colorable v0.1.15
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.45.0
