@@ -273,6 +273,103 @@ func TestStripJSON5Sugar_TrailingCommaWithCommentsRemoved(t *testing.T) {
 	}
 }
 
+func TestRenovateConfigCandidates_IncludesRenovatercJson5(t *testing.T) {
+	t.Parallel()
+
+	// Renovate also supports `.renovaterc.json5`. Confirm it is one of the candidate
+	// paths so configs at that filename are not silently ignored (would otherwise
+	// produce false positives in DependabotEcosystemRule / DependabotGitHubActionsRule).
+	tmp := t.TempDir()
+	got := renovateConfigCandidates(tmp)
+	want := filepath.Join(tmp, ".renovaterc.json5")
+	found := false
+	for _, p := range got {
+		if p == want {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("renovateConfigCandidates missing %q\n  got: %v", want, got)
+	}
+}
+
+func TestRenovateManagedEcosystems_RenovatercJson5Detected(t *testing.T) {
+	t.Parallel()
+
+	// A Renovate config stored at `.renovaterc.json5` (with JSON5 sugar) must be
+	// parsed and its broad preset honored.
+	tmp := t.TempDir()
+	renovate := `{
+  // a JSON5 comment
+  "extends": ["config:recommended",],
+}
+`
+	if err := os.WriteFile(filepath.Join(tmp, ".renovaterc.json5"), []byte(renovate), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	_, all := renovateManagedEcosystems(tmp)
+	if !all {
+		t.Errorf("expected broad preset in .renovaterc.json5 to set all=true")
+	}
+}
+
+func TestRenovateManagedEcosystems_FirstValidConfigWins(t *testing.T) {
+	t.Parallel()
+
+	// Renovate uses the first valid config it finds and does not merge with later
+	// candidates. With .github/renovate.json (first in the candidate order) scoped to
+	// npm and renovate.json (a later candidate) extending a broad preset, only the
+	// npm scope must apply — the broad preset in the *later* file must NOT promote
+	// `all` to true, which would suppress every ecosystem warning.
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first := `{ "packageRules": [{ "matchManagers": ["npm"] }] }`
+	later := `{ "extends": ["config:recommended"] }`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(first), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "renovate.json"), []byte(later), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	managed, all := renovateManagedEcosystems(tmp)
+	if all {
+		t.Errorf("expected all=false (only the first candidate is consulted), got all=true")
+	}
+	if !managed["npm"] {
+		t.Errorf("expected npm managed from the first candidate, got %v", managed)
+	}
+}
+
+func TestRenovateManagedEcosystems_SkipsUnparseableAndTriesNext(t *testing.T) {
+	t.Parallel()
+
+	// .github/renovate.json (first candidate) is malformed garbage; renovateManagedEcosystems
+	// must fall through to .github/renovate.json5 (next candidate) and honor its broad preset.
+	tmp := t.TempDir()
+	githubDir := filepath.Join(tmp, ".github")
+	if err := os.MkdirAll(githubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte("@@@ not parseable @@@"), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	valid := `{ "extends": ["config:recommended"] }`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json5"), []byte(valid), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	_, all := renovateManagedEcosystems(tmp)
+	if !all {
+		t.Errorf("expected fallback to the next valid candidate to set all=true, got all=false")
+	}
+}
+
 func TestRenovateManagedEcosystems_SpecificManagers(t *testing.T) {
 	t.Parallel()
 

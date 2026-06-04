@@ -191,21 +191,26 @@ type renovateConfig struct {
 	} `json:"packageRules" yaml:"packageRules"`
 }
 
-// hasRenovateGitHubActionsManager checks if any Renovate config file exists and manages
-// GitHub Actions. Returns true if Renovate is configured as an equivalent replacement for
-// the dependabot github-actions ecosystem.
+// hasRenovateGitHubActionsManager checks whether the *first* parseable Renovate config in
+// projectRoot manages GitHub Actions. Renovate does not merge across multiple candidate
+// files — it uses the first one it can parse in renovateConfigCandidates order — so this
+// stops at the first successfully parsed file regardless of whether that file manages
+// github-actions. A later file that *does* manage github-actions would never run under
+// Renovate, so honoring it here would suppress a dependabot-github-actions warning that
+// Renovate doesn't actually cover.
 func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(projectRoot string) bool {
 	for _, path := range renovateConfigCandidates(projectRoot) {
-		if _, err := os.Stat(path); err != nil {
-			continue
-		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		if renovateManagesGitHubActions(data) {
-			return true
+		if _, ok := parseRenovateConfig(data); !ok {
+			// Unparseable file — try the next candidate. Renovate would also reject
+			// an invalid config and fall through to a later one.
+			continue
 		}
+		// First valid candidate wins.
+		return renovateManagesGitHubActions(data)
 	}
 	return false
 }
@@ -216,10 +221,8 @@ func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(project
 //   - A known preset that enables github-actions management is extended
 //     (e.g. "config:recommended", "config:base", ":pinAllExceptPeerDependencies").
 func renovateManagesGitHubActions(data []byte) bool {
-	// Renovate config files are JSON (or JSON5). Use a tolerant unmarshal via yaml
-	// since gopkg.in/yaml.v3 handles JSON as a strict subset.
-	var cfg renovateConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	cfg, ok := parseRenovateConfig(data)
+	if !ok {
 		return false
 	}
 

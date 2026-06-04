@@ -68,7 +68,9 @@ func dependabotConfiguredEcosystems(path string) (map[string]bool, error) {
 	return result, nil
 }
 
-// renovateConfigCandidates returns the candidate Renovate config file paths for projectRoot.
+// renovateConfigCandidates returns the candidate Renovate config file paths for projectRoot,
+// in the order Renovate uses to find the *first* valid configuration. Callers should stop at
+// the first successfully parsed entry (Renovate itself does not merge across candidates).
 func renovateConfigCandidates(projectRoot string) []string {
 	return []string{
 		filepath.Join(projectRoot, ".github", "renovate.json"),
@@ -77,7 +79,25 @@ func renovateConfigCandidates(projectRoot string) []string {
 		filepath.Join(projectRoot, "renovate.json5"),
 		filepath.Join(projectRoot, ".renovaterc"),
 		filepath.Join(projectRoot, ".renovaterc.json"),
+		filepath.Join(projectRoot, ".renovaterc.json5"),
 	}
+}
+
+// parseRenovateConfig parses Renovate configuration bytes. It first tries strict YAML
+// (which transparently accepts JSON, the canonical Renovate format), then falls back to
+// JSON5 sugar removal so configs with // line comments, /* */ block comments, or trailing
+// commas still parse. Returns ok=true on success, false when both attempts fail; callers
+// can treat parse failure as "skip this candidate, try the next".
+func parseRenovateConfig(data []byte) (renovateConfig, bool) {
+	var cfg renovateConfig
+	if err := yaml.Unmarshal(data, &cfg); err == nil {
+		return cfg, true
+	}
+	cleaned := stripJSON5Sugar(data)
+	if err := yaml.Unmarshal(cleaned, &cfg); err == nil {
+		return cfg, true
+	}
+	return renovateConfig{}, false
 }
 
 // renovateManagerToEcosystem maps Renovate manager names to the dependabot package-ecosystem
@@ -104,36 +124,31 @@ var renovateManagerToEcosystem = map[string]string{
 	"sbt":              "sbt",
 }
 
-// renovateManagedEcosystems inspects Renovate configs in projectRoot and returns the set of
-// dependabot ecosystems that Renovate manages via packageRules.matchManagers and
-// enabledManagers. The all return value is true when a broad preset (config:recommended /
-// config:base / config:best-practices) is extended *and* the config does not narrow that
-// scope via enabledManagers, which Renovate documents as restricting active managers to
-// only those listed. Best-effort: unrecognized managers are ignored so a Renovate rule
-// scoped to one ecosystem does not suppress warnings for the others.
+// renovateManagedEcosystems inspects the *first* parseable Renovate config in projectRoot
+// (Renovate does not merge across multiple candidate files — it uses the first one found in
+// renovateConfigCandidates order) and returns the set of dependabot ecosystems that
+// Renovate manages via packageRules.matchManagers and enabledManagers. The all return value
+// is true when a broad preset (config:recommended / config:base / config:best-practices) is
+// extended *and* the config does not narrow that scope via enabledManagers, which Renovate
+// documents as restricting active managers to only those listed. Best-effort: unrecognized
+// managers are ignored so a Renovate rule scoped to one ecosystem does not suppress
+// warnings for the others.
 func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all bool) {
 	managed = map[string]bool{}
 	knownPresets := []string{"config:recommended", "config:base", "config:best-practices"}
-	var (
-		hasBroadPreset            bool
-		enabledManagersConstrains bool
-	)
 	for _, path := range renovateConfigCandidates(projectRoot) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		var cfg renovateConfig
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			// Renovate accepts JSON5 (renovate.json5 and, in practice, .json/.renovaterc
-			// files with // comments or trailing commas). yaml.v3 reads JSON but rejects
-			// those JSON5 specifics, which would silently skip a broad-preset config and
-			// produce false positives. Strip the JSON5 sugar and retry before giving up.
-			cleaned := stripJSON5Sugar(data)
-			if err := yaml.Unmarshal(cleaned, &cfg); err != nil {
-				continue
-			}
+		cfg, ok := parseRenovateConfig(data)
+		if !ok {
+			// Unparseable file — skip and try the next candidate, matching how
+			// Renovate would fall through to a later config if the first one is invalid.
+			continue
 		}
+		// First valid candidate wins; never merge with later candidates.
+		var hasBroadPreset bool
 		for _, ext := range cfg.Extends {
 			for _, preset := range knownPresets {
 				if ext == preset {
@@ -149,6 +164,7 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 		// Renovate ignores packageRules whose matchManagers refer to managers it has globally
 		// disabled via enabledManagers.
 		var enabled map[string]bool
+		var enabledManagersConstrains bool
 		if len(cfg.EnabledManagers) > 0 {
 			enabledManagersConstrains = true
 			enabled = make(map[string]bool, len(cfg.EnabledManagers))
@@ -169,9 +185,10 @@ func renovateManagedEcosystems(projectRoot string) (managed map[string]bool, all
 				}
 			}
 		}
+		all = hasBroadPreset && !enabledManagersConstrains
+		return managed, all
 	}
-	all = hasBroadPreset && !enabledManagersConstrains
-	return managed, all
+	return managed, false
 }
 
 // stripJSON5Sugar removes JSON5-specific syntax — // line comments, /* */ block comments,

@@ -735,3 +735,55 @@ func TestDependabotGitHubActionsRule_RemoteScanMode(t *testing.T) {
 		}
 	}
 }
+
+// TestRenovateManagesGitHubActions_JSON5 confirms that a Renovate config written in
+// JSON5 (// line comment + trailing comma) is parsed via the JSON5 sugar-strip path
+// instead of being silently dropped, which would otherwise produce a false-positive
+// dependabot-github-actions warning when Renovate actually manages the ecosystem.
+func TestRenovateManagesGitHubActions_JSON5(t *testing.T) {
+	t.Parallel()
+
+	content := `{
+  // JSON5-style line comment
+  "extends": ["config:recommended",],
+}
+`
+	if !renovateManagesGitHubActions([]byte(content)) {
+		t.Errorf("expected JSON5 renovate config with config:recommended to manage github-actions")
+	}
+}
+
+// TestDependabotGitHubActionsRule_RenovateFirstValidConfigWins guards against the
+// previous all-candidates-union behavior. With a higher-priority config that does NOT
+// manage github-actions and a lower-priority config that does, Renovate would only run
+// the first; honoring the second would incorrectly suppress the dependabot-github-actions
+// warning.
+func TestDependabotGitHubActionsRule_RenovateFirstValidConfigWins(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	githubDir := filepath.Join(tmpDir, ".github")
+	if err := os.MkdirAll(filepath.Join(githubDir, "workflows"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// First candidate: scoped to npm only — does NOT manage github-actions.
+	npmOnly := `{ "packageRules": [{ "matchManagers": ["npm"] }] }`
+	if err := os.WriteFile(filepath.Join(githubDir, "renovate.json"), []byte(npmOnly), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	// Later candidate: extends a broad preset that WOULD manage github-actions. This
+	// file must be ignored because Renovate already loaded the first one.
+	broad := `{ "extends": ["config:recommended"] }`
+	if err := os.WriteFile(filepath.Join(tmpDir, "renovate.json"), []byte(broad), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+
+	workflowPath := filepath.Join(githubDir, "workflows", "ci.yml")
+	if err := os.WriteFile(workflowPath, []byte("name: ci\non: push\njobs: {}\n"), 0o644); err != nil { //nolint:gosec // test fixture
+		t.Fatal(err)
+	}
+	rule := NewDependabotGitHubActionsRule(workflowPath, false)
+	if got := rule.hasRenovateGitHubActionsManager(tmpDir); got {
+		t.Errorf("expected first-valid-config-wins: the npm-only first candidate must NOT mark github-actions as managed (got %v)", got)
+	}
+}

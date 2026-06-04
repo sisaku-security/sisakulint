@@ -3,7 +3,7 @@ title: "Dependabot Ecosystem Rule"
 weight: 1
 ---
 
-### Dependabot Ecosystem Rule Overview
+## Dependabot Ecosystem Rule Overview
 
 This rule detects package ecosystems that a repository depends on but does not configure in its
 Dependabot configuration (`.github/dependabot.yaml` / `.github/dependabot.yml`). It infers the
@@ -13,15 +13,17 @@ reports each ecosystem that is not covered by a `package-ecosystem` entry.
 The `github-actions` ecosystem is intentionally out of scope here; it is handled by the
 `DependabotGitHubActionsRule`.
 
-#### Key Features
+### Key Features
 
 - **Lockfile Signals**: Infers ecosystems from lockfiles in the repository root.
 - **Setup-action Signals**: Infers ecosystems from `setup-*` actions in workflow steps.
 - **Local-scan Only**: Reads the local filesystem to locate lockfiles and the Dependabot config. The
   check is skipped in remote-scan mode.
 - **Diagnose-only**: Reports findings only; it does not auto-fix the Dependabot configuration.
-- **Renovate Aware**: Skips the check when a Renovate configuration manages dependencies (a broad
-  preset such as `config:recommended`, or any `packageRules.matchManagers` entry).
+- **Renovate Aware**: When a Renovate configuration extends a broad preset (e.g.
+  `config:recommended`), the check is skipped entirely. Otherwise only the ecosystems Renovate
+  actually manages (via `packageRules.matchManagers` or `enabledManagers`) are treated as covered;
+  warnings for other ecosystems still surface.
 - **Precise Anchoring**: Setup-action findings are anchored at the offending step; lockfile findings
   are reported at the top of the workflow file. When the same ecosystem is implied by both signals,
   the finding is deduplicated and keeps the precise step anchor.
@@ -37,7 +39,7 @@ chain patched.
 
 ### Ecosystem Inference
 
-#### Root-level lockfiles
+### Root-level lockfiles
 
 | File | Ecosystem |
 |------|-----------|
@@ -52,7 +54,7 @@ chain patched.
 
 Only the repository root is scanned; lockfiles in subdirectories are not inferred.
 
-#### Setup actions
+### Setup actions
 
 | Action | Ecosystem |
 |--------|-----------|
@@ -82,7 +84,7 @@ jobs:
 
 If `.github/dependabot.yaml` does not configure `npm`, the rule reports:
 
-```
+```text
 package ecosystem "npm" is used (detected from actions/setup-node) but not configured in dependabot.
 ```
 
@@ -106,6 +108,7 @@ updates:
   nested in subdirectories are not detected.
 - Matching is based on the presence of a `package-ecosystem`; the Dependabot `directory` value is not
   cross-checked.
-- The Renovate skip is best-effort: any `packageRules.matchManagers` entry or a recognized broad
-  preset suppresses the check.
+- The Renovate skip is best-effort: a recognized broad preset skips the check globally; otherwise
+  only ecosystems Renovate actually manages (matched via `packageRules.matchManagers` or
+  `enabledManagers`) are treated as covered, and warnings for the rest still surface.
 - The rule is diagnose-only and does not provide an auto-fix.
