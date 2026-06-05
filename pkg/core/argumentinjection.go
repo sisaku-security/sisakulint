@@ -415,7 +415,7 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 }
 
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
-	return HasPrivilegedTriggers(rule.workflow)
+	return hasPrivilegedTriggersForCriticalInjection(rule.workflow)
 }
 
 func (rule *ArgumentInjectionRule) RuleNames() string {

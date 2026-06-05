@@ -54,11 +54,11 @@ func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
 			description:  "issue_comment should be detected as privileged",
 		},
 		{
-			name:         "pull_request_review is privileged",
+			name:         "pull_request_review is normal",
 			trigger:      "pull_request_review",
 			runScript:    `git diff ${{ github.event.review.body }}`,
-			shouldDetect: true,
-			description:  "pull_request_review should be detected as privileged (review body is attacker-controlled)",
+			shouldDetect: false,
+			description:  "pull_request_review should not be detected as privileged",
 		},
 		{
 			name:         "pull_request is not privileged",
@@ -447,11 +447,11 @@ func TestArgumentInjection_MediumRule(t *testing.T) {
 			description: "Should not detect in privileged triggers (that's for critical rule)",
 		},
 		{
-			name:        "pull_request_review should not trigger medium rule",
+			name:        "pull_request_review trigger + untrusted input",
 			trigger:     "pull_request_review",
 			runScript:   `git diff ${{ github.event.review.body }}`,
-			wantErrors:  0,
-			description: "Should not detect pull_request_review in medium rule",
+			wantErrors:  1,
+			description: "Should detect pull_request_review in medium rule",
 		},
 	}
 

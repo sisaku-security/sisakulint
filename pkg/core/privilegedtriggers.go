@@ -6,9 +6,11 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
-// PrivilegedTriggers contains the list of workflow triggers that grant elevated privileges.
-// These triggers have write access to the repository or can access secrets, making them
-// potentially dangerous when combined with untrusted input.
+// PrivilegedTriggers contains the workflow triggers that shared security rules
+// treat as privileged or otherwise high risk. Most grant write access to the
+// repository or can access secrets, making them dangerous when combined with
+// untrusted input. Rules with narrower severity semantics can use a smaller
+// trigger set.
 //
 // References:
 // - https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
@@ -19,7 +21,20 @@ var PrivilegedTriggers = map[string]bool{
 	"issue_comment":       true, // Triggered by untrusted issue/PR comments
 	"issues":              true, // Can be triggered by external users
 	"discussion_comment":  true, // Triggered by untrusted discussion comments
-	"pull_request_review": true, // Review body is attacker-controlled; runs in base repo context with secrets access
+	"pull_request_review": true, // Review body is attacker-controlled; some rules treat it as high risk
+}
+
+// privilegedTriggersForCriticalInjection contains the trigger set used by
+// argument-injection and request-forgery to route findings to critical severity.
+// pull_request_review is intentionally excluded: it carries attacker-controlled
+// review input, but it runs on the PR merge ref and forked PR runs do not receive
+// secrets and have a read-only GITHUB_TOKEN, so these findings remain medium.
+var privilegedTriggersForCriticalInjection = map[string]bool{
+	"pull_request_target": true,
+	"workflow_run":        true,
+	"issue_comment":       true,
+	"issues":              true,
+	"discussion_comment":  true,
 }
 
 // HasPrivilegedTriggers checks if a workflow has any privileged triggers.
@@ -36,13 +51,21 @@ var PrivilegedTriggers = map[string]bool{
 //	    // Handle privileged workflow
 //	}
 func HasPrivilegedTriggers(workflow *ast.Workflow) bool {
+	return hasAnyWorkflowTrigger(workflow, PrivilegedTriggers)
+}
+
+func hasPrivilegedTriggersForCriticalInjection(workflow *ast.Workflow) bool {
+	return hasAnyWorkflowTrigger(workflow, privilegedTriggersForCriticalInjection)
+}
+
+func hasAnyWorkflowTrigger(workflow *ast.Workflow, triggers map[string]bool) bool {
 	if workflow == nil || workflow.On == nil {
 		return false
 	}
 
 	for _, event := range workflow.On {
 		eventName := strings.ToLower(event.EventName())
-		if PrivilegedTriggers[eventName] {
+		if triggers[eventName] {
 			return true
 		}
 	}

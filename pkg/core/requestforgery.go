@@ -471,7 +471,7 @@ func (rule *RequestForgeryRule) VisitWorkflowPost(node *ast.Workflow) error {
 }
 
 func (rule *RequestForgeryRule) hasPrivilegedTriggers() bool {
-	return HasPrivilegedTriggers(rule.workflow)
+	return hasPrivilegedTriggersForCriticalInjection(rule.workflow)
 }
 
 func (rule *RequestForgeryRule) RuleNames() string {

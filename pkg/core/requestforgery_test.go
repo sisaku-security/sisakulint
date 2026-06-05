@@ -57,11 +57,11 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 			description:  "issues should be detected as privileged",
 		},
 		{
-			name:         "pull_request_review is privileged",
+			name:         "pull_request_review is normal",
 			trigger:      "pull_request_review",
 			runScript:    `curl "${{ github.event.review.body }}"`,
-			shouldDetect: true,
-			description:  "pull_request_review should be detected as privileged (review body is attacker-controlled)",
+			shouldDetect: false,
+			description:  "pull_request_review should not be detected as privileged",
 		},
 		{
 			name:         "pull_request is not privileged",
@@ -397,11 +397,11 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 			description:  "issue_comment should not be detected by medium rule",
 		},
 		{
-			name:         "pull_request_review is privileged",
+			name:         "pull_request_review is normal",
 			trigger:      "pull_request_review",
 			runScript:    `curl "${{ github.event.review.body }}"`,
-			shouldDetect: false,
-			description:  "pull_request_review should not be detected by medium rule",
+			shouldDetect: true,
+			description:  "pull_request_review should be detected by medium rule",
 		},
 	}
 
