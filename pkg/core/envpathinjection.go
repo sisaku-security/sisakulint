@@ -335,31 +335,35 @@ func setRunScriptValueForPath(stepNode *yaml.Node, newValue string) error {
 
 // generateEnvVarName generates an environment variable name from an untrusted path
 func (rule *EnvPathInjectionRule) generateEnvVarName(path string) string {
+	path = stripTaintAnnotation(path)
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 {
-		return "UNTRUSTED_PATH"
+		return "UNTRUSTED_INPUT"
 	}
 
 	// Common patterns
-	if len(parts) >= 4 && parts[0] == "github" && parts[1] == "event" {
+	if len(parts) >= 4 && parts[0] == ContextGithub && parts[1] == EventCategory {
 		category := parts[2]         // pull_request, issue, comment, etc.
 		field := parts[len(parts)-1] // title, body, etc.
 
 		// Convert to uppercase and join
 		categoryUpper := strings.ToUpper(strings.ReplaceAll(category, "_", ""))
-		fieldUpper := strings.ToUpper(field)
+		fieldUpper := sanitizeEnvVarNameComponent(field)
 
 		// Create readable name
-		if categoryUpper == "PULLREQUEST" {
+		if categoryUpper == EventCategoryPR {
 			categoryUpper = "PR"
 		}
 
-		return fmt.Sprintf("%s_%s_PATH", categoryUpper, fieldUpper)
+		return sanitizeEnvVarNameComponent(fmt.Sprintf("%s_%s", categoryUpper, fieldUpper))
 	}
 
 	// Fallback: use last part
 	lastPart := parts[len(parts)-1]
-	return strings.ToUpper(lastPart) + "_PATH"
+	if name := sanitizeEnvVarNameComponent(lastPart); name != "" {
+		return name
+	}
+	return "UNTRUSTED_INPUT"
 }
 
 // extractAndParseExpressions extracts all expressions from string and parses them

@@ -197,6 +197,83 @@ func TestEnvPathInjectionCritical_AutoFix(t *testing.T) {
 	}
 }
 
+func TestEnvPathInjectionCritical_FixStep_ComposesWithCodeInjection(t *testing.T) {
+	tests := []struct {
+		name       string
+		run        string
+		want       string
+		absentEnvs []string
+	}{
+		{
+			name:       "pull request body gets realpath after code injection fix",
+			run:        `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want:       `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+			absentEnvs: []string{"PR_BODY_PATH"},
+		},
+		{
+			name: "multiple github path writes get realpath after code injection fix",
+			run: `echo "${{ github.event.pull_request.title }}" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+echo "${{ github.event.comment.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_TITLE")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$COMMENT_BODY")" >> "$GITHUB_PATH"`,
+			absentEnvs: []string{"PR_TITLE_PATH", "PR_BODY_PATH", "COMMENT_BODY_PATH"},
+		},
+		{
+			name:       "workflow run head branch gets realpath after code injection fix",
+			run:        `echo "${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_PATH"`,
+			want:       `echo "$(realpath "$WORKFLOWRUN_HEAD_BRANCH")" >> "$GITHUB_PATH"`,
+			absentEnvs: []string{"WORKFLOWRUN_HEAD_BRANCH_PATH"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tt.run)
+			codeRule := CodeInjectionCriticalRule(nil)
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := codeRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("code VisitWorkflowPre() error = %v", err)
+			}
+			if err := codeRule.VisitJobPre(job); err != nil {
+				t.Fatalf("code VisitJobPre() error = %v", err)
+			}
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+
+			if len(codeRule.AutoFixers()) == 0 {
+				t.Fatal("expected code-injection autofixer")
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+
+			if err := codeRule.FixStep(step); err != nil {
+				t.Fatalf("code FixStep() error = %v", err)
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tt.want {
+				t.Errorf("fixed run script = %q, want %q", got, tt.want)
+			}
+			for _, envName := range tt.absentEnvs {
+				if _, ok := step.Env.Vars[strings.ToLower(envName)]; ok {
+					t.Errorf("unexpected dead env var %q", envName)
+				}
+			}
+		})
+	}
+}
+
 func TestEnvPathInjectionCritical_ErrorMessage(t *testing.T) {
 	t.Parallel()
 	rule := EnvPathInjectionCriticalRule()
@@ -244,4 +321,24 @@ func TestEnvPathInjectionCritical_ErrorMessage(t *testing.T) {
 	if !strings.Contains(errMsg, "GITHUB_PATH") {
 		t.Errorf("error message should mention GITHUB_PATH, got: %s", errMsg)
 	}
+}
+
+func envPathInjectionCriticalWorkflowWithRun(run string) (*ast.Workflow, *ast.Job, *ast.Step) {
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target"},
+			},
+		},
+	}
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: run,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	return workflow, job, step
 }
