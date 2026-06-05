@@ -195,6 +195,9 @@ func applyGitHubScriptReplacements(value string, replacements map[string]string)
 
 		content := value[i+1 : end]
 		if rewritten, changed := rewriteGitHubScriptStringLiteral(content, quote, replacements, keys); changed {
+			if isJSObjectPropertyKeyLiteral(value, i, end) {
+				rewritten = "[" + rewritten + "]"
+			}
 			builder.WriteString(rewritten)
 		} else {
 			builder.WriteString(value[i : end+1])
@@ -226,6 +229,40 @@ func findJSBlockCommentEnd(value string, start int) int {
 		return start + end + len("*/")
 	}
 	return len(value)
+}
+
+func isJSObjectPropertyKeyLiteral(value string, start, end int) bool {
+	next := nextNonSpaceIndex(value, end+1)
+	if next == -1 || value[next] != ':' {
+		return false
+	}
+
+	prev := prevNonSpaceIndex(value, start-1)
+	return prev != -1 && (value[prev] == '{' || value[prev] == ',')
+}
+
+func nextNonSpaceIndex(value string, start int) int {
+	for i := start; i < len(value); i++ {
+		switch value[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+func prevNonSpaceIndex(value string, start int) int {
+	for i := start; i >= 0; i-- {
+		switch value[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		default:
+			return i
+		}
+	}
+	return -1
 }
 
 func findJSStringLiteralEnd(value string, start int, quote byte) (int, bool) {

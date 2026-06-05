@@ -382,3 +382,76 @@ func TestCodeInjectionCritical_AutoFix_GitHubScript_YAMLOutput(t *testing.T) {
 		t.Errorf("AST script = %q, want %q", gotScript, "console.log(process.env.COMMENT_BODY)")
 	}
 }
+
+func TestCodeInjectionCritical_AutoFix_GitHubScript_ObjectKey(t *testing.T) {
+	rule := CodeInjectionCriticalRule(nil)
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "issue_comment"},
+			},
+		},
+	}
+
+	scriptValue := `const headers = { '${{ github.event.issue.body }}': 'x' }`
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/github-script@v6"},
+			Inputs: map[string]*ast.Input{
+				"script": {
+					Name: &ast.String{Value: "script"},
+					Value: &ast.String{
+						Value: scriptValue,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+		BaseNode: &yaml.Node{
+			Kind: yaml.MappingNode,
+			Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Value: "uses"},
+				{Kind: yaml.ScalarNode, Value: "actions/github-script@v6"},
+				{Kind: yaml.ScalarNode, Value: "with"},
+				{
+					Kind: yaml.MappingNode,
+					Content: []*yaml.Node{
+						{Kind: yaml.ScalarNode, Value: "script"},
+						{Kind: yaml.ScalarNode, Value: scriptValue},
+					},
+				},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+
+	if len(rule.Errors()) == 0 {
+		t.Fatal("Expected errors but got none")
+	}
+	if err := rule.FixStep(step); err != nil {
+		t.Fatalf("FixStep() error = %v", err)
+	}
+
+	wantScript := `const headers = { [process.env.ISSUE_BODY]: 'x' }`
+	action := step.Exec.(*ast.ExecAction)
+	if gotScript := action.Inputs["script"].Value.Value; gotScript != wantScript {
+		t.Errorf("AST script = %q, want %q", gotScript, wantScript)
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	if err := enc.Encode(step.BaseNode); err != nil {
+		t.Fatalf("Failed to encode YAML: %v", err)
+	}
+	yamlOutput := buf.String()
+	if !strings.Contains(yamlOutput, "[process.env.ISSUE_BODY]") {
+		t.Errorf("YAML output should contain computed key [process.env.ISSUE_BODY], got:\n%s", yamlOutput)
+	}
+	if strings.Contains(yamlOutput, "{ process.env.ISSUE_BODY:") {
+		t.Errorf("YAML output should not emit process.env.ISSUE_BODY as a bare object key, got:\n%s", yamlOutput)
+	}
+}

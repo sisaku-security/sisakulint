@@ -45,6 +45,16 @@ fetch('${{ github.event.issue.body }}')`,
 			want: `// user's supplied URL
 fetch(process.env.ISSUE_BODY)`,
 		},
+		{
+			name:   "object literal key becomes computed property key",
+			script: `const headers = { '${{ github.event.issue.body }}': 'x' }`,
+			want:   `const headers = { [process.env.ISSUE_BODY]: 'x' }`,
+		},
+		{
+			name:   "embedded object literal key becomes computed property key",
+			script: `const headers = { 'prefix-${{ github.event.issue.body }}': 'x' }`,
+			want:   `const headers = { ['prefix-' + process.env.ISSUE_BODY]: 'x' }`,
+		},
 	}
 
 	for _, tt := range tests {
