@@ -55,6 +55,21 @@ fetch(process.env.ISSUE_BODY)`,
 			script: `const headers = { 'prefix-${{ github.event.issue.body }}': 'x' }`,
 			want:   `const headers = { ['prefix-' + process.env.ISSUE_BODY]: 'x' }`,
 		},
+		{
+			name:   "object literal method name becomes computed method name",
+			script: `const handlers = { '${{ github.event.issue.body }}'() {} }`,
+			want:   `const handlers = { [process.env.ISSUE_BODY]() {} }`,
+		},
+		{
+			name:   "embedded object literal method name becomes computed method name",
+			script: `const handlers = { 'prefix-${{ github.event.issue.body }}'() {} }`,
+			want:   `const handlers = { ['prefix-' + process.env.ISSUE_BODY]() {} }`,
+		},
+		{
+			name:   "class method name becomes computed method name",
+			script: `class Handler { '${{ github.event.issue.body }}'() {} }`,
+			want:   `class Handler { [process.env.ISSUE_BODY]() {} }`,
+		},
 	}
 
 	for _, tt := range tests {

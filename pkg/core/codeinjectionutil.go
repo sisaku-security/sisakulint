@@ -195,7 +195,7 @@ func applyGitHubScriptReplacements(value string, replacements map[string]string)
 
 		content := value[i+1 : end]
 		if rewritten, changed := rewriteGitHubScriptStringLiteral(content, quote, replacements, keys); changed {
-			if isJSObjectPropertyKeyLiteral(value, i, end) {
+			if isJSComputedPropertyNameLiteral(value, i, end) {
 				rewritten = "[" + rewritten + "]"
 			}
 			builder.WriteString(rewritten)
@@ -231,9 +231,9 @@ func findJSBlockCommentEnd(value string, start int) int {
 	return len(value)
 }
 
-func isJSObjectPropertyKeyLiteral(value string, start, end int) bool {
+func isJSComputedPropertyNameLiteral(value string, start, end int) bool {
 	next := nextNonSpaceIndex(value, end+1)
-	if next == -1 || value[next] != ':' {
+	if next == -1 || (value[next] != ':' && value[next] != '(') {
 		return false
 	}
 
