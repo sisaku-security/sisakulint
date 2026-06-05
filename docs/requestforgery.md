@@ -11,8 +11,8 @@ The Request Forgery rule detects Server-Side Request Forgery (SSRF) vulnerabilit
 
 ## Rule Variants
 
-- **request-forgery-critical**: Detects SSRF vulnerabilities in workflows with privileged triggers (`pull_request_target`, `workflow_run`, `issue_comment`)
-- **request-forgery-medium**: Detects SSRF vulnerabilities in workflows with normal triggers (`pull_request`, `push`, `schedule`)
+- **request-forgery-critical**: Detects SSRF vulnerabilities in workflows with privileged triggers (`pull_request_target`, `workflow_run`, `issue_comment`, `issues`, `discussion_comment`)
+- **request-forgery-medium**: Detects SSRF vulnerabilities in workflows with normal triggers (`pull_request`, `pull_request_review`, `push`, `schedule`)
 
 ## What It Detects
 

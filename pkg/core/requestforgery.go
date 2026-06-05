@@ -81,7 +81,7 @@ func newRequestForgeryRule(severityLevel string, checkPrivileged bool, wfTaintMa
 	var desc string
 
 	if checkPrivileged {
-		desc = "Checks for Server-Side Request Forgery (SSRF) vulnerabilities when untrusted input is used in network requests with privileged workflow triggers (pull_request_target, workflow_run, issue_comment). Attackers can access internal services, cloud metadata, or pivot to internal networks. See https://cwe.mitre.org/data/definitions/918.html"
+		desc = "Checks for Server-Side Request Forgery (SSRF) vulnerabilities when untrusted input is used in network requests with privileged workflow triggers. Attackers can access internal services, cloud metadata, or pivot to internal networks. See https://cwe.mitre.org/data/definitions/918.html"
 	} else {
 		desc = "Checks for Server-Side Request Forgery (SSRF) vulnerabilities when untrusted input is used in network requests with normal workflow triggers (pull_request, push, etc.). Attackers can access internal services, cloud metadata, or pivot to internal networks. See https://cwe.mitre.org/data/definitions/918.html"
 	}
@@ -471,26 +471,7 @@ func (rule *RequestForgeryRule) VisitWorkflowPost(node *ast.Workflow) error {
 }
 
 func (rule *RequestForgeryRule) hasPrivilegedTriggers() bool {
-	if rule.workflow == nil || rule.workflow.On == nil {
-		return false
-	}
-
-	privilegedTriggers := map[string]bool{
-		"pull_request_target": true,
-		"workflow_run":        true,
-		"issue_comment":       true,
-		"issues":              true,
-		"discussion_comment":  true,
-	}
-
-	for _, event := range rule.workflow.On {
-		eventName := strings.ToLower(event.EventName())
-		if privilegedTriggers[eventName] {
-			return true
-		}
-	}
-
-	return false
+	return hasPrivilegedTriggersForCriticalInjection(rule.workflow)
 }
 
 func (rule *RequestForgeryRule) RuleNames() string {

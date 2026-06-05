@@ -24,42 +24,56 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 	tests := []struct {
 		name         string
 		trigger      string
+		runScript    string
 		shouldDetect bool
 		description  string
 	}{
 		{
 			name:         "pull_request_target is privileged",
 			trigger:      "pull_request_target",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: true,
 			description:  "pull_request_target should be detected as privileged",
 		},
 		{
 			name:         "workflow_run is privileged",
 			trigger:      "workflow_run",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: true,
 			description:  "workflow_run should be detected as privileged",
 		},
 		{
 			name:         "issue_comment is privileged",
 			trigger:      "issue_comment",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: true,
 			description:  "issue_comment should be detected as privileged",
 		},
 		{
 			name:         "issues is privileged",
 			trigger:      "issues",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: true,
 			description:  "issues should be detected as privileged",
 		},
 		{
+			name:         "pull_request_review is normal",
+			trigger:      "pull_request_review",
+			runScript:    `curl "${{ github.event.review.body }}"`,
+			shouldDetect: false,
+			description:  "pull_request_review should not be detected as privileged",
+		},
+		{
 			name:         "pull_request is not privileged",
 			trigger:      "pull_request",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: false,
 			description:  "pull_request should not be detected as privileged",
 		},
 		{
 			name:         "push is not privileged",
 			trigger:      "push",
+			runScript:    `curl "${{ github.event.issue.body }}"`,
 			shouldDetect: false,
 			description:  "push should not be detected as privileged",
 		},
@@ -82,7 +96,7 @@ func TestRequestForgeryCritical_PrivilegedTriggers(t *testing.T) {
 					{
 						Exec: &ast.ExecRun{
 							Run: &ast.String{
-								Value: `curl "${{ github.event.issue.body }}"`,
+								Value: tt.runScript,
 								Pos:   &ast.Position{Line: 1, Col: 1},
 							},
 						},
@@ -343,38 +357,51 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 	tests := []struct {
 		name         string
 		trigger      string
+		runScript    string
 		shouldDetect bool
 		description  string
 	}{
 		{
 			name:         "pull_request is normal trigger",
 			trigger:      "pull_request",
+			runScript:    `curl "${{ github.event.pull_request.body }}"`,
 			shouldDetect: true,
 			description:  "pull_request should be detected by medium rule",
 		},
 		{
 			name:         "push is normal trigger",
 			trigger:      "push",
+			runScript:    `curl "${{ github.event.pull_request.body }}"`,
 			shouldDetect: true,
 			description:  "push should be detected by medium rule",
 		},
 		{
 			name:         "schedule is normal trigger",
 			trigger:      "schedule",
+			runScript:    `curl "${{ github.event.pull_request.body }}"`,
 			shouldDetect: true,
 			description:  "schedule should be detected by medium rule",
 		},
 		{
 			name:         "pull_request_target is privileged",
 			trigger:      "pull_request_target",
+			runScript:    `curl "${{ github.event.pull_request.body }}"`,
 			shouldDetect: false,
 			description:  "pull_request_target should not be detected by medium rule",
 		},
 		{
 			name:         "issue_comment is privileged",
 			trigger:      "issue_comment",
+			runScript:    `curl "${{ github.event.pull_request.body }}"`,
 			shouldDetect: false,
 			description:  "issue_comment should not be detected by medium rule",
+		},
+		{
+			name:         "pull_request_review is normal",
+			trigger:      "pull_request_review",
+			runScript:    `curl "${{ github.event.review.body }}"`,
+			shouldDetect: true,
+			description:  "pull_request_review should be detected by medium rule",
 		},
 	}
 
@@ -395,7 +422,7 @@ func TestRequestForgeryMedium_NormalTriggers(t *testing.T) {
 					{
 						Exec: &ast.ExecRun{
 							Run: &ast.String{
-								Value: `curl "${{ github.event.pull_request.body }}"`,
+								Value: tt.runScript,
 								Pos:   &ast.Position{Line: 1, Col: 1},
 							},
 						},

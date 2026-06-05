@@ -41,6 +41,7 @@ These triggers have write access to the repository and access to secrets, making
 
 Detects argument injection in **normal workflow triggers**:
 - `pull_request`
+- `pull_request_review`
 - `push`
 - `schedule`
 - `workflow_dispatch`

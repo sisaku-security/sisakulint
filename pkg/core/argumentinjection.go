@@ -115,7 +115,7 @@ func newArgumentInjectionRule(severityLevel string, checkPrivileged bool, wfTain
 	var desc string
 
 	if checkPrivileged {
-		desc = "Checks for argument injection vulnerabilities when untrusted input is used as command-line arguments in privileged workflow triggers (pull_request_target, workflow_run, issue_comment). Attackers can inject malicious options like --output=/etc/passwd or --config=malicious.conf. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
+		desc = "Checks for argument injection vulnerabilities when untrusted input is used as command-line arguments in privileged workflow triggers. Attackers can inject malicious options like --output=/etc/passwd or --config=malicious.conf. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
 	} else {
 		desc = "Checks for argument injection vulnerabilities when untrusted input is used as command-line arguments in normal workflow triggers (pull_request, push, etc.). Attackers can inject malicious options like --output=/etc/passwd or --config=malicious.conf. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions"
 	}
@@ -415,26 +415,7 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 }
 
 func (rule *ArgumentInjectionRule) hasPrivilegedTriggers() bool {
-	if rule.workflow == nil || rule.workflow.On == nil {
-		return false
-	}
-
-	privilegedTriggers := map[string]bool{
-		"pull_request_target": true,
-		"workflow_run":        true,
-		"issue_comment":       true,
-		"issues":              true,
-		"discussion_comment":  true,
-	}
-
-	for _, event := range rule.workflow.On {
-		eventName := strings.ToLower(event.EventName())
-		if privilegedTriggers[eventName] {
-			return true
-		}
-	}
-
-	return false
+	return hasPrivilegedTriggersForCriticalInjection(rule.workflow)
 }
 
 func (rule *ArgumentInjectionRule) RuleNames() string {

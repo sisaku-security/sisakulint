@@ -28,36 +28,49 @@ func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
 	tests := []struct {
 		name         string
 		trigger      string
+		runScript    string
 		shouldDetect bool
 		description  string
 	}{
 		{
 			name:         "pull_request_target is privileged",
 			trigger:      "pull_request_target",
+			runScript:    `git diff ${{ github.event.pull_request.head.ref }}`,
 			shouldDetect: true,
 			description:  "pull_request_target should be detected as privileged",
 		},
 		{
 			name:         "workflow_run is privileged",
 			trigger:      "workflow_run",
+			runScript:    `git diff ${{ github.event.pull_request.head.ref }}`,
 			shouldDetect: true,
 			description:  "workflow_run should be detected as privileged",
 		},
 		{
 			name:         "issue_comment is privileged",
 			trigger:      "issue_comment",
+			runScript:    `git diff ${{ github.event.pull_request.head.ref }}`,
 			shouldDetect: true,
 			description:  "issue_comment should be detected as privileged",
 		},
 		{
+			name:         "pull_request_review is normal",
+			trigger:      "pull_request_review",
+			runScript:    `git diff ${{ github.event.review.body }}`,
+			shouldDetect: false,
+			description:  "pull_request_review should not be detected as privileged",
+		},
+		{
 			name:         "pull_request is not privileged",
 			trigger:      "pull_request",
+			runScript:    `git diff ${{ github.event.pull_request.head.ref }}`,
 			shouldDetect: false,
 			description:  "pull_request should not be detected as privileged (critical rule)",
 		},
 		{
 			name:         "push is not privileged",
 			trigger:      "push",
+			runScript:    `git diff ${{ github.event.pull_request.head.ref }}`,
 			shouldDetect: false,
 			description:  "push should not be detected as privileged (critical rule)",
 		},
@@ -84,7 +97,7 @@ func TestArgumentInjection_PrivilegedTriggers(t *testing.T) {
 					{
 						Exec: &ast.ExecRun{
 							Run: &ast.String{
-								Value: `git diff ${{ github.event.pull_request.head.ref }}`,
+								Value: tt.runScript,
 								Pos:   &ast.Position{Line: 1, Col: 1},
 							},
 						},
@@ -432,6 +445,13 @@ func TestArgumentInjection_MediumRule(t *testing.T) {
 			runScript:   `git diff ${{ github.event.pull_request.head.ref }}`,
 			wantErrors:  0,
 			description: "Should not detect in privileged triggers (that's for critical rule)",
+		},
+		{
+			name:        "pull_request_review trigger + untrusted input",
+			trigger:     "pull_request_review",
+			runScript:   `git diff ${{ github.event.review.body }}`,
+			wantErrors:  1,
+			description: "Should detect pull_request_review in medium rule",
 		},
 	}
 
