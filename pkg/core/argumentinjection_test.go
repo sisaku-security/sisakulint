@@ -587,3 +587,150 @@ func TestArgumentInjection_GenerateEnvVarName(t *testing.T) {
 		})
 	}
 }
+
+func TestArgumentInjection_FixStep_ComposesWithCodeInjection(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "standalone argument gets double dash after code injection fix",
+			run:  `git diff ${{ github.event.pull_request.head.ref }}`,
+			want: `git diff -- "$PR_REF"`,
+		},
+		{
+			name: "embedded argument gets quoted without double dash after code injection fix",
+			run:  `curl https://api.example.com/${{ github.event.pull_request.title }}`,
+			want: `curl https://api.example.com/"$PR_TITLE"`,
+		},
+		{
+			name: "repeated standalone expression gets double dash after code injection fix",
+			run: `git diff ${{ github.event.pull_request.head.ref }}
+git log ${{ github.event.pull_request.head.ref }}`,
+			want: `git diff -- "$PR_REF"
+git log -- "$PR_REF"`,
+		},
+		{
+			name: "repeated mixed expression uses per-argument rewrite after code injection fix",
+			run: `git diff ${{ github.event.pull_request.head.ref }}
+curl https://api.example.com/${{ github.event.pull_request.head.ref }}`,
+			want: `git diff -- "$PR_REF"
+curl https://api.example.com/"$PR_REF"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workflow, job, step := argumentInjectionWorkflowWithRun(tt.run)
+			codeRule := CodeInjectionCriticalRule(nil)
+			argRule := ArgumentInjectionCriticalRule(nil)
+
+			if err := codeRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("code VisitWorkflowPre() error = %v", err)
+			}
+			if err := codeRule.VisitJobPre(job); err != nil {
+				t.Fatalf("code VisitJobPre() error = %v", err)
+			}
+			if err := argRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("arg VisitWorkflowPre() error = %v", err)
+			}
+			if err := argRule.VisitJobPre(job); err != nil {
+				t.Fatalf("arg VisitJobPre() error = %v", err)
+			}
+
+			if len(codeRule.AutoFixers()) == 0 {
+				t.Fatal("expected code-injection autofixer")
+			}
+			if len(argRule.AutoFixers()) == 0 {
+				t.Fatal("expected argument-injection autofixer")
+			}
+
+			if err := codeRule.FixStep(step); err != nil {
+				t.Fatalf("code FixStep() error = %v", err)
+			}
+			if err := argRule.FixStep(step); err != nil {
+				t.Fatalf("arg FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tt.want {
+				t.Errorf("fixed run script = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestArgumentInjection_FixStep_EmbeddedExpressionUsesQuoteOnly(t *testing.T) {
+	workflow, job, step := argumentInjectionWorkflowWithRun(
+		`curl https://api.example.com/${{ github.event.pull_request.title }}`,
+	)
+	rule := ArgumentInjectionCriticalRule(nil)
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() error = %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() error = %v", err)
+	}
+	if len(rule.AutoFixers()) == 0 {
+		t.Fatal("expected argument-injection autofixer")
+	}
+
+	if err := rule.FixStep(step); err != nil {
+		t.Fatalf("FixStep() error = %v", err)
+	}
+
+	want := `curl https://api.example.com/"$PR_TITLE"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+func TestArgumentInjection_FixStep_RepeatedMixedExpressionUsesPerArgumentRewrite(t *testing.T) {
+	workflow, job, step := argumentInjectionWorkflowWithRun(`git diff ${{ github.event.pull_request.head.ref }}
+curl https://api.example.com/${{ github.event.pull_request.head.ref }}`)
+	rule := ArgumentInjectionCriticalRule(nil)
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() error = %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() error = %v", err)
+	}
+	if len(rule.AutoFixers()) == 0 {
+		t.Fatal("expected argument-injection autofixer")
+	}
+
+	if err := rule.FixStep(step); err != nil {
+		t.Fatalf("FixStep() error = %v", err)
+	}
+
+	want := `git diff -- "$PR_REF"
+curl https://api.example.com/"$PR_REF"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+func argumentInjectionWorkflowWithRun(run string) (*ast.Workflow, *ast.Job, *ast.Step) {
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target"},
+			},
+		},
+	}
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: run,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{Steps: []*ast.Step{step}}
+	return workflow, job, step
+}

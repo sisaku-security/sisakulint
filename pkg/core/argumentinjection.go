@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -242,6 +243,10 @@ func (rule *ArgumentInjectionRule) prepareScriptForParsing(script string, exprs 
 	exprToPlaceholder := make(map[string]string)
 
 	for i, expr := range exprs {
+		if _, exists := exprToPlaceholder[expr.raw]; exists {
+			continue
+		}
+
 		exprPattern1 := fmt.Sprintf("${{ %s }}", expr.raw)
 		exprPattern2 := fmt.Sprintf("${{%s}}", expr.raw)
 		placeholderName := fmt.Sprintf("__SISAKULINT_ARGEXPR_%d__", i)
@@ -265,9 +270,14 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 	s *ast.Step,
 ) *stepWithArgumentInjection {
 	var stepUntrusted *stepWithArgumentInjection
+	processedExprs := make(map[string]bool)
 
 	for i := range exprs {
 		expr := &exprs[i]
+		if processedExprs[expr.raw] {
+			continue
+		}
+		processedExprs[expr.raw] = true
 
 		placeholderName := exprToPlaceholder[expr.raw]
 		varUsages := parser.FindVarUsageAsCommandArg(placeholderName, dangerousCmdNames)
@@ -451,6 +461,7 @@ func (rule *ArgumentInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	script := rule.replaceExpressionsWithEnvVars(run.Run.Value, stepInfo, envVarMap)
+	script = rule.rewriteExistingEnvVarArguments(script, stepInfo, envVarMap)
 	run.Run.Value = script
 
 	return rule.updateStepRunScript(step, script)
@@ -533,19 +544,111 @@ func (rule *ArgumentInjectionRule) replaceExpressionsWithEnvVars(
 		exprPattern1 := exprPrefix + untrustedInfo.expr.raw + exprSuffix
 		exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
 
-		newValue := rule.buildReplacementValue(envVarName, untrustedInfo.commandName)
+		newValue := fmt.Sprintf("$%s", envVarName)
 		script = strings.ReplaceAll(script, exprPattern1, newValue)
 		script = strings.ReplaceAll(script, exprPattern2, newValue)
 	}
 	return script
 }
 
-// buildReplacementValue builds the replacement value for an expression.
-func (rule *ArgumentInjectionRule) buildReplacementValue(envVarName, commandName string) string {
-	if commandsNotSupportingDoubleDash[commandName] {
-		return fmt.Sprintf("\"$%s\"", envVarName)
+type argumentScriptReplacement struct {
+	start       int
+	end         int
+	replacement string
+}
+
+// rewriteExistingEnvVarArguments fixes env-var references left behind by earlier
+// autofixers that already replaced the original ${{ }} expression.
+func (rule *ArgumentInjectionRule) rewriteExistingEnvVarArguments(
+	script string,
+	stepInfo *stepWithArgumentInjection,
+	envVarMap map[string]string,
+) string {
+	parser := shell.NewShellParser(script)
+	var replacements []argumentScriptReplacement
+
+	for _, untrustedInfo := range stepInfo.untrustedExprs {
+		envVarName := envVarMap[untrustedInfo.expr.raw]
+		if envVarName == "" {
+			continue
+		}
+
+		usages := parser.FindVarUsageAsCommandArg(envVarName, []string{untrustedInfo.commandName})
+		for _, usage := range usages {
+			replacement, ok := rule.replacementForEnvVarUsage(usage, envVarName)
+			if ok {
+				replacements = append(replacements, replacement)
+			}
+		}
 	}
-	return fmt.Sprintf("-- \"$%s\"", envVarName)
+
+	return applyArgumentScriptReplacements(script, replacements)
+}
+
+func (rule *ArgumentInjectionRule) replacementForEnvVarUsage(
+	usage shell.VarArgUsage,
+	envVarName string,
+) (argumentScriptReplacement, bool) {
+	if usage.IsAfterDoubleDash {
+		return argumentScriptReplacement{}, false
+	}
+
+	isStandaloneArg := rule.isStandaloneArgUsage(usage, envVarName)
+	if isStandaloneArg {
+		if !commandsNotSupportingDoubleDash[usage.CommandName] {
+			return argumentScriptReplacement{
+				start:       usage.ArgStartPos,
+				end:         usage.ArgEndPos,
+				replacement: fmt.Sprintf("-- \"$%s\"", envVarName),
+			}, true
+		}
+		if usage.IsQuoted {
+			return argumentScriptReplacement{}, false
+		}
+		return argumentScriptReplacement{
+			start:       usage.ArgStartPos,
+			end:         usage.ArgEndPos,
+			replacement: fmt.Sprintf("\"$%s\"", envVarName),
+		}, true
+	}
+
+	if usage.IsQuoted {
+		return argumentScriptReplacement{}, false
+	}
+	return argumentScriptReplacement{
+		start:       usage.StartPos,
+		end:         usage.EndPos,
+		replacement: fmt.Sprintf("\"$%s\"", envVarName),
+	}, true
+}
+
+func (rule *ArgumentInjectionRule) isStandaloneArgUsage(usage shell.VarArgUsage, varName string) bool {
+	argValue := strings.TrimSpace(usage.ArgValue)
+	return argValue == "$"+varName ||
+		argValue == "${"+varName+"}" ||
+		argValue == "\"$"+varName+"\"" ||
+		argValue == "\"${"+varName+"}\""
+}
+
+func applyArgumentScriptReplacements(script string, replacements []argumentScriptReplacement) string {
+	sort.SliceStable(replacements, func(i, j int) bool {
+		return replacements[i].start > replacements[j].start
+	})
+
+	nextStart := len(script)
+	for _, replacement := range replacements {
+		if replacement.start < 0 ||
+			replacement.end < replacement.start ||
+			replacement.end > len(script) ||
+			replacement.end > nextStart {
+			continue
+		}
+
+		script = script[:replacement.start] + replacement.replacement + script[replacement.end:]
+		nextStart = replacement.start
+	}
+
+	return script
 }
 
 // updateStepRunScript updates the step's run script in the YAML node.
