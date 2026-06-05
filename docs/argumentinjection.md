@@ -34,6 +34,7 @@ Detects argument injection in **privileged workflow triggers**:
 - `issue_comment`
 - `issues`
 - `discussion_comment`
+- `pull_request_review`
 
 These triggers have write access to the repository and access to secrets, making exploitation more severe.
 
