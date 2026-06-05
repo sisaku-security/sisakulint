@@ -115,7 +115,7 @@ func ReplaceInGitHubScript(stepNode *yaml.Node, replacements map[string]string) 
 					scriptNode := withNode.Content[j+1]
 					if scriptNode.Kind == yaml.ScalarNode {
 						// Apply all replacements
-						scriptNode.Value = applyStringReplacements(scriptNode.Value, replacements)
+						scriptNode.Value = applyGitHubScriptReplacements(scriptNode.Value, replacements)
 					}
 					return nil
 				}
@@ -128,6 +128,18 @@ func ReplaceInGitHubScript(stepNode *yaml.Node, replacements map[string]string) 
 }
 
 func applyStringReplacements(value string, replacements map[string]string) string {
+	keys := sortedReplacementKeys(replacements)
+	return applyStringReplacementsWithKeys(value, replacements, keys)
+}
+
+func applyStringReplacementsWithKeys(value string, replacements map[string]string, keys []string) string {
+	for _, oldExpr := range keys {
+		value = strings.ReplaceAll(value, oldExpr, replacements[oldExpr])
+	}
+	return value
+}
+
+func sortedReplacementKeys(replacements map[string]string) []string {
 	keys := make([]string, 0, len(replacements))
 	for oldExpr := range replacements {
 		keys = append(keys, oldExpr)
@@ -135,8 +147,207 @@ func applyStringReplacements(value string, replacements map[string]string) strin
 	sort.Slice(keys, func(i, j int) bool {
 		return len(keys[i]) > len(keys[j])
 	})
-	for _, oldExpr := range keys {
-		value = strings.ReplaceAll(value, oldExpr, replacements[oldExpr])
+	return keys
+}
+
+func applyGitHubScriptReplacements(value string, replacements map[string]string) string {
+	if len(replacements) == 0 || value == "" {
+		return value
 	}
-	return value
+
+	keys := sortedReplacementKeys(replacements)
+	var builder strings.Builder
+	last := 0
+
+	for i := 0; i < len(value); {
+		if i+1 < len(value) && value[i] == '/' {
+			if value[i+1] == '/' {
+				end := findJSLineCommentEnd(value, i+2)
+				builder.WriteString(applyStringReplacementsWithKeys(value[last:i], replacements, keys))
+				builder.WriteString(applyStringReplacementsWithKeys(value[i:end], replacements, keys))
+				i = end
+				last = i
+				continue
+			}
+			if value[i+1] == '*' {
+				end := findJSBlockCommentEnd(value, i+2)
+				builder.WriteString(applyStringReplacementsWithKeys(value[last:i], replacements, keys))
+				builder.WriteString(applyStringReplacementsWithKeys(value[i:end], replacements, keys))
+				i = end
+				last = i
+				continue
+			}
+		}
+
+		quote := value[i]
+		if quote != '\'' && quote != '"' && quote != '`' {
+			i++
+			continue
+		}
+
+		end, ok := findJSStringLiteralEnd(value, i, quote)
+		if !ok {
+			i++
+			continue
+		}
+
+		builder.WriteString(applyStringReplacementsWithKeys(value[last:i], replacements, keys))
+
+		content := value[i+1 : end]
+		if rewritten, changed := rewriteGitHubScriptStringLiteral(content, quote, replacements, keys); changed {
+			if isJSComputedPropertyNameLiteral(value, i, end) {
+				rewritten = "[" + rewritten + "]"
+			}
+			builder.WriteString(rewritten)
+		} else {
+			builder.WriteString(value[i : end+1])
+		}
+
+		i = end + 1
+		last = i
+	}
+
+	if last == 0 {
+		return applyStringReplacementsWithKeys(value, replacements, keys)
+	}
+
+	builder.WriteString(applyStringReplacementsWithKeys(value[last:], replacements, keys))
+	return builder.String()
+}
+
+func findJSLineCommentEnd(value string, start int) int {
+	for i := start; i < len(value); i++ {
+		if value[i] == '\n' || value[i] == '\r' {
+			return i
+		}
+	}
+	return len(value)
+}
+
+func findJSBlockCommentEnd(value string, start int) int {
+	if end := strings.Index(value[start:], "*/"); end >= 0 {
+		return start + end + len("*/")
+	}
+	return len(value)
+}
+
+func isJSComputedPropertyNameLiteral(value string, start, end int) bool {
+	next := nextNonSpaceIndex(value, end+1)
+	if next == -1 || (value[next] != ':' && value[next] != '(') {
+		return false
+	}
+
+	prev := prevNonSpaceIndex(value, start-1)
+	return prev != -1 && (value[prev] == '{' || value[prev] == ',')
+}
+
+func nextNonSpaceIndex(value string, start int) int {
+	for i := start; i < len(value); i++ {
+		switch value[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+func prevNonSpaceIndex(value string, start int) int {
+	for i := start; i >= 0; i-- {
+		switch value[i] {
+		case ' ', '\t', '\n', '\r':
+			continue
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+func findJSStringLiteralEnd(value string, start int, quote byte) (int, bool) {
+	for i := start + 1; i < len(value); i++ {
+		if value[i] == '\\' {
+			i++
+			continue
+		}
+		if value[i] == quote {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+type githubScriptLiteralPart struct {
+	value        string
+	isExpression bool
+}
+
+func rewriteGitHubScriptStringLiteral(content string, quote byte, replacements map[string]string, keys []string) (string, bool) {
+	parts, changed := splitGitHubScriptStringLiteral(content, replacements, keys)
+	if !changed {
+		return "", false
+	}
+
+	terms := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.value == "" {
+			continue
+		}
+		if part.isExpression {
+			terms = append(terms, part.value)
+			continue
+		}
+		terms = append(terms, quoteJSStringSegment(part.value, quote))
+	}
+	if len(terms) == 0 {
+		return "", false
+	}
+
+	return strings.Join(terms, " + "), true
+}
+
+func splitGitHubScriptStringLiteral(content string, replacements map[string]string, keys []string) ([]githubScriptLiteralPart, bool) {
+	parts := make([]githubScriptLiteralPart, 0)
+	segmentStart := 0
+	changed := false
+
+	for i := 0; i < len(content); {
+		matchedKey := ""
+		for _, key := range keys {
+			if strings.HasPrefix(content[i:], key) {
+				matchedKey = key
+				break
+			}
+		}
+
+		if matchedKey == "" {
+			i++
+			continue
+		}
+
+		if segmentStart < i {
+			parts = append(parts, githubScriptLiteralPart{value: content[segmentStart:i]})
+		}
+		parts = append(parts, githubScriptLiteralPart{
+			value:        replacements[matchedKey],
+			isExpression: true,
+		})
+		i += len(matchedKey)
+		segmentStart = i
+		changed = true
+	}
+
+	if !changed {
+		return nil, false
+	}
+	if segmentStart < len(content) {
+		parts = append(parts, githubScriptLiteralPart{value: content[segmentStart:]})
+	}
+
+	return parts, true
+}
+
+func quoteJSStringSegment(value string, quote byte) string {
+	return string(quote) + value + string(quote)
 }

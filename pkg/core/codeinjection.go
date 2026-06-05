@@ -434,7 +434,7 @@ func (rule *CodeInjectionRule) FixStep(step *ast.Step) error {
 				continue
 			}
 			if untrustedInfo.scriptInput != nil && untrustedInfo.scriptInput.Value != nil {
-				untrustedInfo.scriptInput.Value.Value = applyStringReplacements(
+				untrustedInfo.scriptInput.Value.Value = applyGitHubScriptReplacements(
 					untrustedInfo.scriptInput.Value.Value,
 					scriptReplacements,
 				)

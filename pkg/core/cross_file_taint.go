@@ -265,14 +265,18 @@ func (f *ChainFixer) FixStep(step *ast.Step) error {
 					fmt.Sprintf("${{%s}}", sink.InputPath), "$"+envName)
 			}
 		case SinkGitHubScript:
-			scriptReplacements[fmt.Sprintf("${{ %s }}", sink.InputPath)] = "process.env." + envName
-			scriptReplacements[fmt.Sprintf("${{%s}}", sink.InputPath)] = "process.env." + envName
+			spacedExpr := fmt.Sprintf("${{ %s }}", sink.InputPath)
+			compactExpr := fmt.Sprintf("${{%s}}", sink.InputPath)
+			envRef := "process.env." + envName
+			scriptReplacements[spacedExpr] = envRef
+			scriptReplacements[compactExpr] = envRef
 			if action, ok := step.Exec.(*ast.ExecAction); ok {
 				if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
-					scriptInput.Value.Value = strings.ReplaceAll(scriptInput.Value.Value,
-						fmt.Sprintf("${{ %s }}", sink.InputPath), "process.env."+envName)
-					scriptInput.Value.Value = strings.ReplaceAll(scriptInput.Value.Value,
-						fmt.Sprintf("${{%s}}", sink.InputPath), "process.env."+envName)
+					scriptInput.Value.Value = applyGitHubScriptReplacements(scriptInput.Value.Value,
+						map[string]string{
+							spacedExpr:  envRef,
+							compactExpr: envRef,
+						})
 				}
 			}
 		}
