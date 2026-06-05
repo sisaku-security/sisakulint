@@ -24,6 +24,9 @@ type VarArgUsage struct {
 	ShellVarUsage
 	CommandName       string
 	ArgPosition       int
+	ArgValue          string
+	ArgStartPos       int
+	ArgEndPos         int
 	HasDoubleDash     bool
 	IsAfterDoubleDash bool
 }
@@ -1412,7 +1415,17 @@ func (p *ShellParser) FindVarUsageAsCommandArg(varName string, cmdNames []string
 			doubleDashPos := p.findDoubleDashPosition(call)
 			for argIdx, arg := range call.Args[1:] {
 				actualIdx := argIdx + 1
-				p.findVarInArg(arg, varName, cmdName, actualIdx, doubleDashPos, &usages)
+				p.findVarInArg(
+					arg,
+					varName,
+					cmdName,
+					actualIdx,
+					doubleDashPos,
+					p.wordToString(arg),
+					int(arg.Pos().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+					int(arg.End().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+					&usages,
+				)
 			}
 		}
 		return true
@@ -1435,7 +1448,17 @@ func (p *ShellParser) findDoubleDashPosition(call *syntax.CallExpr) int {
 	return -1
 }
 
-func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName string, argPos int, doubleDashPos int, usages *[]VarArgUsage) {
+func (p *ShellParser) findVarInArg(
+	node syntax.Node,
+	varName string,
+	cmdName string,
+	argPos int,
+	doubleDashPos int,
+	argValue string,
+	argStartPos int,
+	argEndPos int,
+	usages *[]VarArgUsage,
+) {
 	if node == nil {
 		return
 	}
@@ -1443,11 +1466,11 @@ func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName str
 	switch x := node.(type) {
 	case *syntax.Word:
 		for _, part := range x.Parts {
-			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, usages)
+			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, argValue, argStartPos, argEndPos, usages)
 		}
 	case *syntax.DblQuoted:
 		for _, part := range x.Parts {
-			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, usages)
+			p.findVarInArg(part, varName, cmdName, argPos, doubleDashPos, argValue, argStartPos, argEndPos, usages)
 		}
 	case *syntax.ParamExp:
 		if x.Param != nil && x.Param.Value == varName {
@@ -1464,13 +1487,16 @@ func (p *ShellParser) findVarInArg(node syntax.Node, varName string, cmdName str
 				},
 				CommandName:       cmdName,
 				ArgPosition:       argPos,
+				ArgValue:          argValue,
+				ArgStartPos:       argStartPos,
+				ArgEndPos:         argEndPos,
 				HasDoubleDash:     doubleDashPos != -1,
 				IsAfterDoubleDash: doubleDashPos != -1 && argPos > doubleDashPos,
 			}
 			*usages = append(*usages, usage)
 		}
 		if x.Exp != nil && x.Exp.Word != nil {
-			p.findVarInArg(x.Exp.Word, varName, cmdName, argPos, doubleDashPos, usages)
+			p.findVarInArg(x.Exp.Word, varName, cmdName, argPos, doubleDashPos, argValue, argStartPos, argEndPos, usages)
 		}
 	}
 }
