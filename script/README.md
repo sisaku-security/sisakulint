@@ -51,6 +51,7 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `taint-args-safe.yaml` | autofix 後の安全パターン (TOKEN= の直後に `::add-mask::$TOKEN` を挿入) |
 | `secret-exfiltration-allowed-hosts.yaml` | Demonstrates the `secret-exfiltration.allowed-hosts` config — paired with a `.github/sisakulint.yaml` listing vendor/internal hosts the rule should trust |
 | `secret-exfiltration-per-workflow-override.yaml` | Demonstrates the `# sisakulint:secret-exfiltration.allowed-hosts:` per-workflow comment directive for scoping extra trusted hosts to a single workflow |
+| `dependabot-ecosystem.yaml` | Uses `actions/setup-node` (npm), `setup-go` (gomod), `setup-python` (pip), and `setup-java` (maven/gradle/sbt ambiguous) across separate jobs to exercise DependabotEcosystemRule on every supported setup-action shape. |
 
 ### Usage
 

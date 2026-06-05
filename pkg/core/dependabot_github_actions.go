@@ -172,84 +172,45 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 
 // findProjectRoot finds the project root directory by looking for .github directory.
 func (rule *DependabotGitHubActionsRule) findProjectRoot(workflowPath string) string {
-	absPath, err := filepath.Abs(workflowPath)
-	if err != nil {
-		return ""
-	}
-
-	dir := filepath.Dir(absPath)
-
-	// If the workflow directory doesn't exist on the local filesystem (e.g. remote
-	// scan virtual paths like "owner/repo/.github/workflows/ci.yml"), skip the check.
-	if _, err := os.Stat(dir); err != nil {
-		return ""
-	}
-	for {
-		// Check if .github directory exists
-		githubDir := filepath.Join(dir, ".github")
-		if info, err := os.Stat(githubDir); err == nil && info.IsDir() {
-			return dir
-		}
-
-		// Move to parent directory
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			// Reached root
-			break
-		}
-		dir = parent
-	}
-	return ""
+	return dependabotFindProjectRoot(workflowPath)
 }
 
 // findDependabotFile finds the dependabot configuration file.
 func (rule *DependabotGitHubActionsRule) findDependabotFile(projectRoot string) string {
-	yamlPath := filepath.Join(projectRoot, ".github", "dependabot.yaml")
-	if _, err := os.Stat(yamlPath); err == nil {
-		return yamlPath
-	}
-
-	ymlPath := filepath.Join(projectRoot, ".github", "dependabot.yml")
-	if _, err := os.Stat(ymlPath); err == nil {
-		return ymlPath
-	}
-
-	return ""
+	return dependabotFindConfigFile(projectRoot)
 }
 
-// renovateConfig represents the partial structure of a renovate.json configuration file
-// used to check if the github-actions manager is enabled.
+// renovateConfig represents the partial structure of a renovate.json / renovate.json5
+// configuration file. Shared by DependabotGitHubActionsRule and DependabotEcosystemRule;
+// each rule projects the fields it needs (Extends / EnabledManagers / PackageRules).
 type renovateConfig struct {
-	Extends      []string `json:"extends" yaml:"extends"`
-	PackageRules []struct {
+	Extends         []string `json:"extends" yaml:"extends"`
+	EnabledManagers []string `json:"enabledManagers" yaml:"enabledManagers"`
+	PackageRules    []struct {
 		MatchManagers []string `json:"matchManagers" yaml:"matchManagers"`
 	} `json:"packageRules" yaml:"packageRules"`
 }
 
-// hasRenovateGitHubActionsManager checks if any Renovate config file exists and manages
-// GitHub Actions. Returns true if Renovate is configured as an equivalent replacement for
-// the dependabot github-actions ecosystem.
+// hasRenovateGitHubActionsManager checks whether the *first* parseable Renovate config in
+// projectRoot manages GitHub Actions. Renovate does not merge across multiple candidate
+// files — it uses the first one it can parse in renovateConfigCandidates order — so this
+// stops at the first successfully parsed file regardless of whether that file manages
+// github-actions. A later file that *does* manage github-actions would never run under
+// Renovate, so honoring it here would suppress a dependabot-github-actions warning that
+// Renovate doesn't actually cover.
 func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(projectRoot string) bool {
-	candidates := []string{
-		filepath.Join(projectRoot, ".github", "renovate.json"),
-		filepath.Join(projectRoot, ".github", "renovate.json5"),
-		filepath.Join(projectRoot, "renovate.json"),
-		filepath.Join(projectRoot, "renovate.json5"),
-		filepath.Join(projectRoot, ".renovaterc"),
-		filepath.Join(projectRoot, ".renovaterc.json"),
-	}
-
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err != nil {
-			continue
-		}
+	for _, path := range renovateConfigCandidates(projectRoot) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		if renovateManagesGitHubActions(data) {
-			return true
+		if _, ok := parseRenovateConfig(data); !ok {
+			// Unparseable file — try the next candidate. Renovate would also reject
+			// an invalid config and fall through to a later one.
+			continue
 		}
+		// First valid candidate wins.
+		return renovateManagesGitHubActions(data)
 	}
 	return false
 }
@@ -260,11 +221,26 @@ func (rule *DependabotGitHubActionsRule) hasRenovateGitHubActionsManager(project
 //   - A known preset that enables github-actions management is extended
 //     (e.g. "config:recommended", "config:base", ":pinAllExceptPeerDependencies").
 func renovateManagesGitHubActions(data []byte) bool {
-	// Renovate config files are JSON (or JSON5). Use a tolerant unmarshal via yaml
-	// since gopkg.in/yaml.v3 handles JSON as a strict subset.
-	var cfg renovateConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	cfg, ok := parseRenovateConfig(data)
+	if !ok {
 		return false
+	}
+
+	// enabledManagers narrows Renovate to the listed managers; if it is set and does
+	// not include "github-actions", Renovate disables the github-actions manager
+	// regardless of any preset or packageRule, so this config does NOT replace the
+	// dependabot github-actions ecosystem.
+	if len(cfg.EnabledManagers) > 0 {
+		enabled := false
+		for _, m := range cfg.EnabledManagers {
+			if m == "github-actions" {
+				enabled = true
+				break
+			}
+		}
+		if !enabled {
+			return false
+		}
 	}
 
 	for _, rule := range cfg.PackageRules {
@@ -294,23 +270,11 @@ func renovateManagesGitHubActions(data []byte) bool {
 
 // checkDependabotConfig checks if the dependabot config has github-actions ecosystem.
 func (rule *DependabotGitHubActionsRule) checkDependabotConfig(path string) (bool, error) {
-	data, err := os.ReadFile(path)
+	eco, err := dependabotConfiguredEcosystems(path)
 	if err != nil {
 		return false, err
 	}
-
-	var config dependabotConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return false, err
-	}
-
-	for _, update := range config.Updates {
-		if update.PackageEcosystem == "github-actions" {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return eco["github-actions"], nil
 }
 
 // createDependabotFile creates a new dependabot.yaml file with github-actions ecosystem.
