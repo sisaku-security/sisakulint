@@ -210,34 +210,22 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)      // expr.raw -> env var name
+	envVarMap := make(map[string]string)      // expr.raw -> chosen env var name
+	baseEnvVarMap := make(map[string]string)  // expr.raw -> canonical name shared with code-injection
 	envVarsForYAML := make(map[string]string) // env var name -> env var value
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
 
 		// Generate environment variable name from the untrusted path
-		envVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
+		baseEnvVarName := rule.generateEnvVarName(untrustedInfo.paths[0])
 
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
+			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
+			envVarName := rule.envVarNameForExpression(step, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
-
-			// Add to env if not already present
-			if _, exists := step.Env.Vars[strings.ToLower(envVarName)]; !exists {
-				step.Env.Vars[strings.ToLower(envVarName)] = &ast.EnvVar{
-					Name: &ast.String{
-						Value: envVarName,
-						Pos:   expr.pos,
-					},
-					Value: &ast.String{
-						Value: fmt.Sprintf("${{ %s }}", expr.raw),
-						Pos:   expr.pos,
-					},
-				}
-				// Also track for BaseNode update
-				envVarsForYAML[envVarName] = fmt.Sprintf("${{ %s }}", expr.raw)
-			}
+			baseEnvVarMap[expr.raw] = baseEnvVarName
 		}
 	}
 
@@ -281,17 +269,20 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			// Replace any $ENV_VAR references (that aren't already wrapped) with validated version
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
+				baseEnvVarName := baseEnvVarMap[untrustedInfo.expr.raw]
 
-				// Pattern to match $ENV_VAR but not $(realpath "$ENV_VAR")
-				// and not "$GITHUB_PATH"
-				plainVarPattern := fmt.Sprintf("$%s", envVarName)
+				sourceEnvVars := []string{envVarName}
+				if baseEnvVarName != "" && baseEnvVarName != envVarName {
+					sourceEnvVars = append(sourceEnvVars, baseEnvVarName)
+				}
 
-				// Only replace if it's not already wrapped in validation
-				if strings.Contains(line, plainVarPattern) &&
-					!strings.Contains(line, fmt.Sprintf("$(realpath \"$%s\")", envVarName)) {
-					// Replace $ENV_VAR with $(realpath "$ENV_VAR")
+				for _, sourceEnvVar := range sourceEnvVars {
+					// Only replace if it's not already wrapped in validation.
 					validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
-					line = strings.ReplaceAll(line, plainVarPattern, validatedVar)
+					if strings.Contains(line, validatedVar) {
+						continue
+					}
+					line = replaceShellEnvVarRef(line, sourceEnvVar, validatedVar)
 				}
 			}
 			lines[i] = line
@@ -311,6 +302,54 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	return nil
+}
+
+func (rule *EnvPathInjectionRule) envVarNameForExpression(
+	step *ast.Step,
+	baseName string,
+	exprValue string,
+	pos *ast.Position,
+	envVarsForYAML map[string]string,
+) string {
+	for suffix := 0; ; suffix++ {
+		candidate := baseName
+		if suffix > 0 {
+			candidate = fmt.Sprintf("%s_%d", baseName, suffix+1)
+		}
+
+		key := strings.ToLower(candidate)
+		existing, exists := step.Env.Vars[key]
+		if exists {
+			if existing != nil && existing.Value != nil && existing.Value.Value == exprValue {
+				return candidate
+			}
+			continue
+		}
+
+		step.Env.Vars[key] = &ast.EnvVar{
+			Name:  &ast.String{Value: candidate, Pos: pos},
+			Value: &ast.String{Value: exprValue, Pos: pos},
+		}
+		envVarsForYAML[candidate] = exprValue
+		return candidate
+	}
+}
+
+func replaceShellEnvVarRef(line, envVarName, replacement string) string {
+	if envVarName == "" {
+		return line
+	}
+
+	braced := regexp.MustCompile(regexp.QuoteMeta("${" + envVarName + "}"))
+	line = braced.ReplaceAllString(line, replacement)
+
+	plain := regexp.MustCompile(regexp.QuoteMeta("$"+envVarName) + `([^A-Za-z0-9_]|$)`)
+	return plain.ReplaceAllStringFunc(line, func(match string) string {
+		if match == "$"+envVarName {
+			return replacement
+		}
+		return replacement + match[len("$"+envVarName):]
+	})
 }
 
 // setRunScriptValueForPath directly sets the run script value in a step's YAML node

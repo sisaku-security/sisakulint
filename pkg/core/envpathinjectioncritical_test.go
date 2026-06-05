@@ -274,6 +274,65 @@ echo "$(realpath "$COMMENT_BODY")" >> "$GITHUB_PATH"`,
 	}
 }
 
+func TestEnvPathInjectionCritical_FixStep_AvoidsExistingEnvCollisionAfterCodeInjection(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	step.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "/tmp/from-user"},
+		},
+	}}
+
+	codeRule := CodeInjectionCriticalRule(nil)
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := codeRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("code VisitWorkflowPre() error = %v", err)
+	}
+	if err := codeRule.VisitJobPre(job); err != nil {
+		t.Fatalf("code VisitJobPre() error = %v", err)
+	}
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+
+	if len(codeRule.AutoFixers()) == 0 {
+		t.Fatal("expected code-injection autofixer")
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+
+	if err := codeRule.FixStep(step); err != nil {
+		t.Fatalf("code FixStep() error = %v", err)
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if got := step.Env.Vars["pr_body"].Value.Value; got != "/tmp/from-user" {
+		t.Fatalf("existing PR_BODY env var was overwritten: %q", got)
+	}
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected PR_BODY_2 env var for colliding expression, got %#v", step.Env.Vars)
+	}
+	if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+		t.Fatalf("PR_BODY_2 value = %q, want pull request body expression", got)
+	}
+
+	want := `echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 func TestEnvPathInjectionCritical_ErrorMessage(t *testing.T) {
 	t.Parallel()
 	rule := EnvPathInjectionCriticalRule()
