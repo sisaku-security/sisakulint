@@ -561,22 +561,22 @@ func (rule *ReusableWorkflowTaintRule) FixStep(step *ast.Step) error {
 				)
 			}
 		} else {
-			scriptReplacements[fmt.Sprintf("${{ %s }}", taintedInfo.inputPath)] = fmt.Sprintf("process.env.%s", envVarName)
-			scriptReplacements[fmt.Sprintf("${{%s}}", taintedInfo.inputPath)] = fmt.Sprintf("process.env.%s", envVarName)
+			spacedExpr := fmt.Sprintf("${{ %s }}", taintedInfo.inputPath)
+			compactExpr := fmt.Sprintf("${{%s}}", taintedInfo.inputPath)
+			envRef := fmt.Sprintf("process.env.%s", envVarName)
+			scriptReplacements[spacedExpr] = envRef
+			scriptReplacements[compactExpr] = envRef
 
 			// Update AST for github-script
 			if step.Exec.Kind() == ast.ExecKindAction {
 				action := step.Exec.(*ast.ExecAction)
 				if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
-					scriptInput.Value.Value = strings.ReplaceAll(
+					scriptInput.Value.Value = applyGitHubScriptReplacements(
 						scriptInput.Value.Value,
-						fmt.Sprintf("${{ %s }}", taintedInfo.inputPath),
-						fmt.Sprintf("process.env.%s", envVarName),
-					)
-					scriptInput.Value.Value = strings.ReplaceAll(
-						scriptInput.Value.Value,
-						fmt.Sprintf("${{%s}}", taintedInfo.inputPath),
-						fmt.Sprintf("process.env.%s", envVarName),
+						map[string]string{
+							spacedExpr:  envRef,
+							compactExpr: envRef,
+						},
 					)
 				}
 			}

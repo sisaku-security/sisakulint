@@ -369,4 +369,16 @@ func TestCodeInjectionCritical_AutoFix_GitHubScript_YAMLOutput(t *testing.T) {
 	if !strings.Contains(yamlOutput, "process.env.COMMENT_BODY") {
 		t.Errorf("YAML output should contain process.env.COMMENT_BODY, got:\n%s", yamlOutput)
 	}
+	if strings.Contains(yamlOutput, "'process.env.COMMENT_BODY'") || strings.Contains(yamlOutput, `"process.env.COMMENT_BODY"`) {
+		t.Errorf("YAML output should use process.env.COMMENT_BODY as a JS expression, got:\n%s", yamlOutput)
+	}
+	if !strings.Contains(yamlOutput, "console.log(process.env.COMMENT_BODY)") {
+		t.Errorf("YAML output should strip string-literal quotes around process.env.COMMENT_BODY, got:\n%s", yamlOutput)
+	}
+
+	action := step.Exec.(*ast.ExecAction)
+	gotScript := action.Inputs["script"].Value.Value
+	if gotScript != "console.log(process.env.COMMENT_BODY)" {
+		t.Errorf("AST script = %q, want %q", gotScript, "console.log(process.env.COMMENT_BODY)")
+	}
 }

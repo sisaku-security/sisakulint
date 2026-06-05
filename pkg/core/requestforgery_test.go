@@ -1,9 +1,12 @@
 package core
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"gopkg.in/yaml.v3"
 )
 
 func TestRequestForgeryCriticalRule(t *testing.T) {
@@ -534,6 +537,103 @@ func TestRequestForgery_EnvVarName(t *testing.T) {
 			result := rule.generateEnvVarName(tt.path)
 			if result != tt.expected {
 				t.Errorf("generateEnvVarName(%q) = %q, want %q", tt.path, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestRequestForgery_AutoFix_GitHubScript_StripsStringLiteralQuotes(t *testing.T) {
+	tests := []struct {
+		name       string
+		script     string
+		wantScript string
+		wantEnvVar string
+	}{
+		{
+			name:       "fetch URL argument",
+			script:     `const response = await fetch('${{ github.event.issue.body }}');`,
+			wantScript: `const response = await fetch(process.env.ISSUE_BODY);`,
+			wantEnvVar: "ISSUE_BODY",
+		},
+		{
+			name:       "axios URL argument",
+			script:     `const response = axios.get("${{ github.event.comment.body }}");`,
+			wantScript: `const response = axios.get(process.env.COMMENT_BODY);`,
+			wantEnvVar: "COMMENT_BODY",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := RequestForgeryCriticalRule(nil)
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "issue_comment"},
+					},
+				},
+			}
+			step := &ast.Step{
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/github-script@v6"},
+					Inputs: map[string]*ast.Input{
+						"script": {
+							Name: &ast.String{Value: "script"},
+							Value: &ast.String{
+								Value: tt.script,
+								Pos:   &ast.Position{Line: 1, Col: 1},
+							},
+						},
+					},
+				},
+				BaseNode: &yaml.Node{
+					Kind: yaml.MappingNode,
+					Content: []*yaml.Node{
+						{Kind: yaml.ScalarNode, Value: "uses"},
+						{Kind: yaml.ScalarNode, Value: "actions/github-script@v6"},
+						{Kind: yaml.ScalarNode, Value: "with"},
+						{
+							Kind: yaml.MappingNode,
+							Content: []*yaml.Node{
+								{Kind: yaml.ScalarNode, Value: "script"},
+								{Kind: yaml.ScalarNode, Value: tt.script},
+							},
+						},
+					},
+				},
+			}
+			job := &ast.Job{Steps: []*ast.Step{step}}
+
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
+
+			if len(rule.Errors()) == 0 {
+				t.Fatal("Expected errors but got none")
+			}
+			if err := rule.FixStep(step); err != nil {
+				t.Fatalf("FixStep() error = %v", err)
+			}
+
+			action := step.Exec.(*ast.ExecAction)
+			gotScript := action.Inputs["script"].Value.Value
+			if gotScript != tt.wantScript {
+				t.Errorf("AST script = %q, want %q", gotScript, tt.wantScript)
+			}
+
+			var buf bytes.Buffer
+			enc := yaml.NewEncoder(&buf)
+			if err := enc.Encode(step.BaseNode); err != nil {
+				t.Fatalf("Failed to encode YAML: %v", err)
+			}
+			yamlOutput := buf.String()
+			if !strings.Contains(yamlOutput, tt.wantEnvVar+":") {
+				t.Errorf("YAML output should contain env var %q, got:\n%s", tt.wantEnvVar, yamlOutput)
+			}
+			if !strings.Contains(yamlOutput, tt.wantScript) {
+				t.Errorf("YAML output should contain %q, got:\n%s", tt.wantScript, yamlOutput)
+			}
+			if strings.Contains(yamlOutput, "'process.env.") || strings.Contains(yamlOutput, `"process.env.`) {
+				t.Errorf("YAML output should not quote process.env references, got:\n%s", yamlOutput)
 			}
 		})
 	}

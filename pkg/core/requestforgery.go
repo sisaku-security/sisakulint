@@ -556,20 +556,20 @@ func (rule *RequestForgeryRule) FixStep(step *ast.Step) error {
 				)
 			}
 		} else if step.Exec.Kind() == ast.ExecKindAction {
-			scriptReplacements[fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
-			scriptReplacements[fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)] = fmt.Sprintf("process.env.%s", envVarName)
+			spacedExpr := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
+			compactExpr := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
+			envRef := fmt.Sprintf("process.env.%s", envVarName)
+			scriptReplacements[spacedExpr] = envRef
+			scriptReplacements[compactExpr] = envRef
 
 			action := step.Exec.(*ast.ExecAction)
 			if scriptInput, ok := action.Inputs["script"]; ok && scriptInput != nil && scriptInput.Value != nil {
-				scriptInput.Value.Value = strings.ReplaceAll(
+				scriptInput.Value.Value = applyGitHubScriptReplacements(
 					scriptInput.Value.Value,
-					fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw),
-					fmt.Sprintf("process.env.%s", envVarName),
-				)
-				scriptInput.Value.Value = strings.ReplaceAll(
-					scriptInput.Value.Value,
-					fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw),
-					fmt.Sprintf("process.env.%s", envVarName),
+					map[string]string{
+						spacedExpr:  envRef,
+						compactExpr: envRef,
+					},
 				)
 			}
 		}
