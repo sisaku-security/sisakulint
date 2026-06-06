@@ -335,15 +335,23 @@ func replaceShellEnvVarRef(line, envVarName, replacement string) string {
 		return line
 	}
 
-	braced := regexp.MustCompile(regexp.QuoteMeta("${" + envVarName + "}"))
-	line = braced.ReplaceAllString(line, replacement)
-
-	plain := regexp.MustCompile(regexp.QuoteMeta("$"+envVarName) + `([^A-Za-z0-9_]|$)`)
-	return plain.ReplaceAllStringFunc(line, func(match string) string {
-		if match == "$"+envVarName {
+	// Match both `${NAME}` and `$NAME` (word-boundary terminated) in a
+	// single non-overlapping pass so that a `$NAME` produced inside the
+	// replacement (e.g. `$(realpath "$PR_BODY")`) is not re-rewritten by a
+	// subsequent pass and double-wrapped. ReplaceAllStringFunc returns the
+	// callback output as-is — no `$name` Expand interpretation — so the
+	// replacement is treated as a pure literal.
+	q := regexp.QuoteMeta(envVarName)
+	re := regexp.MustCompile(`\$\{` + q + `\}|\$` + q + `([^A-Za-z0-9_]|$)`)
+	plainPrefix := "$" + envVarName
+	return re.ReplaceAllStringFunc(line, func(match string) string {
+		if strings.HasPrefix(match, "${") {
 			return replacement
 		}
-		return replacement + match[len("$"+envVarName):]
+		if match == plainPrefix {
+			return replacement
+		}
+		return replacement + match[len(plainPrefix):]
 	})
 }
 

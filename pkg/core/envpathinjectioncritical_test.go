@@ -389,6 +389,60 @@ echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_PreservesBracedEnvRef asserts the
+// braced shell form `${PR_BODY}` on a GITHUB_PATH line is rewritten to the
+// literal `$(realpath "$PR_BODY")` and NOT to `$(realpath "")`. This is
+// the regression flagged by codex on PR #514: regexp.ReplaceAllString
+// interprets `$PR_BODY` inside the replacement as a submatch reference and
+// silently expands it to the empty string.
+func TestEnvPathInjectionCritical_FixStep_PreservesBracedEnvRef(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${PR_BODY}/bin" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	want := `echo "$(realpath "$PR_BODY")/bin" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+	if strings.Contains(got, `realpath ""`) {
+		t.Errorf(`fixed run script contains broken empty path realpath "": %q`, got)
+	}
+}
+
+// TestReplaceShellEnvVarRef_BracedReplacementIsLiteral pins the contract
+// that `replacement` is treated as a literal string (no `$name` submatch
+// expansion), so `$(realpath "$PR_BODY")` survives intact.
+func TestReplaceShellEnvVarRef_BracedReplacementIsLiteral(t *testing.T) {
+	got := replaceShellEnvVarRef(`echo "${PR_BODY}/bin"`, "PR_BODY", `$(realpath "$PR_BODY")`)
+	want := `echo "$(realpath "$PR_BODY")/bin"`
+	if got != want {
+		t.Errorf("braced ref: got %q, want %q", got, want)
+	}
+	got = replaceShellEnvVarRef(`echo "$PR_BODY/bin"`, "PR_BODY", `$(realpath "$PR_BODY")`)
+	want = `echo "$(realpath "$PR_BODY")/bin"`
+	if got != want {
+		t.Errorf("plain ref: got %q, want %q", got, want)
+	}
+}
+
 func TestEnvPathInjectionCritical_ErrorMessage(t *testing.T) {
 	t.Parallel()
 	rule := EnvPathInjectionCriticalRule()
