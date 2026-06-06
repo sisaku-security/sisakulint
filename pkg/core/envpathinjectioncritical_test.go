@@ -674,6 +674,50 @@ func TestEnvPathInjectionCritical_FixStep_ReusesInheritedEnvWhenMatching(t *test
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_PreservesInheritedEnvCasing asserts
+// that when a job- or workflow-level env defines the same expression
+// under different casing (e.g., lowercase `pr_body`), the autofix reuses
+// the inherited variable's ACTUAL casing rather than emitting a
+// case-mismatched `$PR_BODY`. Linux runners use case-sensitive shell
+// env names, so an uppercase rewrite against a lowercase env entry
+// would resolve to an unset variable. Flagged by codex on PR #514.
+func TestEnvPathInjectionCritical_FixStep_PreservesInheritedEnvCasing(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	// Inherited workflow env uses lowercase casing but the same
+	// expression value. The autofix must reuse `pr_body`, not `PR_BODY`.
+	workflow.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "pr_body"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	// No new step-level env should be added because the inherited
+	// (lowercase) variable already holds the right expression.
+	if step.Env != nil && step.Env.Vars["pr_body"] != nil {
+		t.Errorf("autofix added redundant step-level pr_body: %+v", step.Env.Vars["pr_body"].Value)
+	}
+	want := `echo "$(realpath "$pr_body")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q (must preserve inherited casing for case-sensitive Linux shell)", got, want)
+	}
+}
+
 // TestReplaceShellEnvVarRef_BracedReplacementIsLiteral pins the contract
 // that `replacement` is treated as a literal string (no `$name` submatch
 // expansion), so `$(realpath "$PR_BODY")` survives intact.

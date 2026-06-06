@@ -321,10 +321,13 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		}
 
 		key := strings.ToLower(candidate)
-		existing, exists := step.Env.Vars[key]
-		if exists {
-			if existing != nil && existing.Value != nil && existing.Value.Value == exprValue {
-				return candidate
+		if existing, exists := lookupEnvVar(step.Env, key); exists {
+			// Linux shell env vars are case-sensitive; the AST keys
+			// envs by lowercase name but preserves the original casing
+			// in Name.Value. Always return the inherited casing so a
+			// later `$NAME` rewrite resolves to the real env var.
+			if existing.value == exprValue {
+				return existing.actualName
 			}
 			continue
 		}
@@ -335,10 +338,11 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		// etc.) to the attacker-controlled body. Treat job-level and
 		// workflow-level env entries as collisions, reusing the name
 		// only when the inherited value is the exact same expression
-		// the autofix would emit.
-		if inheritedValue, has := inheritedEnvValue(rule.workflow, job, candidate); has {
-			if inheritedValue == exprValue {
-				return candidate
+		// the autofix would emit. Return the inherited variable's
+		// actual casing for the same reason as the step lookup above.
+		if inherited, has := lookupInheritedEnvVar(rule.workflow, job, key); has {
+			if inherited.value == exprValue {
+				return inherited.actualName
 			}
 			continue
 		}
@@ -360,30 +364,50 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 	}
 }
 
-// inheritedEnvValue looks up an env var by name in the job and workflow
-// env blocks (in that precedence order, mirroring GitHub Actions). The
-// boolean return is true when the name is defined at either scope; the
-// string is the raw value of the matching env var (empty when the entry
-// has no Value field).
-func inheritedEnvValue(workflow *ast.Workflow, job *ast.Job, name string) (string, bool) {
-	key := strings.ToLower(name)
-	if job != nil && job.Env != nil && job.Env.Vars != nil {
-		if ev, ok := job.Env.Vars[key]; ok {
-			if ev != nil && ev.Value != nil {
-				return ev.Value.Value, true
-			}
-			return "", true
+// envVarLookup carries the case-preserving name and raw value of an
+// existing env var entry. actualName falls back to the lookup key only
+// when the entry stores no Name.Value (defensive — the parser should
+// always populate it).
+type envVarLookup struct {
+	actualName string
+	value      string
+}
+
+func lookupEnvVar(env *ast.Env, key string) (envVarLookup, bool) {
+	if env == nil || env.Vars == nil {
+		return envVarLookup{}, false
+	}
+	ev, ok := env.Vars[key]
+	if !ok {
+		return envVarLookup{}, false
+	}
+	out := envVarLookup{actualName: key}
+	if ev != nil {
+		if ev.Name != nil && ev.Name.Value != "" {
+			out.actualName = ev.Name.Value
+		}
+		if ev.Value != nil {
+			out.value = ev.Value.Value
 		}
 	}
-	if workflow != nil && workflow.Env != nil && workflow.Env.Vars != nil {
-		if ev, ok := workflow.Env.Vars[key]; ok {
-			if ev != nil && ev.Value != nil {
-				return ev.Value.Value, true
-			}
-			return "", true
+	return out, true
+}
+
+// lookupInheritedEnvVar walks job.Env then workflow.Env in GitHub Actions
+// precedence order and returns the first matching entry. The lookup is
+// keyed by the already-lowercased candidate name.
+func lookupInheritedEnvVar(workflow *ast.Workflow, job *ast.Job, key string) (envVarLookup, bool) {
+	if job != nil {
+		if lk, ok := lookupEnvVar(job.Env, key); ok {
+			return lk, true
 		}
 	}
-	return "", false
+	if workflow != nil {
+		if lk, ok := lookupEnvVar(workflow.Env, key); ok {
+			return lk, true
+		}
+	}
+	return envVarLookup{}, false
 }
 
 // scriptUsesShellName reports whether the run script assigns to or
