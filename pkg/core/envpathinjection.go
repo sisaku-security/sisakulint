@@ -24,7 +24,12 @@ type EnvPathInjectionRule struct {
 
 // stepWithEnvPathInjection tracks steps that need auto-fixing for PATH injection
 type stepWithEnvPathInjection struct {
-	step           *ast.Step
+	step *ast.Step
+	// job is the enclosing job at the time the step was recorded. Retained
+	// so FixStep can consult job-level env vars (and reach workflow.Env via
+	// the rule) when deciding whether a generated env var name would
+	// shadow an inherited variable.
+	job            *ast.Job
 	untrustedExprs []envPathUntrustedExprInfo
 }
 
@@ -127,7 +132,7 @@ func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
 				untrustedPaths := rule.checkUntrustedInput(expr)
 				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
 					if stepUntrusted == nil {
-						stepUntrusted = &stepWithEnvPathInjection{step: s}
+						stepUntrusted = &stepWithEnvPathInjection{step: s, job: node}
 					}
 
 					stepUntrusted.untrustedExprs = append(stepUntrusted.untrustedExprs, envPathUntrustedExprInfo{
@@ -223,7 +228,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
-			envVarName := rule.envVarNameForExpression(step, run.Run.Value, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
+			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
 		}
 	}
@@ -302,6 +307,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 
 func (rule *EnvPathInjectionRule) envVarNameForExpression(
 	step *ast.Step,
+	job *ast.Job,
 	runScript string,
 	baseName string,
 	exprValue string,
@@ -322,6 +328,20 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 			}
 			continue
 		}
+		// GitHub Actions env precedence is step > job > workflow. A
+		// step-level env var with the same name would silently shadow
+		// any inherited value for the rest of the step, redirecting any
+		// command that consumes the inherited env var (curl, kubectl,
+		// etc.) to the attacker-controlled body. Treat job-level and
+		// workflow-level env entries as collisions, reusing the name
+		// only when the inherited value is the exact same expression
+		// the autofix would emit.
+		if inheritedValue, has := inheritedEnvValue(rule.workflow, job, candidate); has {
+			if inheritedValue == exprValue {
+				return candidate
+			}
+			continue
+		}
 		// When creating a new env var (not reusing an existing one with the
 		// same expression), make sure the chosen name does not collide with
 		// a shell variable the run script already assigns or references.
@@ -338,6 +358,32 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		envVarsForYAML[candidate] = exprValue
 		return candidate
 	}
+}
+
+// inheritedEnvValue looks up an env var by name in the job and workflow
+// env blocks (in that precedence order, mirroring GitHub Actions). The
+// boolean return is true when the name is defined at either scope; the
+// string is the raw value of the matching env var (empty when the entry
+// has no Value field).
+func inheritedEnvValue(workflow *ast.Workflow, job *ast.Job, name string) (string, bool) {
+	key := strings.ToLower(name)
+	if job != nil && job.Env != nil && job.Env.Vars != nil {
+		if ev, ok := job.Env.Vars[key]; ok {
+			if ev != nil && ev.Value != nil {
+				return ev.Value.Value, true
+			}
+			return "", true
+		}
+	}
+	if workflow != nil && workflow.Env != nil && workflow.Env.Vars != nil {
+		if ev, ok := workflow.Env.Vars[key]; ok {
+			if ev != nil && ev.Value != nil {
+				return ev.Value.Value, true
+			}
+			return "", true
+		}
+	}
+	return "", false
 }
 
 // scriptUsesShellName reports whether the run script assigns to or

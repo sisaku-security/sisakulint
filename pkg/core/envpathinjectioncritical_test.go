@@ -540,6 +540,140 @@ func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_AvoidsJobEnvCollision asserts that a
+// job-level env entry with a colliding name forces the autofix to suffix
+// instead of adding a step-level entry that would shadow the inherited
+// value for the remainder of the step. This is the regression flagged by
+// codex on PR #514: the previous `_PATH` suffix made this collision
+// improbable, but with the bare `PR_BODY` name it is now likely.
+func TestEnvPathInjectionCritical_FixStep_AvoidsJobEnvCollision(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	// Job-level env has PR_BODY with a different value — the autofix
+	// must not shadow it at step level.
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "/safe/from-job"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil {
+		if added := step.Env.Vars["pr_body"]; added != nil {
+			t.Fatalf("autofix wrongly added a step-level PR_BODY env var (shadows job env): %+v", added.Value)
+		}
+		added := step.Env.Vars["pr_body_2"]
+		if added == nil || added.Value == nil {
+			t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+		}
+		if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+			t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+		}
+	}
+
+	want := `echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_AvoidsWorkflowEnvCollision is the
+// workflow-level analog of the job-level test above: workflow.env vars
+// are inherited by every job's every step, so they must also block the
+// chosen autofix env var name.
+func TestEnvPathInjectionCritical_FixStep_AvoidsWorkflowEnvCollision(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	workflow.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "/safe/from-workflow"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil {
+		if added := step.Env.Vars["pr_body"]; added != nil {
+			t.Fatalf("autofix wrongly added a step-level PR_BODY env var (shadows workflow env): %+v", added.Value)
+		}
+		if step.Env.Vars["pr_body_2"] == nil {
+			t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+		}
+	}
+
+	want := `echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_ReusesInheritedEnvWhenMatching asserts
+// that an inherited env var with the SAME expression value is reused
+// (no new step-level entry is added) instead of being suffixed. This
+// keeps the autofix idempotent and avoids needless step-level duplication.
+func TestEnvPathInjectionCritical_FixStep_ReusesInheritedEnvWhenMatching(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body"] != nil {
+		t.Errorf("autofix added redundant step-level PR_BODY when job env matches: %+v", step.Env.Vars["pr_body"].Value)
+	}
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestReplaceShellEnvVarRef_BracedReplacementIsLiteral pins the contract
 // that `replacement` is treated as a literal string (no `$name` submatch
 // expansion), so `$(realpath "$PR_BODY")` survives intact.
