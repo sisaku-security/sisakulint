@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -131,6 +132,21 @@ type ActionMetadata struct {
 	Runs        *ActionRunsMetadata   `yaml:"runs" json:"runs"`
 	SkipInputs  bool                  `json:"skip_inputs"`
 	SkipOutputs bool                  `json:"skip_outputs"`
+}
+
+// String renders ActionMetadata as JSON so debug logs show dereferenced field
+// values instead of raw pointer addresses. Without this, fmt's default %v
+// stops dereferencing pointers nested inside maps/slices (Inputs, Outputs,
+// Runs.Steps), printing them as 0xc000... addresses.
+func (m *ActionMetadata) String() string {
+	if m == nil {
+		return "<nil>"
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Sprintf("ActionMetadata(json marshal err: %v)", err)
+	}
+	return string(b)
 }
 
 type ActionMetadataResolver interface {
@@ -364,7 +380,7 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 			return nil, fmt.Errorf("failed to parse remote action metadata file %q: %s", metadataPath, msg)
 		}
 
-		c.debug("detected remote action metadata @ %s: %v", spec, meta)
+		c.debug("detected remote action metadata @ %s: %v", spec, &meta)
 		c.writeCache(spec, &meta)
 		return &meta, nil
 	}
