@@ -211,7 +211,6 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 
 	// Group expressions by their raw content to avoid duplicates
 	envVarMap := make(map[string]string)      // expr.raw -> chosen env var name
-	baseEnvVarMap := make(map[string]string)  // expr.raw -> canonical name shared with code-injection
 	envVarsForYAML := make(map[string]string) // env var name -> env var value
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
@@ -225,7 +224,6 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
 			envVarName := rule.envVarNameForExpression(step, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
-			baseEnvVarMap[expr.raw] = baseEnvVarName
 		}
 	}
 
@@ -269,21 +267,18 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			// Replace any $ENV_VAR references (that aren't already wrapped) with validated version
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
-				baseEnvVarName := baseEnvVarMap[untrustedInfo.expr.raw]
 
-				sourceEnvVars := []string{envVarName}
-				if baseEnvVarName != "" && baseEnvVarName != envVarName {
-					sourceEnvVars = append(sourceEnvVars, baseEnvVarName)
+				// Only rewrite the env var actually chosen for this expression.
+				// When envVarNameForExpression suffixes the name (e.g., PR_BODY_2)
+				// because the base name is occupied by an unrelated user value,
+				// the base name must be left untouched — otherwise the user's
+				// `$PR_BODY` references on GITHUB_PATH lines get silently
+				// rewritten to the attacker-controlled value.
+				validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
+				if strings.Contains(line, validatedVar) {
+					continue
 				}
-
-				for _, sourceEnvVar := range sourceEnvVars {
-					// Only replace if it's not already wrapped in validation.
-					validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
-					if strings.Contains(line, validatedVar) {
-						continue
-					}
-					line = replaceShellEnvVarRef(line, sourceEnvVar, validatedVar)
-				}
+				line = replaceShellEnvVarRef(line, envVarName, validatedVar)
 			}
 			lines[i] = line
 		}

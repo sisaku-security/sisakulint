@@ -326,7 +326,63 @@ func TestEnvPathInjectionCritical_FixStep_AvoidsExistingEnvCollisionAfterCodeInj
 		t.Fatalf("PR_BODY_2 value = %q, want pull request body expression", got)
 	}
 
-	want := `echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	// code-injection rewrote the expression to `$PR_BODY`, which expands to
+	// the user-supplied "/tmp/from-user" — not the attacker body. The
+	// envpath-injection autofix must NOT rewrite that `$PR_BODY` to
+	// `$(realpath "$PR_BODY_2")`, because doing so would (a) re-inject the
+	// attacker-controlled value via PR_BODY_2 and (b) silently clobber any
+	// unrelated `$PR_BODY` references the user has on GITHUB_PATH lines.
+	// This is the regression flagged by codex in PR #514 review.
+	want := `echo "$PR_BODY" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_LeavesUnrelatedBaseEnvVarReference asserts
+// that when the base env var name (e.g., PR_BODY) is occupied by an unrelated
+// user value and the autofix suffixes the chosen name (PR_BODY_2), an existing
+// `$PR_BODY` reference on another GITHUB_PATH line is NOT rewritten to the
+// attacker-controlled `$PR_BODY_2`. This is the regression originally flagged
+// by codex in PR #514 review.
+func TestEnvPathInjectionCritical_FixStep_LeavesUnrelatedBaseEnvVarReference(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "/some/$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	step.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "/tmp/from-user"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if got := step.Env.Vars["pr_body"].Value.Value; got != "/tmp/from-user" {
+		t.Fatalf("existing PR_BODY env var was overwritten: %q", got)
+	}
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected PR_BODY_2 env var for colliding expression, got %#v", step.Env.Vars)
+	}
+
+	want := `echo "/some/$PR_BODY" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q", got, want)
