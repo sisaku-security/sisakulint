@@ -222,7 +222,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
-			envVarName := rule.envVarNameForExpression(step, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
+			envVarName := rule.envVarNameForExpression(step, run.Run.Value, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
 		}
 	}
@@ -301,6 +301,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 
 func (rule *EnvPathInjectionRule) envVarNameForExpression(
 	step *ast.Step,
+	runScript string,
 	baseName string,
 	exprValue string,
 	pos *ast.Position,
@@ -320,6 +321,14 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 			}
 			continue
 		}
+		// When creating a new env var (not reusing an existing one with the
+		// same expression), make sure the chosen name does not collide with
+		// a shell variable the run script already assigns or references.
+		// Otherwise the autofix would silently shadow the user's `$NAME`
+		// reference with the new env var's attacker-controlled value.
+		if scriptUsesShellName(runScript, candidate) {
+			continue
+		}
 
 		step.Env.Vars[key] = &ast.EnvVar{
 			Name:  &ast.String{Value: candidate, Pos: pos},
@@ -328,6 +337,31 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		envVarsForYAML[candidate] = exprValue
 		return candidate
 	}
+}
+
+// scriptUsesShellName reports whether the run script assigns to or
+// references a shell variable with the given name. GitHub Actions
+// `${{ ... }}` expressions are stripped first so they cannot
+// false-positive on path components like `${{ github.event.NAME }}`.
+// The matcher accepts:
+//   - `${NAME}` braced reference
+//   - `$NAME` plain reference (word-boundary terminated)
+//   - `NAME=` assignment (including `export NAME=`, `local NAME=`, etc.)
+//
+// Used by envVarNameForExpression to keep the autofix from generating
+// an env var name that would shadow a script-level shell variable.
+func scriptUsesShellName(script, name string) bool {
+	if name == "" || script == "" {
+		return false
+	}
+	sanitized, _ := sanitizeForShellParse(script)
+	q := regexp.QuoteMeta(name)
+	re := regexp.MustCompile(
+		`\$\{` + q + `\}` +
+			`|\$` + q + `(?:[^A-Za-z0-9_]|$)` +
+			`|(?:^|[^A-Za-z0-9_.])` + q + `=`,
+	)
+	return re.MatchString(sanitized)
 }
 
 func replaceShellEnvVarRef(line, envVarName, replacement string) string {

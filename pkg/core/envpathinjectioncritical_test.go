@@ -390,11 +390,10 @@ echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 }
 
 // TestEnvPathInjectionCritical_FixStep_PreservesBracedEnvRef asserts the
-// braced shell form `${PR_BODY}` on a GITHUB_PATH line is rewritten to the
-// literal `$(realpath "$PR_BODY")` and NOT to `$(realpath "")`. This is
-// the regression flagged by codex on PR #514: regexp.ReplaceAllString
-// interprets `$PR_BODY` inside the replacement as a submatch reference and
-// silently expands it to the empty string.
+// user's braced shell form `${PR_BODY}` is left untouched by the autofix
+// (no rewrite to `$(realpath "")` or any other shape). With the collision
+// check, the autofix now suffixes its chosen name to PR_BODY_2 instead of
+// shadowing the user's `${PR_BODY}` reference.
 func TestEnvPathInjectionCritical_FixStep_PreservesBracedEnvRef(t *testing.T) {
 	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
 		`echo "${PR_BODY}/bin" >> "$GITHUB_PATH"
@@ -416,14 +415,96 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 		t.Fatalf("envpath FixStep() error = %v", err)
 	}
 
-	want := `echo "$(realpath "$PR_BODY")/bin" >> "$GITHUB_PATH"
-echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	want := `echo "${PR_BODY}/bin" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q", got, want)
 	}
 	if strings.Contains(got, `realpath ""`) {
 		t.Errorf(`fixed run script contains broken empty path realpath "": %q`, got)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_AvoidsScriptDefinedShellName asserts
+// that when the script already assigns or references a shell variable named
+// like the autofix's would-be env var, the autofix suffixes the env var
+// name instead of shadowing the user's shell variable. This is the
+// regression flagged by codex on PR #514: collision detection previously
+// only inspected `step.Env.Vars`, not shell vars used in the run script.
+func TestEnvPathInjectionCritical_FixStep_AvoidsScriptDefinedShellName(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`PR_BODY=/safe
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	// The autofix must NOT create a `PR_BODY` env var, because the script
+	// already uses `PR_BODY` as a shell variable; doing so would shadow
+	// the user's safe `$PR_BODY` with the attacker-controlled body value.
+	if added := step.Env.Vars["pr_body"]; added != nil {
+		t.Fatalf("autofix wrongly created PR_BODY env var (would shadow shell var): %+v", added.Value)
+	}
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+	}
+	if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+		t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+	}
+
+	want := `PR_BODY=/safe
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestScriptUsesShellName_StripsGitHubExpressions pins that the matcher
+// does not false-positive on identifiers that appear only inside a
+// `${{ ... }}` GitHub Actions expression (which gets rewritten by the
+// autofix anyway). Without stripping, every chosen name would collide
+// with itself when the expression references the same path component.
+func TestScriptUsesShellName_StripsGitHubExpressions(t *testing.T) {
+	script := `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`
+	// `body` appears inside the `${{ ... }}` block; it must not match.
+	if scriptUsesShellName(script, "body") {
+		t.Errorf("scriptUsesShellName matched a name that only appears inside ${{ ... }}")
+	}
+	if scriptUsesShellName(script, "PR_BODY") {
+		t.Errorf("scriptUsesShellName matched a name absent from the script")
+	}
+	// Reference outside the GitHub expression should match.
+	script2 := `echo "$PR_BODY" >> "$GITHUB_PATH"`
+	if !scriptUsesShellName(script2, "PR_BODY") {
+		t.Errorf("scriptUsesShellName missed a plain $PR_BODY reference")
+	}
+	// Assignment should match.
+	script3 := `PR_BODY=/safe`
+	if !scriptUsesShellName(script3, "PR_BODY") {
+		t.Errorf("scriptUsesShellName missed a PR_BODY= assignment")
+	}
+	// Braced reference should match.
+	script4 := `echo "${PR_BODY}/bin" >> "$GITHUB_PATH"`
+	if !scriptUsesShellName(script4, "PR_BODY") {
+		t.Errorf("scriptUsesShellName missed a ${PR_BODY} reference")
 	}
 }
 
