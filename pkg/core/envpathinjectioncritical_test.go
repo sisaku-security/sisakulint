@@ -524,6 +524,16 @@ func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
 		{"export assignment", `export PR_BODY=/safe`},
 		{"local assignment", `f() { local PR_BODY=/safe; }`},
 		{"read", `read PR_BODY`}, // bash assigns via read
+		// Bare declarations (no =VALUE) bind the name and on Linux runners
+		// shadow the env var for the rest of the scope, so the autofix
+		// must treat them as a collision. mvdan.cc/sh parses these as
+		// DeclClause -> Assign(Name=NAME, Value=nil); the matcher must
+		// catch them. Reported by codex on PR #514.
+		{"bare local in function", `f() { local PR_BODY; }`},
+		{"bare declare in function", `f() { declare PR_BODY; }`},
+		{"bare typeset in function", `f() { typeset PR_BODY; }`},
+		{"bare export", `export PR_BODY`},
+		{"bare readonly", `readonly PR_BODY`},
 	}
 
 	for _, tc := range cases {
@@ -537,6 +547,57 @@ func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
 	// Negative: PR_BODY not used at all
 	if scriptUsesShellName(`echo "$OTHER"`, "PR_BODY") {
 		t.Errorf("scriptUsesShellName false-positive on absent name")
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_AvoidsBareLocalDeclaration covers
+// the codex-flagged regression on PR #514: a function-scoped bare
+// declaration like `local PR_BODY` (no =value) binds the name and
+// shadows any env var with the same name inside the function, so the
+// autofix must not pick the bare base name. `mvdan.cc/sh` parses the
+// declaration as DeclClause -> Assign(Name=NAME, Value=nil), which the
+// AST walker treats as a usage; this test pins that integration path.
+func TestEnvPathInjectionCritical_FixStep_AvoidsBareLocalDeclaration(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`f() {
+  local PR_BODY
+  echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+}
+f`,
+	)
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil {
+		if added := step.Env.Vars["pr_body"]; added != nil {
+			t.Fatalf("autofix wrongly added PR_BODY env (would be shadowed by `local PR_BODY`): %+v", added.Value)
+		}
+		if step.Env.Vars["pr_body_2"] == nil {
+			t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+		}
+	}
+
+	want := `f() {
+  local PR_BODY
+  echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"
+}
+f`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
 	}
 }
 
