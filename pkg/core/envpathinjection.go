@@ -8,6 +8,7 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"gopkg.in/yaml.v3"
+	"mvdan.cc/sh/v3/syntax"
 )
 
 // EnvPathInjectionRule is a shared implementation for detecting PATH injection vulnerabilities
@@ -343,10 +344,15 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 // references a shell variable with the given name. GitHub Actions
 // `${{ ... }}` expressions are stripped first so they cannot
 // false-positive on path components like `${{ github.event.NAME }}`.
-// The matcher accepts:
-//   - `${NAME}` braced reference
-//   - `$NAME` plain reference (word-boundary terminated)
-//   - `NAME=` assignment (including `export NAME=`, `local NAME=`, etc.)
+//
+// Detection uses the bash AST when the sanitized script parses cleanly:
+// every ParamExp `Param.Value` and Assign `Name.Value` is collected, so
+// all parameter-expansion shapes are recognized — `${NAME}`,
+// `${NAME:-default}`, `${NAME:+alt}`, `${NAME#prefix}`, `${NAME%suffix}`,
+// `${NAME/pat/repl}`, `${NAME^^}`, `${#NAME}`, `${!NAME}`, etc. — plus
+// plain `$NAME` and `NAME=...` (including `export NAME=...`,
+// `local NAME=...`). On parse failure (best-effort), falls back to a
+// regex that catches the common `${NAME}`, `$NAME`, and `NAME=` forms.
 //
 // Used by envVarNameForExpression to keep the autofix from generating
 // an env var name that would shadow a script-level shell variable.
@@ -355,9 +361,108 @@ func scriptUsesShellName(script, name string) bool {
 		return false
 	}
 	sanitized, _ := sanitizeForShellParse(script)
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return scriptUsesShellNameRegex(sanitized, name)
+	}
+
+	var found bool
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if found || node == nil {
+			return false
+		}
+		switch x := node.(type) {
+		case *syntax.ParamExp:
+			if x.Param != nil && x.Param.Value == name {
+				found = true
+				return false
+			}
+		case *syntax.Assign:
+			if x.Name != nil && x.Name.Value == name {
+				found = true
+				return false
+			}
+		case *syntax.CallExpr:
+			// Built-ins like `read NAME`, `mapfile NAME`, `readarray NAME`
+			// bind the named variable but are represented as plain CallExpr
+			// (not Assign) in the AST. Recognize the common ones so the
+			// autofix doesn't shadow a user-assigned shell variable.
+			if callAssignsName(x, name) {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// callAssignsName reports whether a CallExpr is a built-in command that
+// assigns to the named variable (e.g., `read NAME`, `mapfile NAME`,
+// `readarray NAME`). The flag-and-operand grammar of these built-ins is
+// approximated: anything that does not start with `-` and isn't `--` is
+// treated as a candidate variable name. False positives only cause the
+// autofix to suffix more aggressively, which is conservative.
+func callAssignsName(call *syntax.CallExpr, name string) bool {
+	if len(call.Args) < 2 {
+		return false
+	}
+	cmd := wordLitValue(call.Args[0])
+	switch cmd {
+	case "read", "mapfile", "readarray":
+		for _, arg := range call.Args[1:] {
+			v := wordLitValue(arg)
+			if v == "" || v == "--" || strings.HasPrefix(v, "-") {
+				continue
+			}
+			if v == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// wordLitValue returns the literal-string value of a Word when it is
+// composed of plain Lits (and/or DblQuoted-wrapped Lits). Returns "" for
+// Words containing expansions, command substitutions, etc.
+func wordLitValue(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range w.Parts {
+		switch x := p.(type) {
+		case *syntax.Lit:
+			b.WriteString(x.Value)
+		case *syntax.SglQuoted:
+			b.WriteString(x.Value)
+		case *syntax.DblQuoted:
+			for _, inner := range x.Parts {
+				lit, ok := inner.(*syntax.Lit)
+				if !ok {
+					return ""
+				}
+				b.WriteString(lit.Value)
+			}
+		default:
+			return ""
+		}
+	}
+	return b.String()
+}
+
+// scriptUsesShellNameRegex is the best-effort fallback used when the
+// shell parser cannot parse the sanitized run script. It catches the
+// common shapes but does not understand all parameter-expansion
+// operators. Prefer the AST path; this exists only so a parse error
+// does not silently bypass the collision check.
+func scriptUsesShellNameRegex(sanitized, name string) bool {
 	q := regexp.QuoteMeta(name)
 	re := regexp.MustCompile(
-		`\$\{` + q + `\}` +
+		`\$\{#?!?` + q + `(?:[}:#%/^,@]|$)` +
 			`|\$` + q + `(?:[^A-Za-z0-9_]|$)` +
 			`|(?:^|[^A-Za-z0-9_.])` + q + `=`,
 	)

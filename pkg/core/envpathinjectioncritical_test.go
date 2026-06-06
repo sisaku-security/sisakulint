@@ -491,20 +491,52 @@ func TestScriptUsesShellName_StripsGitHubExpressions(t *testing.T) {
 	if scriptUsesShellName(script, "PR_BODY") {
 		t.Errorf("scriptUsesShellName matched a name absent from the script")
 	}
-	// Reference outside the GitHub expression should match.
-	script2 := `echo "$PR_BODY" >> "$GITHUB_PATH"`
-	if !scriptUsesShellName(script2, "PR_BODY") {
-		t.Errorf("scriptUsesShellName missed a plain $PR_BODY reference")
+}
+
+// TestScriptUsesShellName_ParameterExpansions pins that all bash
+// parameter-expansion shapes referencing the name are detected — the
+// regression flagged by codex on PR #514 where `${PR_BODY:-/safe}`
+// slipped past the matcher because it only accepted the exact
+// `${PR_BODY}` form.
+func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
+	cases := []struct {
+		name   string
+		script string
+	}{
+		{"plain", `echo "$PR_BODY"`},
+		{"braced", `echo "${PR_BODY}"`},
+		{"default if unset", `echo "${PR_BODY:-/safe}"`},
+		{"alt if set", `echo "${PR_BODY:+set}"`},
+		{"assign default", `echo "${PR_BODY:=/safe}"`},
+		{"error if unset", `echo "${PR_BODY:?missing}"`},
+		{"substring", `echo "${PR_BODY:0:5}"`},
+		{"length", `echo "${#PR_BODY}"`},
+		{"strip prefix", `echo "${PR_BODY#pre}"`},
+		{"strip longest prefix", `echo "${PR_BODY##pre}"`},
+		{"strip suffix", `echo "${PR_BODY%suf}"`},
+		{"strip longest suffix", `echo "${PR_BODY%%suf}"`},
+		{"substitution", `echo "${PR_BODY/foo/bar}"`},
+		{"global substitution", `echo "${PR_BODY//foo/bar}"`},
+		{"uppercase", `echo "${PR_BODY^^}"`},
+		{"lowercase", `echo "${PR_BODY,,}"`},
+		{"indirect", `echo "${!PR_BODY}"`},
+		{"assignment", `PR_BODY=/safe`},
+		{"export assignment", `export PR_BODY=/safe`},
+		{"local assignment", `f() { local PR_BODY=/safe; }`},
+		{"read", `read PR_BODY`}, // bash assigns via read
 	}
-	// Assignment should match.
-	script3 := `PR_BODY=/safe`
-	if !scriptUsesShellName(script3, "PR_BODY") {
-		t.Errorf("scriptUsesShellName missed a PR_BODY= assignment")
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !scriptUsesShellName(tc.script, "PR_BODY") {
+				t.Errorf("scriptUsesShellName missed PR_BODY in %q", tc.script)
+			}
+		})
 	}
-	// Braced reference should match.
-	script4 := `echo "${PR_BODY}/bin" >> "$GITHUB_PATH"`
-	if !scriptUsesShellName(script4, "PR_BODY") {
-		t.Errorf("scriptUsesShellName missed a ${PR_BODY} reference")
+
+	// Negative: PR_BODY not used at all
+	if scriptUsesShellName(`echo "$OTHER"`, "PR_BODY") {
+		t.Errorf("scriptUsesShellName false-positive on absent name")
 	}
 }
 
