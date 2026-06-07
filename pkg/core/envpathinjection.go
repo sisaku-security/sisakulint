@@ -334,7 +334,7 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 			// envs by lowercase name but preserves the original casing
 			// in Name.Value. Always return the inherited casing so a
 			// later `$NAME` rewrite resolves to the real env var.
-			if existing.value == exprValue {
+			if envValueMatchesExpression(existing.value, exprRaw, exprValue) {
 				return existing.actualName
 			}
 			continue
@@ -374,7 +374,7 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 			// order-aware logic.
 			// Codex PR #514 regression. Casing is preserved by passing
 			// inherited.actualName (case-sensitive bash names).
-			if inherited.value == exprValue && !assignmentShadowsUntrustedExpression(runScript, inherited.actualName, exprRaw) {
+			if envValueMatchesExpression(inherited.value, exprRaw, exprValue) && !assignmentShadowsUntrustedExpression(runScript, inherited.actualName, exprRaw) {
 				return inherited.actualName
 			}
 			continue
@@ -424,6 +424,22 @@ func lookupEnvVar(env *ast.Env, key string) (envVarLookup, bool) {
 		}
 	}
 	return out, true
+}
+
+func envValueMatchesExpression(value, exprRaw, exprValue string) bool {
+	if value == exprValue {
+		return true
+	}
+	trimmed := strings.TrimSpace(value)
+	matches := taintGhExprPattern.FindAllStringSubmatchIndex(trimmed, -1)
+	if len(matches) != 1 {
+		return false
+	}
+	match := matches[0]
+	if len(match) < 4 || match[0] != 0 || match[1] != len(trimmed) {
+		return false
+	}
+	return normalizeExpression(trimmed[match[2]:match[3]]) == normalizeExpression(exprRaw)
 }
 
 // lookupInheritedEnvVar walks job.Env then workflow.Env in GitHub Actions

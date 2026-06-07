@@ -834,6 +834,48 @@ func TestEnvPathInjectionCritical_FixStep_WrapsAllRefsOnSingleLine(t *testing.T)
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ReusesWhitespaceVariantInheritedEnv
+// pins the codex-flagged regression on PR #514: inherited env values that
+// contain the same GitHub expression with different whitespace must be reused
+// so existing `$NAME` GITHUB_PATH writes are wrapped instead of left raw.
+func TestEnvPathInjectionCritical_FixStep_ReusesWhitespaceVariantInheritedEnv(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{github.event.pull_request.body}}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed equivalent inherited expression: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath
 // is the end-to-end analog of WrapsAllExpansionShapes: when the chosen
 // helper name is reused from inherited env, a GITHUB_PATH line that mixes
