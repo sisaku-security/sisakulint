@@ -678,6 +678,9 @@ func TestEnvPathInjectionCritical_FixStep_AvoidsWorkflowEnvCollision(t *testing.
 	if err := envPathRule.VisitJobPre(job); err != nil {
 		t.Fatalf("envpath VisitJobPre() error = %v", err)
 	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
 	if err := envPathRule.FixStep(step); err != nil {
 		t.Fatalf("envpath FixStep() error = %v", err)
 	}
@@ -721,6 +724,9 @@ func TestEnvPathInjectionCritical_FixStep_ReusesInheritedEnvWhenMatching(t *test
 	if err := envPathRule.VisitJobPre(job); err != nil {
 		t.Fatalf("envpath VisitJobPre() error = %v", err)
 	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
 	if err := envPathRule.FixStep(step); err != nil {
 		t.Fatalf("envpath FixStep() error = %v", err)
 	}
@@ -763,6 +769,9 @@ func TestEnvPathInjectionCritical_FixStep_PreservesInheritedEnvCasing(t *testing
 	if err := envPathRule.VisitJobPre(job); err != nil {
 		t.Fatalf("envpath VisitJobPre() error = %v", err)
 	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
 	if err := envPathRule.FixStep(step); err != nil {
 		t.Fatalf("envpath FixStep() error = %v", err)
 	}
@@ -776,6 +785,52 @@ func TestEnvPathInjectionCritical_FixStep_PreservesInheritedEnvCasing(t *testing
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q (must preserve inherited casing for case-sensitive Linux shell)", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_WrapsAllRefsOnSingleLine asserts that
+// when a single GITHUB_PATH line contains BOTH the untrusted `${{ expr }}`
+// AND a separate `$NAME` reference to the chosen env var (e.g., via an
+// inherited env block that already binds the same expression), every
+// reference on the line gets wrapped with realpath — not just the first.
+// Regression flagged by codex on PR #514: the previous `strings.Contains`
+// guard short-circuited the entire line once the expression-derived
+// occurrence was wrapped, leaving the user's other `$PR_BODY` token
+// unwrapped and still expanding to the attacker body.
+func TestEnvPathInjectionCritical_FixStep_WrapsAllRefsOnSingleLine(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`printf '%s\n%s\n' "${{ github.event.pull_request.body }}" "$PR_BODY" >> "$GITHUB_PATH"`,
+	)
+	// Inherited job env binds the same expression to PR_BODY, so
+	// envVarNameForExpression reuses PR_BODY (no suffix). With reuse,
+	// the script's `$PR_BODY` reference reads the inherited body too,
+	// and the second pass must wrap it just like the lifted occurrence.
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	want := `printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
 	}
 }
 

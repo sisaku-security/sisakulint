@@ -270,19 +270,25 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	for i, line := range lines {
 		if githubPathPattern.MatchString(line) {
 			// This line writes to GITHUB_PATH
-			// Replace any $ENV_VAR references (that aren't already wrapped) with validated version
+			// Replace any $ENV_VAR references with the validated version.
+			// Only rewrite the env var actually chosen for this expression.
+			// When envVarNameForExpression suffixes the name (e.g.,
+			// PR_BODY_2) because the base name is occupied by an unrelated
+			// user value, the base name must be left untouched — otherwise
+			// the user's `$PR_BODY` references on GITHUB_PATH lines get
+			// silently rewritten to the attacker-controlled value.
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
-
-				// Only rewrite the env var actually chosen for this expression.
-				// When envVarNameForExpression suffixes the name (e.g., PR_BODY_2)
-				// because the base name is occupied by an unrelated user value,
-				// the base name must be left untouched — otherwise the user's
-				// `$PR_BODY` references on GITHUB_PATH lines get silently
-				// rewritten to the attacker-controlled value.
 				validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
+				// If the first pass already wrapped one occurrence on this
+				// line, unwrap it first so we can re-wrap every shell
+				// reference uniformly. A coarse "skip the line if it
+				// already contains validatedVar" check would leave any
+				// other `$NAME` reference on the same line untouched —
+				// regression flagged by codex on PR #514 for
+				// `printf '%s\n%s\n' "${{ expr }}" "$NAME" >> $GITHUB_PATH`.
 				if strings.Contains(line, validatedVar) {
-					continue
+					line = strings.ReplaceAll(line, validatedVar, "$"+envVarName)
 				}
 				line = replaceShellEnvVarRef(line, envVarName, validatedVar)
 			}
