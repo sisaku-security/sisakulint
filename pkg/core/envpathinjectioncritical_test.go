@@ -1150,6 +1150,66 @@ func TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadowSameLi
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_MixedStepEnvWritesAroundShadow
+// mirrors the inherited-env shadow case for step-level env vars. A matching
+// step env PR_BODY is tainted before a script assignment, but shadowed after
+// it, so expression rewrites after the assignment need a suffixed helper while
+// earlier `$PR_BODY` PATH writes still need wrapping.
+func TestEnvPathInjectionCritical_FixStep_MixedStepEnvWritesAroundShadow(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"; PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	step.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	exprs := envPathRule.extractAndParseExpressions(step.Exec.(*ast.ExecRun).Run)
+	if len(exprs) != 1 {
+		t.Fatalf("expected one parsed expression, got %d", len(exprs))
+	}
+	envPathRule.stepsWithUntrusted = []*stepWithEnvPathInjection{
+		{
+			step: step,
+			job:  job,
+			untrustedExprs: []envPathUntrustedExprInfo{
+				{
+					expr:  exprs[0],
+					paths: []string{"github.event.pull_request.body"},
+					line:  step.Exec.(*ast.ExecRun).Run.Value,
+				},
+			},
+		},
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if got := step.Env.Vars["pr_body"].Value.Value; got != "${{ github.event.pull_request.body }}" {
+		t.Fatalf("existing PR_BODY step env was overwritten: %q", got)
+	}
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+	}
+	if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+		t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+	}
+
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_IgnoresUnrelatedExpressionAfterShadow
 // pins the codex-flagged regression on PR #514: inherited env reuse must
 // consider only the expression being rewritten. A later unrelated GitHub

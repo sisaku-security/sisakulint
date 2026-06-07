@@ -217,9 +217,9 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)              // expr.raw -> chosen env var name
-	envVarsForYAML := make(map[string]string)         // env var name -> env var value
-	preShadowInheritedRefs := make(map[string]string) // expr.raw -> inherited env var name
+	envVarMap := make(map[string]string)             // expr.raw -> chosen env var name
+	envVarsForYAML := make(map[string]string)        // env var name -> env var value
+	preShadowExistingRefs := make(map[string]string) // expr.raw -> existing env var name
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
@@ -230,15 +230,15 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
-			matchingInherited, hasMatchingInherited := rule.matchingInheritedEnvVarForExpression(step, stepInfo.job, baseEnvVarName, expr.raw, exprValue)
+			matchingExisting, hasMatchingExisting := rule.matchingExistingEnvVarForExpression(step, stepInfo.job, baseEnvVarName, expr.raw, exprValue)
 			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, expr.raw, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
-			// If an inherited matching env var had to be avoided because
+			// If a matching existing env var had to be avoided because
 			// the script shadows it later, references before that shadow
-			// still read the inherited tainted value and must be wrapped.
-			if hasMatchingInherited && matchingInherited.actualName != envVarName {
-				if _, ok := firstShellAssignmentOffset(run.Run.Value, matchingInherited.actualName); ok {
-					preShadowInheritedRefs[expr.raw] = matchingInherited.actualName
+			// still read the existing tainted value and must be wrapped.
+			if hasMatchingExisting && matchingExisting.actualName != envVarName {
+				if _, ok := firstShellAssignmentOffset(run.Run.Value, matchingExisting.actualName); ok {
+					preShadowExistingRefs[expr.raw] = matchingExisting.actualName
 				}
 			}
 		}
@@ -275,10 +275,10 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		newScript = strings.ReplaceAll(newScript, old, new)
 	}
 
-	preShadowInheritedAssignOffset := make(map[string]int)
-	for exprRaw, inheritedName := range preShadowInheritedRefs {
-		if assignOffset, ok := firstShellAssignmentOffset(newScript, inheritedName); ok {
-			preShadowInheritedAssignOffset[exprRaw] = assignOffset
+	preShadowExistingAssignOffset := make(map[string]int)
+	for exprRaw, existingName := range preShadowExistingRefs {
+		if assignOffset, ok := firstShellAssignmentOffset(newScript, existingName); ok {
+			preShadowExistingAssignOffset[exprRaw] = assignOffset
 		}
 	}
 
@@ -313,15 +313,15 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 				}
 				line = replaceShellEnvVarRef(line, envVarName)
 				// When chosen name suffixing was caused by a later
-				// script assignment, only the pre-assignment inherited
+				// script assignment, only the pre-assignment existing
 				// references still expand to the untrusted env value.
-				if inheritedName, ok := preShadowInheritedRefs[untrustedInfo.expr.raw]; ok {
-					if assignOffset, ok := preShadowInheritedAssignOffset[untrustedInfo.expr.raw]; ok && lineStart < assignOffset {
+				if existingName, ok := preShadowExistingRefs[untrustedInfo.expr.raw]; ok {
+					if assignOffset, ok := preShadowExistingAssignOffset[untrustedInfo.expr.raw]; ok && lineStart < assignOffset {
 						limit := originalLineLen
 						if assignOffset < lineEnd {
 							limit = assignOffset - lineStart
 						}
-						line = replaceShellEnvVarRefBeforeOffset(line, inheritedName, limit)
+						line = replaceShellEnvVarRefBeforeOffset(line, existingName, limit)
 					}
 				}
 			}
@@ -345,10 +345,9 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	return nil
 }
 
-// matchingInheritedEnvVarForExpression returns a job/workflow env var that
-// already binds the exact expression the autofix would otherwise lift, as long
-// as no step-level env var shadows that inherited name for the whole step.
-func (rule *EnvPathInjectionRule) matchingInheritedEnvVarForExpression(
+// matchingExistingEnvVarForExpression returns a step/job/workflow env var that
+// already binds the exact expression the autofix would otherwise lift.
+func (rule *EnvPathInjectionRule) matchingExistingEnvVarForExpression(
 	step *ast.Step,
 	job *ast.Job,
 	baseName string,
@@ -356,7 +355,10 @@ func (rule *EnvPathInjectionRule) matchingInheritedEnvVarForExpression(
 	exprValue string,
 ) (envVarLookup, bool) {
 	key := strings.ToLower(baseName)
-	if _, exists := lookupEnvVar(step.Env, key); exists {
+	if existing, exists := lookupEnvVar(step.Env, key); exists {
+		if envValueMatchesExpression(existing.value, exprRaw, exprValue) {
+			return existing, true
+		}
 		return envVarLookup{}, false
 	}
 	inherited, has := lookupInheritedEnvVar(rule.workflow, job, key)
@@ -386,9 +388,11 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		if existing, exists := lookupEnvVar(step.Env, key); exists {
 			// Linux shell env vars are case-sensitive; the AST keys
 			// envs by lowercase name but preserves the original casing
-			// in Name.Value. Always return the inherited casing so a
-			// later `$NAME` rewrite resolves to the real env var.
-			if envValueMatchesExpression(existing.value, exprRaw, exprValue) {
+			// in Name.Value. Always return the existing casing so a
+			// later `$NAME` rewrite resolves to the real env var. Even
+			// a matching step env cannot be reused after a script-level
+			// assignment shadows it before the PATH write.
+			if envValueMatchesExpression(existing.value, exprRaw, exprValue) && !assignmentShadowsUntrustedExpression(runScript, existing.actualName, exprRaw) {
 				return existing.actualName
 			}
 			continue
@@ -411,9 +415,6 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		// `${PR_BODY:-/safe}`) do NOT block reuse — those refer to the
 		// inherited value the same way the autofix would, and we WANT
 		// the second wrap pass to cover them. Codex PR #514 regression.
-		// Note that step.Env reuse intentionally does NOT apply this
-		// check: it covers the code-injection composition path where the
-		// script's `$NAME` reference is the autofix-emitted form.
 		if inherited, has := lookupInheritedEnvVar(rule.workflow, job, key); has {
 			// Reuse the inherited name when the value matches, EXCEPT
 			// when a script-level assignment precedes any rewrite
