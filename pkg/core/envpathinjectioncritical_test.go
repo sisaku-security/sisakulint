@@ -542,6 +542,7 @@ func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
 		{"lowercase", `echo "${PR_BODY,,}"`},
 		{"indirect", `echo "${!PR_BODY}"`},
 		{"assignment", `PR_BODY=/safe`},
+		{"command-local assignment", `PR_BODY=/safe true`},
 		{"export assignment", `export PR_BODY=/safe`},
 		{"local assignment", `f() { local PR_BODY=/safe; }`},
 		{"read", `read PR_BODY`}, // bash assigns via read
@@ -1122,6 +1123,69 @@ echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_CommandLocalAssignmentDoesNotShadowInheritedEnv
+// pins that `NAME=value command` prefixes are command-local in bash. They must
+// not make later or same-command PATH writes look shadowed when a matching
+// inherited env var still supplies the tainted value.
+func TestEnvPathInjectionCritical_FixStep_CommandLocalAssignmentDoesNotShadowInheritedEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "prefix assignment before later path writes",
+			run: `PR_BODY=/safe true
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `PR_BODY=/safe true
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "prefix assignment on path write command",
+			run: `PR_BODY=/safe echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `PR_BODY=/safe echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+				"pr_body": {
+					Name:  &ast.String{Value: "PR_BODY"},
+					Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+				},
+			}}
+
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+			if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+				t.Fatalf("autofix wrongly suffixed due to command-local assignment: %+v", step.Env.Vars["pr_body_2"].Value)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tc.want {
+				t.Errorf("fixed run script = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -1733,6 +1797,19 @@ read PR_BODY`,
 			want:    false,
 		},
 		{
+			name: "command-local assignment before parent expression",
+			script: `PR_BODY=/safe true
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name:    "command-local assignment on target expression command",
+			script:  `PR_BODY=/safe echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
 			name: "subshell assignment before parent expression",
 			script: `(PR_BODY=/safe)
 echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
@@ -1960,6 +2037,7 @@ func TestScriptAssignsShellName(t *testing.T) {
 		{"readarray delimiter arg", `readarray -d PR_BODY ARR`, ""},
 		{"readarray ignores extra operand", `readarray ARR PR_BODY`, ""},
 		{"readarray explicit array avoids default", `readarray ARR`, "MAPFILE"},
+		{"command-local assignment", `PR_BODY=/safe true`, ""},
 	}
 	for _, tc := range referencesOnly {
 		t.Run("references/"+tc.name, func(t *testing.T) {

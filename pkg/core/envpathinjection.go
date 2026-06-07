@@ -702,7 +702,7 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 		}
 		nodeFrames = append(nodeFrames, openedScopeID)
 
-		if off, ok := shellAssignmentOffset(node, name); ok {
+		if off, ok := persistentShellAssignmentOffset(node, name); ok {
 			analysis.assignments = append(analysis.assignments, shellAssignmentRef{
 				offset: off,
 				scope:  cloneIntSlice(scopePath),
@@ -823,7 +823,7 @@ func functionBodyAssignsNameGlobally(fn *syntax.FuncDecl, name string) bool {
 		if localName {
 			return true
 		}
-		if _, ok := shellAssignmentOffset(node, name); ok {
+		if _, ok := persistentShellAssignmentOffset(node, name); ok {
 			assignsGlobally = true
 			return false
 		}
@@ -1151,7 +1151,7 @@ func scriptAssignsShellName(script, name string) bool {
 		if found || node == nil {
 			return false
 		}
-		if _, ok := shellAssignmentOffset(node, name); ok {
+		if _, ok := persistentShellAssignmentOffset(node, name); ok {
 			found = true
 			return false
 		}
@@ -1188,15 +1188,81 @@ func callAssignsName(call *syntax.CallExpr, name string) bool {
 	return false
 }
 
+// persistentShellAssignmentOffset reports assignments that persist in the
+// current shell scope. Command-local prefixes like `NAME=value command` are
+// intentionally ignored because bash applies them only to that simple command.
+func persistentShellAssignmentOffset(node syntax.Node, name string) (int, bool) {
+	if node == nil || name == "" {
+		return 0, false
+	}
+	switch x := node.(type) {
+	case *syntax.CallExpr:
+		if off, ok := callPersistentAssignmentOffset(x, name); ok {
+			return off, true
+		}
+		if callAssignsName(x, name) {
+			return int(x.Pos().Offset()), true
+		}
+	case *syntax.DeclClause:
+		return declClauseAssignmentOffset(x, name)
+	case *syntax.WordIter:
+		if x.Name != nil && x.Name.Value == name {
+			return int(x.Name.Pos().Offset()), true
+		}
+	case *syntax.BinaryArithm:
+		if arithmAssignsName(x, name) {
+			return int(x.X.Pos().Offset()), true
+		}
+	case *syntax.UnaryArithm:
+		if (x.Op == syntax.Inc || x.Op == syntax.Dec) && arithmExprName(x.X) == name {
+			return int(x.X.Pos().Offset()), true
+		}
+	}
+	return 0, false
+}
+
+func callPersistentAssignmentOffset(call *syntax.CallExpr, name string) (int, bool) {
+	if call == nil || len(call.Args) > 0 {
+		return 0, false
+	}
+	for _, assign := range call.Assigns {
+		if off, ok := assignNameOffset(assign, name); ok {
+			return off, true
+		}
+	}
+	return 0, false
+}
+
+func declClauseAssignmentOffset(decl *syntax.DeclClause, name string) (int, bool) {
+	if decl == nil {
+		return 0, false
+	}
+	for _, arg := range decl.Args {
+		if off, ok := assignNameOffset(arg, name); ok {
+			return off, true
+		}
+	}
+	return 0, false
+}
+
+func assignNameOffset(assign *syntax.Assign, name string) (int, bool) {
+	if assign != nil && assign.Name != nil && assign.Name.Value == name {
+		return int(assign.Pos().Offset()), true
+	}
+	return 0, false
+}
+
+// shellAssignmentOffset is a broader name-use detector used for collision
+// avoidance. Unlike persistentShellAssignmentOffset, it includes command-local
+// assignment prefixes because generating a same-named env var can still
+// collide with user-authored shell names.
 func shellAssignmentOffset(node syntax.Node, name string) (int, bool) {
 	if node == nil || name == "" {
 		return 0, false
 	}
 	switch x := node.(type) {
 	case *syntax.Assign:
-		if x.Name != nil && x.Name.Value == name {
-			return int(x.Pos().Offset()), true
-		}
+		return assignNameOffset(x, name)
 	case *syntax.CallExpr:
 		// Built-ins like `read NAME`, `mapfile NAME`, `readarray NAME`
 		// bind the named variable but are represented as plain CallExpr
