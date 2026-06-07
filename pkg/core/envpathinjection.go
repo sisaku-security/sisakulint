@@ -1344,10 +1344,35 @@ func stmtRedirectsStdout(stmt *syntax.Stmt) bool {
 }
 
 func stmtCanWriteInheritedStdout(stmt *syntax.Stmt) bool {
-	if stmt == nil || stmtRedirectsStdout(stmt) || stmtIsFunctionDecl(stmt) {
+	if stmt == nil || stmtRedirectsStdout(stmt) || stmtIsFunctionDecl(stmt) || stmtIsOutputFreeBinding(stmt) {
 		return false
 	}
 	return true
+}
+
+func stmtIsOutputFreeBinding(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	switch cmd := stmt.Cmd.(type) {
+	case *syntax.CallExpr:
+		return len(cmd.Args) == 0 && len(cmd.Assigns) > 0
+	case *syntax.DeclClause:
+		return declClauseIsOutputFreeBinding(cmd)
+	}
+	return false
+}
+
+func declClauseIsOutputFreeBinding(decl *syntax.DeclClause) bool {
+	if decl == nil || declClauseHasOption(decl, 'p') {
+		return false
+	}
+	for _, arg := range decl.Args {
+		if arg != nil && arg.Name != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func stmtIsFunctionDecl(stmt *syntax.Stmt) bool {

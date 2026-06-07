@@ -170,6 +170,20 @@ f() { echo "${{ github.event.pull_request.body }}"; }`,
 			description: "Should not treat a function definition as output just because parent stdout writes GITHUB_PATH",
 		},
 		{
+			name:        "exec append does not make assignment-only output",
+			trigger:     "pull_request_target",
+			runScript:   `exec >> "$GITHUB_PATH"; PR_BODY="${{ github.event.pull_request.body }}"`,
+			wantErrors:  0,
+			description: "Should not treat assignment-only statements as output after persistent exec append",
+		},
+		{
+			name:        "exec append does not make declaration-only output",
+			trigger:     "pull_request_target",
+			runScript:   `exec >> "$GITHUB_PATH"; export PR_BODY="${{ github.event.pull_request.body }}"`,
+			wantErrors:  0,
+			description: "Should not treat declaration-only statements as output after persistent exec append",
+		},
+		{
 			name:        "extracted path from untrusted input",
 			trigger:     "pull_request_target",
 			runScript:   `echo "${{ github.event.comment.body }}" >> "$GITHUB_PATH"`,
@@ -1854,6 +1868,20 @@ echo "$(realpath "$PR_BODY")"`,
 			name: "brace group exec append rewrites following parent output",
 			run:  `{ exec >> "$GITHUB_PATH"; }; echo "${{ github.event.pull_request.body }}"`,
 			want: `{ exec >> "$GITHUB_PATH"; }; echo "$(realpath "$PR_BODY")"`,
+		},
+		{
+			name: "assignment-only after exec append is preserved",
+			run: `exec >> "$GITHUB_PATH"; PR_BODY="${{ github.event.pull_request.body }}"
+echo "${{ github.event.pull_request.body }}"`,
+			want: `exec >> "$GITHUB_PATH"; PR_BODY="${{ github.event.pull_request.body }}"
+echo "$(realpath "$PR_BODY_2")"`,
+		},
+		{
+			name: "declaration-only after exec append is preserved",
+			run: `exec >> "$GITHUB_PATH"; export PR_BODY="${{ github.event.pull_request.body }}"
+echo "${{ github.event.pull_request.body }}"`,
+			want: `exec >> "$GITHUB_PATH"; export PR_BODY="${{ github.event.pull_request.body }}"
+echo "$(realpath "$PR_BODY_2")"`,
 		},
 	}
 	for _, tc := range tests {
