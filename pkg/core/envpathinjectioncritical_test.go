@@ -877,6 +877,120 @@ func TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath(t 
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_AssignmentAfterPathWrites pins
+// the codex-flagged ordering bug on PR #514: when the inherited env
+// declares the same expression and the script assigns the same name
+// AFTER all `$GITHUB_PATH` writes (so the writes still read the
+// inherited untrusted value), the autofix must REUSE the inherited
+// name so the second pass can wrap the earlier `$NAME` references.
+// A naive "any assignment forces a suffix" check (the previous
+// scriptAssignsShellName behavior) would have suffixed to PR_BODY_2
+// and left the earlier raw `$PR_BODY` PATH entry unfixed.
+func TestEnvPathInjectionCritical_FixStep_AssignmentAfterPathWrites(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+PR_BODY=/safe`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	// No suffix: the assignment is after the PATH writes, so reusing
+	// PR_BODY is safe. Both PATH-write lines should be wrapped.
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed when assignment is after PATH writes: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+PR_BODY=/safe`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestAssignmentShadowsAnyUntrustedExpression pins the ordering
+// semantics directly: only assignments that PRECEDE at least one
+// `${{ ... }}` expression count as shadowing. Reported by codex on
+// PR #514.
+func TestAssignmentShadowsAnyUntrustedExpression(t *testing.T) {
+	cases := []struct {
+		name   string
+		script string
+		want   bool
+	}{
+		{
+			name: "assignment before expression",
+			script: `PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}"`,
+			want: true,
+		},
+		{
+			name: "assignment after expression",
+			script: `echo "${{ github.event.pull_request.body }}"
+PR_BODY=/safe`,
+			want: false,
+		},
+		{
+			name: "no assignment",
+			script: `echo "${{ github.event.pull_request.body }}"
+echo "$PR_BODY"`,
+			want: false,
+		},
+		{
+			name: "no expression",
+			script: `PR_BODY=/safe
+echo "$PR_BODY"`,
+			want: false,
+		},
+		{
+			name: "two expressions, assignment between them",
+			script: `echo "${{ first.expr }}"
+PR_BODY=/safe
+echo "${{ second.expr }}"`,
+			want: true,
+		},
+		{
+			name: "read builtin before expression",
+			script: `read PR_BODY
+echo "${{ github.event.pull_request.body }}"`,
+			want: true,
+		},
+		{
+			name: "read builtin after expression",
+			script: `echo "${{ github.event.pull_request.body }}"
+read PR_BODY`,
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := assignmentShadowsAnyUntrustedExpression(tc.script, "PR_BODY"); got != tc.want {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestScriptAssignsShellName pins that the inherited-env reuse gate
 // distinguishes assignment from reference. References must NOT block
 // reuse (they read the inherited value, which the autofix wants to

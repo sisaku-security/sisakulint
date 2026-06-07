@@ -360,14 +360,19 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		// check: it covers the code-injection composition path where the
 		// script's `$NAME` reference is the autofix-emitted form.
 		if inherited, has := lookupInheritedEnvVar(rule.workflow, job, key); has {
-			// scriptAssignsShellName must check the name we are actually
-			// about to return (inherited.actualName), not the candidate.
-			// When the inherited entry uses different casing (e.g.,
-			// lowercase `pr_body` for a `PR_BODY` candidate), checking
-			// against the candidate misses the script's lowercase
-			// assignment and the rewrite then resolves the shadowed
-			// script value. Codex PR #514 regression.
-			if inherited.value == exprValue && !scriptAssignsShellName(runScript, inherited.actualName) {
+			// Reuse the inherited name when the value matches, EXCEPT
+			// when a script-level assignment precedes any rewrite
+			// location and would shadow the inherited env at that point.
+			// A pure-presence check (scriptAssignsShellName) would also
+			// suffix when the assignment happens AFTER all the rewrite
+			// locations — in that case the earlier `$NAME` references on
+			// GITHUB_PATH lines still read the inherited (untrusted)
+			// value and the second pass should wrap them, which only
+			// works if we reuse the inherited name. assignmentShadowsAny-
+			// UntrustedExpression bakes in the order-aware logic.
+			// Codex PR #514 regression. Casing is preserved by passing
+			// inherited.actualName (case-sensitive bash names).
+			if inherited.value == exprValue && !assignmentShadowsAnyUntrustedExpression(runScript, inherited.actualName) {
 				return inherited.actualName
 			}
 			continue
@@ -493,6 +498,72 @@ func scriptUsesShellName(script, name string) bool {
 		return true
 	})
 	return found
+}
+
+// assignmentShadowsAnyUntrustedExpression reports whether the run
+// script assigns to `name` BEFORE any `${{ ... }}` expression appears.
+// Order matters: when the assignment happens AFTER all expression
+// positions, the autofix's rewrites at those positions still read the
+// inherited (untrusted) value — so reuse is safe and we want to wrap
+// them with realpath. When the assignment precedes at least one
+// expression position, that expression's rewrite would resolve the
+// shadowed local value at runtime — semantically wrong — so the
+// caller must suffix to a fresh helper name. Reported by codex on
+// PR #514.
+//
+// Implementation: sanitize `${{ ... }}` to word-only placeholders so
+// bash can parse the script, locate the first assignment offset via
+// AST walk (covers `Assign` and `read`/`mapfile`/`readarray`
+// builtins), then check whether any placeholder offset is greater
+// than the assignment offset.
+func assignmentShadowsAnyUntrustedExpression(script, name string) bool {
+	if name == "" || script == "" {
+		return false
+	}
+	sanitized, exprMap := sanitizeForShellParse(script)
+	if len(exprMap) == 0 {
+		return false
+	}
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		// Conservative on parse failure: any assignment forces a suffix.
+		return scriptAssignsShellName(script, name)
+	}
+
+	firstAssignOffset := -1
+	syntax.Walk(file, func(node syntax.Node) bool {
+		off := -1
+		switch x := node.(type) {
+		case *syntax.Assign:
+			if x.Name != nil && x.Name.Value == name {
+				off = int(x.Pos().Offset())
+			}
+		case *syntax.CallExpr:
+			if callAssignsName(x, name) {
+				off = int(x.Pos().Offset())
+			}
+		}
+		if off >= 0 && (firstAssignOffset == -1 || off < firstAssignOffset) {
+			firstAssignOffset = off
+		}
+		return true
+	})
+	if firstAssignOffset == -1 {
+		return false
+	}
+
+	// If any `${{ ... }}` placeholder appears AFTER the first
+	// assignment, that expression's rewrite would resolve the shadowed
+	// value — return true so the caller suffixes.
+	for placeholder := range exprMap {
+		idx := strings.Index(sanitized, placeholder)
+		if idx >= 0 && idx > firstAssignOffset {
+			return true
+		}
+	}
+	return false
 }
 
 // scriptAssignsShellName reports whether the run script assigns to a
