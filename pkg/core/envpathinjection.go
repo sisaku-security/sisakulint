@@ -347,8 +347,20 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		// only when the inherited value is the exact same expression
 		// the autofix would emit. Return the inherited variable's
 		// actual casing for the same reason as the step lookup above.
+		//
+		// Reuse is gated on scriptAssignsShellName even when the inherited
+		// value matches: a script-level `PR_BODY=/safe` would shadow the
+		// inherited env at runtime, so a rewritten `$(realpath "$PR_BODY")`
+		// would silently resolve to `/safe` instead of the inherited
+		// expression. References without assignment (`$PR_BODY`,
+		// `${PR_BODY:-/safe}`) do NOT block reuse — those refer to the
+		// inherited value the same way the autofix would, and we WANT
+		// the second wrap pass to cover them. Codex PR #514 regression.
+		// Note that step.Env reuse intentionally does NOT apply this
+		// check: it covers the code-injection composition path where the
+		// script's `$NAME` reference is the autofix-emitted form.
 		if inherited, has := lookupInheritedEnvVar(rule.workflow, job, key); has {
-			if inherited.value == exprValue {
+			if inherited.value == exprValue && !scriptAssignsShellName(runScript, candidate) {
 				return inherited.actualName
 			}
 			continue
@@ -474,6 +486,60 @@ func scriptUsesShellName(script, name string) bool {
 		return true
 	})
 	return found
+}
+
+// scriptAssignsShellName reports whether the run script assigns to a
+// shell variable with the given name. References (`$NAME`, `${NAME}`,
+// `${NAME:-default}`, etc.) are intentionally NOT treated as
+// assignments — they read the variable rather than bind it, so they
+// do not shadow an inherited env value. Used by the inherited-env
+// reuse path to keep a script-level `PR_BODY=/safe` from silently
+// redirecting the autofix's `$(realpath "$PR_BODY")` rewrite to a
+// shadowed local value while still allowing reuse when the script
+// only references the inherited variable.
+func scriptAssignsShellName(script, name string) bool {
+	if name == "" || script == "" {
+		return false
+	}
+	sanitized, _ := sanitizeForShellParse(script)
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return scriptAssignsShellNameRegex(sanitized, name)
+	}
+
+	var found bool
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if found || node == nil {
+			return false
+		}
+		switch x := node.(type) {
+		case *syntax.Assign:
+			if x.Name != nil && x.Name.Value == name {
+				found = true
+				return false
+			}
+		case *syntax.CallExpr:
+			if callAssignsName(x, name) {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// scriptAssignsShellNameRegex is the parse-failure fallback for
+// scriptAssignsShellName. Matches `NAME=` (with `export NAME=`,
+// `local NAME=`, etc. covered by the `[^A-Za-z0-9_.]` boundary).
+// Does not catch `read NAME` / `mapfile NAME` built-ins; on parse
+// failure those slip past, but parse failures should be rare.
+func scriptAssignsShellNameRegex(sanitized, name string) bool {
+	q := regexp.QuoteMeta(name)
+	re := regexp.MustCompile(`(?:^|[^A-Za-z0-9_.])` + q + `=`)
+	return re.MatchString(sanitized)
 }
 
 // callAssignsName reports whether a CallExpr is a built-in command that

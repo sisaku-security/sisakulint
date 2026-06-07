@@ -877,6 +877,117 @@ func TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath(t 
 	}
 }
 
+// TestScriptAssignsShellName pins that the inherited-env reuse gate
+// distinguishes assignment from reference. References must NOT block
+// reuse (they read the inherited value, which the autofix wants to
+// wrap); only assignments shadow the inherited env at runtime and
+// thus force a suffix. Reported by codex on PR #514.
+func TestScriptAssignsShellName(t *testing.T) {
+	assigns := []struct {
+		name   string
+		script string
+	}{
+		{"plain assignment", `PR_BODY=/safe`},
+		{"export assignment", `export PR_BODY=/safe`},
+		{"local assignment in fn", `f() { local PR_BODY=/safe; }`},
+		{"bare local in fn", `f() { local PR_BODY; }`},
+		{"bare declare in fn", `f() { declare PR_BODY; }`},
+		{"bare readonly", `readonly PR_BODY`},
+		{"read builtin", `read PR_BODY`},
+		{"mapfile builtin", `mapfile PR_BODY`},
+	}
+	for _, tc := range assigns {
+		t.Run("assigns/"+tc.name, func(t *testing.T) {
+			if !scriptAssignsShellName(tc.script, "PR_BODY") {
+				t.Errorf("scriptAssignsShellName missed assignment in %q", tc.script)
+			}
+		})
+	}
+
+	referencesOnly := []struct {
+		name   string
+		script string
+	}{
+		{"plain ref", `echo "$PR_BODY"`},
+		{"braced ref", `echo "${PR_BODY}"`},
+		{"default if unset", `echo "${PR_BODY:-/safe}"`},
+		{"alt if set", `echo "${PR_BODY:+set}"`},
+		{"strip prefix", `echo "${PR_BODY#pre}"`},
+		{"uppercase", `echo "${PR_BODY^^}"`},
+		{"length", `echo "${#PR_BODY}"`},
+		{"indirect", `echo "${!PR_BODY}"`},
+	}
+	for _, tc := range referencesOnly {
+		t.Run("references/"+tc.name, func(t *testing.T) {
+			if scriptAssignsShellName(tc.script, "PR_BODY") {
+				t.Errorf("scriptAssignsShellName false-positive on reference %q", tc.script)
+			}
+		})
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_ScriptShadowsInheritedEnv pins
+// the codex-flagged regression on PR #514: when a job- or workflow-level
+// env defines the same expression under the helper name AND the script
+// also assigns the same shell name locally, the autofix must suffix
+// rather than reuse — otherwise the rewritten `$(realpath "$PR_BODY")`
+// reads the script's local `PR_BODY=/safe` (which shadows the inherited
+// env at runtime) and silently changes the user's intent from
+// "write the body" to "write /safe".
+func TestEnvPathInjectionCritical_FixStep_ScriptShadowsInheritedEnv(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	// Job env declares the same expression under PR_BODY. The autofix
+	// would normally reuse this name, but the script's `PR_BODY=/safe`
+	// shadows the inherited value at runtime, so reuse would mis-resolve.
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	// Step env must add a SUFFIXED entry (PR_BODY_2) so the rewrite
+	// reads the autofix-introduced env var, not the script's shadowed
+	// PR_BODY. The inherited job env is left intact.
+	if step.Env != nil {
+		if added := step.Env.Vars["pr_body"]; added != nil {
+			t.Fatalf("autofix wrongly created step-level PR_BODY (would be shadowed by script): %+v", added.Value)
+		}
+		added := step.Env.Vars["pr_body_2"]
+		if added == nil || added.Value == nil {
+			t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+		}
+		if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+			t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+		}
+	}
+
+	want := `PR_BODY=/safe
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_LeftoverGitHubExpressionInLine
 // is the end-to-end regression for the codex sanitize-before-parse
 // concern: an inherited-env reuse path where the GITHUB_PATH line
