@@ -217,8 +217,10 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)      // expr.raw -> chosen env var name
-	envVarsForYAML := make(map[string]string) // env var name -> env var value
+	envVarMap := make(map[string]string)                 // expr.raw -> chosen env var name
+	envVarsForYAML := make(map[string]string)            // env var name -> env var value
+	preShadowInheritedRefs := make(map[string]string)    // expr.raw -> inherited env var name
+	preShadowInheritedAssignLine := make(map[string]int) // expr.raw -> first shadowing assignment line
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
@@ -229,8 +231,18 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
+			matchingInherited, hasMatchingInherited := rule.matchingInheritedEnvVarForExpression(step, stepInfo.job, baseEnvVarName, expr.raw, exprValue)
 			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, expr.raw, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
+			// If an inherited matching env var had to be avoided because
+			// the script shadows it later, references before that shadow
+			// still read the inherited tainted value and must be wrapped.
+			if hasMatchingInherited && matchingInherited.actualName != envVarName {
+				if assignLine, ok := firstShellAssignmentLine(run.Run.Value, matchingInherited.actualName); ok {
+					preShadowInheritedRefs[expr.raw] = matchingInherited.actualName
+					preShadowInheritedAssignLine[expr.raw] = assignLine
+				}
+			}
 		}
 	}
 
@@ -292,6 +304,14 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					line = strings.ReplaceAll(line, validatedVar, "$"+envVarName)
 				}
 				line = replaceShellEnvVarRef(line, envVarName)
+				// When chosen name suffixing was caused by a later
+				// script assignment, only the pre-assignment inherited
+				// references still expand to the untrusted env value.
+				if inheritedName, ok := preShadowInheritedRefs[untrustedInfo.expr.raw]; ok {
+					if i < preShadowInheritedAssignLine[untrustedInfo.expr.raw] {
+						line = replaceShellEnvVarRef(line, inheritedName)
+					}
+				}
 			}
 			lines[i] = line
 		}
@@ -310,6 +330,27 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	return nil
+}
+
+// matchingInheritedEnvVarForExpression returns a job/workflow env var that
+// already binds the exact expression the autofix would otherwise lift, as long
+// as no step-level env var shadows that inherited name for the whole step.
+func (rule *EnvPathInjectionRule) matchingInheritedEnvVarForExpression(
+	step *ast.Step,
+	job *ast.Job,
+	baseName string,
+	exprRaw string,
+	exprValue string,
+) (envVarLookup, bool) {
+	key := strings.ToLower(baseName)
+	if _, exists := lookupEnvVar(step.Env, key); exists {
+		return envVarLookup{}, false
+	}
+	inherited, has := lookupInheritedEnvVar(rule.workflow, job, key)
+	if !has || !envValueMatchesExpression(inherited.value, exprRaw, exprValue) {
+		return envVarLookup{}, false
+	}
+	return inherited, true
 }
 
 func (rule *EnvPathInjectionRule) envVarNameForExpression(
@@ -585,6 +626,41 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	return false
 }
 
+func firstShellAssignmentLine(script, name string) (int, bool) {
+	if name == "" || script == "" {
+		return 0, false
+	}
+	sanitized, _ := sanitizeForShellParse(script)
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return 0, false
+	}
+
+	firstAssignOffset := -1
+	syntax.Walk(file, func(node syntax.Node) bool {
+		off := -1
+		switch x := node.(type) {
+		case *syntax.Assign:
+			if x.Name != nil && x.Name.Value == name {
+				off = int(x.Pos().Offset())
+			}
+		case *syntax.CallExpr:
+			if callAssignsName(x, name) {
+				off = int(x.Pos().Offset())
+			}
+		}
+		if off >= 0 && (firstAssignOffset == -1 || off < firstAssignOffset) {
+			firstAssignOffset = off
+		}
+		return true
+	})
+	if firstAssignOffset == -1 {
+		return 0, false
+	}
+	return strings.Count(sanitized[:firstAssignOffset], "\n"), true
+}
+
 func githubPathExpressionPlaceholders(script, exprRaw string) map[string]struct{} {
 	placeholders := make(map[string]struct{})
 	targetExpr := strings.TrimSpace(exprRaw)
@@ -681,7 +757,7 @@ func scriptAssignsShellNameRegex(sanitized, name string) bool {
 // assigns to the named variable (e.g., `read NAME`, `mapfile NAME`,
 // `readarray NAME`).
 func callAssignsName(call *syntax.CallExpr, name string) bool {
-	if len(call.Args) < 2 {
+	if len(call.Args) < 1 {
 		return false
 	}
 	cmd := wordLitValue(call.Args[0])
@@ -689,20 +765,14 @@ func callAssignsName(call *syntax.CallExpr, name string) bool {
 	case "read":
 		return readCallAssignsName(call.Args[1:], name)
 	case "mapfile", "readarray":
-		for _, arg := range call.Args[1:] {
-			v := wordLitValue(arg)
-			if v == "" || v == "--" || strings.HasPrefix(v, "-") {
-				continue
-			}
-			if v == name {
-				return true
-			}
-		}
+		return mapfileCallAssignsName(call.Args[1:], name)
 	}
 	return false
 }
 
 func readCallAssignsName(args []*syntax.Word, name string) bool {
+	arrayMode := false
+	sawName := false
 	for i := 0; i < len(args); i++ {
 		v := wordLitValue(args[i])
 		if v == "" {
@@ -710,38 +780,50 @@ func readCallAssignsName(args []*syntax.Word, name string) bool {
 		}
 		if v == "--" {
 			for _, arg := range args[i+1:] {
+				if arrayMode {
+					continue
+				}
+				sawName = true
 				if wordLitValue(arg) == name {
 					return true
 				}
 			}
-			return false
+			return !arrayMode && !sawName && name == "REPLY"
 		}
 		if strings.HasPrefix(v, "-") && v != "-" {
-			if assigned, consumedNext, nextAssigns := readOptionAssignsName(v, name); assigned {
+			assigned, consumedNext, arrayOption := readOptionAssignsName(v, name)
+			if arrayOption {
+				arrayMode = true
+			}
+			if assigned {
 				return true
 			} else if consumedNext {
-				if nextAssigns && i+1 < len(args) && wordLitValue(args[i+1]) == name {
+				if arrayOption && i+1 < len(args) && wordLitValue(args[i+1]) == name {
 					return true
 				}
 				i++
 			}
 			continue
 		}
+		if arrayMode {
+			continue
+		}
+		sawName = true
 		if v == name {
 			return true
 		}
 	}
-	return false
+	return !arrayMode && !sawName && name == "REPLY"
 }
 
-func readOptionAssignsName(option, name string) (assigned bool, consumedNext bool, nextAssigns bool) {
+func readOptionAssignsName(option, name string) (assigned bool, consumedNext bool, arrayOption bool) {
 	for i := 1; i < len(option); i++ {
 		opt := option[i]
 		inlineArg := option[i+1:]
 		switch opt {
 		case 'a':
 			if inlineArg != "" {
-				return inlineArg == name, false, false
+				return inlineArg == name, false, true
 			}
 			return false, true, true
 		case 'd', 'i', 'n', 'N', 'p', 't', 'u':
@@ -749,6 +831,49 @@ func readOptionAssignsName(option, name string) (assigned bool, consumedNext boo
 		}
 	}
 	return false, false, false
+}
+
+func mapfileCallAssignsName(args []*syntax.Word, name string) bool {
+	for i := 0; i < len(args); i++ {
+		v := wordLitValue(args[i])
+		if v == "" {
+			continue
+		}
+		if v == "--" {
+			return mapfileArrayOperandAssignsName(args[i+1:], name)
+		}
+		if strings.HasPrefix(v, "-") && v != "-" {
+			if mapfileOptionConsumesNext(v) {
+				i++
+			}
+			continue
+		}
+		return v == name
+	}
+	return name == "MAPFILE"
+}
+
+func mapfileArrayOperandAssignsName(args []*syntax.Word, name string) bool {
+	for _, arg := range args {
+		v := wordLitValue(arg)
+		if v == "" {
+			continue
+		}
+		return v == name
+	}
+	return name == "MAPFILE"
+}
+
+func mapfileOptionConsumesNext(option string) bool {
+	for i := 1; i < len(option); i++ {
+		opt := option[i]
+		inlineArg := option[i+1:]
+		switch opt {
+		case 'd', 'n', 'O', 's', 'u', 'C', 'c':
+			return inlineArg == ""
+		}
+	}
+	return false
 }
 
 // wordLitValue returns the literal-string value of a Word when it is

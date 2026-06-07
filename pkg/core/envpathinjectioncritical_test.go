@@ -920,6 +920,49 @@ echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_MapfileDelimiterDoesNotShadowInheritedEnv
+// pins the codex-flagged regression on PR #514: `mapfile -d PR_BODY ARR`
+// uses PR_BODY as the delimiter argument, not as the array variable name.
+func TestEnvPathInjectionCritical_FixStep_MapfileDelimiterDoesNotShadowInheritedEnv(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"
+mapfile -d PR_BODY ARR
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed mapfile delimiter argument: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+mapfile -d PR_BODY ARR
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath
 // is the end-to-end analog of WrapsAllExpansionShapes: when the chosen
 // helper name is reused from inherited env, a GITHUB_PATH line that mixes
@@ -1008,6 +1051,57 @@ PR_BODY=/safe`,
 	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
 echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
 PR_BODY=/safe`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadow
+// pins the order-aware inherited-env case where a matching inherited
+// PR_BODY is still tainted before a script assignment, but shadowed after it.
+// The autofix must suffix expression rewrites after the assignment while
+// still wrapping earlier `$PR_BODY` GITHUB_PATH writes that read the inherited
+// value. Otherwise suffixing leaves the earlier PATH write vulnerable.
+func TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadow(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+	}
+	if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+		t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+	}
+
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q", got, want)
@@ -1153,48 +1247,91 @@ read PR_BODY`,
 // thus force a suffix. Reported by codex on PR #514.
 func TestScriptAssignsShellName(t *testing.T) {
 	assigns := []struct {
-		name   string
-		script string
+		name    string
+		script  string
+		varName string
 	}{
-		{"plain assignment", `PR_BODY=/safe`},
-		{"export assignment", `export PR_BODY=/safe`},
-		{"local assignment in fn", `f() { local PR_BODY=/safe; }`},
-		{"bare local in fn", `f() { local PR_BODY; }`},
-		{"bare declare in fn", `f() { declare PR_BODY; }`},
-		{"bare readonly", `readonly PR_BODY`},
-		{"read builtin", `read PR_BODY`},
-		{"read prompt then name", `read -p "prompt" PR_BODY`},
-		{"read array option", `read -a PR_BODY`},
-		{"mapfile builtin", `mapfile PR_BODY`},
+		{"plain assignment", `PR_BODY=/safe`, ""},
+		{"export assignment", `export PR_BODY=/safe`, ""},
+		{"local assignment in fn", `f() { local PR_BODY=/safe; }`, ""},
+		{"bare local in fn", `f() { local PR_BODY; }`, ""},
+		{"bare declare in fn", `f() { declare PR_BODY; }`, ""},
+		{"bare readonly", `readonly PR_BODY`, ""},
+		{"read builtin", `read PR_BODY`, ""},
+		{"read prompt then name", `read -p "prompt" PR_BODY`, ""},
+		{"read combined prompt then name", `read -rp "prompt" PR_BODY`, ""},
+		{"read array option", `read -a PR_BODY`, ""},
+		{"read inline array option", `read -aPR_BODY`, ""},
+		{"read default reply no options", `read`, "REPLY"},
+		{"read default reply flag only", `read -r`, "REPLY"},
+		{"read default reply", `read -p "prompt"`, "REPLY"},
+		{"mapfile builtin", `mapfile PR_BODY`, ""},
+		{"mapfile delimiter then array", `mapfile -d ":" PR_BODY`, ""},
+		{"mapfile combined trim delimiter then array", `mapfile -td ":" PR_BODY`, ""},
+		{"mapfile default array no options", `mapfile`, "MAPFILE"},
+		{"mapfile default array flag only", `mapfile -t`, "MAPFILE"},
+		{"mapfile default array", `mapfile -d ":"`, "MAPFILE"},
+		{"readarray count then array", `readarray -n 1 PR_BODY`, ""},
+		{"readarray default array no options", `readarray`, "MAPFILE"},
+		{"readarray default array flag only", `readarray -t`, "MAPFILE"},
+		{"readarray default array", `readarray -n 1`, "MAPFILE"},
 	}
 	for _, tc := range assigns {
 		t.Run("assigns/"+tc.name, func(t *testing.T) {
-			if !scriptAssignsShellName(tc.script, "PR_BODY") {
-				t.Errorf("scriptAssignsShellName missed assignment in %q", tc.script)
+			varName := tc.varName
+			if varName == "" {
+				varName = "PR_BODY"
+			}
+			if !scriptAssignsShellName(tc.script, varName) {
+				t.Errorf("scriptAssignsShellName missed assignment to %s in %q", varName, tc.script)
 			}
 		})
 	}
 
 	referencesOnly := []struct {
-		name   string
-		script string
+		name    string
+		script  string
+		varName string
 	}{
-		{"plain ref", `echo "$PR_BODY"`},
-		{"braced ref", `echo "${PR_BODY}"`},
-		{"default if unset", `echo "${PR_BODY:-/safe}"`},
-		{"alt if set", `echo "${PR_BODY:+set}"`},
-		{"strip prefix", `echo "${PR_BODY#pre}"`},
-		{"uppercase", `echo "${PR_BODY^^}"`},
-		{"length", `echo "${#PR_BODY}"`},
-		{"indirect", `echo "${!PR_BODY}"`},
-		{"read prompt arg", `read -p PR_BODY ANSWER`},
-		{"read inline prompt arg", `read -pPR_BODY ANSWER`},
-		{"read fd arg", `read -u PR_BODY ANSWER`},
+		{"plain ref", `echo "$PR_BODY"`, ""},
+		{"braced ref", `echo "${PR_BODY}"`, ""},
+		{"default if unset", `echo "${PR_BODY:-/safe}"`, ""},
+		{"alt if set", `echo "${PR_BODY:+set}"`, ""},
+		{"strip prefix", `echo "${PR_BODY#pre}"`, ""},
+		{"uppercase", `echo "${PR_BODY^^}"`, ""},
+		{"length", `echo "${#PR_BODY}"`, ""},
+		{"indirect", `echo "${!PR_BODY}"`, ""},
+		{"read prompt arg", `read -p PR_BODY ANSWER`, ""},
+		{"read inline prompt arg", `read -pPR_BODY ANSWER`, ""},
+		{"read combined prompt arg", `read -rp PR_BODY ANSWER`, ""},
+		{"read fd arg", `read -u PR_BODY ANSWER`, ""},
+		{"read array ignores trailing name", `read -a ARR PR_BODY`, ""},
+		{"read inline array ignores trailing name", `read -aARR PR_BODY`, ""},
+		{"read explicit name avoids reply", `read PR_BODY`, "REPLY"},
+		{"mapfile delimiter arg", `mapfile -d PR_BODY ARR`, ""},
+		{"mapfile inline delimiter arg", `mapfile -dPR_BODY ARR`, ""},
+		{"mapfile combined trim delimiter arg", `mapfile -td PR_BODY ARR`, ""},
+		{"mapfile count arg", `mapfile -n PR_BODY ARR`, ""},
+		{"mapfile origin arg", `mapfile -O PR_BODY ARR`, ""},
+		{"mapfile skip arg", `mapfile -s PR_BODY ARR`, ""},
+		{"mapfile fd arg", `mapfile -u PR_BODY ARR`, ""},
+		{"mapfile callback arg", `mapfile -C PR_BODY ARR`, ""},
+		{"mapfile quantum arg", `mapfile -c PR_BODY ARR`, ""},
+		{"mapfile ignores extra operand", `mapfile ARR PR_BODY`, ""},
+		{"mapfile double dash ignores extra operand", `mapfile -- ARR PR_BODY`, ""},
+		{"mapfile explicit array avoids default", `mapfile ARR`, "MAPFILE"},
+		{"readarray delimiter arg", `readarray -d PR_BODY ARR`, ""},
+		{"readarray ignores extra operand", `readarray ARR PR_BODY`, ""},
+		{"readarray explicit array avoids default", `readarray ARR`, "MAPFILE"},
 	}
 	for _, tc := range referencesOnly {
 		t.Run("references/"+tc.name, func(t *testing.T) {
-			if scriptAssignsShellName(tc.script, "PR_BODY") {
-				t.Errorf("scriptAssignsShellName false-positive on reference %q", tc.script)
+			varName := tc.varName
+			if varName == "" {
+				varName = "PR_BODY"
+			}
+			if scriptAssignsShellName(tc.script, varName) {
+				t.Errorf("scriptAssignsShellName false-positive for %s on %q", varName, tc.script)
 			}
 		})
 	}
