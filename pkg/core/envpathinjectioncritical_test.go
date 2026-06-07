@@ -1194,6 +1194,28 @@ f
 echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
 echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
 		},
+		{
+			name: "pipeline function call does not shadow parent",
+			run: `f() { PR_BODY=/safe; }
+f | cat
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { PR_BODY=/safe; }
+f | cat
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "background function call does not shadow parent",
+			run: `f() { PR_BODY=/safe; }
+f &
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { PR_BODY=/safe; }
+f &
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1673,6 +1695,64 @@ f
 echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			exprRaw: "github.event.pull_request.body",
 			want:    false,
+		},
+		{
+			name: "function call in pipeline before parent expression",
+			script: `f() { PR_BODY=/safe; }
+f | cat
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "plain assignment in pipeline before parent expression",
+			script: `PR_BODY=/safe | cat
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "read in pipeline before parent expression",
+			script: `printf '%s\n' safe | read PR_BODY
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "parent assignment before pipeline expression",
+			script: `PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH" | cat`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name:    "left pipeline assignment does not shadow right pipeline expression",
+			script:  `PR_BODY=/safe | echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "function call in background before parent expression",
+			script: `f() { PR_BODY=/safe; }
+f &
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "plain assignment in background before parent expression",
+			script: `PR_BODY=/safe &
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "background block assignment before same background expression",
+			script: `{ PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+} &`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
 		},
 	}
 	for _, tc := range cases {

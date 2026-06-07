@@ -581,7 +581,8 @@ func scriptUsesShellName(script, name string) bool {
 // then ask whether each PATH-write occurrence is in a scope where a previous
 // assignment is visible. Unrelated GitHub expressions, same-expression
 // occurrences outside PATH writes, assignments in non-propagating subshells,
-// and uncalled function-body assignments must not force suffixing.
+// pipeline/background elements, and uncalled function-body assignments must
+// not force suffixing.
 func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	if name == "" || script == "" || exprRaw == "" {
 		return false
@@ -600,8 +601,9 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	// If any target `${{ ... }}` occurrence is in a shell scope where an
 	// earlier assignment to name is visible, that expression's rewrite
 	// would resolve the shadowed value. Assignments inside subshells,
-	// command substitutions, and process substitutions are only visible
-	// in that nested scope; they do not shadow later parent-shell writes.
+	// command substitutions, process substitutions, pipelines, and
+	// background jobs are only visible in that nested scope; they do not
+	// shadow later parent-shell writes.
 	for _, offset := range targetOffsets {
 		if analysis.shadowedAt(offset) {
 			return true
@@ -645,6 +647,7 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 	scopePath := []int{}
 	nodeFrames := []int{}
 	functionsByScope := make(map[string]map[string]functionShadowInfo)
+	pipelineStmtScopeIDs := make(map[*syntax.Stmt]int)
 	nextScopeID := 1
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if node == nil {
@@ -660,6 +663,27 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 		}
 
 		openedScopeID := 0
+		if stmt, ok := node.(*syntax.Stmt); ok {
+			scopeID := 0
+			if id, ok := pipelineStmtScopeIDs[stmt]; ok {
+				scopeID = id
+			} else if stmt.Background {
+				scopeID = nextScopeID
+				nextScopeID++
+			}
+			if scopeID != 0 {
+				openedScopeID = scopeID
+				scopePath = append(scopePath, openedScopeID)
+				analysis.scopes = append(analysis.scopes, shellScopeRange{
+					start: int(stmt.Pos().Offset()),
+					end:   int(stmt.End().Offset()),
+					path:  cloneIntSlice(scopePath),
+				})
+			}
+		}
+		if binary, ok := node.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+			registerPipelineElementScopes(binary, pipelineStmtScopeIDs, &nextScopeID)
+		}
 		if fn, ok := node.(*syntax.FuncDecl); ok {
 			assignsNameGlobally := functionBodyAssignsNameGlobally(fn, name)
 			for _, funcName := range funcDeclNames(fn) {
@@ -669,14 +693,15 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 			}
 		}
 		if opensNestedShellScope(node) {
-			openedScopeID = nextScopeID
+			nestedScopeID := nextScopeID
 			nextScopeID++
-			scopePath = append(scopePath, openedScopeID)
+			scopePath = append(scopePath, nestedScopeID)
 			analysis.scopes = append(analysis.scopes, shellScopeRange{
 				start: int(node.Pos().Offset()),
 				end:   int(node.End().Offset()),
 				path:  cloneIntSlice(scopePath),
 			})
+			openedScopeID = nestedScopeID
 		}
 		nodeFrames = append(nodeFrames, openedScopeID)
 
@@ -697,6 +722,33 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 		return true
 	})
 	return analysis, true
+}
+
+func isPipelineBinaryCmd(binary *syntax.BinaryCmd) bool {
+	return binary != nil && (binary.Op == syntax.Pipe || binary.Op == syntax.PipeAll)
+}
+
+func registerPipelineElementScopes(binary *syntax.BinaryCmd, stmtScopeIDs map[*syntax.Stmt]int, nextScopeID *int) {
+	if binary == nil {
+		return
+	}
+	registerPipelineStmtScope(binary.X, stmtScopeIDs, nextScopeID)
+	registerPipelineStmtScope(binary.Y, stmtScopeIDs, nextScopeID)
+}
+
+func registerPipelineStmtScope(stmt *syntax.Stmt, stmtScopeIDs map[*syntax.Stmt]int, nextScopeID *int) {
+	if stmt == nil {
+		return
+	}
+	if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+		registerPipelineElementScopes(binary, stmtScopeIDs, nextScopeID)
+		return
+	}
+	if _, exists := stmtScopeIDs[stmt]; exists {
+		return
+	}
+	stmtScopeIDs[stmt] = *nextScopeID
+	*nextScopeID = *nextScopeID + 1
 }
 
 func opensNestedShellScope(node syntax.Node) bool {
