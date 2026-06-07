@@ -877,6 +877,47 @@ func TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath(t 
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_LeftoverGitHubExpressionInLine
+// is the end-to-end regression for the codex sanitize-before-parse
+// concern: an inherited-env reuse path where the GITHUB_PATH line
+// contains the tainted `${{ ... }}`, a parameter expansion of the
+// reused name, AND an unrelated `${{ ... }}`. The unrelated expression
+// must NOT defeat the bash parse used for the second wrap pass —
+// without sanitize-before-parse the line would fall through to the
+// regex fallback and leave the expansion form unwrapped.
+func TestEnvPathInjectionCritical_FixStep_LeftoverGitHubExpressionInLine(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`printf '%s\n%s\n%s\n' "${{ github.event.pull_request.body }}" "${PR_BODY:-/safe}" "${{ matrix.path }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	want := `printf '%s\n%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "${PR_BODY:-/safe}")" "${{ matrix.path }}" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestReplaceShellEnvVarRef_WrapsAllExpansionShapes asserts that every
 // bash parameter-expansion form referencing the env var name gets wrapped
 // with `$(realpath "<source>")`, preserving the original expansion shape
@@ -914,6 +955,30 @@ func TestReplaceShellEnvVarRef_WrapsAllExpansionShapes(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestReplaceShellEnvVarRef_HandlesLineWithLeftoverGitHubExpression
+// asserts that a line still containing a non-tainted `${{ ... }}`
+// (e.g., `${{ matrix.path }}`) does NOT defeat parsing and therefore
+// does not silently fall back to the regex-only path that misses
+// parameter expansions. Regression flagged by codex on PR #514: a
+// line like
+// `printf '%s\n%s\n%s\n' "$PR_BODY" "${PR_BODY:-/safe}" "${{ matrix.path }}"`
+// previously failed the bash parse (because `${{ ... }}` is not valid
+// bash), tripped the regex fallback, and left `${PR_BODY:-/safe}`
+// unwrapped.
+func TestReplaceShellEnvVarRef_HandlesLineWithLeftoverGitHubExpression(t *testing.T) {
+	in := `printf '%s\n%s\n%s\n' "$PR_BODY" "${PR_BODY:-/safe}" "${{ matrix.path }}"`
+	want := `printf '%s\n%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "${PR_BODY:-/safe}")" "${{ matrix.path }}"`
+	got := replaceShellEnvVarRef(in, "PR_BODY")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// The untouched `${{ matrix.path }}` must round-trip exactly —
+	// sanitize/desanitize is byte-for-byte for unrelated expressions.
+	if !strings.Contains(got, `"${{ matrix.path }}"`) {
+		t.Errorf("output dropped or mangled `${{ matrix.path }}`: %q", got)
 	}
 }
 

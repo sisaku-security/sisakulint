@@ -553,22 +553,32 @@ func scriptUsesShellNameRegex(sanitized, name string) bool {
 // `${NAME:+alt}`, `${NAME#pre}`, `${NAME%suf}`, `${NAME/p/r}`,
 // `${NAME^^}`, `${#NAME}`, `${!NAME}`, `${NAME[i]}`, etc. — by walking
 // every ParamExp whose Param.Value matches and rewriting its byte range
-// with the source-preserving wrap. The previous regex (`${NAME}` exact
-// only) left expansions with operators unwrapped — codex PR #514
-// regression where `printf '%s\n%s\n' "${{ expr }}" "${NAME:-/safe}"
-// >> "$GITHUB_PATH"` kept the second arg as a raw PATH entry while the
-// new env var held the attacker body.
+// with the source-preserving wrap.
 //
-// On parse failure (defensive — line should always be valid bash since
-// it came out of a parsed run script), falls back to the regex form
-// covering the common `$NAME` / `${NAME}` shapes.
+// Any leftover GitHub Actions `${{ ... }}` expression on the same line
+// is replaced with a placeholder via sanitizeForShellParse before
+// parsing, then restored afterwards. Without sanitization the bash
+// parser fails on `${{ ... }}` (not valid bash) and the regex fallback
+// kicks in, which misses expansion forms with operators — codex PR
+// #514 regression where a line like
+// `printf '%s\n%s\n%s\n' "${{ expr }}" "${NAME:-/safe}" "${{ other }}"
+// >> "$GITHUB_PATH"` left the middle arg unwrapped because the
+// trailing GH expression broke the bash parse.
+//
+// On parse failure (defensive), falls back to the regex form covering
+// the common `$NAME` / `${NAME}` shapes.
 func replaceShellEnvVarRef(line, envVarName string) string {
 	if envVarName == "" || line == "" {
 		return line
 	}
 
+	// Strip `${{ ... }}` so bash can parse the line. Placeholders are
+	// word-only (no `$`/`{`) so they appear as plain literals in the
+	// AST and never accidentally match envVarName.
+	sanitized, exprMap := sanitizeForShellParse(line)
+
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
-	file, err := parser.Parse(strings.NewReader(line), "")
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
 	if err != nil || file == nil {
 		return replaceShellEnvVarRefRegex(line, envVarName)
 	}
@@ -593,13 +603,17 @@ func replaceShellEnvVarRef(line, envVarName string) string {
 	// Rightmost-first so earlier offsets remain valid as we splice.
 	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start > ranges[j].start })
 
-	out := line
+	out := sanitized
 	for _, r := range ranges {
 		if r.start < 0 || r.end > len(out) || r.start >= r.end {
 			continue
 		}
 		src := out[r.start:r.end]
 		out = out[:r.start] + `$(realpath "` + src + `")` + out[r.end:]
+	}
+	// Restore the GitHub expression placeholders to their original form.
+	for ph, expr := range exprMap {
+		out = strings.ReplaceAll(out, ph, "${{ "+expr+" }}")
 	}
 	return out
 }
