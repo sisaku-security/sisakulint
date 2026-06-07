@@ -317,12 +317,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 				line = replaceInTextRanges(line, pathWriteRanges, func(segment string, _ int) string {
 					// Replace ${{ expr }} with validated path using realpath.
 					newPattern := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
-					oldPattern := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
-					segment = strings.ReplaceAll(segment, oldPattern, newPattern)
-
-					// Also handle no-space variant.
-					oldPatternNoSpace := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
-					return strings.ReplaceAll(segment, oldPatternNoSpace, newPattern)
+					return replaceGitHubExpression(segment, untrustedInfo.expr.raw, newPattern)
 				})
 				pathWriteRanges = githubPathWriteLineRanges(line)
 			}
@@ -1091,6 +1086,20 @@ func githubExpressionInRanges(text, exprRaw string, ranges []textRange) bool {
 		}
 	}
 	return false
+}
+
+func replaceGitHubExpression(text, exprRaw, replacement string) string {
+	targetExpr := normalizeExpression(exprRaw)
+	if targetExpr == "" || text == "" {
+		return text
+	}
+	return taintGhExprPattern.ReplaceAllStringFunc(text, func(match string) string {
+		parts := taintGhExprPattern.FindStringSubmatch(match)
+		if len(parts) < 2 || normalizeExpression(parts[1]) != targetExpr {
+			return match
+		}
+		return replacement
+	})
 }
 
 func replaceInTextRanges(line string, ranges []textRange, replace func(segment string, segmentStart int) string) string {

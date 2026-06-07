@@ -901,6 +901,63 @@ echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ReplacesMixedWhitespaceGitHubExpressions
+// pins that detection and autofix use the same normalized expression matching.
+// Mixed whitespace spellings like `${{github.event.pull_request.body }}` must
+// be replaced exactly; otherwise --fix leaves the original untrusted PATH write.
+func TestEnvPathInjectionCritical_FixStep_ReplacesMixedWhitespaceGitHubExpressions(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "compact left spaced right",
+			run:  `echo "${{github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "spaced left compact right",
+			run:  `echo "${{ github.event.pull_request.body}}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "extra outer whitespace",
+			run:  `echo "${{   github.event.pull_request.body   }}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "unrelated same-line expression is preserved",
+			run:  `echo "${{github.event.pull_request.body }}"; echo "${{ github.event.pull_request.body}}" >> "$GITHUB_PATH"`,
+			want: `echo "${{github.event.pull_request.body }}"; echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tc.want {
+				t.Errorf("fixed run script = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_ReadPromptArgDoesNotShadowInheritedEnv
 // pins the codex-flagged regression on PR #514: `read -p PR_BODY ANSWER`
 // uses PR_BODY as the prompt argument, not as a variable name. It must not
