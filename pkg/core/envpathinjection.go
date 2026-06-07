@@ -576,12 +576,12 @@ func scriptUsesShellName(script, name string) bool {
 // shadowed local value at runtime — semantically wrong — so the caller must
 // suffix to a fresh helper name. Reported by codex on PR #514.
 //
-// Implementation: sanitize `${{ ... }}` to word-only placeholders so bash
-// can parse the script, locate the first assignment offset via AST walk
-// (covers `Assign` and `read`/`mapfile`/`readarray` builtins), then check
-// whether any PATH-write placeholder for the target expression is greater
-// than the assignment offset. Unrelated GitHub expressions and same-expression
-// occurrences outside PATH writes must not force suffixing.
+// Implementation: sanitize `${{ ... }}` to same-length placeholders so bash
+// can parse the script, collect assignment offsets with their shell scope,
+// then ask whether each PATH-write occurrence is in a scope where a previous
+// assignment is visible. Unrelated GitHub expressions, same-expression
+// occurrences outside PATH writes, assignments in non-propagating subshells,
+// and uncalled function-body assignments must not force suffixing.
 func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	if name == "" || script == "" || exprRaw == "" {
 		return false
@@ -626,6 +626,10 @@ type shellScopeRange struct {
 	path  []int
 }
 
+type functionShadowInfo struct {
+	assignsNameGlobally bool
+}
+
 func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, bool) {
 	if name == "" || script == "" {
 		return &shellNameShadowAnalysis{}, true
@@ -640,6 +644,7 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 	analysis := &shellNameShadowAnalysis{}
 	scopePath := []int{}
 	nodeFrames := []int{}
+	functionsByScope := make(map[string]map[string]functionShadowInfo)
 	nextScopeID := 1
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if node == nil {
@@ -655,6 +660,14 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 		}
 
 		openedScopeID := 0
+		if fn, ok := node.(*syntax.FuncDecl); ok {
+			assignsNameGlobally := functionBodyAssignsNameGlobally(fn, name)
+			for _, funcName := range funcDeclNames(fn) {
+				recordFunctionShadowInfo(functionsByScope, scopePath, funcName, functionShadowInfo{
+					assignsNameGlobally: assignsNameGlobally,
+				})
+			}
+		}
 		if opensNestedShellScope(node) {
 			openedScopeID = nextScopeID
 			nextScopeID++
@@ -673,6 +686,14 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 				scope:  cloneIntSlice(scopePath),
 			})
 		}
+		if call, ok := node.(*syntax.CallExpr); ok {
+			if functionCallAssignsNameGlobally(call, functionsByScope, scopePath) {
+				analysis.assignments = append(analysis.assignments, shellAssignmentRef{
+					offset: int(call.Pos().Offset()),
+					scope:  cloneIntSlice(scopePath),
+				})
+			}
+		}
 		return true
 	})
 	return analysis, true
@@ -680,8 +701,137 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 
 func opensNestedShellScope(node syntax.Node) bool {
 	switch node.(type) {
-	case *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst:
+	case *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst, *syntax.FuncDecl:
 		return true
+	}
+	return false
+}
+
+func funcDeclNames(fn *syntax.FuncDecl) []string {
+	if fn == nil {
+		return nil
+	}
+	var names []string
+	if fn.Name != nil && fn.Name.Value != "" {
+		names = append(names, fn.Name.Value)
+	}
+	for _, name := range fn.Names {
+		if name != nil && name.Value != "" {
+			names = append(names, name.Value)
+		}
+	}
+	return names
+}
+
+func recordFunctionShadowInfo(functionsByScope map[string]map[string]functionShadowInfo, scope []int, name string, info functionShadowInfo) {
+	if name == "" {
+		return
+	}
+	key := shellScopeKey(scope)
+	if functionsByScope[key] == nil {
+		functionsByScope[key] = make(map[string]functionShadowInfo)
+	}
+	functionsByScope[key][name] = info
+}
+
+func functionCallAssignsNameGlobally(call *syntax.CallExpr, functionsByScope map[string]map[string]functionShadowInfo, scope []int) bool {
+	if call == nil || len(call.Args) == 0 {
+		return false
+	}
+	cmd := wordLitValue(call.Args[0])
+	if cmd == "" {
+		return false
+	}
+	for i := len(scope); i >= 0; i-- {
+		if info, ok := functionsByScope[shellScopeKey(scope[:i])][cmd]; ok {
+			return info.assignsNameGlobally
+		}
+	}
+	return false
+}
+
+func functionBodyAssignsNameGlobally(fn *syntax.FuncDecl, name string) bool {
+	if fn == nil || fn.Body == nil || name == "" {
+		return false
+	}
+	var localName bool
+	var assignsGlobally bool
+	syntax.Walk(fn.Body, func(node syntax.Node) bool {
+		if assignsGlobally || node == nil {
+			return false
+		}
+		switch x := node.(type) {
+		case *syntax.FuncDecl, *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst:
+			return false
+		case *syntax.DeclClause:
+			if declClauseAssignsNameGlobally(x, name) {
+				assignsGlobally = true
+			} else if declClauseDeclaresLocalName(x, name) {
+				localName = true
+			}
+			return false
+		}
+		if localName {
+			return true
+		}
+		if _, ok := shellAssignmentOffset(node, name); ok {
+			assignsGlobally = true
+			return false
+		}
+		return true
+	})
+	return assignsGlobally
+}
+
+func declClauseAssignsNameGlobally(decl *syntax.DeclClause, name string) bool {
+	if decl == nil || decl.Variant == nil || name == "" {
+		return false
+	}
+	variant := decl.Variant.Value
+	if variant == "declare" || variant == "typeset" {
+		if !declClauseHasOption(decl, 'g') {
+			return false
+		}
+	} else if variant != "export" && variant != "readonly" {
+		return false
+	}
+	return declClauseHasName(decl, name)
+}
+
+func declClauseDeclaresLocalName(decl *syntax.DeclClause, name string) bool {
+	if decl == nil || decl.Variant == nil || name == "" {
+		return false
+	}
+	switch decl.Variant.Value {
+	case "local":
+		return declClauseHasName(decl, name)
+	case "declare", "typeset":
+		return !declClauseHasOption(decl, 'g') && declClauseHasName(decl, name)
+	}
+	return false
+}
+
+func declClauseHasName(decl *syntax.DeclClause, name string) bool {
+	for _, arg := range decl.Args {
+		if arg != nil && arg.Name != nil && arg.Name.Value == name {
+			return true
+		}
+	}
+	return false
+}
+
+func declClauseHasOption(decl *syntax.DeclClause, option byte) bool {
+	for _, arg := range decl.Args {
+		if arg == nil || !arg.Naked || arg.Name != nil || arg.Value == nil {
+			continue
+		}
+		value := wordLitValue(arg.Value)
+		if len(value) < 2 || value[0] != '-' {
+			continue
+		}
+		if strings.ContainsRune(value[1:], rune(option)) {
+			return true
+		}
 	}
 	return false
 }
@@ -722,6 +872,10 @@ func shellScopeCanShadow(assignmentScope, targetScope []int) bool {
 		}
 	}
 	return true
+}
+
+func shellScopeKey(scope []int) string {
+	return fmt.Sprint(scope)
 }
 
 func cloneIntSlice(in []int) []int {

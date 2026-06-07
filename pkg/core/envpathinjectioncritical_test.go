@@ -1145,6 +1145,97 @@ func TestEnvPathInjectionCritical_FixStep_SubshellAssignmentShadowsInsideSubshel
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_FunctionScopeShadowing pins function
+// body scoping for matching inherited env vars. Function definitions are
+// deferred scopes; plain assignments shadow inside the function and after a
+// call, while local declarations do not leak back to the parent shell.
+func TestEnvPathInjectionCritical_FixStep_FunctionScopeShadowing(t *testing.T) {
+	tests := []struct {
+		name       string
+		run        string
+		want       string
+		wantSuffix bool
+	}{
+		{
+			name: "definition does not shadow parent",
+			run: `f() { PR_BODY=/safe; }
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { PR_BODY=/safe; }
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "plain assignment shadows inside function",
+			run: `f() { PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+f`,
+			want: `f() { PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+f`,
+			wantSuffix: true,
+		},
+		{
+			name: "called plain assignment shadows parent",
+			run: `f() { PR_BODY=/safe; }
+f
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { PR_BODY=/safe; }
+f
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`,
+			wantSuffix: true,
+		},
+		{
+			name: "called local assignment does not shadow parent",
+			run: `f() { local PR_BODY=/safe; }
+f
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { local PR_BODY=/safe; }
+f
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+				"pr_body": {
+					Name:  &ast.String{Value: "PR_BODY"},
+					Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+				},
+			}}
+
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			added := step.Env.Vars["pr_body_2"]
+			if tc.wantSuffix {
+				if added == nil || added.Value == nil {
+					t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+				}
+			} else if added != nil {
+				t.Errorf("autofix wrongly suffixed for function scope case: %+v", added.Value)
+			}
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tc.want {
+				t.Errorf("fixed run script = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadow
 // pins the order-aware inherited-env case where a matching inherited
 // PR_BODY is still tainted before a script assignment, but shadowed after it.
@@ -1540,6 +1631,45 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 		{
 			name: "process substitution assignment before parent expression",
 			script: `cat <(PR_BODY=/safe)
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "function assignment before parent expression",
+			script: `f() { PR_BODY=/safe; }
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "function assignment before same function expression",
+			script: `f() {
+PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+}`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "parent assignment before function expression",
+			script: `PR_BODY=/safe
+f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "function call with global assignment before parent expression",
+			script: `f() { PR_BODY=/safe; }
+f
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "function call with local assignment before parent expression",
+			script: `f() { local PR_BODY=/safe; }
+f
 echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			exprRaw: "github.event.pull_request.body",
 			want:    false,
