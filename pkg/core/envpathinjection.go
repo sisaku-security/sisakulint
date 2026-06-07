@@ -605,8 +605,10 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 }
 
 type shellNameShadowAnalysis struct {
-	assignments []shellAssignmentRef
-	scopes      []shellScopeRange
+	assignments   []shellAssignmentRef
+	scopes        []shellScopeRange
+	functions     []shellFunctionRef
+	functionCalls []shellFunctionCallRef
 }
 
 type shellAssignmentRef struct {
@@ -620,8 +622,31 @@ type shellScopeRange struct {
 	path  []int
 }
 
+type shellFunctionRef struct {
+	id              int
+	names           []string
+	start           int
+	end             int
+	definitionScope []int
+	bodyScope       []int
+}
+
+type shellFunctionCallRef struct {
+	name               string
+	offset             int
+	scope              []int
+	assignsNameLocally bool
+}
+
 type functionShadowInfo struct {
-	assignsNameGlobally bool
+	assignsNameGlobally            bool
+	assignsNameThroughCommandLocal bool
+}
+
+type shellFunctionInvocationState struct {
+	offset   int
+	scope    []int
+	shadowed bool
 }
 
 func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, bool) {
@@ -676,12 +701,14 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 		if binary, ok := node.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
 			registerPipelineElementScopes(binary, pipelineStmtScopeIDs, &nextScopeID)
 		}
+		var funcNames []string
+		var funcDefinitionScope []int
 		if fn, ok := node.(*syntax.FuncDecl); ok {
-			assignsNameGlobally := functionBodyAssignsNameGlobally(fn, name)
-			for _, funcName := range funcDeclNames(fn) {
-				recordFunctionShadowInfo(functionsByScope, scopePath, funcName, functionShadowInfo{
-					assignsNameGlobally: assignsNameGlobally,
-				})
+			shadowInfo := functionBodyNameShadowInfo(fn, name)
+			funcNames = funcDeclNames(fn)
+			funcDefinitionScope = cloneIntSlice(scopePath)
+			for _, funcName := range funcNames {
+				recordFunctionShadowInfo(functionsByScope, scopePath, funcName, shadowInfo)
 			}
 		}
 		if opensNestedShellScope(node) {
@@ -693,6 +720,16 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 				end:   int(node.End().Offset()),
 				path:  cloneIntSlice(scopePath),
 			})
+			if len(funcNames) > 0 {
+				analysis.functions = append(analysis.functions, shellFunctionRef{
+					id:              len(analysis.functions),
+					names:           append([]string(nil), funcNames...),
+					start:           int(node.Pos().Offset()),
+					end:             int(node.End().Offset()),
+					definitionScope: funcDefinitionScope,
+					bodyScope:       cloneIntSlice(scopePath),
+				})
+			}
 			openedScopeID = nestedScopeID
 		}
 		nodeFrames = append(nodeFrames, openedScopeID)
@@ -704,7 +741,15 @@ func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, 
 			})
 		}
 		if call, ok := node.(*syntax.CallExpr); ok {
-			if functionCallAssignsNameGlobally(call, functionsByScope, scopePath) {
+			if callName := callExprName(call); callName != "" {
+				analysis.functionCalls = append(analysis.functionCalls, shellFunctionCallRef{
+					name:               callName,
+					offset:             int(call.Pos().Offset()),
+					scope:              cloneIntSlice(scopePath),
+					assignsNameLocally: callHasAssignmentPrefix(call, name),
+				})
+			}
+			if functionCallAssignsNameGlobally(call, functionsByScope, scopePath, name) {
 				analysis.assignments = append(analysis.assignments, shellAssignmentRef{
 					offset: int(call.Pos().Offset()),
 					scope:  cloneIntSlice(scopePath),
@@ -778,38 +823,61 @@ func recordFunctionShadowInfo(functionsByScope map[string]map[string]functionSha
 	functionsByScope[key][name] = info
 }
 
-func functionCallAssignsNameGlobally(call *syntax.CallExpr, functionsByScope map[string]map[string]functionShadowInfo, scope []int) bool {
-	if call == nil || len(call.Args) == 0 {
-		return false
-	}
-	cmd := wordLitValue(call.Args[0])
+func functionCallAssignsNameGlobally(call *syntax.CallExpr, functionsByScope map[string]map[string]functionShadowInfo, scope []int, name string) bool {
+	cmd := callExprName(call)
 	if cmd == "" {
 		return false
 	}
 	for i := len(scope); i >= 0; i-- {
 		if info, ok := functionsByScope[shellScopeKey(scope[:i])][cmd]; ok {
+			if callHasAssignmentPrefix(call, name) {
+				return info.assignsNameThroughCommandLocal
+			}
 			return info.assignsNameGlobally
 		}
 	}
 	return false
 }
 
+func callExprName(call *syntax.CallExpr) string {
+	if call == nil || len(call.Args) == 0 {
+		return ""
+	}
+	return wordLitValue(call.Args[0])
+}
+
+func shellFunctionHasName(fn shellFunctionRef, name string) bool {
+	for _, candidate := range fn.names {
+		if candidate == name {
+			return true
+		}
+	}
+	return false
+}
+
 func functionBodyAssignsNameGlobally(fn *syntax.FuncDecl, name string) bool {
+	return functionBodyNameShadowInfo(fn, name).assignsNameGlobally
+}
+
+func functionBodyNameShadowInfo(fn *syntax.FuncDecl, name string) functionShadowInfo {
+	var info functionShadowInfo
 	if fn == nil || fn.Body == nil || name == "" {
-		return false
+		return info
 	}
 	var localName bool
-	var assignsGlobally bool
 	syntax.Walk(fn.Body, func(node syntax.Node) bool {
-		if assignsGlobally || node == nil {
+		if (info.assignsNameGlobally && info.assignsNameThroughCommandLocal) || node == nil {
 			return false
 		}
 		switch x := node.(type) {
 		case *syntax.FuncDecl, *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst:
 			return false
 		case *syntax.DeclClause:
-			if declClauseAssignsNameGlobally(x, name) {
-				assignsGlobally = true
+			if declClauseAssignsNameThroughCommandLocal(x, name) {
+				info.assignsNameGlobally = true
+				info.assignsNameThroughCommandLocal = true
+			} else if !localName && declClauseAssignsNameGlobally(x, name) {
+				info.assignsNameGlobally = true
 			} else if declClauseDeclaresLocalName(x, name) {
 				localName = true
 			}
@@ -819,12 +887,12 @@ func functionBodyAssignsNameGlobally(fn *syntax.FuncDecl, name string) bool {
 			return true
 		}
 		if _, ok := persistentShellAssignmentOffset(node, name); ok {
-			assignsGlobally = true
+			info.assignsNameGlobally = true
 			return false
 		}
 		return true
 	})
-	return assignsGlobally
+	return info
 }
 
 func declClauseAssignsNameGlobally(decl *syntax.DeclClause, name string) bool {
@@ -832,7 +900,7 @@ func declClauseAssignsNameGlobally(decl *syntax.DeclClause, name string) bool {
 		return false
 	}
 	variant := decl.Variant.Value
-	if variant == "declare" || variant == "typeset" {
+	if variant == "declare" || variant == "typeset" || variant == "local" {
 		if !declClauseHasOption(decl, 'g') {
 			return false
 		}
@@ -842,13 +910,24 @@ func declClauseAssignsNameGlobally(decl *syntax.DeclClause, name string) bool {
 	return declClauseHasName(decl, name)
 }
 
+func declClauseAssignsNameThroughCommandLocal(decl *syntax.DeclClause, name string) bool {
+	if decl == nil || decl.Variant == nil || name == "" {
+		return false
+	}
+	switch decl.Variant.Value {
+	case "declare", "typeset", "local":
+		return declClauseHasOption(decl, 'g') && declClauseHasName(decl, name)
+	}
+	return false
+}
+
 func declClauseDeclaresLocalName(decl *syntax.DeclClause, name string) bool {
 	if decl == nil || decl.Variant == nil || name == "" {
 		return false
 	}
 	switch decl.Variant.Value {
 	case "local":
-		return declClauseHasName(decl, name)
+		return !declClauseHasOption(decl, 'g') && declClauseHasName(decl, name)
 	case "declare", "typeset":
 		return !declClauseHasOption(decl, 'g') && declClauseHasName(decl, name)
 	}
@@ -885,8 +964,129 @@ func (analysis *shellNameShadowAnalysis) shadowedAt(offset int) bool {
 		return false
 	}
 	targetScope := analysis.scopeAt(offset)
+	targetFn := analysis.functionAt(offset)
 	for _, assignment := range analysis.assignments {
 		if assignment.offset < offset && shellScopeCanShadow(assignment.scope, targetScope) {
+			if targetFn != nil && !shellScopeCanShadow(targetFn.bodyScope, assignment.scope) {
+				continue
+			}
+			return true
+		}
+	}
+	if targetFn != nil && analysis.functionBodyShadowedAtCall(*targetFn) {
+		return true
+	}
+	return false
+}
+
+func (analysis *shellNameShadowAnalysis) functionAt(offset int) *shellFunctionRef {
+	if analysis == nil {
+		return nil
+	}
+	var found *shellFunctionRef
+	for i := range analysis.functions {
+		fn := &analysis.functions[i]
+		if fn.start <= offset && offset < fn.end && (found == nil || len(fn.bodyScope) > len(found.bodyScope)) {
+			found = fn
+		}
+	}
+	return found
+}
+
+func (analysis *shellNameShadowAnalysis) functionBodyShadowedAtCall(fn shellFunctionRef) bool {
+	for _, state := range analysis.functionInvocationStates(fn, fn.start, nil) {
+		if state.shadowed {
+			return true
+		}
+	}
+	return false
+}
+
+func (analysis *shellNameShadowAnalysis) functionInvocationStates(fn shellFunctionRef, requiredStart int, stack map[int]bool) []shellFunctionInvocationState {
+	if analysis == nil || stack[fn.id] {
+		return nil
+	}
+	if stack == nil {
+		stack = make(map[int]bool)
+	}
+	stack[fn.id] = true
+	defer delete(stack, fn.id)
+
+	var states []shellFunctionInvocationState
+	for _, call := range analysis.functionCalls {
+		if !shellFunctionHasName(fn, call.name) {
+			continue
+		}
+		caller := analysis.functionAt(call.offset)
+		if caller == nil {
+			if call.offset <= requiredStart || !analysis.callResolvesToFunction(call, fn, call.offset, call.scope) {
+				continue
+			}
+			states = append(states, shellFunctionInvocationState{
+				offset:   call.offset,
+				scope:    cloneIntSlice(call.scope),
+				shadowed: analysis.callSiteShadowsName(call),
+			})
+			continue
+		}
+
+		callerRequiredStart := requiredStart
+		if fn.start > callerRequiredStart {
+			callerRequiredStart = fn.start
+		}
+		for _, callerState := range analysis.functionInvocationStates(*caller, callerRequiredStart, stack) {
+			if !analysis.functionResolvesAt(call.name, fn, callerState.offset, callerState.scope) {
+				continue
+			}
+			states = append(states, shellFunctionInvocationState{
+				offset:   callerState.offset,
+				scope:    cloneIntSlice(callerState.scope),
+				shadowed: callerState.shadowed || analysis.callSiteShadowsName(call),
+			})
+		}
+	}
+	return states
+}
+
+func (analysis *shellNameShadowAnalysis) callResolvesToFunction(call shellFunctionCallRef, fn shellFunctionRef, runtimeOffset int, runtimeScope []int) bool {
+	return analysis.functionResolvesAt(call.name, fn, runtimeOffset, runtimeScope)
+}
+
+func (analysis *shellNameShadowAnalysis) functionResolvesAt(name string, fn shellFunctionRef, runtimeOffset int, runtimeScope []int) bool {
+	resolved := analysis.functionNamedAt(name, runtimeOffset, runtimeScope)
+	return resolved != nil && resolved.id == fn.id
+}
+
+func (analysis *shellNameShadowAnalysis) functionNamedAt(name string, runtimeOffset int, runtimeScope []int) *shellFunctionRef {
+	if analysis == nil || name == "" {
+		return nil
+	}
+	var resolved *shellFunctionRef
+	for i := range analysis.functions {
+		fn := &analysis.functions[i]
+		if fn.start >= runtimeOffset || !shellFunctionHasName(*fn, name) {
+			continue
+		}
+		if !shellScopeCanShadow(fn.definitionScope, runtimeScope) {
+			continue
+		}
+		if resolved == nil || fn.start > resolved.start {
+			resolved = fn
+		}
+	}
+	return resolved
+}
+
+func (analysis *shellNameShadowAnalysis) callSiteShadowsName(call shellFunctionCallRef) bool {
+	if call.assignsNameLocally {
+		return true
+	}
+	caller := analysis.functionAt(call.offset)
+	for _, assignment := range analysis.assignments {
+		if assignment.offset < call.offset && shellScopeCanShadow(assignment.scope, call.scope) {
+			if caller != nil && !shellScopeCanShadow(caller.bodyScope, assignment.scope) {
+				continue
+			}
 			return true
 		}
 	}
@@ -1240,6 +1440,18 @@ func callPersistentAssignmentOffset(call *syntax.CallExpr, name string) (int, bo
 		}
 	}
 	return 0, false
+}
+
+func callHasAssignmentPrefix(call *syntax.CallExpr, name string) bool {
+	if call == nil || len(call.Args) == 0 {
+		return false
+	}
+	for _, assign := range call.Assigns {
+		if _, ok := assignNameOffset(assign, name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func declClauseAssignmentOffset(decl *syntax.DeclClause, name string) (int, bool) {

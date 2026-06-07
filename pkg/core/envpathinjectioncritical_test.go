@@ -1316,6 +1316,138 @@ f`,
 			wantSuffix: true,
 		},
 		{
+			name: "parent assignment before function call shadows function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f`,
+			wantSuffix: true,
+		},
+		{
+			name: "function call before parent assignment does not shadow function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+f
+PR_BODY=/safe`,
+			want: `f() { echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; }
+f
+PR_BODY=/safe`,
+		},
+		{
+			name: "command-local assignment on function call shadows function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe f`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe f`,
+			wantSuffix: true,
+		},
+		{
+			name: "parent assignment before wrapper call shadows nested function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe
+g`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe
+g`,
+			wantSuffix: true,
+		},
+		{
+			name: "command-local assignment on wrapper call shadows nested function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe g`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe g`,
+			wantSuffix: true,
+		},
+		{
+			name: "later-defined function shadows through wrapper called after definition",
+			run: `g() { f; }
+f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+g`,
+			want: `g() { f; }
+f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+g`,
+			wantSuffix: true,
+		},
+		{
+			name: "wrapper call before later function definition does not shadow function body",
+			run: `g() { f; }
+PR_BODY=/safe
+g
+f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }`,
+			want: `g() { f; }
+PR_BODY=/safe
+g
+f() { echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; }`,
+		},
+		{
+			name: "uncalled wrapper assignment does not shadow nested function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { PR_BODY=/safe; f; }`,
+			want: `f() { echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; }
+g() { PR_BODY=/safe; f; }`,
+		},
+		{
+			name: "called wrapper local assignment shadows nested function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { local PR_BODY=/safe; f; }
+g`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+g() { local PR_BODY=/safe; f; }
+g`,
+			wantSuffix: true,
+		},
+		{
+			name: "later redefinition prevents earlier function body shadowing",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+f() { :; }
+PR_BODY=/safe
+f`,
+			want: `f() { echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; }
+f() { :; }
+PR_BODY=/safe
+f`,
+		},
+		{
+			name: "redefinition after call does not prevent earlier function body shadowing",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f
+f() { :; }`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f
+f() { :; }`,
+			wantSuffix: true,
+		},
+		{
+			name: "parent assignment before pipeline function call shadows function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f | cat`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f | cat`,
+			wantSuffix: true,
+		},
+		{
+			name: "parent assignment before background function call shadows function body",
+			run: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f &`,
+			want: `f() { echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f &`,
+			wantSuffix: true,
+		},
+		{
 			name: "called plain assignment shadows parent",
 			run: `f() { PR_BODY=/safe; }
 f
@@ -1357,6 +1489,27 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 f &
 echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
 echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "command-local function assignment call does not shadow parent",
+			run: `f() { PR_BODY=/safe; }
+PR_BODY=/local f
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { PR_BODY=/safe; }
+PR_BODY=/local f
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "command-local function global declaration shadows parent",
+			run: `f() { declare -g PR_BODY=/safe; }
+PR_BODY=/local f
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `f() { declare -g PR_BODY=/safe; }
+PR_BODY=/local f
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`,
+			wantSuffix: true,
 		},
 	}
 	for _, tc := range tests {
@@ -1918,9 +2071,116 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 			want:    true,
 		},
 		{
-			name: "parent assignment before function expression",
+			name: "parent assignment before uncalled function expression",
 			script: `PR_BODY=/safe
 f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "parent assignment before function call shadows function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "function call before parent assignment does not shadow function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+f
+PR_BODY=/safe`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "command-local assignment on function call shadows function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe f`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "parent assignment before wrapper call shadows nested function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe
+g`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "command-local assignment on wrapper call shadows nested function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { f; }
+PR_BODY=/safe g`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "later-defined function shadows through wrapper called after definition",
+			script: `g() { f; }
+f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+g`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "wrapper call before later function definition does not shadow function expression",
+			script: `g() { f; }
+PR_BODY=/safe
+g
+f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "uncalled wrapper assignment does not shadow nested function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { PR_BODY=/safe; f; }`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "called wrapper local assignment shadows nested function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+g() { local PR_BODY=/safe; f; }
+g`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "later redefinition prevents earlier function expression shadowing",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+f() { :; }
+PR_BODY=/safe
+f`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "redefinition after call does not prevent earlier function expression shadowing",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f
+f() { :; }`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "parent assignment before pipeline function call shadows function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f | cat`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "parent assignment before background function call shadows function expression",
+			script: `f() { echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; }
+PR_BODY=/safe
+f &`,
 			exprRaw: "github.event.pull_request.body",
 			want:    true,
 		},
@@ -1982,6 +2242,22 @@ f &
 echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			exprRaw: "github.event.pull_request.body",
 			want:    false,
+		},
+		{
+			name: "command-local function assignment call does not shadow parent expression",
+			script: `f() { PR_BODY=/safe; }
+PR_BODY=/local f
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "command-local function global declaration shadows parent expression",
+			script: `f() { declare -g PR_BODY=/safe; }
+PR_BODY=/local f
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
 		},
 		{
 			name: "plain assignment in background before parent expression",
