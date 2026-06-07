@@ -834,19 +834,108 @@ func TestEnvPathInjectionCritical_FixStep_WrapsAllRefsOnSingleLine(t *testing.T)
 	}
 }
 
-// TestReplaceShellEnvVarRef_BracedReplacementIsLiteral pins the contract
-// that `replacement` is treated as a literal string (no `$name` submatch
-// expansion), so `$(realpath "$PR_BODY")` survives intact.
-func TestReplaceShellEnvVarRef_BracedReplacementIsLiteral(t *testing.T) {
-	got := replaceShellEnvVarRef(`echo "${PR_BODY}/bin"`, "PR_BODY", `$(realpath "$PR_BODY")`)
-	want := `echo "$(realpath "$PR_BODY")/bin"`
-	if got != want {
-		t.Errorf("braced ref: got %q, want %q", got, want)
+// TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath
+// is the end-to-end analog of WrapsAllExpansionShapes: when the chosen
+// helper name is reused from inherited env, a GITHUB_PATH line that mixes
+// `${{ expr }}` with a parameter-expansion form like `${PR_BODY:-/safe}`
+// must have BOTH references wrapped. Otherwise the expansion expands at
+// runtime to the attacker body (PR_BODY now holds it) and is written
+// raw to GITHUB_PATH. Regression flagged by codex on PR #514.
+func TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`printf '%s\n%s\n' "${{ github.event.pull_request.body }}" "${PR_BODY:-/safe}" >> "$GITHUB_PATH"`,
+	)
+	// Inherited job env binds the same expression so envVarNameForExpression
+	// reuses PR_BODY (no suffix). The parameter expansion on the same line
+	// reads that env var and is just as dangerous as the bare reference.
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
 	}
-	got = replaceShellEnvVarRef(`echo "$PR_BODY/bin"`, "PR_BODY", `$(realpath "$PR_BODY")`)
-	want = `echo "$(realpath "$PR_BODY")/bin"`
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	want := `printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "${PR_BODY:-/safe}")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
-		t.Errorf("plain ref: got %q, want %q", got, want)
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestReplaceShellEnvVarRef_WrapsAllExpansionShapes asserts that every
+// bash parameter-expansion form referencing the env var name gets wrapped
+// with `$(realpath "<source>")`, preserving the original expansion shape
+// so the runtime semantics (default / case op / substitution / etc.)
+// stay intact. The previous regex only matched `$NAME` and exact
+// `${NAME}`, leaving `${NAME:-/safe}` and friends unwrapped — the
+// regression flagged by codex on PR #514.
+func TestReplaceShellEnvVarRef_WrapsAllExpansionShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain", `echo "$PR_BODY/bin"`, `echo "$(realpath "$PR_BODY")/bin"`},
+		{"braced", `echo "${PR_BODY}/bin"`, `echo "$(realpath "${PR_BODY}")/bin"`},
+		{"default if unset", `echo "${PR_BODY:-/safe}"`, `echo "$(realpath "${PR_BODY:-/safe}")"`},
+		{"alt if set", `echo "${PR_BODY:+set}"`, `echo "$(realpath "${PR_BODY:+set}")"`},
+		{"error if unset", `echo "${PR_BODY:?missing}"`, `echo "$(realpath "${PR_BODY:?missing}")"`},
+		{"strip prefix", `echo "${PR_BODY#pre}"`, `echo "$(realpath "${PR_BODY#pre}")"`},
+		{"strip longest prefix", `echo "${PR_BODY##pre}"`, `echo "$(realpath "${PR_BODY##pre}")"`},
+		{"strip suffix", `echo "${PR_BODY%suf}"`, `echo "$(realpath "${PR_BODY%suf}")"`},
+		{"substitution", `echo "${PR_BODY/foo/bar}"`, `echo "$(realpath "${PR_BODY/foo/bar}")"`},
+		{"uppercase", `echo "${PR_BODY^^}"`, `echo "$(realpath "${PR_BODY^^}")"`},
+		{"lowercase", `echo "${PR_BODY,,}"`, `echo "$(realpath "${PR_BODY,,}")"`},
+		{"indirect", `echo "${!PR_BODY}"`, `echo "$(realpath "${!PR_BODY}")"`},
+		{"length", `echo "${#PR_BODY}"`, `echo "$(realpath "${#PR_BODY}")"`},
+		{"multiple on one line",
+			`printf '%s\n%s\n' "$PR_BODY" "${PR_BODY:-/safe}"`,
+			`printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "${PR_BODY:-/safe}")"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := replaceShellEnvVarRef(tc.in, "PR_BODY")
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestReplaceShellEnvVarRef_LeavesUnrelatedNames pins that references
+// to OTHER variable names on the line are not rewritten when the
+// caller asks for a specific envVarName.
+func TestReplaceShellEnvVarRef_LeavesUnrelatedNames(t *testing.T) {
+	got := replaceShellEnvVarRef(`echo "$PR_BODY $OTHER"`, "PR_BODY")
+	want := `echo "$(realpath "$PR_BODY") $OTHER"`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestReplaceShellEnvVarRef_IgnoresSingleQuotedLiteral confirms that
+// `$PR_BODY` inside single quotes is left alone — bash does not expand
+// it, so wrapping would be incorrect.
+func TestReplaceShellEnvVarRef_IgnoresSingleQuotedLiteral(t *testing.T) {
+	in := `echo 'has $PR_BODY here'`
+	got := replaceShellEnvVarRef(in, "PR_BODY")
+	if got != in {
+		t.Errorf("got %q, want unchanged %q", got, in)
 	}
 }
 

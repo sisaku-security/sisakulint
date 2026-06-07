@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -279,7 +280,6 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			// silently rewritten to the attacker-controlled value.
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
-				validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
 				// If the first pass already wrapped one occurrence on this
 				// line, unwrap it first so we can re-wrap every shell
 				// reference uniformly. A coarse "skip the line if it
@@ -287,10 +287,11 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 				// other `$NAME` reference on the same line untouched —
 				// regression flagged by codex on PR #514 for
 				// `printf '%s\n%s\n' "${{ expr }}" "$NAME" >> $GITHUB_PATH`.
+				validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
 				if strings.Contains(line, validatedVar) {
 					line = strings.ReplaceAll(line, validatedVar, "$"+envVarName)
 				}
-				line = replaceShellEnvVarRef(line, envVarName, validatedVar)
+				line = replaceShellEnvVarRef(line, envVarName)
 			}
 			lines[i] = line
 		}
@@ -545,28 +546,77 @@ func scriptUsesShellNameRegex(sanitized, name string) bool {
 	return re.MatchString(sanitized)
 }
 
-func replaceShellEnvVarRef(line, envVarName, replacement string) string {
-	if envVarName == "" {
+// replaceShellEnvVarRef wraps every shell-level reference of envVarName
+// on the given line with `$(realpath "<source>")`, preserving the
+// original parameter-expansion shape so semantics survive. The parse-
+// based path catches all forms — `$NAME`, `${NAME}`, `${NAME:-default}`,
+// `${NAME:+alt}`, `${NAME#pre}`, `${NAME%suf}`, `${NAME/p/r}`,
+// `${NAME^^}`, `${#NAME}`, `${!NAME}`, `${NAME[i]}`, etc. — by walking
+// every ParamExp whose Param.Value matches and rewriting its byte range
+// with the source-preserving wrap. The previous regex (`${NAME}` exact
+// only) left expansions with operators unwrapped — codex PR #514
+// regression where `printf '%s\n%s\n' "${{ expr }}" "${NAME:-/safe}"
+// >> "$GITHUB_PATH"` kept the second arg as a raw PATH entry while the
+// new env var held the attacker body.
+//
+// On parse failure (defensive — line should always be valid bash since
+// it came out of a parsed run script), falls back to the regex form
+// covering the common `$NAME` / `${NAME}` shapes.
+func replaceShellEnvVarRef(line, envVarName string) string {
+	if envVarName == "" || line == "" {
 		return line
 	}
 
-	// Match both `${NAME}` and `$NAME` (word-boundary terminated) in a
-	// single non-overlapping pass so that a `$NAME` produced inside the
-	// replacement (e.g. `$(realpath "$PR_BODY")`) is not re-rewritten by a
-	// subsequent pass and double-wrapped. ReplaceAllStringFunc returns the
-	// callback output as-is — no `$name` Expand interpretation — so the
-	// replacement is treated as a pure literal.
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(line), "")
+	if err != nil || file == nil {
+		return replaceShellEnvVarRefRegex(line, envVarName)
+	}
+
+	// Collect every ParamExp byte range that references envVarName.
+	type rng struct{ start, end int }
+	var ranges []rng
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if pe, ok := node.(*syntax.ParamExp); ok {
+			if pe.Param != nil && pe.Param.Value == envVarName {
+				ranges = append(ranges, rng{
+					start: int(pe.Pos().Offset()),
+					end:   int(pe.End().Offset()),
+				})
+			}
+		}
+		return true
+	})
+	if len(ranges) == 0 {
+		return line
+	}
+	// Rightmost-first so earlier offsets remain valid as we splice.
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start > ranges[j].start })
+
+	out := line
+	for _, r := range ranges {
+		if r.start < 0 || r.end > len(out) || r.start >= r.end {
+			continue
+		}
+		src := out[r.start:r.end]
+		out = out[:r.start] + `$(realpath "` + src + `")` + out[r.end:]
+	}
+	return out
+}
+
+func replaceShellEnvVarRefRegex(line, envVarName string) string {
 	q := regexp.QuoteMeta(envVarName)
 	re := regexp.MustCompile(`\$\{` + q + `\}|\$` + q + `([^A-Za-z0-9_]|$)`)
 	plainPrefix := "$" + envVarName
+	bracedForm := "${" + envVarName + "}"
 	return re.ReplaceAllStringFunc(line, func(match string) string {
 		if strings.HasPrefix(match, "${") {
-			return replacement
+			return `$(realpath "` + bracedForm + `")`
 		}
 		if match == plainPrefix {
-			return replacement
+			return `$(realpath "` + plainPrefix + `")`
 		}
-		return replacement + match[len(plainPrefix):]
+		return `$(realpath "` + plainPrefix + `")` + match[len(plainPrefix):]
 	})
 }
 
