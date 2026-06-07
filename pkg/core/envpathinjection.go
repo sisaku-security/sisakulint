@@ -217,10 +217,9 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	}
 
 	// Group expressions by their raw content to avoid duplicates
-	envVarMap := make(map[string]string)                 // expr.raw -> chosen env var name
-	envVarsForYAML := make(map[string]string)            // env var name -> env var value
-	preShadowInheritedRefs := make(map[string]string)    // expr.raw -> inherited env var name
-	preShadowInheritedAssignLine := make(map[string]int) // expr.raw -> first shadowing assignment line
+	envVarMap := make(map[string]string)              // expr.raw -> chosen env var name
+	envVarsForYAML := make(map[string]string)         // env var name -> env var value
+	preShadowInheritedRefs := make(map[string]string) // expr.raw -> inherited env var name
 
 	for _, untrustedInfo := range stepInfo.untrustedExprs {
 		expr := untrustedInfo.expr
@@ -238,9 +237,8 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			// the script shadows it later, references before that shadow
 			// still read the inherited tainted value and must be wrapped.
 			if hasMatchingInherited && matchingInherited.actualName != envVarName {
-				if assignLine, ok := firstShellAssignmentLine(run.Run.Value, matchingInherited.actualName); ok {
+				if _, ok := firstShellAssignmentOffset(run.Run.Value, matchingInherited.actualName); ok {
 					preShadowInheritedRefs[expr.raw] = matchingInherited.actualName
-					preShadowInheritedAssignLine[expr.raw] = assignLine
 				}
 			}
 		}
@@ -277,10 +275,20 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		newScript = strings.ReplaceAll(newScript, old, new)
 	}
 
+	preShadowInheritedAssignOffset := make(map[string]int)
+	for exprRaw, inheritedName := range preShadowInheritedRefs {
+		if assignOffset, ok := firstShellAssignmentOffset(newScript, inheritedName); ok {
+			preShadowInheritedAssignOffset[exprRaw] = assignOffset
+		}
+	}
+
 	// Additional pass: validate env var references in GITHUB_PATH lines
 	// Split into lines and process each line that writes to GITHUB_PATH
 	lines := strings.Split(newScript, "\n")
+	lineStart := 0
 	for i, line := range lines {
+		originalLineLen := len(line)
+		lineEnd := lineStart + originalLineLen
 		if githubPathPattern.MatchString(line) {
 			// This line writes to GITHUB_PATH
 			// Replace any $ENV_VAR references with the validated version.
@@ -308,13 +316,18 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 				// script assignment, only the pre-assignment inherited
 				// references still expand to the untrusted env value.
 				if inheritedName, ok := preShadowInheritedRefs[untrustedInfo.expr.raw]; ok {
-					if i < preShadowInheritedAssignLine[untrustedInfo.expr.raw] {
-						line = replaceShellEnvVarRef(line, inheritedName)
+					if assignOffset, ok := preShadowInheritedAssignOffset[untrustedInfo.expr.raw]; ok && lineStart < assignOffset {
+						limit := originalLineLen
+						if assignOffset < lineEnd {
+							limit = assignOffset - lineStart
+						}
+						line = replaceShellEnvVarRefBeforeOffset(line, inheritedName, limit)
 					}
 				}
 			}
 			lines[i] = line
 		}
+		lineStart = lineEnd + 1
 	}
 	newScript = strings.Join(lines, "\n")
 
@@ -626,11 +639,11 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	return false
 }
 
-func firstShellAssignmentLine(script, name string) (int, bool) {
+func firstShellAssignmentOffset(script, name string) (int, bool) {
 	if name == "" || script == "" {
 		return 0, false
 	}
-	sanitized, _ := sanitizeForShellParse(script)
+	sanitized := sanitizeForShellParsePreservingLength(script)
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
 	file, err := parser.Parse(strings.NewReader(sanitized), "")
 	if err != nil || file == nil {
@@ -658,7 +671,13 @@ func firstShellAssignmentLine(script, name string) (int, bool) {
 	if firstAssignOffset == -1 {
 		return 0, false
 	}
-	return strings.Count(sanitized[:firstAssignOffset], "\n"), true
+	return firstAssignOffset, true
+}
+
+func sanitizeForShellParsePreservingLength(script string) string {
+	return taintGhExprPattern.ReplaceAllStringFunc(script, func(match string) string {
+		return strings.Repeat("_", len(match))
+	})
 }
 
 func githubPathExpressionPlaceholders(script, exprRaw string) map[string]struct{} {
@@ -942,8 +961,18 @@ func scriptUsesShellNameRegex(sanitized, name string) bool {
 // On parse failure (defensive), falls back to the regex form covering
 // the common `$NAME` / `${NAME}` shapes.
 func replaceShellEnvVarRef(line, envVarName string) string {
+	return replaceShellEnvVarRefBeforeOffset(line, envVarName, len(line))
+}
+
+func replaceShellEnvVarRefBeforeOffset(line, envVarName string, limit int) string {
 	if envVarName == "" || line == "" {
 		return line
+	}
+	if limit <= 0 {
+		return line
+	}
+	if limit < len(line) {
+		return replaceShellEnvVarRef(line[:limit], envVarName) + line[limit:]
 	}
 
 	// Strip `${{ ... }}` so bash can parse the line. Placeholders are

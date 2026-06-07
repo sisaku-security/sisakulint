@@ -1108,6 +1108,48 @@ echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadowSameLine
+// covers the same order-aware inherited-env case when the pre-shadow PATH
+// write, shadowing assignment, and post-shadow PATH write share one physical
+// shell line. Line-level ordering is not precise enough here.
+func TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadowSameLine(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"; PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+	}
+
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_IgnoresUnrelatedExpressionAfterShadow
 // pins the codex-flagged regression on PR #514: inherited env reuse must
 // consider only the expression being rewritten. A later unrelated GitHub
