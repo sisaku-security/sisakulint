@@ -988,6 +988,60 @@ echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ScriptShadowsLowercaseInheritedEnv
+// pins that the inherited-env reuse path's shadowing check uses the
+// inherited entry's ACTUAL casing rather than the upper-case candidate.
+// When workflow env declares `pr_body: ${{ expr }}` (lowercase) and the
+// script assigns `pr_body=/safe`, checking shadow against the upper-case
+// `PR_BODY` candidate misses the lowercase assignment (bash names are
+// case-sensitive), reuse fires, and the rewrite resolves the shadowed
+// `/safe` value instead of the inherited untrusted expression.
+// Codex PR #514 regression.
+func TestEnvPathInjectionCritical_FixStep_ScriptShadowsLowercaseInheritedEnv(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`pr_body=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	workflow.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "pr_body"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil {
+		if added := step.Env.Vars["pr_body"]; added != nil {
+			t.Fatalf("autofix wrongly created step-level pr_body (would be shadowed by script): %+v", added.Value)
+		}
+		added := step.Env.Vars["pr_body_2"]
+		if added == nil || added.Value == nil {
+			t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+		}
+	}
+
+	want := `pr_body=/safe
+echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_LeftoverGitHubExpressionInLine
 // is the end-to-end regression for the codex sanitize-before-parse
 // concern: an inherited-env reuse path where the GITHUB_PATH line

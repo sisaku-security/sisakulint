@@ -360,7 +360,14 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 		// check: it covers the code-injection composition path where the
 		// script's `$NAME` reference is the autofix-emitted form.
 		if inherited, has := lookupInheritedEnvVar(rule.workflow, job, key); has {
-			if inherited.value == exprValue && !scriptAssignsShellName(runScript, candidate) {
+			// scriptAssignsShellName must check the name we are actually
+			// about to return (inherited.actualName), not the candidate.
+			// When the inherited entry uses different casing (e.g.,
+			// lowercase `pr_body` for a `PR_BODY` candidate), checking
+			// against the candidate misses the script's lowercase
+			// assignment and the rewrite then resolves the shadowed
+			// script value. Codex PR #514 regression.
+			if inherited.value == exprValue && !scriptAssignsShellName(runScript, inherited.actualName) {
 				return inherited.actualName
 			}
 			continue
