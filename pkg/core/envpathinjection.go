@@ -229,7 +229,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		// Check if we already created an env var for this expression
 		if _, exists := envVarMap[expr.raw]; !exists {
 			exprValue := fmt.Sprintf("${{ %s }}", expr.raw)
-			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, exprValue, expr.pos, envVarsForYAML)
+			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, expr.raw, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
 		}
 	}
@@ -317,6 +317,7 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 	job *ast.Job,
 	runScript string,
 	baseName string,
+	exprRaw string,
 	exprValue string,
 	pos *ast.Position,
 	envVarsForYAML map[string]string,
@@ -368,11 +369,12 @@ func (rule *EnvPathInjectionRule) envVarNameForExpression(
 			// locations — in that case the earlier `$NAME` references on
 			// GITHUB_PATH lines still read the inherited (untrusted)
 			// value and the second pass should wrap them, which only
-			// works if we reuse the inherited name. assignmentShadowsAny-
-			// UntrustedExpression bakes in the order-aware logic.
+			// works if we reuse the inherited name. assignmentShadows-
+			// UntrustedExpression bakes in the expression-specific,
+			// order-aware logic.
 			// Codex PR #514 regression. Casing is preserved by passing
 			// inherited.actualName (case-sensitive bash names).
-			if inherited.value == exprValue && !assignmentShadowsAnyUntrustedExpression(runScript, inherited.actualName) {
+			if inherited.value == exprValue && !assignmentShadowsUntrustedExpression(runScript, inherited.actualName, exprRaw) {
 				return inherited.actualName
 			}
 			continue
@@ -500,31 +502,32 @@ func scriptUsesShellName(script, name string) bool {
 	return found
 }
 
-// assignmentShadowsAnyUntrustedExpression reports whether the run
-// script assigns to `name` BEFORE any `${{ ... }}` expression appears.
-// Order matters: when the assignment happens AFTER all expression
-// positions, the autofix's rewrites at those positions still read the
-// inherited (untrusted) value — so reuse is safe and we want to wrap
-// them with realpath. When the assignment precedes at least one
-// expression position, that expression's rewrite would resolve the
-// shadowed local value at runtime — semantically wrong — so the
-// caller must suffix to a fresh helper name. Reported by codex on
-// PR #514.
+// assignmentShadowsUntrustedExpression reports whether the run script
+// assigns to `name` BEFORE a PATH-write occurrence of the target
+// `${{ ... }}` expression appears. Order matters: when the assignment
+// happens AFTER all rewrite positions, the autofix's rewrites at those
+// positions still read the inherited (untrusted) value — so reuse is safe
+// and we want to wrap them with realpath. When the assignment precedes at
+// least one rewrite position, that expression's rewrite would resolve the
+// shadowed local value at runtime — semantically wrong — so the caller must
+// suffix to a fresh helper name. Reported by codex on PR #514.
 //
-// Implementation: sanitize `${{ ... }}` to word-only placeholders so
-// bash can parse the script, locate the first assignment offset via
-// AST walk (covers `Assign` and `read`/`mapfile`/`readarray`
-// builtins), then check whether any placeholder offset is greater
-// than the assignment offset.
-func assignmentShadowsAnyUntrustedExpression(script, name string) bool {
-	if name == "" || script == "" {
+// Implementation: sanitize `${{ ... }}` to word-only placeholders so bash
+// can parse the script, locate the first assignment offset via AST walk
+// (covers `Assign` and `read`/`mapfile`/`readarray` builtins), then check
+// whether any PATH-write placeholder for the target expression is greater
+// than the assignment offset. Unrelated GitHub expressions and same-expression
+// occurrences outside PATH writes must not force suffixing.
+func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
+	if name == "" || script == "" || exprRaw == "" {
 		return false
 	}
-	sanitized, exprMap := sanitizeForShellParse(script)
-	if len(exprMap) == 0 {
+	targetPlaceholders := githubPathExpressionPlaceholders(script, exprRaw)
+	if len(targetPlaceholders) == 0 {
 		return false
 	}
 
+	sanitized, _ := sanitizeForShellParse(script)
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
 	file, err := parser.Parse(strings.NewReader(sanitized), "")
 	if err != nil || file == nil {
@@ -554,16 +557,54 @@ func assignmentShadowsAnyUntrustedExpression(script, name string) bool {
 		return false
 	}
 
-	// If any `${{ ... }}` placeholder appears AFTER the first
+	// If any target `${{ ... }}` placeholder appears AFTER the first
 	// assignment, that expression's rewrite would resolve the shadowed
 	// value — return true so the caller suffixes.
-	for placeholder := range exprMap {
+	for placeholder := range targetPlaceholders {
 		idx := strings.Index(sanitized, placeholder)
 		if idx >= 0 && idx > firstAssignOffset {
 			return true
 		}
 	}
 	return false
+}
+
+func githubPathExpressionPlaceholders(script, exprRaw string) map[string]struct{} {
+	placeholders := make(map[string]struct{})
+	targetExpr := strings.TrimSpace(exprRaw)
+	if script == "" || targetExpr == "" {
+		return placeholders
+	}
+
+	matches := taintGhExprPattern.FindAllStringSubmatchIndex(script, -1)
+	for i, match := range matches {
+		if len(match) < 4 {
+			continue
+		}
+		if strings.TrimSpace(script[match[2]:match[3]]) != targetExpr {
+			continue
+		}
+		if !githubPathPattern.MatchString(lineAtOffset(script, match[0])) {
+			continue
+		}
+		placeholders[fmt.Sprintf("%s%d_", taintPlaceholderPrefix, i)] = struct{}{}
+	}
+	return placeholders
+}
+
+func lineAtOffset(script string, offset int) string {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(script) {
+		offset = len(script)
+	}
+	start := strings.LastIndex(script[:offset], "\n") + 1
+	end := len(script)
+	if rel := strings.Index(script[offset:], "\n"); rel >= 0 {
+		end = offset + rel
+	}
+	return script[start:end]
 }
 
 // scriptAssignsShellName reports whether the run script assigns to a

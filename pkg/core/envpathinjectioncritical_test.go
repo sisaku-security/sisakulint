@@ -928,63 +928,132 @@ PR_BODY=/safe`
 	}
 }
 
-// TestAssignmentShadowsAnyUntrustedExpression pins the ordering
-// semantics directly: only assignments that PRECEDE at least one
-// `${{ ... }}` expression count as shadowing. Reported by codex on
-// PR #514.
-func TestAssignmentShadowsAnyUntrustedExpression(t *testing.T) {
+// TestEnvPathInjectionCritical_FixStep_IgnoresUnrelatedExpressionAfterShadow
+// pins the codex-flagged regression on PR #514: inherited env reuse must
+// consider only the expression being rewritten. A later unrelated GitHub
+// expression after `PR_BODY=/safe` must not force suffixing for an earlier
+// PATH write that still reads the inherited PR_BODY value.
+func TestEnvPathInjectionCritical_FixStep_IgnoresUnrelatedExpressionAfterShadow(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`printf '%s\n%s\n' "$PR_BODY" "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "${{ matrix.path }}"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed due to unrelated later expression: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "${{ matrix.path }}"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestAssignmentShadowsUntrustedExpression pins the ordering semantics
+// directly: only assignments that PRECEDE the target `${{ ... }}`
+// expression count as shadowing. Unrelated expressions elsewhere in the
+// script must not force suffixing. Reported by codex on PR #514.
+func TestAssignmentShadowsUntrustedExpression(t *testing.T) {
 	cases := []struct {
-		name   string
-		script string
-		want   bool
+		name    string
+		script  string
+		exprRaw string
+		want    bool
 	}{
 		{
-			name: "assignment before expression",
+			name: "assignment before target expression",
 			script: `PR_BODY=/safe
-echo "${{ github.event.pull_request.body }}"`,
-			want: true,
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
 		},
 		{
-			name: "assignment after expression",
-			script: `echo "${{ github.event.pull_request.body }}"
+			name: "assignment after target expression",
+			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 PR_BODY=/safe`,
-			want: false,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
 		},
 		{
 			name: "no assignment",
-			script: `echo "${{ github.event.pull_request.body }}"
+			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 echo "$PR_BODY"`,
-			want: false,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
 		},
 		{
 			name: "no expression",
 			script: `PR_BODY=/safe
 echo "$PR_BODY"`,
-			want: false,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
 		},
 		{
-			name: "two expressions, assignment between them",
+			name: "target expression after assignment",
 			script: `echo "${{ first.expr }}"
 PR_BODY=/safe
-echo "${{ second.expr }}"`,
-			want: true,
+echo "${{ second.expr }}" >> "$GITHUB_PATH"`,
+			exprRaw: "second.expr",
+			want:    true,
+		},
+		{
+			name: "only unrelated expression after assignment",
+			script: `echo "${{ github.event.pull_request.body }}"
+PR_BODY=/safe
+echo "${{ matrix.path }}"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "same expression after assignment outside path write",
+			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
 		},
 		{
 			name: "read builtin before expression",
 			script: `read PR_BODY
-echo "${{ github.event.pull_request.body }}"`,
-			want: true,
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
 		},
 		{
 			name: "read builtin after expression",
-			script: `echo "${{ github.event.pull_request.body }}"
+			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 read PR_BODY`,
-			want: false,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := assignmentShadowsAnyUntrustedExpression(tc.script, "PR_BODY"); got != tc.want {
+			if got := assignmentShadowsUntrustedExpression(tc.script, "PR_BODY", tc.exprRaw); got != tc.want {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
 		})
