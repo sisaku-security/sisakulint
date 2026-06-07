@@ -547,23 +547,12 @@ func scriptUsesShellName(script, name string) bool {
 		if found || node == nil {
 			return false
 		}
-		switch x := node.(type) {
-		case *syntax.ParamExp:
+		if _, ok := shellAssignmentOffset(node, name); ok {
+			found = true
+			return false
+		}
+		if x, ok := node.(*syntax.ParamExp); ok {
 			if x.Param != nil && x.Param.Value == name {
-				found = true
-				return false
-			}
-		case *syntax.Assign:
-			if x.Name != nil && x.Name.Value == name {
-				found = true
-				return false
-			}
-		case *syntax.CallExpr:
-			// Built-ins like `read NAME`, `mapfile NAME`, `readarray NAME`
-			// bind the named variable but are represented as plain CallExpr
-			// (not Assign) in the AST. Recognize the common ones so the
-			// autofix doesn't shadow a user-assigned shell variable.
-			if callAssignsName(x, name) {
 				found = true
 				return false
 			}
@@ -608,18 +597,8 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 
 	firstAssignOffset := -1
 	syntax.Walk(file, func(node syntax.Node) bool {
-		off := -1
-		switch x := node.(type) {
-		case *syntax.Assign:
-			if x.Name != nil && x.Name.Value == name {
-				off = int(x.Pos().Offset())
-			}
-		case *syntax.CallExpr:
-			if callAssignsName(x, name) {
-				off = int(x.Pos().Offset())
-			}
-		}
-		if off >= 0 && (firstAssignOffset == -1 || off < firstAssignOffset) {
+		off, ok := shellAssignmentOffset(node, name)
+		if ok && (firstAssignOffset == -1 || off < firstAssignOffset) {
 			firstAssignOffset = off
 		}
 		return true
@@ -653,18 +632,8 @@ func firstShellAssignmentOffset(script, name string) (int, bool) {
 
 	firstAssignOffset := -1
 	syntax.Walk(file, func(node syntax.Node) bool {
-		off := -1
-		switch x := node.(type) {
-		case *syntax.Assign:
-			if x.Name != nil && x.Name.Value == name {
-				off = int(x.Pos().Offset())
-			}
-		case *syntax.CallExpr:
-			if callAssignsName(x, name) {
-				off = int(x.Pos().Offset())
-			}
-		}
-		if off >= 0 && (firstAssignOffset == -1 || off < firstAssignOffset) {
+		off, ok := shellAssignmentOffset(node, name)
+		if ok && (firstAssignOffset == -1 || off < firstAssignOffset) {
 			firstAssignOffset = off
 		}
 		return true
@@ -745,17 +714,9 @@ func scriptAssignsShellName(script, name string) bool {
 		if found || node == nil {
 			return false
 		}
-		switch x := node.(type) {
-		case *syntax.Assign:
-			if x.Name != nil && x.Name.Value == name {
-				found = true
-				return false
-			}
-		case *syntax.CallExpr:
-			if callAssignsName(x, name) {
-				found = true
-				return false
-			}
+		if _, ok := shellAssignmentOffset(node, name); ok {
+			found = true
+			return false
 		}
 		return true
 	})
@@ -788,6 +749,61 @@ func callAssignsName(call *syntax.CallExpr, name string) bool {
 		return mapfileCallAssignsName(call.Args[1:], name)
 	}
 	return false
+}
+
+func shellAssignmentOffset(node syntax.Node, name string) (int, bool) {
+	if node == nil || name == "" {
+		return 0, false
+	}
+	switch x := node.(type) {
+	case *syntax.Assign:
+		if x.Name != nil && x.Name.Value == name {
+			return int(x.Pos().Offset()), true
+		}
+	case *syntax.CallExpr:
+		// Built-ins like `read NAME`, `mapfile NAME`, `readarray NAME`
+		// bind the named variable but are represented as plain CallExpr
+		// (not Assign) in the AST.
+		if callAssignsName(x, name) {
+			return int(x.Pos().Offset()), true
+		}
+	case *syntax.WordIter:
+		// `for NAME in ...` and bash `select NAME in ...` both assign the
+		// loop value to NAME before running the loop body.
+		if x.Name != nil && x.Name.Value == name {
+			return int(x.Name.Pos().Offset()), true
+		}
+	case *syntax.BinaryArithm:
+		if arithmAssignsName(x, name) {
+			return int(x.X.Pos().Offset()), true
+		}
+	case *syntax.UnaryArithm:
+		if (x.Op == syntax.Inc || x.Op == syntax.Dec) && arithmExprName(x.X) == name {
+			return int(x.X.Pos().Offset()), true
+		}
+	}
+	return 0, false
+}
+
+func arithmAssignsName(expr *syntax.BinaryArithm, name string) bool {
+	if expr == nil || arithmExprName(expr.X) != name {
+		return false
+	}
+	switch expr.Op {
+	case syntax.Assgn, syntax.AddAssgn, syntax.SubAssgn, syntax.MulAssgn,
+		syntax.QuoAssgn, syntax.RemAssgn, syntax.AndAssgn, syntax.OrAssgn,
+		syntax.XorAssgn, syntax.ShlAssgn, syntax.ShrAssgn, syntax.AndBoolAssgn,
+		syntax.OrBoolAssgn, syntax.XorBoolAssgn, syntax.PowAssgn:
+		return true
+	}
+	return false
+}
+
+func arithmExprName(expr syntax.ArithmExpr) string {
+	if word, ok := expr.(*syntax.Word); ok {
+		return wordLitValue(word)
+	}
+	return ""
 }
 
 func readCallAssignsName(args []*syntax.Word, name string) bool {

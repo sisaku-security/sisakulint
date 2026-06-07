@@ -524,6 +524,9 @@ func TestScriptUsesShellName_ParameterExpansions(t *testing.T) {
 		{"export assignment", `export PR_BODY=/safe`},
 		{"local assignment", `f() { local PR_BODY=/safe; }`},
 		{"read", `read PR_BODY`}, // bash assigns via read
+		{"for loop variable", `for PR_BODY in /safe; do :; done`},
+		{"select loop variable", `select PR_BODY in /safe; do break; done`},
+		{"c-style loop assignment", `for (( PR_BODY=0; PR_BODY<1; PR_BODY++ )); do :; done`},
 		// Bare declarations (no =VALUE) bind the name and on Linux runners
 		// shadow the env var for the rest of the scope, so the autofix
 		// must treat them as a collision. mvdan.cc/sh parses these as
@@ -1210,6 +1213,70 @@ func TestEnvPathInjectionCritical_FixStep_MixedStepEnvWritesAroundShadow(t *test
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ForLoopVarShadowsInheritedEnv
+// pins that shell loop binders (`for NAME` / `select NAME`) shadow matching
+// inherited env vars before commands in the loop body.
+func TestEnvPathInjectionCritical_FixStep_ForLoopVarShadowsInheritedEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+	}{
+		{
+			name: "for",
+			run:  `for PR_BODY in /safe; do echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; done`,
+		},
+		{
+			name: "select",
+			run:  `select PR_BODY in /safe; do echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; break; done`,
+		},
+		{
+			name: "c-style for assignment",
+			run:  `for (( PR_BODY=0; PR_BODY<1; PR_BODY++ )); do echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; done`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+				"pr_body": {
+					Name:  &ast.String{Value: "PR_BODY"},
+					Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+				},
+			}}
+
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			added := step.Env.Vars["pr_body_2"]
+			if added == nil || added.Value == nil {
+				t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+			}
+			if got := added.Value.Value; got != "${{ github.event.pull_request.body }}" {
+				t.Errorf("PR_BODY_2 value = %q, want pull request body expression", got)
+			}
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if strings.Contains(got, `realpath "$PR_BODY")`) {
+				t.Errorf("fixed run script reused shadowed PR_BODY: %q", got)
+			}
+			if !strings.Contains(got, `$(realpath "$PR_BODY_2")`) {
+				t.Errorf("fixed run script does not use suffixed helper: %q", got)
+			}
+		})
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_IgnoresUnrelatedExpressionAfterShadow
 // pins the codex-flagged regression on PR #514: inherited env reuse must
 // consider only the expression being rewritten. A later unrelated GitHub
@@ -1326,6 +1393,31 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			want:    true,
 		},
 		{
+			name: "for loop variable before expression",
+			script: `for PR_BODY in /safe; do
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+done`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "select loop variable before expression",
+			script: `select PR_BODY in /safe; do
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+break
+done`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "c-style loop assignment before expression",
+			script: `for (( PR_BODY=0; PR_BODY<1; PR_BODY++ )); do
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+done`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
 			name: "read builtin after expression",
 			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 read PR_BODY`,
@@ -1364,6 +1456,9 @@ func TestScriptAssignsShellName(t *testing.T) {
 		{"read combined prompt then name", `read -rp "prompt" PR_BODY`, ""},
 		{"read array option", `read -a PR_BODY`, ""},
 		{"read inline array option", `read -aPR_BODY`, ""},
+		{"for loop variable", `for PR_BODY in /safe; do :; done`, ""},
+		{"select loop variable", `select PR_BODY in /safe; do break; done`, ""},
+		{"c-style loop assignment", `for (( PR_BODY=0; PR_BODY<1; PR_BODY++ )); do :; done`, ""},
 		{"read default reply no options", `read`, "REPLY"},
 		{"read default reply flag only", `read -r`, "REPLY"},
 		{"read default reply", `read -p "prompt"`, "REPLY"},
