@@ -1208,12 +1208,59 @@ func githubPathWriteLineRangesWithExecState(line string, execPathActive bool) ([
 	}
 
 	var ranges []textRange
+	execPathActiveByScope := map[int]bool{0: execPathActive}
+	scopeStack := []int{0}
+	nodeFrames := []int{}
+	pipelineStmtScopeIDs := make(map[*syntax.Stmt]int)
+	nextScopeID := 1
 	syntax.Walk(file, func(node syntax.Node) bool {
+		if node == nil {
+			if len(nodeFrames) == 0 {
+				return true
+			}
+			openedScopeID := nodeFrames[len(nodeFrames)-1]
+			nodeFrames = nodeFrames[:len(nodeFrames)-1]
+			if openedScopeID != 0 && len(scopeStack) > 1 {
+				scopeStack = scopeStack[:len(scopeStack)-1]
+			}
+			return true
+		}
+
+		openedScopeID := 0
+		if stmt, ok := node.(*syntax.Stmt); ok {
+			scopeID := 0
+			if id, ok := pipelineStmtScopeIDs[stmt]; ok {
+				scopeID = id
+			} else if stmt.Background {
+				scopeID = nextScopeID
+				nextScopeID++
+			}
+			if scopeID != 0 {
+				openedScopeID = scopeID
+				parentScopeID := scopeStack[len(scopeStack)-1]
+				execPathActiveByScope[scopeID] = execPathActiveByScope[parentScopeID]
+				scopeStack = append(scopeStack, scopeID)
+			}
+		}
+		if binary, ok := node.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+			registerPipelineElementScopes(binary, pipelineStmtScopeIDs, &nextScopeID)
+		}
+		if opensExecNestedShellScope(node) {
+			openedScopeID = nextScopeID
+			nextScopeID++
+			parentScopeID := scopeStack[len(scopeStack)-1]
+			execPathActiveByScope[openedScopeID] = nestedExecInitialState(node, execPathActiveByScope[parentScopeID])
+			scopeStack = append(scopeStack, openedScopeID)
+		}
+		nodeFrames = append(nodeFrames, openedScopeID)
+
 		stmt, ok := node.(*syntax.Stmt)
 		if !ok || stmt == nil {
 			return true
 		}
-		if execPathActive && !stmtRedirectsStdout(stmt) {
+		scopeID := scopeStack[len(scopeStack)-1]
+		scopeExecPathActive := execPathActiveByScope[scopeID]
+		if scopeExecPathActive && stmtCanWriteInheritedStdout(stmt) {
 			if r, ok := nodeTextRange(line, stmt); ok {
 				ranges = append(ranges, r)
 			}
@@ -1224,12 +1271,27 @@ func githubPathWriteLineRangesWithExecState(line string, execPathActive bool) ([
 			}
 		}
 		if changed, nextExecPathActive := stmtPersistentExecStdoutState(line, stmt); changed {
-			execPathActive = nextExecPathActive
+			execPathActiveByScope[scopeID] = nextExecPathActive
 		}
 		return true
 	})
 	ranges = normalizeTextRanges(ranges)
-	return ranges, execPathActive
+	return ranges, execPathActiveByScope[0]
+}
+
+func opensExecNestedShellScope(node syntax.Node) bool {
+	switch node.(type) {
+	case *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst, *syntax.FuncDecl:
+		return true
+	}
+	return false
+}
+
+func nestedExecInitialState(node syntax.Node, parentExecPathActive bool) bool {
+	if _, ok := node.(*syntax.FuncDecl); ok {
+		return false
+	}
+	return parentExecPathActive
 }
 
 func stmtPersistentExecStdoutState(line string, stmt *syntax.Stmt) (bool, bool) {
@@ -1279,6 +1341,21 @@ func stmtRedirectsStdout(stmt *syntax.Stmt) bool {
 		}
 	}
 	return false
+}
+
+func stmtCanWriteInheritedStdout(stmt *syntax.Stmt) bool {
+	if stmt == nil || stmtRedirectsStdout(stmt) || stmtIsFunctionDecl(stmt) {
+		return false
+	}
+	return true
+}
+
+func stmtIsFunctionDecl(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	_, ok := stmt.Cmd.(*syntax.FuncDecl)
+	return ok
 }
 
 func redirAffectsStdout(redir *syntax.Redirect) bool {
