@@ -75,6 +75,27 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			description: "Should not detect for trusted github.workspace",
 		},
 		{
+			name:        "unrelated expression before safe GITHUB_PATH write",
+			trigger:     "pull_request_target",
+			runScript:   `echo "${{ github.event.pull_request.body }}" && echo "/safe" >> "$GITHUB_PATH"`,
+			wantErrors:  0,
+			description: "Should not detect an untrusted expression outside the PATH-writing command",
+		},
+		{
+			name:        "quoted GITHUB_PATH redirect text is not a write",
+			trigger:     "pull_request_target",
+			runScript:   `echo '>> "$GITHUB_PATH"' && echo "${{ github.event.pull_request.body }}"`,
+			wantErrors:  0,
+			description: "Should not detect a quoted redirect-looking string as a PATH write",
+		},
+		{
+			name:        "if condition expression before safe GITHUB_PATH write",
+			trigger:     "pull_request_target",
+			runScript:   `if echo "${{ github.event.pull_request.body }}"; then echo "/safe" >> "$GITHUB_PATH"; fi`,
+			wantErrors:  0,
+			description: "Should not detect an untrusted expression outside an inner PATH-writing statement",
+		},
+		{
 			name:        "extracted path from untrusted input",
 			trigger:     "pull_request_target",
 			runScript:   `echo "${{ github.event.comment.body }}" >> "$GITHUB_PATH"`,
@@ -1348,6 +1369,95 @@ func TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadowSameLi
 	got := step.Exec.(*ast.ExecRun).Run.Value
 	if got != want {
 		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_SameLineOnlyRewritesPathWriteStatements
+// pins that a physical line containing both ordinary shell commands and a
+// later GITHUB_PATH append only rewrites the command(s) that actually write to
+// GITHUB_PATH. Non-PATH commands on the same line must be left alone.
+func TestEnvPathInjectionCritical_FixStep_SameLineOnlyRewritesPathWriteStatements(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "unrelated inherited ref before shadow",
+			run:  `echo "$PR_BODY"; PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$PR_BODY"; PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "path write then unrelated ref then shadow",
+			run:  `echo "$PR_BODY" >> "$GITHUB_PATH"; echo "$PR_BODY"; PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; echo "$PR_BODY"; PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "unrelated expression before path write",
+			run:  `echo "${{ github.event.pull_request.body }}"; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "${{ github.event.pull_request.body }}"; echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "unrelated ref before reused path write",
+			run:  `echo "$PR_BODY"; printf '%s\n%s\n' "${{ github.event.pull_request.body }}" "$PR_BODY" >> "$GITHUB_PATH"`,
+			want: `echo "$PR_BODY"; printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "and-list unrelated ref before path write",
+			run:  `echo "$PR_BODY" && echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$PR_BODY" && echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "or-list path write before unrelated ref",
+			run:  `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH" || echo "$PR_BODY"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH" || echo "$PR_BODY"`,
+		},
+		{
+			name: "and-list unrelated expression before path write",
+			run:  `echo "${{ github.event.pull_request.body }}" && echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "${{ github.event.pull_request.body }}" && echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "compound redirect rewrites whole redirected block",
+			run:  `{ echo "$PR_BODY"; echo "${{ github.event.pull_request.body }}"; } >> "$GITHUB_PATH"`,
+			want: `{ echo "$(realpath "$PR_BODY")"; echo "$(realpath "$PR_BODY")"; } >> "$GITHUB_PATH"`,
+		},
+		{
+			name: "if condition ref before branch path write",
+			run:  `if echo "$PR_BODY"; then echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; fi`,
+			want: `if echo "$PR_BODY"; then echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; fi`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+				"pr_body": {
+					Name:  &ast.String{Value: "PR_BODY"},
+					Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+				},
+			}}
+
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tc.want {
+				t.Errorf("fixed run script = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

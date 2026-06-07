@@ -118,15 +118,15 @@ func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
 		lines := strings.Split(script, "\n")
 		for lineIdx, line := range lines {
 			// Check if this line writes to GITHUB_PATH
-			if !githubPathPattern.MatchString(line) {
+			pathWriteRanges := githubPathWriteLineRanges(line)
+			if len(pathWriteRanges) == 0 {
 				continue
 			}
 
-			// Check if this line contains any untrusted expressions
+			// Check if a PATH-writing command contains any untrusted expressions
 			for _, expr := range exprs {
-				// Check if the expression is in this line
-				if !strings.Contains(line, fmt.Sprintf("${{ %s }}", expr.raw)) &&
-					!strings.Contains(line, fmt.Sprintf("${{%s}}", expr.raw)) {
+				// Check if the expression is in a PATH-writing command
+				if !githubExpressionInRanges(line, expr.raw, pathWriteRanges) {
 					continue
 				}
 
@@ -250,29 +250,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		}
 	}
 
-	// Build replacement map for the run script
-	// For each untrusted expression in GITHUB_PATH writes, replace with validated version
-	replacements := make(map[string]string)
-
-	for _, untrustedInfo := range stepInfo.untrustedExprs {
-		envVarName := envVarMap[untrustedInfo.expr.raw]
-
-		// Replace ${{ expr }} with validated path using realpath
-		// realpath resolves the path and ensures it's absolute and canonical
-		oldPattern := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
-		newPattern := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
-		replacements[oldPattern] = newPattern
-
-		// Also handle no-space variant
-		oldPatternNoSpace := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
-		replacements[oldPatternNoSpace] = newPattern
-	}
-
-	// Apply replacements to the run script
 	newScript := run.Run.Value
-	for old, new := range replacements {
-		newScript = strings.ReplaceAll(newScript, old, new)
-	}
 
 	existingNameShadowAnalyses := make(map[string]*shellNameShadowAnalysis)
 	for _, existingName := range preShadowExistingRefs {
@@ -291,7 +269,8 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	for i, line := range lines {
 		originalLineLen := len(line)
 		lineEnd := lineStart + originalLineLen
-		if githubPathPattern.MatchString(line) {
+		pathWriteRanges := githubPathWriteLineRanges(line)
+		if len(pathWriteRanges) > 0 {
 			// This line writes to GITHUB_PATH
 			// Replace any $ENV_VAR references with the validated version.
 			// Only rewrite the env var actually chosen for this expression.
@@ -311,23 +290,41 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 				}
 				processedExistingNames[existingName] = struct{}{}
 				if analysis := existingNameShadowAnalyses[existingName]; analysis != nil {
-					line = replaceUnshadowedShellEnvVarRef(line, existingName, lineStart, analysis)
+					line = replaceInTextRanges(line, pathWriteRanges, func(segment string, segmentStart int) string {
+						return replaceUnshadowedShellEnvVarRef(segment, existingName, lineStart+segmentStart, analysis)
+					})
+					pathWriteRanges = githubPathWriteLineRanges(line)
 				}
 			}
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
-				// If the first pass already wrapped one occurrence on this
-				// line, unwrap it first so we can re-wrap every shell
-				// reference uniformly. A coarse "skip the line if it
-				// already contains validatedVar" check would leave any
-				// other `$NAME` reference on the same line untouched —
-				// regression flagged by codex on PR #514 for
-				// `printf '%s\n%s\n' "${{ expr }}" "$NAME" >> $GITHUB_PATH`.
-				validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
-				if strings.Contains(line, validatedVar) {
-					line = strings.ReplaceAll(line, validatedVar, "$"+envVarName)
-				}
-				line = replaceShellEnvVarRef(line, envVarName)
+				line = replaceInTextRanges(line, pathWriteRanges, func(segment string, _ int) string {
+					// If the user already had one occurrence wrapped on this
+					// statement, unwrap it first so we can re-wrap every shell
+					// reference uniformly. A coarse "skip if it already
+					// contains validatedVar" check would leave any other
+					// `$NAME` reference in the same PATH write untouched.
+					validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
+					if strings.Contains(segment, validatedVar) {
+						segment = strings.ReplaceAll(segment, validatedVar, "$"+envVarName)
+					}
+					return replaceShellEnvVarRef(segment, envVarName)
+				})
+				pathWriteRanges = githubPathWriteLineRanges(line)
+			}
+			for _, untrustedInfo := range stepInfo.untrustedExprs {
+				envVarName := envVarMap[untrustedInfo.expr.raw]
+				line = replaceInTextRanges(line, pathWriteRanges, func(segment string, _ int) string {
+					// Replace ${{ expr }} with validated path using realpath.
+					newPattern := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
+					oldPattern := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
+					segment = strings.ReplaceAll(segment, oldPattern, newPattern)
+
+					// Also handle no-space variant.
+					oldPatternNoSpace := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
+					return strings.ReplaceAll(segment, oldPatternNoSpace, newPattern)
+				})
+				pathWriteRanges = githubPathWriteLineRanges(line)
 			}
 			lines[i] = line
 		}
@@ -960,7 +957,8 @@ func githubPathExpressionOffsets(script, exprRaw string) []int {
 		if strings.TrimSpace(script[match[2]:match[3]]) != targetExpr {
 			continue
 		}
-		if !githubPathPattern.MatchString(lineAtOffset(script, match[0])) {
+		line, lineStart := lineAtOffsetWithStart(script, match[0])
+		if !offsetInTextRanges(match[0]-lineStart, githubPathWriteLineRanges(line)) {
 			continue
 		}
 		offsets = append(offsets, match[0])
@@ -968,7 +966,151 @@ func githubPathExpressionOffsets(script, exprRaw string) []int {
 	return offsets
 }
 
-func lineAtOffset(script string, offset int) string {
+type textRange struct {
+	start int
+	end   int
+}
+
+// githubPathWriteLineRanges returns byte ranges for shell statements whose own
+// append redirection targets $GITHUB_PATH. It deliberately avoids using the
+// whole physical line, so neighboring commands joined with `;`, `&&`, `||`, or
+// compound-command internals are not rewritten just because another command
+// appends to PATH. If parsing fails, it falls back to the full line to preserve
+// conservative behavior.
+func githubPathWriteLineRanges(line string) []textRange {
+	if line == "" || !githubPathPattern.MatchString(line) {
+		return nil
+	}
+
+	sanitized := sanitizeForShellParsePreservingLength(line)
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return []textRange{{start: 0, end: len(line)}}
+	}
+
+	var ranges []textRange
+	syntax.Walk(file, func(node syntax.Node) bool {
+		stmt, ok := node.(*syntax.Stmt)
+		if !ok || stmt == nil || !stmtHasGitHubPathAppend(line, stmt) {
+			return true
+		}
+		if r, ok := nodeTextRange(line, stmt); ok {
+			ranges = append(ranges, r)
+		}
+		return true
+	})
+	ranges = normalizeTextRanges(ranges)
+	return ranges
+}
+
+func stmtHasGitHubPathAppend(line string, stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	for _, redir := range stmt.Redirs {
+		if redir == nil || (redir.Op != syntax.AppOut && redir.Op != syntax.AppAll) {
+			continue
+		}
+		if r, ok := nodeTextRange(line, redir); ok && githubPathPattern.MatchString(line[r.start:r.end]) {
+			return true
+		}
+	}
+	return false
+}
+
+func nodeTextRange(line string, node syntax.Node) (textRange, bool) {
+	if node == nil || !node.Pos().IsValid() || !node.End().IsValid() {
+		return textRange{}, false
+	}
+	start := int(node.Pos().Offset())
+	end := int(node.End().Offset())
+	if start < 0 || end > len(line) || start >= end {
+		return textRange{}, false
+	}
+	return textRange{start: start, end: end}, true
+}
+
+func normalizeTextRanges(ranges []textRange) []textRange {
+	if len(ranges) <= 1 {
+		return ranges
+	}
+	sort.Slice(ranges, func(i, j int) bool {
+		if ranges[i].start != ranges[j].start {
+			return ranges[i].start < ranges[j].start
+		}
+		return ranges[i].end > ranges[j].end
+	})
+
+	normalized := ranges[:0]
+	for _, r := range ranges {
+		if r.start < 0 || r.start >= r.end {
+			continue
+		}
+		if len(normalized) > 0 {
+			last := &normalized[len(normalized)-1]
+			if r.start >= last.start && r.end <= last.end {
+				continue
+			}
+			if r.start < last.end {
+				if r.end > last.end {
+					last.end = r.end
+				}
+				continue
+			}
+		}
+		normalized = append(normalized, r)
+	}
+	return normalized
+}
+
+func offsetInTextRanges(offset int, ranges []textRange) bool {
+	for _, r := range ranges {
+		if r.start <= offset && offset < r.end {
+			return true
+		}
+	}
+	return false
+}
+
+func githubExpressionInRanges(text, exprRaw string, ranges []textRange) bool {
+	targetExpr := normalizeExpression(exprRaw)
+	if targetExpr == "" || len(ranges) == 0 {
+		return false
+	}
+	matches := taintGhExprPattern.FindAllStringSubmatchIndex(text, -1)
+	for _, match := range matches {
+		if len(match) < 4 {
+			continue
+		}
+		if normalizeExpression(text[match[2]:match[3]]) != targetExpr {
+			continue
+		}
+		if offsetInTextRanges(match[0], ranges) {
+			return true
+		}
+	}
+	return false
+}
+
+func replaceInTextRanges(line string, ranges []textRange, replace func(segment string, segmentStart int) string) string {
+	if line == "" || len(ranges) == 0 || replace == nil {
+		return line
+	}
+	ranges = append([]textRange(nil), ranges...)
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start > ranges[j].start })
+
+	out := line
+	for _, r := range ranges {
+		if r.start < 0 || r.end > len(out) || r.start >= r.end {
+			continue
+		}
+		out = out[:r.start] + replace(out[r.start:r.end], r.start) + out[r.end:]
+	}
+	return out
+}
+
+func lineAtOffsetWithStart(script string, offset int) (string, int) {
 	if offset < 0 {
 		offset = 0
 	}
@@ -980,7 +1122,7 @@ func lineAtOffset(script string, offset int) string {
 	if rel := strings.Index(script[offset:], "\n"); rel >= 0 {
 		end = offset + rel
 	}
-	return script[start:end]
+	return script[start:end], start
 }
 
 // scriptAssignsShellName reports whether the run script assigns to a
