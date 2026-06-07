@@ -876,6 +876,50 @@ echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ReadPromptArgDoesNotShadowInheritedEnv
+// pins the codex-flagged regression on PR #514: `read -p PR_BODY ANSWER`
+// uses PR_BODY as the prompt argument, not as a variable name. It must not
+// force suffixing when earlier PATH writes still read the inherited PR_BODY.
+func TestEnvPathInjectionCritical_FixStep_ReadPromptArgDoesNotShadowInheritedEnv(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`echo "$PR_BODY" >> "$GITHUB_PATH"
+read -p PR_BODY ANSWER
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed read prompt argument: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+read -p PR_BODY ANSWER
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_WrapsParameterExpansionOnGitHubPath
 // is the end-to-end analog of WrapsAllExpansionShapes: when the chosen
 // helper name is reused from inherited env, a GITHUB_PATH line that mixes
@@ -1119,6 +1163,8 @@ func TestScriptAssignsShellName(t *testing.T) {
 		{"bare declare in fn", `f() { declare PR_BODY; }`},
 		{"bare readonly", `readonly PR_BODY`},
 		{"read builtin", `read PR_BODY`},
+		{"read prompt then name", `read -p "prompt" PR_BODY`},
+		{"read array option", `read -a PR_BODY`},
 		{"mapfile builtin", `mapfile PR_BODY`},
 	}
 	for _, tc := range assigns {
@@ -1141,6 +1187,9 @@ func TestScriptAssignsShellName(t *testing.T) {
 		{"uppercase", `echo "${PR_BODY^^}"`},
 		{"length", `echo "${#PR_BODY}"`},
 		{"indirect", `echo "${!PR_BODY}"`},
+		{"read prompt arg", `read -p PR_BODY ANSWER`},
+		{"read inline prompt arg", `read -pPR_BODY ANSWER`},
+		{"read fd arg", `read -u PR_BODY ANSWER`},
 	}
 	for _, tc := range referencesOnly {
 		t.Run("references/"+tc.name, func(t *testing.T) {

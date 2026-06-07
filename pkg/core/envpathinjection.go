@@ -679,17 +679,16 @@ func scriptAssignsShellNameRegex(sanitized, name string) bool {
 
 // callAssignsName reports whether a CallExpr is a built-in command that
 // assigns to the named variable (e.g., `read NAME`, `mapfile NAME`,
-// `readarray NAME`). The flag-and-operand grammar of these built-ins is
-// approximated: anything that does not start with `-` and isn't `--` is
-// treated as a candidate variable name. False positives only cause the
-// autofix to suffix more aggressively, which is conservative.
+// `readarray NAME`).
 func callAssignsName(call *syntax.CallExpr, name string) bool {
 	if len(call.Args) < 2 {
 		return false
 	}
 	cmd := wordLitValue(call.Args[0])
 	switch cmd {
-	case "read", "mapfile", "readarray":
+	case "read":
+		return readCallAssignsName(call.Args[1:], name)
+	case "mapfile", "readarray":
 		for _, arg := range call.Args[1:] {
 			v := wordLitValue(arg)
 			if v == "" || v == "--" || strings.HasPrefix(v, "-") {
@@ -701,6 +700,55 @@ func callAssignsName(call *syntax.CallExpr, name string) bool {
 		}
 	}
 	return false
+}
+
+func readCallAssignsName(args []*syntax.Word, name string) bool {
+	for i := 0; i < len(args); i++ {
+		v := wordLitValue(args[i])
+		if v == "" {
+			continue
+		}
+		if v == "--" {
+			for _, arg := range args[i+1:] {
+				if wordLitValue(arg) == name {
+					return true
+				}
+			}
+			return false
+		}
+		if strings.HasPrefix(v, "-") && v != "-" {
+			if assigned, consumedNext, nextAssigns := readOptionAssignsName(v, name); assigned {
+				return true
+			} else if consumedNext {
+				if nextAssigns && i+1 < len(args) && wordLitValue(args[i+1]) == name {
+					return true
+				}
+				i++
+			}
+			continue
+		}
+		if v == name {
+			return true
+		}
+	}
+	return false
+}
+
+func readOptionAssignsName(option, name string) (assigned bool, consumedNext bool, nextAssigns bool) {
+	for i := 1; i < len(option); i++ {
+		opt := option[i]
+		inlineArg := option[i+1:]
+		switch opt {
+		case 'a':
+			if inlineArg != "" {
+				return inlineArg == name, false, false
+			}
+			return false, true, true
+		case 'd', 'i', 'n', 'N', 'p', 't', 'u':
+			return false, inlineArg == "", false
+		}
+	}
+	return false, false, false
 }
 
 // wordLitValue returns the literal-string value of a Word when it is
