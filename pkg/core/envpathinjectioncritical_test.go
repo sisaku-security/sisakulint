@@ -1060,6 +1060,91 @@ PR_BODY=/safe`
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_SubshellAssignmentDoesNotShadowParent
+// pins that assignments inside `( ... )` do not shadow the parent shell's
+// inherited env value. Suffixing because of the subshell assignment would
+// leave the later parent `$PR_BODY` GITHUB_PATH write unwrapped.
+func TestEnvPathInjectionCritical_FixStep_SubshellAssignmentDoesNotShadowParent(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`(PR_BODY=/safe)
+echo "$PR_BODY" >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	if step.Env != nil && step.Env.Vars["pr_body_2"] != nil {
+		t.Errorf("autofix wrongly suffixed for non-propagating subshell assignment: %+v", step.Env.Vars["pr_body_2"].Value)
+	}
+	want := `(PR_BODY=/safe)
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_SubshellAssignmentShadowsInsideSubshell
+// is the counterexample to the previous test: an assignment inside a subshell
+// does shadow later commands in that same subshell, so expression rewrites
+// there still need a suffixed helper.
+func TestEnvPathInjectionCritical_FixStep_SubshellAssignmentShadowsInsideSubshell(t *testing.T) {
+	workflow, job, step := envPathInjectionCriticalWorkflowWithRun(
+		`(PR_BODY=/safe; echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH")`,
+	)
+	job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+		"pr_body": {
+			Name:  &ast.String{Value: "PR_BODY"},
+			Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+		},
+	}}
+
+	envPathRule := EnvPathInjectionCriticalRule()
+
+	if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+	}
+	if err := envPathRule.VisitJobPre(job); err != nil {
+		t.Fatalf("envpath VisitJobPre() error = %v", err)
+	}
+	if len(envPathRule.AutoFixers()) == 0 {
+		t.Fatal("expected envpath-injection autofixer")
+	}
+	if err := envPathRule.FixStep(step); err != nil {
+		t.Fatalf("envpath FixStep() error = %v", err)
+	}
+
+	added := step.Env.Vars["pr_body_2"]
+	if added == nil || added.Value == nil {
+		t.Fatalf("expected suffixed PR_BODY_2 env var, got %#v", step.Env.Vars)
+	}
+	want := `(PR_BODY=/safe; echo "$(realpath "$PR_BODY_2")" >> "$GITHUB_PATH")`
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if got != want {
+		t.Errorf("fixed run script = %q, want %q", got, want)
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_MixedInheritedWritesAroundShadow
 // pins the order-aware inherited-env case where a matching inherited
 // PR_BODY is still tainted before a script assignment, but shadowed after it.
@@ -1421,6 +1506,41 @@ done`,
 			name: "read builtin after expression",
 			script: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
 read PR_BODY`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "subshell assignment before parent expression",
+			script: `(PR_BODY=/safe)
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "subshell assignment before same subshell expression",
+			script: `(PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH")`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "parent assignment before subshell expression",
+			script: `PR_BODY=/safe
+(echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH")`,
+			exprRaw: "github.event.pull_request.body",
+			want:    true,
+		},
+		{
+			name: "command substitution assignment before parent expression",
+			script: `echo "$(PR_BODY=/safe)"
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			exprRaw: "github.event.pull_request.body",
+			want:    false,
+		},
+		{
+			name: "process substitution assignment before parent expression",
+			script: `cat <(PR_BODY=/safe)
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			exprRaw: "github.event.pull_request.body",
 			want:    false,
 		},

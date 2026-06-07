@@ -234,12 +234,11 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			envVarName := rule.envVarNameForExpression(step, stepInfo.job, run.Run.Value, baseEnvVarName, expr.raw, exprValue, expr.pos, envVarsForYAML)
 			envVarMap[expr.raw] = envVarName
 			// If a matching existing env var had to be avoided because
-			// the script shadows it later, references before that shadow
-			// still read the existing tainted value and must be wrapped.
+			// the script shadows it in at least one shell scope, references
+			// in unshadowed scopes still read the existing tainted value
+			// and must be wrapped.
 			if hasMatchingExisting && matchingExisting.actualName != envVarName {
-				if _, ok := firstShellAssignmentOffset(run.Run.Value, matchingExisting.actualName); ok {
-					preShadowExistingRefs[expr.raw] = matchingExisting.actualName
-				}
+				preShadowExistingRefs[expr.raw] = matchingExisting.actualName
 			}
 		}
 	}
@@ -275,10 +274,13 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		newScript = strings.ReplaceAll(newScript, old, new)
 	}
 
-	preShadowExistingAssignOffset := make(map[string]int)
-	for exprRaw, existingName := range preShadowExistingRefs {
-		if assignOffset, ok := firstShellAssignmentOffset(newScript, existingName); ok {
-			preShadowExistingAssignOffset[exprRaw] = assignOffset
+	existingNameShadowAnalyses := make(map[string]*shellNameShadowAnalysis)
+	for _, existingName := range preShadowExistingRefs {
+		if _, seen := existingNameShadowAnalyses[existingName]; seen {
+			continue
+		}
+		if analysis, ok := newShellNameShadowAnalysis(newScript, existingName); ok {
+			existingNameShadowAnalyses[existingName] = analysis
 		}
 	}
 
@@ -298,6 +300,20 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			// user value, the base name must be left untouched — otherwise
 			// the user's `$PR_BODY` references on GITHUB_PATH lines get
 			// silently rewritten to the attacker-controlled value.
+			processedExistingNames := make(map[string]struct{})
+			for _, untrustedInfo := range stepInfo.untrustedExprs {
+				existingName, ok := preShadowExistingRefs[untrustedInfo.expr.raw]
+				if !ok {
+					continue
+				}
+				if _, seen := processedExistingNames[existingName]; seen {
+					continue
+				}
+				processedExistingNames[existingName] = struct{}{}
+				if analysis := existingNameShadowAnalyses[existingName]; analysis != nil {
+					line = replaceUnshadowedShellEnvVarRef(line, existingName, lineStart, analysis)
+				}
+			}
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
 				// If the first pass already wrapped one occurrence on this
@@ -312,18 +328,6 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					line = strings.ReplaceAll(line, validatedVar, "$"+envVarName)
 				}
 				line = replaceShellEnvVarRef(line, envVarName)
-				// When chosen name suffixing was caused by a later
-				// script assignment, only the pre-assignment existing
-				// references still expand to the untrusted env value.
-				if existingName, ok := preShadowExistingRefs[untrustedInfo.expr.raw]; ok {
-					if assignOffset, ok := preShadowExistingAssignOffset[untrustedInfo.expr.raw]; ok && lineStart < assignOffset {
-						limit := originalLineLen
-						if assignOffset < lineEnd {
-							limit = assignOffset - lineStart
-						}
-						line = replaceShellEnvVarRefBeforeOffset(line, existingName, limit)
-					}
-				}
 			}
 			lines[i] = line
 		}
@@ -582,66 +586,151 @@ func assignmentShadowsUntrustedExpression(script, name, exprRaw string) bool {
 	if name == "" || script == "" || exprRaw == "" {
 		return false
 	}
-	targetPlaceholders := githubPathExpressionPlaceholders(script, exprRaw)
-	if len(targetPlaceholders) == 0 {
+	targetOffsets := githubPathExpressionOffsets(script, exprRaw)
+	if len(targetOffsets) == 0 {
 		return false
 	}
 
-	sanitized, _ := sanitizeForShellParse(script)
-	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
-	file, err := parser.Parse(strings.NewReader(sanitized), "")
-	if err != nil || file == nil {
+	analysis, ok := newShellNameShadowAnalysis(script, name)
+	if !ok {
 		// Conservative on parse failure: any assignment forces a suffix.
 		return scriptAssignsShellName(script, name)
 	}
 
-	firstAssignOffset := -1
-	syntax.Walk(file, func(node syntax.Node) bool {
-		off, ok := shellAssignmentOffset(node, name)
-		if ok && (firstAssignOffset == -1 || off < firstAssignOffset) {
-			firstAssignOffset = off
-		}
-		return true
-	})
-	if firstAssignOffset == -1 {
-		return false
-	}
-
-	// If any target `${{ ... }}` placeholder appears AFTER the first
-	// assignment, that expression's rewrite would resolve the shadowed
-	// value — return true so the caller suffixes.
-	for placeholder := range targetPlaceholders {
-		idx := strings.Index(sanitized, placeholder)
-		if idx >= 0 && idx > firstAssignOffset {
+	// If any target `${{ ... }}` occurrence is in a shell scope where an
+	// earlier assignment to name is visible, that expression's rewrite
+	// would resolve the shadowed value. Assignments inside subshells,
+	// command substitutions, and process substitutions are only visible
+	// in that nested scope; they do not shadow later parent-shell writes.
+	for _, offset := range targetOffsets {
+		if analysis.shadowedAt(offset) {
 			return true
 		}
 	}
 	return false
 }
 
-func firstShellAssignmentOffset(script, name string) (int, bool) {
+type shellNameShadowAnalysis struct {
+	assignments []shellAssignmentRef
+	scopes      []shellScopeRange
+}
+
+type shellAssignmentRef struct {
+	offset int
+	scope  []int
+}
+
+type shellScopeRange struct {
+	start int
+	end   int
+	path  []int
+}
+
+func newShellNameShadowAnalysis(script, name string) (*shellNameShadowAnalysis, bool) {
 	if name == "" || script == "" {
-		return 0, false
+		return &shellNameShadowAnalysis{}, true
 	}
 	sanitized := sanitizeForShellParsePreservingLength(script)
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
 	file, err := parser.Parse(strings.NewReader(sanitized), "")
 	if err != nil || file == nil {
-		return 0, false
+		return nil, false
 	}
 
-	firstAssignOffset := -1
+	analysis := &shellNameShadowAnalysis{}
+	scopePath := []int{}
+	nodeFrames := []int{}
+	nextScopeID := 1
 	syntax.Walk(file, func(node syntax.Node) bool {
-		off, ok := shellAssignmentOffset(node, name)
-		if ok && (firstAssignOffset == -1 || off < firstAssignOffset) {
-			firstAssignOffset = off
+		if node == nil {
+			if len(nodeFrames) == 0 {
+				return true
+			}
+			openedScopeID := nodeFrames[len(nodeFrames)-1]
+			nodeFrames = nodeFrames[:len(nodeFrames)-1]
+			if openedScopeID != 0 && len(scopePath) > 0 {
+				scopePath = scopePath[:len(scopePath)-1]
+			}
+			return true
+		}
+
+		openedScopeID := 0
+		if opensNestedShellScope(node) {
+			openedScopeID = nextScopeID
+			nextScopeID++
+			scopePath = append(scopePath, openedScopeID)
+			analysis.scopes = append(analysis.scopes, shellScopeRange{
+				start: int(node.Pos().Offset()),
+				end:   int(node.End().Offset()),
+				path:  cloneIntSlice(scopePath),
+			})
+		}
+		nodeFrames = append(nodeFrames, openedScopeID)
+
+		if off, ok := shellAssignmentOffset(node, name); ok {
+			analysis.assignments = append(analysis.assignments, shellAssignmentRef{
+				offset: off,
+				scope:  cloneIntSlice(scopePath),
+			})
 		}
 		return true
 	})
-	if firstAssignOffset == -1 {
-		return 0, false
+	return analysis, true
+}
+
+func opensNestedShellScope(node syntax.Node) bool {
+	switch node.(type) {
+	case *syntax.Subshell, *syntax.CmdSubst, *syntax.ProcSubst:
+		return true
 	}
-	return firstAssignOffset, true
+	return false
+}
+
+func (analysis *shellNameShadowAnalysis) shadowedAt(offset int) bool {
+	if analysis == nil {
+		return false
+	}
+	targetScope := analysis.scopeAt(offset)
+	for _, assignment := range analysis.assignments {
+		if assignment.offset < offset && shellScopeCanShadow(assignment.scope, targetScope) {
+			return true
+		}
+	}
+	return false
+}
+
+func (analysis *shellNameShadowAnalysis) scopeAt(offset int) []int {
+	if analysis == nil {
+		return nil
+	}
+	var scope []int
+	for _, candidate := range analysis.scopes {
+		if candidate.start <= offset && offset < candidate.end && len(candidate.path) > len(scope) {
+			scope = candidate.path
+		}
+	}
+	return scope
+}
+
+func shellScopeCanShadow(assignmentScope, targetScope []int) bool {
+	if len(assignmentScope) > len(targetScope) {
+		return false
+	}
+	for i := range assignmentScope {
+		if assignmentScope[i] != targetScope[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneIntSlice(in []int) []int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]int, len(in))
+	copy(out, in)
+	return out
 }
 
 func sanitizeForShellParsePreservingLength(script string) string {
@@ -650,15 +739,15 @@ func sanitizeForShellParsePreservingLength(script string) string {
 	})
 }
 
-func githubPathExpressionPlaceholders(script, exprRaw string) map[string]struct{} {
-	placeholders := make(map[string]struct{})
+func githubPathExpressionOffsets(script, exprRaw string) []int {
+	var offsets []int
 	targetExpr := strings.TrimSpace(exprRaw)
 	if script == "" || targetExpr == "" {
-		return placeholders
+		return offsets
 	}
 
 	matches := taintGhExprPattern.FindAllStringSubmatchIndex(script, -1)
-	for i, match := range matches {
+	for _, match := range matches {
 		if len(match) < 4 {
 			continue
 		}
@@ -668,9 +757,9 @@ func githubPathExpressionPlaceholders(script, exprRaw string) map[string]struct{
 		if !githubPathPattern.MatchString(lineAtOffset(script, match[0])) {
 			continue
 		}
-		placeholders[fmt.Sprintf("%s%d_", taintPlaceholderPrefix, i)] = struct{}{}
+		offsets = append(offsets, match[0])
 	}
-	return placeholders
+	return offsets
 }
 
 func lineAtOffset(script string, offset int) string {
@@ -979,6 +1068,50 @@ func scriptUsesShellNameRegex(sanitized, name string) bool {
 // the common `$NAME` / `${NAME}` shapes.
 func replaceShellEnvVarRef(line, envVarName string) string {
 	return replaceShellEnvVarRefBeforeOffset(line, envVarName, len(line))
+}
+
+func replaceUnshadowedShellEnvVarRef(line, envVarName string, lineStart int, analysis *shellNameShadowAnalysis) string {
+	if envVarName == "" || line == "" || analysis == nil {
+		return line
+	}
+	sanitized := sanitizeForShellParsePreservingLength(line)
+
+	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
+	file, err := parser.Parse(strings.NewReader(sanitized), "")
+	if err != nil || file == nil {
+		return line
+	}
+
+	type rng struct{ start, end int }
+	var ranges []rng
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if pe, ok := node.(*syntax.ParamExp); ok {
+			if pe.Param != nil && pe.Param.Value == envVarName {
+				start := int(pe.Pos().Offset())
+				if !analysis.shadowedAt(lineStart + start) {
+					ranges = append(ranges, rng{
+						start: start,
+						end:   int(pe.End().Offset()),
+					})
+				}
+			}
+		}
+		return true
+	})
+	if len(ranges) == 0 {
+		return line
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i].start > ranges[j].start })
+
+	out := line
+	for _, r := range ranges {
+		if r.start < 0 || r.end > len(out) || r.start >= r.end {
+			continue
+		}
+		src := out[r.start:r.end]
+		out = out[:r.start] + `$(realpath "` + src + `")` + out[r.end:]
+	}
+	return out
 }
 
 func replaceShellEnvVarRefBeforeOffset(line, envVarName string, limit int) string {
