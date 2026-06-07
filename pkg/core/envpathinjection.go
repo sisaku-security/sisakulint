@@ -116,9 +116,11 @@ func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
 
 		// Split script into lines to find which lines write to GITHUB_PATH
 		lines := strings.Split(script, "\n")
+		execPathActive := false
 		for lineIdx, line := range lines {
 			// Check if this line writes to GITHUB_PATH
-			pathWriteRanges := githubPathWriteLineRanges(line)
+			pathWriteRanges, nextExecPathActive := githubPathWriteLineRangesWithExecState(line, execPathActive)
+			execPathActive = nextExecPathActive
 			if len(pathWriteRanges) == 0 {
 				continue
 			}
@@ -266,11 +268,16 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 	// Split into lines and process each line that writes to GITHUB_PATH
 	lines := strings.Split(newScript, "\n")
 	lineStart := 0
+	execPathActive := false
 	for i, line := range lines {
 		originalLineLen := len(line)
 		lineEnd := lineStart + originalLineLen
-		pathWriteRanges := githubPathWriteLineRanges(line)
+		lineExecPathActive := execPathActive
+		pathWriteRanges, nextExecPathActive := githubPathWriteLineRangesWithExecState(line, lineExecPathActive)
 		if len(pathWriteRanges) > 0 {
+			recomputePathWriteRanges := func() {
+				pathWriteRanges, _ = githubPathWriteLineRangesWithExecState(line, lineExecPathActive)
+			}
 			// This line writes to GITHUB_PATH
 			// Replace any $ENV_VAR references with the validated version.
 			// Only rewrite the env var actually chosen for this expression.
@@ -293,7 +300,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					line = replaceInTextRanges(line, pathWriteRanges, func(segment string, segmentStart int) string {
 						return replaceUnshadowedShellEnvVarRef(segment, existingName, lineStart+segmentStart, analysis)
 					})
-					pathWriteRanges = githubPathWriteLineRanges(line)
+					recomputePathWriteRanges()
 				}
 			}
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
@@ -310,7 +317,7 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					}
 					return replaceShellEnvVarRef(segment, envVarName)
 				})
-				pathWriteRanges = githubPathWriteLineRanges(line)
+				recomputePathWriteRanges()
 			}
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
@@ -319,10 +326,11 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					newPattern := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
 					return replaceGitHubExpression(segment, untrustedInfo.expr.raw, newPattern)
 				})
-				pathWriteRanges = githubPathWriteLineRanges(line)
+				recomputePathWriteRanges()
 			}
 			lines[i] = line
 		}
+		execPathActive = nextExecPathActive
 		lineStart = lineEnd + 1
 	}
 	newScript = strings.Join(lines, "\n")
@@ -1144,19 +1152,25 @@ func githubPathExpressionOffsets(script, exprRaw string) []int {
 		return offsets
 	}
 
-	matches := taintGhExprPattern.FindAllStringSubmatchIndex(script, -1)
-	for _, match := range matches {
-		if len(match) < 4 {
-			continue
+	lineStart := 0
+	execPathActive := false
+	for _, line := range strings.Split(script, "\n") {
+		pathWriteRanges, nextExecPathActive := githubPathWriteLineRangesWithExecState(line, execPathActive)
+		matches := taintGhExprPattern.FindAllStringSubmatchIndex(line, -1)
+		for _, match := range matches {
+			if len(match) < 4 {
+				continue
+			}
+			if strings.TrimSpace(line[match[2]:match[3]]) != targetExpr {
+				continue
+			}
+			if !offsetInTextRanges(match[0], pathWriteRanges) {
+				continue
+			}
+			offsets = append(offsets, lineStart+match[0])
 		}
-		if strings.TrimSpace(script[match[2]:match[3]]) != targetExpr {
-			continue
-		}
-		line, lineStart := lineAtOffsetWithStart(script, match[0])
-		if !offsetInTextRanges(match[0]-lineStart, githubPathWriteLineRanges(line)) {
-			continue
-		}
-		offsets = append(offsets, match[0])
+		execPathActive = nextExecPathActive
+		lineStart += len(line) + 1
 	}
 	return offsets
 }
@@ -1166,37 +1180,128 @@ type textRange struct {
 	end   int
 }
 
-// githubPathWriteLineRanges returns byte ranges for shell statements whose own
-// append redirection targets $GITHUB_PATH. It deliberately avoids using the
-// whole physical line, so neighboring commands joined with `;`, `&&`, `||`, or
-// compound-command internals are not rewritten just because another command
-// appends to PATH. If parsing fails, it falls back to the full line to preserve
-// conservative behavior.
+// githubPathWriteLineRanges returns byte ranges for shell statements that write
+// to $GITHUB_PATH. It deliberately avoids using the whole physical line, so
+// neighboring commands joined with `;`, `&&`, `||`, or compound-command
+// internals are not rewritten just because another command appends to PATH. If
+// parsing fails, it falls back to the full line to preserve conservative
+// behavior.
 func githubPathWriteLineRanges(line string) []textRange {
-	if line == "" || !githubPathPattern.MatchString(line) {
-		return nil
+	ranges, _ := githubPathWriteLineRangesWithExecState(line, false)
+	return ranges
+}
+
+func githubPathWriteLineRangesWithExecState(line string, execPathActive bool) ([]textRange, bool) {
+	hasGitHubPathRedirect := githubPathPattern.MatchString(line)
+	if line == "" || (!execPathActive && !hasGitHubPathRedirect) {
+		return nil, execPathActive
 	}
 
 	sanitized := sanitizeForShellParsePreservingLength(line)
 	parser := syntax.NewParser(syntax.KeepComments(true), syntax.Variant(syntax.LangBash))
 	file, err := parser.Parse(strings.NewReader(sanitized), "")
 	if err != nil || file == nil {
-		return []textRange{{start: 0, end: len(line)}}
+		if execPathActive || hasGitHubPathRedirect {
+			return []textRange{{start: 0, end: len(line)}}, execPathActive
+		}
+		return nil, execPathActive
 	}
 
 	var ranges []textRange
 	syntax.Walk(file, func(node syntax.Node) bool {
 		stmt, ok := node.(*syntax.Stmt)
-		if !ok || stmt == nil || !stmtHasGitHubPathAppend(line, stmt) {
+		if !ok || stmt == nil {
 			return true
 		}
-		if r, ok := nodeTextRange(line, stmt); ok {
-			ranges = append(ranges, r)
+		if execPathActive && !stmtRedirectsStdout(stmt) {
+			if r, ok := nodeTextRange(line, stmt); ok {
+				ranges = append(ranges, r)
+			}
+		}
+		if stmtHasGitHubPathAppend(line, stmt) {
+			if r, ok := nodeTextRange(line, stmt); ok {
+				ranges = append(ranges, r)
+			}
+		}
+		if changed, nextExecPathActive := stmtPersistentExecStdoutState(line, stmt); changed {
+			execPathActive = nextExecPathActive
 		}
 		return true
 	})
 	ranges = normalizeTextRanges(ranges)
-	return ranges
+	return ranges, execPathActive
+}
+
+func stmtPersistentExecStdoutState(line string, stmt *syntax.Stmt) (bool, bool) {
+	if stmt == nil || !stmtIsRedirectOnlyExec(stmt) {
+		return false, false
+	}
+	var changed bool
+	var execPathActive bool
+	for _, redir := range stmt.Redirs {
+		if redir == nil || !redirAffectsStdout(redir) {
+			continue
+		}
+		changed = true
+		if redirAppendsGitHubPath(line, redir) {
+			execPathActive = true
+		} else {
+			execPathActive = false
+		}
+	}
+	return changed, execPathActive
+}
+
+func stmtIsRedirectOnlyExec(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	call, ok := stmt.Cmd.(*syntax.CallExpr)
+	if !ok || callExprName(call) != "exec" {
+		return false
+	}
+	for _, arg := range call.Args[1:] {
+		value := wordLitValue(arg)
+		if value == "" || !strings.HasPrefix(value, "-") {
+			return false
+		}
+	}
+	return true
+}
+
+func stmtRedirectsStdout(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	for _, redir := range stmt.Redirs {
+		if redir != nil && redirAffectsStdout(redir) {
+			return true
+		}
+	}
+	return false
+}
+
+func redirAffectsStdout(redir *syntax.Redirect) bool {
+	if redir == nil {
+		return false
+	}
+	switch redir.Op {
+	case syntax.RdrAll, syntax.RdrAllClob, syntax.AppAll, syntax.AppAllClob:
+		return true
+	case syntax.RdrOut, syntax.AppOut, syntax.DplOut, syntax.RdrClob, syntax.AppClob:
+		return redir.N == nil || redir.N.Value == "1"
+	}
+	return false
+}
+
+func redirAppendsGitHubPath(line string, redir *syntax.Redirect) bool {
+	if redir == nil || (redir.Op != syntax.AppOut && redir.Op != syntax.AppAll && redir.Op != syntax.AppAllClob) {
+		return false
+	}
+	if r, ok := nodeTextRange(line, redir); ok && githubPathPattern.MatchString(line[r.start:r.end]) {
+		return true
+	}
+	return false
 }
 
 func stmtHasGitHubPathAppend(line string, stmt *syntax.Stmt) bool {
@@ -1204,10 +1309,7 @@ func stmtHasGitHubPathAppend(line string, stmt *syntax.Stmt) bool {
 		return false
 	}
 	for _, redir := range stmt.Redirs {
-		if redir == nil || (redir.Op != syntax.AppOut && redir.Op != syntax.AppAll) {
-			continue
-		}
-		if r, ok := nodeTextRange(line, redir); ok && githubPathPattern.MatchString(line[r.start:r.end]) {
+		if redirAppendsGitHubPath(line, redir) {
 			return true
 		}
 	}

@@ -96,6 +96,30 @@ echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
 			description: "Should not detect an untrusted expression outside an inner PATH-writing statement",
 		},
 		{
+			name:        "exec append makes later same-line output write GITHUB_PATH",
+			trigger:     "pull_request_target",
+			runScript:   `exec >> "$GITHUB_PATH"; echo "${{ github.event.pull_request.body }}"`,
+			wantErrors:  1,
+			description: "Should detect untrusted output after persistent exec append redirection",
+		},
+		{
+			name:    "exec append makes next-line output write GITHUB_PATH",
+			trigger: "pull_request_target",
+			runScript: `exec >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}"`,
+			wantErrors:  1,
+			description: "Should detect untrusted output on following lines after persistent exec append redirection",
+		},
+		{
+			name:    "exec stdout redirect away stops GITHUB_PATH output",
+			trigger: "pull_request_target",
+			runScript: `exec >> "$GITHUB_PATH"
+exec > out
+echo "${{ github.event.pull_request.body }}"`,
+			wantErrors:  0,
+			description: "Should not detect output after persistent stdout is redirected away from GITHUB_PATH",
+		},
+		{
 			name:        "extracted path from untrusted input",
 			trigger:     "pull_request_target",
 			runScript:   `echo "${{ github.event.comment.body }}" >> "$GITHUB_PATH"`,
@@ -1700,6 +1724,66 @@ func TestEnvPathInjectionCritical_FixStep_SameLineOnlyRewritesPathWriteStatement
 			name: "if condition ref before branch path write",
 			run:  `if echo "$PR_BODY"; then echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"; fi`,
 			want: `if echo "$PR_BODY"; then echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"; fi`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tc.run)
+			job.Env = &ast.Env{Vars: map[string]*ast.EnvVar{
+				"pr_body": {
+					Name:  &ast.String{Value: "PR_BODY"},
+					Value: &ast.String{Value: "${{ github.event.pull_request.body }}"},
+				},
+			}}
+
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+			if len(envPathRule.AutoFixers()) == 0 {
+				t.Fatal("expected envpath-injection autofixer")
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tc.want {
+				t.Errorf("fixed run script = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEnvPathInjectionCritical_FixStep_ExecPersistentPathWrites pins Bash's
+// `exec` behavior: with no command, stdout redirections persist in the current
+// shell, so later commands can write to GITHUB_PATH without their own redirect.
+func TestEnvPathInjectionCritical_FixStep_ExecPersistentPathWrites(t *testing.T) {
+	tests := []struct {
+		name string
+		run  string
+		want string
+	}{
+		{
+			name: "same-line command after exec append",
+			run:  `exec >> "$GITHUB_PATH"; echo "${{ github.event.pull_request.body }}"`,
+			want: `exec >> "$GITHUB_PATH"; echo "$(realpath "$PR_BODY")"`,
+		},
+		{
+			name: "next-line command after exec append",
+			run: `exec >> "$GITHUB_PATH"
+echo "${{ github.event.pull_request.body }}"`,
+			want: `exec >> "$GITHUB_PATH"
+echo "$(realpath "$PR_BODY")"`,
+		},
+		{
+			name: "inherited ref and expression after exec append",
+			run:  `exec >> "$GITHUB_PATH"; printf '%s\n%s\n' "$PR_BODY" "${{ github.event.pull_request.body }}"`,
+			want: `exec >> "$GITHUB_PATH"; printf '%s\n%s\n' "$(realpath "$PR_BODY")" "$(realpath "$PR_BODY")"`,
 		},
 	}
 	for _, tc := range tests {
