@@ -19,10 +19,12 @@ var unsafePatternsLower = []string{
 	"refs/pull/",
 	".head_sha", // Detects steps.*.outputs.head_sha
 	".head_ref", // Detects steps.*.outputs.head_ref
-	".head.sha", // Detects nested head.sha patterns
-	".head.ref", // Detects nested head.ref patterns
-	"head-sha",  // Detects kebab-case variants
-	"head-ref",  // Detects kebab-case variants
+	".head.sha",   // Detects nested head.sha patterns
+	".head.ref",   // Detects nested head.ref patterns
+	".head.label", // Detects head.label (mutable; also bypasses the safe-substring short-circuit in compound refs)
+	"head-sha",    // Detects kebab-case variants
+	"head-ref",    // Detects kebab-case variants
+	"head-label",  // Detects kebab-case head.label variants
 }
 
 // Patterns that are explicitly safe to use with any trigger
