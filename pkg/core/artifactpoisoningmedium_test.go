@@ -81,6 +81,21 @@ func TestArtifactPoisoningMedium_VisitWorkflowPre(t *testing.T) {
 			wantUnsafeTriggers: 1,
 		},
 		{
+			name:               "issues trigger",
+			triggers:           []string{"issues"},
+			wantUnsafeTriggers: 1,
+		},
+		{
+			name:               "discussion_comment trigger",
+			triggers:           []string{"discussion_comment"},
+			wantUnsafeTriggers: 1,
+		},
+		{
+			name:               "pull_request_review trigger",
+			triggers:           []string{"pull_request_review"},
+			wantUnsafeTriggers: 1,
+		},
+		{
 			name:               "multiple untrusted triggers",
 			triggers:           []string{"workflow_run", "pull_request_target"},
 			wantUnsafeTriggers: 2,
