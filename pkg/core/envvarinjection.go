@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +27,12 @@ type EnvVarInjectionRule struct {
 	taintTracker *TaintTracker
 	// pendingCrossJobChecks holds needs.*.outputs.* checks deferred to VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // stepWithEnvVarInjection tracks steps that need auto-fixing for environment variable injection
@@ -89,6 +96,10 @@ func (rule *EnvVarInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Initialize taint tracker per job for cross-job output registration.
 	rule.taintTracker = NewTaintTracker()
 	for _, s := range node.Steps {
@@ -184,6 +195,21 @@ func (rule *EnvVarInjectionRule) VisitJobPre(node *ast.Job) error {
 							"environment variable injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_ENV. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
+					}
+
+					if rule.collector != nil {
+						sourceName := strings.Join(untrustedPaths, ", ")
+						rule.collector.Add(chain.SinkRecord{
+							JobID:        rule.currentJobID,
+							StepPos:      linePos,
+							StepSummary:  stepExecSummary(s),
+							SourceKind:   chain.SourceUntrusted,
+							SourceName:   sourceName,
+							SourceOrigin: sourceName,
+							SinkKind:     chain.SinkExpr,
+							RuleName:     rule.RuleNames(),
+							Severity:     rule.severityLevel,
+						})
 					}
 				}
 			}
@@ -528,10 +554,11 @@ func (rule *EnvVarInjectionRule) addPendingEnvVarCrossJobCheck(expr parsedExpres
 		return
 	}
 	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
-		expr:       expr,
-		needsJobID: parts[1],
-		outputName: strings.Join(parts[3:], "."),
-		step:       step,
+		expr:          expr,
+		needsJobID:    parts[1],
+		outputName:    strings.Join(parts[3:], "."),
+		step:          step,
+		consumerJobID: rule.currentJobID,
 	})
 }
 
@@ -555,6 +582,11 @@ func (rule *EnvVarInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 
 		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
 
+		// Restore currentJobID to the job this check was queued from (VisitJobPre
+		// for every other job has since overwritten it) so the collector push
+		// below attributes the finding to the correct job.
+		rule.currentJobID = pending.consumerJobID
+
 		if rule.checkPrivileged {
 			rule.Errorf(
 				pending.expr.pos,
@@ -567,6 +599,20 @@ func (rule *EnvVarInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 				"environment variable injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_ENV. This can allow attackers to inject additional environment variables. Use heredoc syntax with unique delimiters or sanitize the input with 'tr -d '\\n''. See https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/",
 				taintPath,
 			)
+		}
+
+		if rule.collector != nil {
+			rule.collector.Add(chain.SinkRecord{
+				JobID:        rule.currentJobID,
+				StepPos:      pending.expr.pos,
+				StepSummary:  stepExecSummary(pending.step),
+				SourceKind:   chain.SourceUntrusted,
+				SourceName:   taintPath,
+				SourceOrigin: taintPath,
+				SinkKind:     chain.SinkExpr,
+				RuleName:     rule.RuleNames(),
+				Severity:     rule.severityLevel,
+			})
 		}
 	}
 
