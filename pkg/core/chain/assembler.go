@@ -65,6 +65,8 @@ func Assemble(in AssemblerInput) *ChainModel {
 
 	computeChainCount(nodes, in)
 	computeUntrustedReachable(nodes, m.Edges)
+	computeSummary(m, nodes)
+	m.LeverageID = computeLeverage(nodes)
 
 	m.Nodes = sortedNodes(nodes)
 	dedupEdges(m)
@@ -117,6 +119,63 @@ func computeUntrustedReachable(nodes map[string]*Node, edges []Edge) {
 			}
 		}
 	}
+}
+
+func computeSummary(m *ChainModel, nodes map[string]*Node) {
+	m.Summary.SinkCountsByKind = map[SinkKind]int{}
+	for _, n := range nodes {
+		switch n.Kind {
+		case NodeTrigger:
+			if n.Untrusted {
+				m.Summary.UntrustedTriggers++
+			}
+		case NodeSource:
+			if n.SourceKind == SourceSecret {
+				m.Summary.Secrets++
+			}
+		case NodeSink:
+			m.Summary.Sinks++
+			m.Summary.SinkCountsByKind[n.SinkKind]++
+		}
+	}
+}
+
+// computeLeverage は非終端の共有ノード（Trigger/Permission/Source）の中で
+// ChainCount 最大を選ぶ。タイは上流優先（Trigger > Permission > Source）、
+// さらにタイなら ID 昇順で決定的に。選んだノードの Leverage を立てる。
+func computeLeverage(nodes map[string]*Node) string {
+	rank := map[NodeKind]int{NodeTrigger: 0, NodePermission: 1, NodeSource: 2}
+	var best *Node
+	for _, n := range nodes {
+		r, ok := rank[n.Kind]
+		if !ok {
+			continue // 終端(Action/Sink)は対象外
+		}
+		if best == nil {
+			best = n
+			continue
+		}
+		br := rank[best.Kind]
+		switch {
+		case n.ChainCount != best.ChainCount:
+			if n.ChainCount > best.ChainCount {
+				best = n
+			}
+		case r != br:
+			if r < br {
+				best = n
+			}
+		default:
+			if n.ID < best.ID {
+				best = n
+			}
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	best.Leverage = true
+	return best.ID
 }
 
 func posLine(p *ast.Position) int {

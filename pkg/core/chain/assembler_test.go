@@ -162,3 +162,38 @@ func TestAssembleUntrustedReachableSafeTrigger(t *testing.T) {
 		}
 	}
 }
+
+func TestAssembleSummaryAndLeverage(t *testing.T) {
+	rec := func(sink SinkKind, rule string, line int) SinkRecord {
+		return SinkRecord{JobID: "build", StepPos: &ast.Position{Line: line, Col: 9},
+			SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: sink, RuleName: rule}
+	}
+	in := AssemblerInput{
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true, SecretsAvailable: true}},
+			Permission: PermissionRef{Label: "contents:write"}}},
+		Records: []SinkRecord{rec(SinkLog, "secret-in-log", 10), rec(SinkNetwork, "secret-exfiltration", 12)},
+	}
+	m := Assemble(in)
+
+	if m.Summary.UntrustedTriggers != 1 {
+		t.Errorf("UntrustedTriggers = %d, want 1", m.Summary.UntrustedTriggers)
+	}
+	if m.Summary.Secrets != 1 {
+		t.Errorf("Secrets = %d, want 1", m.Summary.Secrets)
+	}
+	if m.Summary.Sinks != 2 {
+		t.Errorf("Sinks = %d, want 2", m.Summary.Sinks)
+	}
+	if m.Summary.SinkCountsByKind[SinkLog] != 1 || m.Summary.SinkCountsByKind[SinkNetwork] != 1 {
+		t.Errorf("SinkCountsByKind = %v", m.Summary.SinkCountsByKind)
+	}
+	// trigger と source は共に ChainCount=2（2チェーンを通過）。タイのため
+	// 上流優先ルールで trigger が選ばれる。
+	if m.LeverageID != "trigger:pull_request_target" {
+		t.Errorf("LeverageID = %q, want trigger:pull_request_target", m.LeverageID)
+	}
+	if n := nodeByID(m, m.LeverageID); n == nil || !n.Leverage {
+		t.Error("leverage node not flagged")
+	}
+}
