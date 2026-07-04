@@ -264,6 +264,28 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 		}
 	}
 
+	// When a prior autofix (code-injection-critical) has already lifted the
+	// untrusted `${{ ... }}` into `$NAME`, the chosen name is reused, but the
+	// literal that assignmentShadowsUntrustedExpression relies on is gone, so
+	// the reuse decision cannot see a script-local shadow of NAME. Build a
+	// shadow analysis for any reused name the script also assigns, so the
+	// wrap pass below leaves `$NAME` references unwrapped in scopes where the
+	// assignment shadows the inherited value — wrapping them would validate
+	// the shadowed local value instead of the untrusted input. Codex PR #514
+	// regression (co-fire path).
+	chosenNameShadowAnalyses := make(map[string]*shellNameShadowAnalysis)
+	for _, chosenName := range envVarMap {
+		if _, seen := chosenNameShadowAnalyses[chosenName]; seen {
+			continue
+		}
+		if !scriptAssignsShellName(newScript, chosenName) {
+			continue
+		}
+		if analysis, ok := newShellNameShadowAnalysis(newScript, chosenName); ok {
+			chosenNameShadowAnalyses[chosenName] = analysis
+		}
+	}
+
 	// Additional pass: validate env var references in GITHUB_PATH lines
 	// Split into lines and process each line that writes to GITHUB_PATH
 	lines := strings.Split(newScript, "\n")
@@ -305,7 +327,8 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 			}
 			for _, untrustedInfo := range stepInfo.untrustedExprs {
 				envVarName := envVarMap[untrustedInfo.expr.raw]
-				line = replaceInTextRanges(line, pathWriteRanges, func(segment string, _ int) string {
+				chosenAnalysis := chosenNameShadowAnalyses[envVarName]
+				line = replaceInTextRanges(line, pathWriteRanges, func(segment string, segmentStart int) string {
 					// If the user already had one occurrence wrapped on this
 					// statement, unwrap it first so we can re-wrap every shell
 					// reference uniformly. A coarse "skip if it already
@@ -314,6 +337,13 @@ func (rule *EnvPathInjectionRule) FixStep(step *ast.Step) error {
 					validatedVar := fmt.Sprintf("$(realpath \"$%s\")", envVarName)
 					if strings.Contains(segment, validatedVar) {
 						segment = strings.ReplaceAll(segment, validatedVar, "$"+envVarName)
+					}
+					// When the reused name is assigned (shadowed) somewhere in
+					// the script, only wrap references in scopes where the
+					// assignment is not visible; a shadowed reference reads the
+					// script-local value, not the inherited untrusted input.
+					if chosenAnalysis != nil {
+						return replaceUnshadowedShellEnvVarRef(segment, envVarName, lineStart+segmentStart, chosenAnalysis)
 					}
 					return replaceShellEnvVarRef(segment, envVarName)
 				})

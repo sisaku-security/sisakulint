@@ -449,6 +449,81 @@ func TestEnvPathInjectionCritical_FixStep_AvoidsExistingEnvCollisionAfterCodeInj
 	}
 }
 
+// TestEnvPathInjectionCritical_FixStep_ComposedShadowedReuseNotWrapped pins the
+// co-fire regression flagged by codex on PR #514: when code-injection-critical
+// runs first and lifts the untrusted `${{ ... }}` into `$PR_BODY`, the literal
+// is gone from the script, so the shadow check that decides name reuse finds no
+// PATH-write occurrence of the expression and cannot see the shadow. The second
+// wrap pass must still not apply `realpath` to a `$PR_BODY` reference in a scope
+// where a script-local assignment shadows the inherited env value — doing so
+// would validate the shadowed local value instead of the untrusted input. No
+// suffixed helper env var is created either (it would be dead).
+func TestEnvPathInjectionCritical_FixStep_ComposedShadowedReuseNotWrapped(t *testing.T) {
+	tests := []struct {
+		name       string
+		run        string
+		want       string
+		absentEnvs []string
+	}{
+		{
+			name: "shadowed surrogate reference is left unwrapped",
+			run: `PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `PR_BODY=/safe
+echo "$PR_BODY" >> "$GITHUB_PATH"`,
+			absentEnvs: []string{"PR_BODY_2"},
+		},
+		{
+			name: "unshadowed occurrence is wrapped while shadowed occurrence is left",
+			run: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+			want: `echo "$(realpath "$PR_BODY")" >> "$GITHUB_PATH"
+PR_BODY=/safe
+echo "$PR_BODY" >> "$GITHUB_PATH"`,
+			absentEnvs: []string{"PR_BODY_2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			workflow, job, step := envPathInjectionCriticalWorkflowWithRun(tt.run)
+			codeRule := CodeInjectionCriticalRule(nil)
+			envPathRule := EnvPathInjectionCriticalRule()
+
+			if err := codeRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("code VisitWorkflowPre() error = %v", err)
+			}
+			if err := codeRule.VisitJobPre(job); err != nil {
+				t.Fatalf("code VisitJobPre() error = %v", err)
+			}
+			if err := envPathRule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("envpath VisitWorkflowPre() error = %v", err)
+			}
+			if err := envPathRule.VisitJobPre(job); err != nil {
+				t.Fatalf("envpath VisitJobPre() error = %v", err)
+			}
+
+			if err := codeRule.FixStep(step); err != nil {
+				t.Fatalf("code FixStep() error = %v", err)
+			}
+			if err := envPathRule.FixStep(step); err != nil {
+				t.Fatalf("envpath FixStep() error = %v", err)
+			}
+
+			got := step.Exec.(*ast.ExecRun).Run.Value
+			if got != tt.want {
+				t.Errorf("fixed run script = %q, want %q", got, tt.want)
+			}
+			for _, envName := range tt.absentEnvs {
+				if _, ok := step.Env.Vars[strings.ToLower(envName)]; ok {
+					t.Errorf("unexpected dead env var %q", envName)
+				}
+			}
+		})
+	}
+}
+
 // TestEnvPathInjectionCritical_FixStep_LeavesUnrelatedBaseEnvVarReference asserts
 // that when the base env var name (e.g., PR_BODY) is occupied by an unrelated
 // user value and the autofix suffixes the chosen name (PR_BODY_2), an existing
