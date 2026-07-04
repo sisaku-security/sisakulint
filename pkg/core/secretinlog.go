@@ -43,11 +43,21 @@ type SecretInLogRule struct {
 	crossStepOutputs map[string]map[string]string
 	// pendingNeedsSteps は、consumer job が producer job より先に現れた場合に、
 	// needs.*.outputs.* の解決を VisitWorkflowPost まで遅延するための step 集合。
-	pendingNeedsSteps []*ast.Step
+	// jobID を各要素に保持するのは、フラッシュ時 (VisitWorkflowPost) には
+	// currentJobID が最後に訪問した job を指してしまうため（codeinjection.go 等の
+	// pendingCrossJobCheck.consumerJobID と同じ理由）。
+	pendingNeedsSteps []pendingNeedsStep
 	// collector は漏洩チェーン可視化用の per-file SinkCollector（nil 許容）。
 	collector *chain.SinkCollector
 	// currentJobID は走査中の job ID（小文字）。VisitJobPre で設定される。
 	currentJobID string
+}
+
+// pendingNeedsStep は VisitWorkflowPost まで遅延される step と、それを queue した
+// consumer job の ID を保持する。
+type pendingNeedsStep struct {
+	step  *ast.Step
+	jobID string
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
@@ -630,8 +640,12 @@ func (rule *SecretInLogRule) VisitWorkflowPost(node *ast.Workflow) error {
 		rule.crossStepOutputs = savedCrossStepOutputs
 	}()
 
-	for _, step := range rule.pendingNeedsSteps {
-		rule.checkPendingNeedsStep(step)
+	for _, pending := range rule.pendingNeedsSteps {
+		// フラッシュ時点で currentJobID は最後に訪問した job を指すため、
+		// この step を queue した consumer job に復元してから解析する
+		// (reportLeak/reportStepOutputLeak が SinkRecord.JobID に使う)。
+		rule.currentJobID = pending.jobID
+		rule.checkPendingNeedsStep(pending.step)
 	}
 	rule.pendingNeedsSteps = nil
 	return nil
@@ -651,7 +665,7 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return
 	}
 	if rule.stepHasUnregisteredNeedsOutputReference(step, script) {
-		rule.pendingNeedsSteps = append(rule.pendingNeedsSteps, step)
+		rule.pendingNeedsSteps = append(rule.pendingNeedsSteps, pendingNeedsStep{step: step, jobID: rule.currentJobID})
 	}
 
 	// 初期 taint 集合を構築: workflow env, job env, crossStepEnv, step env の順で merge。

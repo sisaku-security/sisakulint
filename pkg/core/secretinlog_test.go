@@ -1528,6 +1528,62 @@ func TestSecretInLog_CrossJob_NeedsOutputsDirectExpressionLeak_ReverseJobOrder(t
 	}
 }
 
+// TestSecretInLog_CrossJob_ReverseJobOrder_SinkRecordJobID pins the review fix:
+// when the deferred pendingNeedsSteps queue is flushed in VisitWorkflowPost, each
+// leak's chain SinkRecord must carry the consumer job's ID (captured at queue time),
+// not whichever job happened to be visited last. Here "downstream" (consumer) is
+// visited before "upstream" (producer), so a stale currentJobID would wrongly
+// attribute the sink to "upstream" and misplace it in the rendered graph.
+func TestSecretInLog_CrossJob_ReverseJobOrder_SinkRecordJobID(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	collector := chain.NewSinkCollector()
+	rule := NewSecretInLogRuleWithTaintMapAndCollector(NewWorkflowSecretTaintMap(), collector)
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	// Consumer visited before producer forces the deferred pendingNeedsSteps path.
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitWorkflowPost(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPost: %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected exactly 1 SinkRecord from the deferred flush, got %d", len(recs))
+	}
+	if recs[0].JobID != "downstream" {
+		t.Errorf("deferred cross-job sink attributed to wrong job: JobID = %q, want %q (the consumer that reads the tainted needs output)", recs[0].JobID, "downstream")
+	}
+}
+
 func TestSecretInLog_CrossJob_NeedsOutputsEnvExpressionLeak_ReverseJobOrder(t *testing.T) {
 	t.Parallel()
 

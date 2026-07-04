@@ -590,6 +590,14 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 		l.postProcessResolvedChains(filepath, result)
 	}
 
+	// 漏洩チェーン可視化: mermaid 指定時のみ組み立てる。LintFiles / LintFile と同じ
+	// 配線をこの Lint (=-remote 経路, command.go の runRemoteScan から呼ばれる) にも
+	// 適用し、3 エントリポイントを同期させる（未配線だと -remote で空グラフになる）。
+	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() && result != nil && result.ParsedWorkflow != nil {
+		in := buildAssemblerInput(filepath, result.ParsedWorkflow, result.ChainRecords)
+		l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+	}
+
 	if err != nil {
 		return nil, err
 	}

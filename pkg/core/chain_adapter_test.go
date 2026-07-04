@@ -66,3 +66,25 @@ func TestRenderModelsToMermaid(t *testing.T) {
 		t.Error("expected file path header in multi-model output")
 	}
 }
+
+// TestBuildAssemblerInputWorkflowCallUntrusted pins the review fix: a reusable
+// workflow triggered only by workflow_call (which is absent from PrivilegedTriggers)
+// must still be classified Untrusted, since its inputs come from the caller.
+func TestBuildAssemblerInputWorkflowCallUntrusted(t *testing.T) {
+	wf := &ast.Workflow{
+		Name: &ast.String{Value: "reusable"},
+		On:   []ast.Event{&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_call"}, Pos: &ast.Position{Line: 2, Col: 3}}},
+		Jobs: map[string]*ast.Job{"build": {ID: &ast.String{Value: "build"}}},
+	}
+	in := buildAssemblerInput("r.yml", wf, nil)
+	if len(in.JobContexts) != 1 || len(in.JobContexts[0].Triggers) != 1 {
+		t.Fatalf("unexpected job contexts: %+v", in.JobContexts)
+	}
+	tr := in.JobContexts[0].Triggers[0]
+	if tr.Name != "workflow_call" {
+		t.Fatalf("trigger name = %q, want workflow_call", tr.Name)
+	}
+	if !tr.Untrusted {
+		t.Error("workflow_call trigger must be marked Untrusted for reusable-workflow analysis")
+	}
+}

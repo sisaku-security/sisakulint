@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -113,5 +114,28 @@ func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	// collapse to underscores in the ID.
 	if !strings.Contains(out, "n_source_1_needs_produce_outputs_ref__tainted_via_github_head_ref_") {
 		t.Errorf("expected the needs-derived source node naming the upstream job and its taint origin:\n%s", out)
+	}
+}
+
+// TestChainVizE2ELintEntryPointRendersMermaid is the regression for the review
+// finding that Lint() (the -remote entry point, called from runRemoteScan) did
+// not wire chain assembly like LintFiles/LintFile — so a mermaid format rendered
+// empty on remote scans. runLinterMermaid exercises LintFile; this exercises Lint.
+func TestChainVizE2ELintEntryPointRendersMermaid(t *testing.T) {
+	path := "../../script/actions/chainviz-blastradius.yaml"
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	linter, err := NewLinter(&buf, &LinterOptions{CustomErrorMessageFormat: "{{mermaid .}}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := linter.Lint(path, content, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "flowchart TD") {
+		t.Errorf("Lint() entry point produced no mermaid graph:\n%s", buf.String())
 	}
 }

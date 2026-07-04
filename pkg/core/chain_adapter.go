@@ -71,10 +71,15 @@ func buildAssemblerInput(filePath string, wf *ast.Workflow, records []chain.Sink
 			if info != nil && info.Name == tn {
 				pos = info.Pos
 			}
+			// workflow_call は PrivilegedTriggers に無い（実行時 github.event_name は
+			// caller 側イベントになるため）が、reusable workflow の inputs は caller から
+			// 渡される untrusted 経路になり得る。ReusableWorkflowTaintRule の
+			// isDangerousTriggerForAnalysis と同様に workflow_call も untrusted 扱いにする。
+			untrusted := PrivilegedTriggers[tn] || tn == "workflow_call"
 			trs = append(trs, chain.TriggerRef{
 				Name:             tn,
-				Untrusted:        PrivilegedTriggers[tn],
-				SecretsAvailable: PrivilegedTriggers[tn],
+				Untrusted:        untrusted,
+				SecretsAvailable: untrusted,
 				Pos:              pos,
 			})
 		}
