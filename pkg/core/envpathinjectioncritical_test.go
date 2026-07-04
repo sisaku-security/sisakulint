@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestEnvPathInjectionCriticalRule(t *testing.T) {
@@ -2931,6 +2932,69 @@ func TestEnvPathInjectionCritical_ErrorMessage(t *testing.T) {
 	}
 	if !strings.Contains(errMsg, "GITHUB_PATH") {
 		t.Errorf("error message should mention GITHUB_PATH, got: %s", errMsg)
+	}
+}
+
+// TestEnvPathInjectionCriticalPushesSinkRecord verifies that a detected PATH
+// injection finding in a privileged-trigger workflow is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization (Milestone E
+// task 16), with Severity reflecting the critical variant.
+func TestEnvPathInjectionCriticalPushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := EnvPathInjectionCriticalRuleWithCollector(collector)
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}},
+		},
+	}
+	job := &ast.Job{
+		ID: &ast.String{Value: "build"},
+		Steps: []*ast.Step{
+			{
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: `echo "${{ github.event.pull_request.body }}" >> "$GITHUB_PATH"`,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkExpr {
+		t.Errorf("SinkKind = %v, want SinkExpr", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceUntrusted {
+		t.Errorf("SourceKind = %v, want SourceUntrusted", r.SourceKind)
+	}
+	if r.Severity != "critical" {
+		t.Errorf("Severity = %q, want %q", r.Severity, "critical")
+	}
+	if !strings.Contains(r.SourceName, "github.event.pull_request.body") {
+		t.Errorf("SourceName = %q, want it to contain %q", r.SourceName, "github.event.pull_request.body")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
 
