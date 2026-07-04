@@ -45,7 +45,7 @@ jobs:
 
 sisakulint reports:
 
-```
+```text
 workflow.yaml:5:15: action 'actions/checkout@v4' runs on the deprecated Node.js runtime 'node20' (EOL since 2026-04-30 and scheduled for removal from the runner on 2026-09-16). Update to actions/checkout@v5 or later, which runs on node24. [deprecated-node-runtime]
 ```
 
