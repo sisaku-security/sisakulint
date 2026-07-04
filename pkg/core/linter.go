@@ -630,14 +630,14 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		DeprecatedCommandsRule(),
 		NewConditionalRule(),
 		TimeoutMinuteRule(),
-		CodeInjectionCriticalRule(wfTaintMap),   // Detects untrusted input in privileged workflow triggers
-		CodeInjectionMediumRule(wfTaintMap),     // Detects untrusted input in normal workflow triggers
-		EnvVarInjectionCriticalRule(wfTaintMap), // Detects envvar injection in privileged workflow triggers
-		EnvVarInjectionMediumRule(wfTaintMap),   // Detects envvar injection in normal workflow triggers
-		EnvPathInjectionCriticalRule(),          // Detects PATH injection in privileged workflow triggers
-		EnvPathInjectionMediumRule(),            // Detects PATH injection in normal workflow triggers
-		OutputClobberingCriticalRule(),          // Detects output clobbering in privileged workflow triggers
-		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
+		CodeInjectionCriticalRuleWithCollector(wfTaintMap, collector),   // Detects untrusted input in privileged workflow triggers; pushes SinkRecords for chain visualization
+		CodeInjectionMediumRuleWithCollector(wfTaintMap, collector),     // Detects untrusted input in normal workflow triggers; pushes SinkRecords for chain visualization
+		EnvVarInjectionCriticalRuleWithCollector(wfTaintMap, collector), // Detects envvar injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		EnvVarInjectionMediumRuleWithCollector(wfTaintMap, collector),   // Detects envvar injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		EnvPathInjectionCriticalRuleWithCollector(collector),            // Detects PATH injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		EnvPathInjectionMediumRuleWithCollector(collector),              // Detects PATH injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		OutputClobberingCriticalRuleWithCollector(collector),            // Detects output clobbering in privileged workflow triggers; pushes SinkRecords for chain visualization
+		OutputClobberingMediumRuleWithCollector(collector),              // Detects output clobbering in normal workflow triggers; pushes SinkRecords for chain visualization
 		CommitShaRule(gitHubToken),
 		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
 		NewDependabotEcosystemRule(filePath, isRemote),     // Checks dependabot config covers ecosystems from lockfiles and setup actions
@@ -648,38 +648,38 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUntrustedCheckoutRule(),
 		NewCachePoisoningRule(actionMetadata),
 		NewCachePoisoningPoisonableStepRule(),
-		NewSecretExposureRuleWithCollector(collector),                                // Detects toJSON(secrets) and secrets[dynamic-access]; pushes SinkRecords for chain visualization
-		NewUnmaskedSecretExposureRuleWithCollector(collector),                        // Detects fromJson(secrets.XXX).yyy unmasked exposure; pushes SinkRecords for chain visualization
-		NewImproperAccessControlRule(),                                               // Detects improper access control with label-based approval and synchronize events
-		ImpostorCommitRuleFactory(),                                                  // Detects impostor commits from fork network
-		NewUntrustedCheckoutTOCTOUCriticalRule(),                                     // Detects TOCTOU with labeled event type and mutable refs
-		NewUntrustedCheckoutTOCTOUHighRule(),                                         // Detects TOCTOU with deployment environment and mutable refs
-		NewRefConfusionRule(),                                                        // Detects ref confusion attacks (same name branch and tag)
-		NewObfuscationRule(),                                                         // Detects obfuscated workflow patterns
-		NewKnownVulnerableActionsRule(gitHubToken),                                   // Detects actions with known security vulnerabilities
-		NewBotConditionsRule(),                                                       // Detects spoofable bot detection conditions
-		NewArtipackedRuleWithCollector(collector),                                    // Detects credential leakage via artifact upload; pushes SinkRecords for chain visualization
-		NewUnsoundContainsRule(),                                                     // Detects bypassable contains() function usage in conditions
-		NewSelfHostedRunnersRule(),                                                   // Detects self-hosted runner usage which may be dangerous in public repos
-		NewArchivedUsesRule(),                                                        // Detects usage of archived actions/reusable workflows
-		NewUnpinnedImagesRule(),                                                      // Detects container images not pinned by SHA256 digest
-		NewSecretsInArtifactsRuleWithCollector(collector),                            // Detects secrets exposure in artifact uploads (CWE-312); pushes SinkRecords for chain visualization
-		NewSecretExfiltrationRuleWithCollector(collector),                            // Detects secret exfiltration via network commands; pushes SinkRecords for chain visualization
-		NewSecretInLogRuleWithTaintMapAndCollector(wfSecretTaintMap, collector),      // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs; pushes SinkRecords for chain visualization
-		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow),                // Detects untrusted inputs passed to reusable workflows
-		NewDangerousTriggersCriticalRule(),                                           // Detects dangerous triggers without any mitigations
-		NewDangerousTriggersMediumRule(),                                             // Detects dangerous triggers with partial mitigations
-		NewSecretsInheritRuleWithCacheAndCollector(localReusableWorkflow, collector), // Detects excessive secret inheritance using 'secrets: inherit'; pushes SinkRecords for chain visualization
-		ArgumentInjectionCriticalRule(wfTaintMap),
-		ArgumentInjectionMediumRule(wfTaintMap),
-		RequestForgeryCriticalRule(wfTaintMap), // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(wfTaintMap),   // Detects SSRF vulnerabilities in normal triggers
-		NewCacheBloatRule(),                    // Detects cache bloat risk with cache/restore and cache/save
-		NewAIActionUnrestrictedTriggerRule(),   // Detects AI actions with unrestricted user access (Clinejection attack pattern)
-		NewAIActionExcessiveToolsRule(),        // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
-		NewAIActionPromptInjectionRule(),       // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern)
-		NewAIActionUnsafeSandboxRule(),         // Detects unsafe sandbox settings in AI agent actions
-		NewAIActionExecutionOrderRule(),        // Detects AI agent actions that are not the last step in a job
+		NewSecretExposureRuleWithCollector(collector),                                         // Detects toJSON(secrets) and secrets[dynamic-access]; pushes SinkRecords for chain visualization
+		NewUnmaskedSecretExposureRuleWithCollector(collector),                                 // Detects fromJson(secrets.XXX).yyy unmasked exposure; pushes SinkRecords for chain visualization
+		NewImproperAccessControlRule(),                                                        // Detects improper access control with label-based approval and synchronize events
+		ImpostorCommitRuleFactory(),                                                           // Detects impostor commits from fork network
+		NewUntrustedCheckoutTOCTOUCriticalRule(),                                              // Detects TOCTOU with labeled event type and mutable refs
+		NewUntrustedCheckoutTOCTOUHighRule(),                                                  // Detects TOCTOU with deployment environment and mutable refs
+		NewRefConfusionRule(),                                                                 // Detects ref confusion attacks (same name branch and tag)
+		NewObfuscationRule(),                                                                  // Detects obfuscated workflow patterns
+		NewKnownVulnerableActionsRule(gitHubToken),                                            // Detects actions with known security vulnerabilities
+		NewBotConditionsRule(),                                                                // Detects spoofable bot detection conditions
+		NewArtipackedRuleWithCollector(collector),                                             // Detects credential leakage via artifact upload; pushes SinkRecords for chain visualization
+		NewUnsoundContainsRule(),                                                              // Detects bypassable contains() function usage in conditions
+		NewSelfHostedRunnersRule(),                                                            // Detects self-hosted runner usage which may be dangerous in public repos
+		NewArchivedUsesRule(),                                                                 // Detects usage of archived actions/reusable workflows
+		NewUnpinnedImagesRule(),                                                               // Detects container images not pinned by SHA256 digest
+		NewSecretsInArtifactsRuleWithCollector(collector),                                     // Detects secrets exposure in artifact uploads (CWE-312); pushes SinkRecords for chain visualization
+		NewSecretExfiltrationRuleWithCollector(collector),                                     // Detects secret exfiltration via network commands; pushes SinkRecords for chain visualization
+		NewSecretInLogRuleWithTaintMapAndCollector(wfSecretTaintMap, collector),               // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs; pushes SinkRecords for chain visualization
+		NewReusableWorkflowTaintRuleWithCollector(filePath, localReusableWorkflow, collector), // Detects untrusted inputs passed to reusable workflows; pushes SinkRecords for chain visualization (single-file fallback path only)
+		NewDangerousTriggersCriticalRule(),                                                    // Detects dangerous triggers without any mitigations
+		NewDangerousTriggersMediumRule(),                                                      // Detects dangerous triggers with partial mitigations
+		NewSecretsInheritRuleWithCacheAndCollector(localReusableWorkflow, collector),          // Detects excessive secret inheritance using 'secrets: inherit'; pushes SinkRecords for chain visualization
+		ArgumentInjectionCriticalRuleWithCollector(wfTaintMap, collector),                     // Detects argument injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		ArgumentInjectionMediumRuleWithCollector(wfTaintMap, collector),                       // Detects argument injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		RequestForgeryCriticalRuleWithCollector(wfTaintMap, collector),                        // Detects SSRF vulnerabilities in privileged triggers; pushes SinkRecords for chain visualization
+		RequestForgeryMediumRuleWithCollector(wfTaintMap, collector),                          // Detects SSRF vulnerabilities in normal triggers; pushes SinkRecords for chain visualization
+		NewCacheBloatRule(),                                                                   // Detects cache bloat risk with cache/restore and cache/save
+		NewAIActionUnrestrictedTriggerRule(),                                                  // Detects AI actions with unrestricted user access (Clinejection attack pattern)
+		NewAIActionExcessiveToolsRule(),                                                       // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
+		NewAIActionPromptInjectionRuleWithCollector(collector),                                // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern); pushes SinkRecords for chain visualization
+		NewAIActionUnsafeSandboxRule(),                                                        // Detects unsafe sandbox settings in AI agent actions
+		NewAIActionExecutionOrderRule(),                                                       // Detects AI agent actions that are not the last step in a job
 	}
 }
 
