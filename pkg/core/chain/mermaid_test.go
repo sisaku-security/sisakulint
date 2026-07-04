@@ -2,6 +2,8 @@
 package chain
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -66,5 +68,31 @@ func TestMermaidEmphasis(t *testing.T) {
 	}
 	if !strings.Contains(out, "class ") || !strings.Contains(out, "fixhere") {
 		t.Error("missing leverage (fixhere) class assignment")
+	}
+}
+
+func TestMermaidGolden(t *testing.T) {
+	out := NewMermaidRenderer().Render(sampleModel())
+	golden := filepath.Join("testdata", "blastradius.mmd")
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(golden, []byte(out), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden: %v (run with UPDATE_GOLDEN=1 to create)", err)
+	}
+	if out != string(want) {
+		t.Errorf("mermaid output drift:\n--- got ---\n%s\n--- want ---\n%s", out, want)
+	}
+}
+
+// 決定性: 同一入力を2回描画してバイト一致
+func TestMermaidDeterministic(t *testing.T) {
+	a := NewMermaidRenderer().Render(sampleModel())
+	b := NewMermaidRenderer().Render(sampleModel())
+	if a != b {
+		t.Error("render is non-deterministic")
 	}
 }

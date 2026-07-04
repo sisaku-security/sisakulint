@@ -1,0 +1,22 @@
+%% blast-radius: untrusted:1 secrets:1 sinks:1 (network:1)
+flowchart TD
+  n_trigger_pull_request_target(["🔧 pull_request_target"])
+  n_perm_build{{"contents:write"}}
+  n_source_0_secrets_TOKEN["secrets.TOKEN"]
+  subgraph job_build["job: build"]
+    n_action_build_10_9["run: curl"]
+    n_sink_secret_exfiltration_build_10_9>"network"]
+  end
+  n_action_build_10_9 -->|flows-to| n_sink_secret_exfiltration_build_10_9
+  n_perm_build -.->|enables| n_source_0_secrets_TOKEN
+  n_source_0_secrets_TOKEN -->|used-by| n_action_build_10_9
+  n_trigger_pull_request_target -.->|grants| n_perm_build
+  classDef untrusted fill:#f88,stroke:#c00,color:#000
+  classDef safe fill:#eee,stroke:#bbb,color:#999
+  classDef fixhere stroke:#00a,stroke-width:3px
+  class n_trigger_pull_request_target untrusted
+  class n_perm_build untrusted
+  class n_source_0_secrets_TOKEN untrusted
+  class n_action_build_10_9 untrusted
+  class n_sink_secret_exfiltration_build_10_9 untrusted
+  class n_trigger_pull_request_target fixhere
