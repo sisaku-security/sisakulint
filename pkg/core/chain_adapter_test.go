@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -43,5 +44,25 @@ func TestBuildAssemblerInputTriggersAndPermissions(t *testing.T) {
 	}
 	if len(jc.Triggers) != 1 || !jc.Triggers[0].Untrusted {
 		t.Errorf("expected 1 untrusted trigger, got %+v", jc.Triggers)
+	}
+}
+
+func TestRenderModelsToMermaid(t *testing.T) {
+	wf := &ast.Workflow{
+		Name: &ast.String{Value: "CI"},
+		On:   []ast.Event{&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}, Pos: &ast.Position{Line: 2, Col: 3}}},
+		Jobs: map[string]*ast.Job{"build": {ID: &ast.String{Value: "build"}}},
+	}
+	records := []chain.SinkRecord{{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9},
+		SourceKind: chain.SourceSecret, SourceName: "secrets.TOKEN", SinkKind: chain.SinkNetwork, RuleName: "secret-exfiltration"}}
+
+	in := buildAssemblerInput(".github/workflows/ci.yml", wf, records)
+	out := renderModelsToMermaid([]*chain.ChainModel{chain.Assemble(in)})
+
+	if !strings.Contains(out, "flowchart TD") {
+		t.Error("expected mermaid output")
+	}
+	if !strings.Contains(out, "ci.yml") {
+		t.Error("expected file path header in multi-model output")
 	}
 }

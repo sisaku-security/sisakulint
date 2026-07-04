@@ -438,6 +438,22 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		l.postProcessResolvedChains(ws.path, ws.result)
 	}
 
+	// 漏洩チェーン可視化: mermaid フォーマット指定時のみ組み立てる（無回帰保護）。
+	// ResolvePendingChains と同じ単一スレッド区間で実行するためロック不要
+	// (pkg/core/CLAUDE.md: この区間を Wait() より前に移動したり並列化すると data race になる)。
+	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() {
+		models := make([]*chain.ChainModel, 0, len(workspaces))
+		for i := range workspaces {
+			ws := &workspaces[i]
+			if ws.result == nil || ws.result.ParsedWorkflow == nil {
+				continue
+			}
+			in := buildAssemblerInput(ws.path, ws.result.ParsedWorkflow, ws.result.ChainRecords)
+			models = append(models, chain.Assemble(in))
+		}
+		l.errorFormatter.SetChains(models)
+	}
+
 	totalErrors := 0
 	// Preallocate allResult with the capacity equal to the number of workspaces
 	allResult := make([]*ValidateResult, 0, len(workspaces))
@@ -528,6 +544,13 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 		return nil, err
 	}
 	if l.errorFormatter != nil {
+		// 漏洩チェーン可視化: 単一ファイルパス（LintFiles の1ファイル呼び出しも含む）は
+		// errgroup.Wait() を使う post-Wait セクションを経由しないため、ここで個別に
+		// 組み立てる。mermaid フォーマット指定時のみ（無回帰保護）。
+		if l.errorFormatter.HasMermaid() && result.ParsedWorkflow != nil {
+			in := buildAssemblerInput(file, result.ParsedWorkflow, result.ChainRecords)
+			l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+		}
 		if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, source); err != nil {
 			return nil, fmt.Errorf("error formatting output: %w", err)
 		}

@@ -2,6 +2,7 @@
 package core
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -84,4 +85,21 @@ func buildAssemblerInput(filePath string, wf *ast.Workflow, records []chain.Sink
 		})
 	}
 	return chain.AssemblerInput{FilePath: filePath, WorkflowName: name, JobContexts: contexts, Records: records}
+}
+
+// renderModelsToMermaid renders one or more ChainModels (one per linted file) into a
+// mermaid-fenced document, used by the {{mermaid .}} error-format function.
+func renderModelsToMermaid(models []*chain.ChainModel) string {
+	r := chain.NewMermaidRenderer()
+	var b strings.Builder
+	for _, m := range models {
+		if m == nil {
+			continue
+		}
+		fmt.Fprintf(&b, "%%%% file: %s\n", m.FilePath)
+		b.WriteString("```mermaid\n")
+		b.WriteString(r.Render(m))
+		b.WriteString("```\n\n")
+	}
+	return b.String()
 }
