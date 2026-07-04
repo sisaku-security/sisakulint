@@ -69,3 +69,53 @@ func TestAssembleSingleChain(t *testing.T) {
 		t.Error("missing FlowsTo edge")
 	}
 }
+
+func TestAssembleFanOutSharedSource(t *testing.T) {
+	base := func(sink SinkKind, rule string, line int) SinkRecord {
+		return SinkRecord{JobID: "build", StepPos: &ast.Position{Line: line, Col: 9},
+			SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SourceOrigin: "secrets.TOKEN",
+			SinkKind: sink, RuleName: rule, Severity: "critical"}
+	}
+	in := AssemblerInput{
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "push", Untrusted: false, Pos: &ast.Position{Line: 2, Col: 3}}},
+			Permission: PermissionRef{Label: "contents:read", Pos: &ast.Position{Line: 4, Col: 3}}}},
+		Records: []SinkRecord{base(SinkLog, "secret-in-log", 10), base(SinkNetwork, "secret-exfiltration", 12)},
+	}
+	m := Assemble(in)
+	// 共有 source ノードは1つ、sink は2つ
+	if n := nodeByID(m, "source:0:secrets.TOKEN"); n == nil {
+		t.Fatal("shared source node missing")
+	}
+	sinks := 0
+	for _, n := range m.Nodes {
+		if n.Kind == NodeSink {
+			sinks++
+		}
+	}
+	if sinks != 2 {
+		t.Errorf("sink count = %d, want 2", sinks)
+	}
+}
+
+func TestAssembleNoRecordsNoDataflowEdges(t *testing.T) {
+	// 捏造しない担保: Records が空ならデータフローエッジはゼロ
+	in := AssemblerInput{
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+			Permission: PermissionRef{Label: "contents:write"}}},
+		Records: nil,
+	}
+	m := Assemble(in)
+	for _, e := range m.Edges {
+		if !e.Kind.IsContext() {
+			t.Errorf("dataflow edge fabricated with no records: %+v", e)
+		}
+	}
+	// source/action/sink ノードも生成されない
+	for _, n := range m.Nodes {
+		if n.Kind == NodeSource || n.Kind == NodeAction || n.Kind == NodeSink {
+			t.Errorf("dataflow node fabricated with no records: %+v", n)
+		}
+	}
+}
