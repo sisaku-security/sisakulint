@@ -166,9 +166,8 @@ func TestDeprecatedNodeRuntimeResolver(t *testing.T) {
 }
 
 // TestDeprecatedNodeRuntimeResolverFirst verifies that the resolved
-// action.yml wins over the embedded-table/comment heuristic (issue found in
-// the real-world evaluation: a stale "# v5" comment next to a node24 SHA
-// produced a false positive when the comment was trusted).
+// action.yml wins over the embedded-table/comment heuristic: a stale "# v5"
+// comment next to a node24 SHA must not produce a false positive.
 func TestDeprecatedNodeRuntimeResolverFirst(t *testing.T) {
 	sha := "a309ff8b426b58ec0e2a45f0f869d46889d02405"
 

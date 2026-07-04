@@ -52,8 +52,8 @@ type nodeRuntimeUpgrade struct {
 }
 
 // nodeRuntimeUpgrades is an embedded snapshot (verified 2026-07 against each
-// action's action.yml `runs.using` field). A production implementation should
-// generate this table with a scraper, like actionlint's popular_actions DB.
+// action's action.yml `runs.using` field). Maintained by hand: update an
+// entry when the listed action publishes a new major.
 var nodeRuntimeUpgrades = map[string]nodeRuntimeUpgrade{
 	"actions/checkout":          {lastNode20Major: 4, firstNode24Major: 5},
 	"actions/setup-node":        {lastNode20Major: 4, firstNode24Major: 5},
@@ -265,17 +265,16 @@ func parseMajorFromRef(ref string) (int, bool) {
 }
 
 // checkKnownNode20Action matches `uses:` against the embedded table of
-// popular actions with known node20 majors. Returns true when the action was
-// conclusively identified (reported or confirmed up to date), so the caller
-// can skip the metadata-resolver fallback.
-func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, action *ast.ExecAction) bool {
+// popular actions with known node20 majors. Fallback path for when the
+// metadata resolver is unavailable.
+func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, action *ast.ExecAction) {
 	owner, repo, ref := parseUsesValue(action.Uses.Value)
 	if owner == "" || repo == "" || ref == "" {
-		return false
+		return
 	}
 	upgrade, known := nodeRuntimeUpgrades[strings.ToLower(owner+"/"+repo)]
 	if !known {
-		return false
+		return
 	}
 
 	major, isTag := parseMajorFromRef(ref)
@@ -284,16 +283,15 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 		// SHA-pinned refs carry the human-readable tag as a line comment when
 		// pinned by the commit-sha auto-fix (e.g. "# v4.1.1").
 		comment := strings.TrimSpace(strings.TrimPrefix(action.Uses.BaseNode.LineComment, "#"))
-		comment = strings.TrimSpace(comment)
 		if m, ok := parseMajorFromRef(comment); ok {
 			major = m
 		} else {
-			return false
+			return
 		}
 	}
 
 	if major > upgrade.lastNode20Major {
-		return true // already on a node24-capable major
+		return // already on a node24-capable major
 	}
 
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
@@ -303,7 +301,6 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	if fixable {
 		rule.AddAutoFixer(NewStepFixer(step, rule))
 	}
-	return true
 }
 
 // eolNodeBuildTargets are Node.js majors that are EOL as build targets
