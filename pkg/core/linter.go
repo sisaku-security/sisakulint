@@ -17,6 +17,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -580,7 +581,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	return result, nil
 }
 
-func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache, collector *chain.SinkCollector) []Rule {
 	// WorkflowTaintMap is shared between Critical and Medium variants of
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
@@ -673,6 +674,7 @@ type ValidateResult struct {
 	Errors         []*LintingError
 	AutoFixers     []AutoFixer
 	Repository     string
+	ChainRecords   []chain.SinkRecord // 漏洩チェーン可視化用の per-file sink 記録
 }
 
 // isDependabotConfigFile checks if the given filepath is a dependabot configuration file
@@ -719,7 +721,8 @@ func (l *Linter) validate(
 	// dependabot config / composite action / unparseable workflow would
 	// silently skip the rule-name check and the user's CLI typo would not
 	// be reported until a parseable workflow happened to reach validate().
-	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow)
+	chainCollector := chain.NewSinkCollector()
+	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow, chainCollector)
 	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
 	if optErr != nil {
 		return nil, optErr
@@ -839,6 +842,7 @@ func (l *Linter) validate(
 		ParsedWorkflow: parsedWorkflow,
 		Errors:         allErrors,
 		AutoFixers:     allAutoFixers,
+		ChainRecords:   chainCollector.Records(),
 	}, nil
 }
 
