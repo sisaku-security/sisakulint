@@ -197,3 +197,31 @@ func TestAssembleSummaryAndLeverage(t *testing.T) {
 		t.Error("leverage node not flagged")
 	}
 }
+
+func TestAssembleCrossJobNeeds(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{
+			{JobID: "produce", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+			{JobID: "consume", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+		},
+		Records: []SinkRecord{
+			// produce: untrusted 入力 → GITHUB_OUTPUT（sink=expr 相当の action）
+			{JobID: "produce", StepPos: &ast.Position{Line: 10, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "github.head_ref", SourceOrigin: "github.head_ref",
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical"},
+			// consume: needs.produce.outputs.ref を使う → network
+			{JobID: "consume", StepPos: &ast.Position{Line: 20, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "needs.produce.outputs.ref",
+				SourceOrigin: "needs.produce.outputs.ref",
+				SinkKind: SinkNetwork, RuleName: "request-forgery-critical"},
+		},
+	}
+	m := Assemble(in)
+	upAction := "action:produce:10:9"
+	downSource := "source:1:needs.produce.outputs.ref"
+	if !hasEdge(m, upAction, downSource, EdgeNeeds) {
+		t.Errorf("missing cross-job Needs edge %s -> %s", upAction, downSource)
+	}
+}

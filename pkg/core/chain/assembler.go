@@ -3,7 +3,9 @@ package chain
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
@@ -63,6 +65,7 @@ func Assemble(in AssemblerInput) *ChainModel {
 		}
 	}
 
+	linkCrossJobNeeds(m, nodes, in)
 	computeChainCount(nodes, in)
 	computeUntrustedReachable(nodes, m.Edges)
 	computeSummary(m, nodes)
@@ -71,6 +74,34 @@ func Assemble(in AssemblerInput) *ChainModel {
 	m.Nodes = sortedNodes(nodes)
 	dedupEdges(m)
 	return m
+}
+
+var needsOutputPattern = regexp.MustCompile(`needs\.([A-Za-z0-9_-]+)\.outputs\.`)
+
+// linkCrossJobNeeds は SourceOrigin が needs.<job>.outputs.* を指す source に、
+// 上流 job の全 Action ノードから EdgeNeeds を張る。
+func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput) {
+	// job → その job の action ノード ID 群
+	actionsByJob := map[string][]string{}
+	for _, n := range nodes {
+		if n.Kind == NodeAction {
+			actionsByJob[n.JobID] = append(actionsByJob[n.JobID], n.ID)
+		}
+	}
+	for _, r := range in.Records {
+		mm := needsOutputPattern.FindStringSubmatch(r.SourceOrigin)
+		if mm == nil {
+			continue
+		}
+		upJob := strings.ToLower(mm[1])
+		sourceID := fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName)
+		if _, ok := nodes[sourceID]; !ok {
+			continue
+		}
+		for _, upActionID := range actionsByJob[upJob] {
+			m.Edges = append(m.Edges, Edge{From: upActionID, To: sourceID, Kind: EdgeNeeds})
+		}
+	}
 }
 
 // computeChainCount は各 record のパスが通過する全ノードの ChainCount を +1 する。
