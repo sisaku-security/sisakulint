@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,8 +37,11 @@ type ArtipackedRule struct {
 	BaseRule
 	// checkoutSteps stores checkout steps without persist-credentials: false per job
 	checkoutSteps []*checkoutInfo
-	// currentJobID stores the current job being processed
+	// currentJobID stores the current job being processed (lowercased)
 	currentJobID string
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
 }
 
 type checkoutInfo struct {
@@ -52,6 +56,16 @@ func NewArtipackedRule() *ArtipackedRule {
 			RuleDesc: "Detects credential leakage risk when actions/checkout credentials are persisted and workspace is uploaded via actions/upload-artifact",
 		},
 	}
+}
+
+// NewArtipackedRuleWithCollector is like NewArtipackedRule but additionally pushes a
+// chain.SinkRecord to collector for every confirmed checkout-then-upload credential leak,
+// feeding the leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be
+// nil, in which case no records are pushed (equivalent to NewArtipackedRule).
+func NewArtipackedRuleWithCollector(collector *chain.SinkCollector) *ArtipackedRule {
+	r := NewArtipackedRule()
+	r.collector = collector
+	return r
 }
 
 func (rule *ArtipackedRule) VisitWorkflowPre(n *ast.Workflow) error {
@@ -69,7 +83,7 @@ func (rule *ArtipackedRule) VisitWorkflowPost(n *ast.Workflow) error {
 func (rule *ArtipackedRule) VisitJobPre(node *ast.Job) error {
 	rule.checkoutSteps = nil
 	if node.ID != nil {
-		rule.currentJobID = node.ID.Value
+		rule.currentJobID = strings.ToLower(node.ID.Value)
 	}
 	return nil
 }
@@ -190,6 +204,20 @@ func (rule *ArtipackedRule) handleUploadArtifact(step *ast.Step, action *ast.Exe
 			checkoutInfo.step.Pos.Line,
 			rule.getCredentialLocation(checkoutInfo.version),
 		)
+
+		if rule.collector != nil {
+			rule.collector.Add(chain.SinkRecord{
+				JobID:        rule.currentJobID,
+				StepPos:      step.Pos,
+				StepSummary:  "uses: " + action.Uses.Value,
+				SourceKind:   chain.SourceSecret,
+				SourceName:   "GITHUB_TOKEN",
+				SourceOrigin: "actions/checkout persist-credentials (" + rule.getCredentialLocation(checkoutInfo.version) + ")",
+				SinkKind:     chain.SinkArtifact,
+				RuleName:     rule.RuleNames(),
+				Severity:     "medium",
+			})
+		}
 
 		rule.AddAutoFixer(NewStepFixer(checkoutInfo.step, rule))
 	}

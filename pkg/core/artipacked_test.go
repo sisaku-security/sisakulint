@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -615,6 +616,77 @@ func TestArtipackedRule_MultipleCheckoutsAndUploads(t *testing.T) {
 		for _, e := range errors {
 			t.Logf("Error: %s", e.Description)
 		}
+	}
+}
+
+// TestArtipackedRule_PushesSinkRecord verifies that a confirmed
+// checkout-then-dangerous-upload credential leak is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization feature
+// (Milestone E task 16).
+func TestArtipackedRule_PushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := NewArtipackedRuleWithCollector(collector)
+
+	workflow := &ast.Workflow{
+		Jobs: map[string]*ast.Job{
+			"build": {
+				ID:  &ast.String{Value: "build"},
+				Pos: &ast.Position{Line: 5, Col: 3},
+				Steps: []*ast.Step{
+					{
+						ID: &ast.String{Value: "checkout"},
+						Exec: &ast.ExecAction{
+							Uses:   &ast.String{Value: "actions/checkout@v4"},
+							Inputs: map[string]*ast.Input{},
+						},
+						Pos: &ast.Position{Line: 10, Col: 5},
+					},
+					{
+						ID: &ast.String{Value: "upload"},
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{Value: "actions/upload-artifact@v4"},
+							Inputs: map[string]*ast.Input{
+								"path": {
+									Name:  &ast.String{Value: "path"},
+									Value: &ast.String{Value: "."},
+								},
+							},
+						},
+						Pos: &ast.Position{Line: 15, Col: 5},
+					},
+				},
+			},
+		},
+	}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(workflow.Jobs["build"])
+	for _, step := range workflow.Jobs["build"].Steps {
+		_ = rule.VisitStep(step)
+	}
+	_ = rule.VisitJobPost(workflow.Jobs["build"])
+	_ = rule.VisitWorkflowPost(workflow)
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkArtifact {
+		t.Errorf("SinkKind = %v, want SinkArtifact", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
 
