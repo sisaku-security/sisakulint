@@ -12,10 +12,22 @@ type MermaidRenderer struct{}
 
 func NewMermaidRenderer() *MermaidRenderer { return &MermaidRenderer{} }
 
+// sanitizeToken は [A-Za-z0-9_] 以外の全 rune を _ に写像し、mermaid の
+// 識別子として安全なトークンを返す。SourceName は括弧・カンマ・引用符・
+// アスタリスク（例: "expr (tainted via src)", "a, b", "secrets.*"）を含み得るため、
+// 個別置換ではなくホワイトリストで正規化する。
+func sanitizeToken(s string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			return r
+		}
+		return '_'
+	}, s)
+}
+
 // mermaidID は mermaid ノード ID に使えるよう記号を _ に正規化する。
 func mermaidID(id string) string {
-	r := strings.NewReplacer(":", "_", ".", "_", "-", "_", "/", "_", " ", "_")
-	return "n_" + r.Replace(id)
+	return "n_" + sanitizeToken(id)
 }
 
 // escapeLabel は mermaid ラベル内のダブルクォートを実体参照に置換する。
@@ -69,7 +81,7 @@ func (r *MermaidRenderer) Render(m *ChainModel) string {
 	}
 	sort.Strings(jobIDs)
 	for _, j := range jobIDs {
-		fmt.Fprintf(&b, "  subgraph job_%s[\"job: %s\"]\n", j, escapeLabel(j))
+		fmt.Fprintf(&b, "  subgraph job_%s[\"job: %s\"]\n", sanitizeToken(j), escapeLabel(j))
 		for _, n := range jobNodes[j] {
 			fmt.Fprintf(&b, "    %s\n", nodeShapeWithBadge(n))
 		}

@@ -96,3 +96,59 @@ func TestMermaidDeterministic(t *testing.T) {
 		t.Error("render is non-deterministic")
 	}
 }
+
+// TestSanitizeTokenWhitelist pins the whitelist normalization: SourceName values
+// carry mermaid-structural characters (parens from "expr (tainted via src)",
+// commas from multi-path joins, quotes from code-injection, "*" from secrets.*),
+// none of which may survive into a node ID.
+func TestSanitizeTokenWhitelist(t *testing.T) {
+	cases := map[string]string{
+		"needs.produce.outputs.ref (tainted via github.head_ref)": "needs_produce_outputs_ref__tainted_via_github_head_ref_",
+		"a, b":            "a__b",
+		"secrets.*":       "secrets__",
+		`x"y`:             "x_y",
+		"build-and-test":  "build_and_test",
+		"already_ok_1234": "already_ok_1234",
+	}
+	for in, want := range cases {
+		if got := sanitizeToken(in); got != want {
+			t.Errorf("sanitizeToken(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestMermaidRenderSanitizesIDs is the regression test for the malformed-mermaid
+// bug: a SourceName with parens/commas/star must not leak those characters into
+// emitted node IDs (which appear in node defs, edges, and class lines). Labels,
+// which are quoted, may still contain them.
+func TestMermaidRenderSanitizesIDs(t *testing.T) {
+	in := AssemblerInput{
+		FilePath: "x.yml", WorkflowName: "X",
+		JobContexts: []JobContext{{
+			JobID:      "build-and-test",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+			Permission: PermissionRef{Label: "contents:write"},
+		}},
+		Records: []SinkRecord{{
+			JobID: "build-and-test", StepPos: &ast.Position{Line: 5, Col: 3},
+			SourceKind: SourceUntrusted,
+			SourceName: "needs.a.outputs.x (tainted via github.head_ref), secrets.*",
+			SinkKind:   SinkNetwork, RuleName: "request-forgery-critical",
+		}},
+	}
+	out := NewMermaidRenderer().Render(Assemble(in))
+
+	// If the id were unsanitized it would contain "_(" (a space-then-paren from
+	// the SourceName collapsed into the id). Labels keep the literal " (" instead.
+	if strings.Contains(out, "_(") || strings.Contains(out, "_*") {
+		t.Errorf("unsanitized structural character leaked into a node ID:\n%s", out)
+	}
+	// The hyphenated job id must also be sanitized in the subgraph declaration.
+	if strings.Contains(out, "subgraph job_build-and-test") {
+		t.Errorf("subgraph id not sanitized for hyphenated job name:\n%s", out)
+	}
+	// And the sanitized source is still present (proves the source rendered).
+	if !strings.Contains(out, "needs_a_outputs_x__tainted_via_github_head_ref___secrets__") {
+		t.Errorf("expected sanitized source node id in output:\n%s", out)
+	}
+}

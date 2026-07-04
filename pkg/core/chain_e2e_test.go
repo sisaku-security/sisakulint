@@ -108,7 +108,10 @@ func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	if !strings.Contains(out, "-->|needs|") {
 		t.Errorf("expected a cross-job needs edge linking produce's action(s) to consume's tainted source:\n%s", out)
 	}
-	if !strings.Contains(out, "n_source_1_needs_produce_outputs_ref_(tainted_via_github_head_ref)") {
+	// Node IDs are whitelist-sanitized to [A-Za-z0-9_], so the parens/spaces in
+	// the SourceName ("needs.produce.outputs.ref (tainted via github.head_ref)")
+	// collapse to underscores in the ID.
+	if !strings.Contains(out, "n_source_1_needs_produce_outputs_ref__tainted_via_github_head_ref_") {
 		t.Errorf("expected the needs-derived source node naming the upstream job and its taint origin:\n%s", out)
 	}
 }
