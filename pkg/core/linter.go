@@ -648,28 +648,28 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUntrustedCheckoutRule(),
 		NewCachePoisoningRule(actionMetadata),
 		NewCachePoisoningPoisonableStepRule(),
-		NewSecretExposureRule(),                                                 // Detects toJSON(secrets) and secrets[dynamic-access]
-		NewUnmaskedSecretExposureRule(),                                         // Detects fromJson(secrets.XXX).yyy unmasked exposure
-		NewImproperAccessControlRule(),                                          // Detects improper access control with label-based approval and synchronize events
-		ImpostorCommitRuleFactory(),                                             // Detects impostor commits from fork network
-		NewUntrustedCheckoutTOCTOUCriticalRule(),                                // Detects TOCTOU with labeled event type and mutable refs
-		NewUntrustedCheckoutTOCTOUHighRule(),                                    // Detects TOCTOU with deployment environment and mutable refs
-		NewRefConfusionRule(),                                                   // Detects ref confusion attacks (same name branch and tag)
-		NewObfuscationRule(),                                                    // Detects obfuscated workflow patterns
-		NewKnownVulnerableActionsRule(gitHubToken),                              // Detects actions with known security vulnerabilities
-		NewBotConditionsRule(),                                                  // Detects spoofable bot detection conditions
-		NewArtipackedRule(),                                                     // Detects credential leakage via artifact upload
-		NewUnsoundContainsRule(),                                                // Detects bypassable contains() function usage in conditions
-		NewSelfHostedRunnersRule(),                                              // Detects self-hosted runner usage which may be dangerous in public repos
-		NewArchivedUsesRule(),                                                   // Detects usage of archived actions/reusable workflows
-		NewUnpinnedImagesRule(),                                                 // Detects container images not pinned by SHA256 digest
-		NewSecretsInArtifactsRule(),                                             // Detects secrets exposure in artifact uploads (CWE-312)
-		NewSecretExfiltrationRule(),                                             // Detects secret exfiltration via network commands
-		NewSecretInLogRuleWithTaintMapAndCollector(wfSecretTaintMap, collector), // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs; pushes SinkRecords for chain visualization
-		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow),           // Detects untrusted inputs passed to reusable workflows
-		NewDangerousTriggersCriticalRule(),                                      // Detects dangerous triggers without any mitigations
-		NewDangerousTriggersMediumRule(),                                        // Detects dangerous triggers with partial mitigations
-		NewSecretsInheritRuleWithCache(localReusableWorkflow),                   // Detects excessive secret inheritance using 'secrets: inherit'
+		NewSecretExposureRuleWithCollector(collector),                                // Detects toJSON(secrets) and secrets[dynamic-access]; pushes SinkRecords for chain visualization
+		NewUnmaskedSecretExposureRuleWithCollector(collector),                        // Detects fromJson(secrets.XXX).yyy unmasked exposure; pushes SinkRecords for chain visualization
+		NewImproperAccessControlRule(),                                               // Detects improper access control with label-based approval and synchronize events
+		ImpostorCommitRuleFactory(),                                                  // Detects impostor commits from fork network
+		NewUntrustedCheckoutTOCTOUCriticalRule(),                                     // Detects TOCTOU with labeled event type and mutable refs
+		NewUntrustedCheckoutTOCTOUHighRule(),                                         // Detects TOCTOU with deployment environment and mutable refs
+		NewRefConfusionRule(),                                                        // Detects ref confusion attacks (same name branch and tag)
+		NewObfuscationRule(),                                                         // Detects obfuscated workflow patterns
+		NewKnownVulnerableActionsRule(gitHubToken),                                   // Detects actions with known security vulnerabilities
+		NewBotConditionsRule(),                                                       // Detects spoofable bot detection conditions
+		NewArtipackedRuleWithCollector(collector),                                    // Detects credential leakage via artifact upload; pushes SinkRecords for chain visualization
+		NewUnsoundContainsRule(),                                                     // Detects bypassable contains() function usage in conditions
+		NewSelfHostedRunnersRule(),                                                   // Detects self-hosted runner usage which may be dangerous in public repos
+		NewArchivedUsesRule(),                                                        // Detects usage of archived actions/reusable workflows
+		NewUnpinnedImagesRule(),                                                      // Detects container images not pinned by SHA256 digest
+		NewSecretsInArtifactsRuleWithCollector(collector),                            // Detects secrets exposure in artifact uploads (CWE-312); pushes SinkRecords for chain visualization
+		NewSecretExfiltrationRuleWithCollector(collector),                            // Detects secret exfiltration via network commands; pushes SinkRecords for chain visualization
+		NewSecretInLogRuleWithTaintMapAndCollector(wfSecretTaintMap, collector),      // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs; pushes SinkRecords for chain visualization
+		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow),                // Detects untrusted inputs passed to reusable workflows
+		NewDangerousTriggersCriticalRule(),                                           // Detects dangerous triggers without any mitigations
+		NewDangerousTriggersMediumRule(),                                             // Detects dangerous triggers with partial mitigations
+		NewSecretsInheritRuleWithCacheAndCollector(localReusableWorkflow, collector), // Detects excessive secret inheritance using 'secrets: inherit'; pushes SinkRecords for chain visualization
 		ArgumentInjectionCriticalRule(wfTaintMap),
 		ArgumentInjectionMediumRule(wfTaintMap),
 		RequestForgeryCriticalRule(wfTaintMap), // Detects SSRF vulnerabilities in privileged triggers
