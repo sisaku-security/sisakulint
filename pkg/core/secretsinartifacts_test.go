@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewSecretsInArtifactsRule(t *testing.T) {
@@ -697,5 +698,60 @@ func TestSecretsInArtifacts_Integration(t *testing.T) {
 				t.Errorf("VisitStep() got %d autofixers, want %d autofixers", len(autoFixers), tt.wantAutoFixers)
 			}
 		})
+	}
+}
+
+// TestSecretsInArtifactsPushesSinkRecord verifies that a detected unsafe
+// artifact upload (v3 default include-hidden-files) is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization feature
+// (Milestone E task 16).
+func TestSecretsInArtifactsPushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewSecretsInArtifactsRuleWithCollector(collector)
+
+	step := &ast.Step{
+		ID: &ast.String{Value: "upload"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/upload-artifact@v3"},
+			Inputs: map[string]*ast.Input{
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist/"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if err := rule.VisitStep(step); err != nil {
+		t.Fatalf("VisitStep: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkArtifact {
+		t.Errorf("SinkKind = %v, want SinkArtifact", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
