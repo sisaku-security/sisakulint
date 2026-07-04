@@ -7,6 +7,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
@@ -2260,5 +2261,43 @@ func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {
 	msg := errs[0].Description
 	if !strings.Contains(msg, "$X") {
 		t.Errorf("error message %q should mention $X", msg)
+	}
+}
+
+// TestSecretInLogPushesSinkRecord verifies that a detected echo/printf leak of a
+// secret-sourced env var is also pushed to the chain.SinkCollector for the
+// leakage-path chain visualization feature (#milestone-D task 13).
+func TestSecretInLogPushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewSecretInLogRuleWithTaintMapAndCollector(NewWorkflowSecretTaintMap(), collector)
+
+	step := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ secrets.TOKEN }}"},
+		"echo \"$TOKEN\"",
+	)
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) == 0 {
+		t.Fatal("expected at least one SinkRecord pushed")
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkLog {
+		t.Errorf("SinkKind = %v, want SinkLog", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
 	}
 }
