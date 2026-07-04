@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -19,6 +20,10 @@ type UnmaskedSecretExposureRule struct {
 	currentStep   *ast.Step   // Track current step being visited (for auto-fix context)
 	currentString *ast.String // Track current string being checked (for auto-fix context)
 	currentJob    *ast.Job    // Track current job being visited (for auto-fix context)
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
 }
 
 // NewUnmaskedSecretExposureRule creates a new UnmaskedSecretExposureRule
@@ -31,6 +36,16 @@ func NewUnmaskedSecretExposureRule() *UnmaskedSecretExposureRule {
 				"See https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/",
 		},
 	}
+}
+
+// NewUnmaskedSecretExposureRuleWithCollector is like NewUnmaskedSecretExposureRule but
+// additionally pushes a chain.SinkRecord to collector for every detected unmasked derived
+// secret, feeding the leakage-path chain visualization (`-format "{{mermaid .}}"`). collector
+// may be nil, in which case no records are pushed (equivalent to NewUnmaskedSecretExposureRule).
+func NewUnmaskedSecretExposureRuleWithCollector(collector *chain.SinkCollector) *UnmaskedSecretExposureRule {
+	r := NewUnmaskedSecretExposureRule()
+	r.collector = collector
+	return r
 }
 
 // VisitWorkflowPre checks workflow-level env for unmasked secret patterns
@@ -301,6 +316,70 @@ func (rule *UnmaskedSecretExposureRule) reportUnmaskedSecretExposure(expr parsed
 			"See https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/",
 		expr.raw,
 	)
+
+	if rule.collector != nil {
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobIDForCollector(),
+			StepPos:      expr.pos,
+			StepSummary:  rule.stepSummaryForCollector(),
+			SourceKind:   chain.SourceSecret,
+			SourceName:   secretRefFromFromJsonExpr(expr.raw),
+			SourceOrigin: expr.raw,
+			SinkKind:     chain.SinkExpr,
+			RuleName:     rule.RuleNames(),
+			Severity:     "high",
+		})
+	}
+}
+
+// currentJobIDForCollector returns the lowercased ID of the job currently
+// being visited (tracked via currentJob, set in VisitJobPre), or "" when no
+// job context is available (e.g. workflow-level env checked in VisitWorkflowPre).
+func (rule *UnmaskedSecretExposureRule) currentJobIDForCollector() string {
+	if rule.currentJob == nil || rule.currentJob.ID == nil {
+		return ""
+	}
+	return strings.ToLower(rule.currentJob.ID.Value)
+}
+
+// stepSummaryForCollector returns a short human-readable summary of the step
+// currently being checked, for the chain visualization's StepSummary field.
+// Returns "" when no step context is available (e.g. workflow/job-level env).
+func (rule *UnmaskedSecretExposureRule) stepSummaryForCollector() string {
+	if rule.currentStep == nil || rule.currentStep.Exec == nil {
+		return ""
+	}
+	switch exec := rule.currentStep.Exec.(type) {
+	case *ast.ExecRun:
+		if exec.Run != nil {
+			return exec.Run.Value
+		}
+	case *ast.ExecAction:
+		if exec.Uses != nil {
+			return "uses: " + exec.Uses.Value
+		}
+	}
+	return ""
+}
+
+// secretRefFromFromJsonExpr extracts the "secrets.NAME" reference from an
+// expression like "fromJson(secrets.AZURE_CREDENTIALS).clientId" for use as
+// the chain visualization SourceName. Falls back to the generic "secrets.*"
+// when no identifier-shaped secret name can be isolated.
+func secretRefFromFromJsonExpr(expr string) string {
+	idx := strings.Index(expr, "secrets.")
+	if idx == -1 {
+		return "secrets.*"
+	}
+	start := idx + len("secrets.")
+	end := start
+	for end < len(expr) && isIdentChar(expr[end]) {
+		end++
+	}
+	if end == start {
+		return "secrets.*"
+	}
+	return "secrets." + expr[start:end]
 }
 
 // addAutoFixer adds an auto-fixer that inserts add-mask command

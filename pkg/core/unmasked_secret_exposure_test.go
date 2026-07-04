@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewUnmaskedSecretExposureRule(t *testing.T) {
@@ -670,6 +671,61 @@ func TestUnmaskedSecretExposure_AutoFixEdgeCases(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestUnmaskedSecretExposurePushesSinkRecord verifies that a detected
+// fromJson(secrets.X).y unmasked derived secret is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization feature
+// (Milestone E task 16).
+func TestUnmaskedSecretExposurePushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewUnmaskedSecretExposureRuleWithCollector(collector)
+
+	step := &ast.Step{
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"test_var": {
+					Name: &ast.String{Value: "TEST_VAR"},
+					Value: &ast.String{
+						Value: "${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkExpr {
+		t.Errorf("SinkKind = %v, want SinkExpr", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.SourceName != "secrets.AZURE_CREDENTIALS" {
+		t.Errorf("SourceName = %q, want %q", r.SourceName, "secrets.AZURE_CREDENTIALS")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
+	}
 }
 
 func TestUnmaskedSecretExposure_ComplexPatterns(t *testing.T) {
