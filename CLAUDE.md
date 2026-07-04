@@ -1,35 +1,35 @@
 # CLAUDE.md
 
-sisakulint は GitHub Actions workflow (.github/workflows/*.yml) の静的解析ツール。OWASP Top 10 CI/CD Security Risks 相当の検査を実装し、多くのルールが auto-fix と SARIF 出力に対応する。
+sisakulint is a static analysis tool for GitHub Actions workflow files (.github/workflows/*.yml). It implements checks aligned with the OWASP Top 10 CI/CD Security Risks, and most rules support auto-fix and SARIF output.
 
-## コマンド
+## Commands
 
 ```bash
 go build ./cmd/sisakulint
-go test ./...                          # 品質保証はローカル実行のみ (CI は test を回さない)
-sisakulint script/actions/<file>.yaml  # fixture の手動検証
-sisakulint -fix dry-run                # 修正プレビュー
+go test ./...                          # quality assurance is local-only (CI runs no tests)
+sisakulint script/actions/<file>.yaml  # manual fixture verification
+sisakulint -fix dry-run                # preview fixes
 sisakulint -debug
 ```
 
-## アーキテクチャ
+## Architecture
 
-workflow 走査 → AST 化 (pkg/ast + pkg/core/parse_*.go) → ルール適用 (pkg/core、visitor による depth-first: WorkflowPre → JobPre → Step → JobPost → WorkflowPost) → 報告 → 要求時 auto-fix。式 ${{ }} は pkg/expressions、シェル taint は pkg/shell、GitHub API は pkg/remote。パッケージ固有の規約は各ディレクトリの CLAUDE.md にある。
+Scan workflows → build AST (pkg/ast + pkg/core/parse_*.go) → apply rules (pkg/core, depth-first visitor: WorkflowPre → JobPre → Step → JobPost → WorkflowPost) → report → auto-fix on request. Expressions (${{ }}) live in pkg/expressions, shell taint analysis in pkg/shell, GitHub API access in pkg/remote. Package-specific conventions live in each directory's CLAUDE.md.
 
-ルール一覧の正は pkg/core/linter.go の makeRules の返り値と docs/ のルール別 md。この文書には一覧を持たない (二重管理は必ず陳腐化するため)。
+The source of truth for the rule inventory is the slice returned by makeRules in pkg/core/linter.go plus the per-rule docs in docs/. This file intentionally carries no rule list — a duplicated list always goes stale.
 
-## 全域で効く前提 (誤認されやすいが正しいもの)
+## Project-wide facts (easy to misread, but correct)
 
-- CI は go test も lint も実行しない。CI.yaml は gofmt の diff を表示するだけで fail もしない。push は何も検証しないため、コミット前にローカルで go test ./... を通すことがタスク完了条件。
-- 新ルールの追加は複数ファイルの同期契約: makeRules への登録、docs/<slug>.md、docs/_index.md の件数表 (手動集計)、script/actions/<rule>.yaml と <rule>-safe.yaml、script/README.md の表。コードとテストだけでは未完了。
-- 実効設定は .github/sisakulint.{yaml,yml}。-init が生成する .github/action.yaml はローダーに読まれない (既知の乖離、gitignore 済み)。
-- GitHub API トークンの解決経路は 2 つ併存する。CLI 本経路は pkg/core/github_token.go の ResolveGitHubToken (-github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN、サブプロセスプローブなし #484)。pkg/remote/fetcher.go の getToken は gh auth token / git credential fill を今もプローブする旧経路で、-remote スキャンと RemoteActionsMetadataCache が使う。認証を触るときは先にどちらの経路かを特定する。
-- exit code: 0 = 問題なし / 1 = 検出あり / 2 = オプション誤り / 3 = 致命的エラー (-fix on 中の GitHub API rate limit 超過を含む #474)。
-- missing-timeout-minutes ルールは opt-in。-enable-rule missing-timeout-minutes を付けたときだけ走る (登録済みでも既定無効)。
-- Go バージョンの正は go.mod と .go-version (1.25.10)。CI.yaml と Dockerfile (1.24.0)、release.yml (1.25) は追従漏れなので基準にしない。
-- リリースは v*.*.* の tag push でのみ発火する。main push ではデプロイされない。
-- docs/RULES_GUIDE.md、docs/ARCHITECTURE.md、script/github_to_aws/ への参照が一部ドキュメントに残っているが実在しない。探しに行かない。
+- CI runs neither go test nor any linter. CI.yaml only echoes the gofmt diff and never fails. A push verifies nothing, so passing go test ./... locally before committing is part of the definition of done.
+- Adding a rule is a multi-file sync contract: register in makeRules, add docs/<slug>.md, update the severity counts table in docs/_index.md (manually tallied), add script/actions/<rule>.yaml and <rule>-safe.yaml, and update the table in script/README.md. Code plus tests alone is incomplete.
+- The effective config file is .github/sisakulint.{yaml,yml}. The .github/action.yaml that -init generates is never read by the loader (known mismatch, gitignored).
+- Two GitHub API token resolution paths coexist. The primary CLI path is ResolveGitHubToken in pkg/core/github_token.go (-github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN, no subprocess probing, #484). getToken in pkg/remote/fetcher.go is the legacy path that still probes gh auth token / git credential fill; it serves -remote scans and the RemoteActionsMetadataCache. Identify which path you are on before touching auth.
+- Exit codes: 0 = clean / 1 = findings / 2 = invalid options / 3 = fatal error (including a GitHub API rate limit hit during -fix on, #474).
+- The missing-timeout-minutes rule is opt-in. It only runs with -enable-rule missing-timeout-minutes (registered but disabled by default).
+- The authoritative Go version is go.mod and .go-version (1.25.10). CI.yaml and the Dockerfile (1.24.0) and release.yml (1.25) lag behind; do not treat them as reference.
+- Releases fire only on a v*.*.* tag push. A push to main deploys nothing.
+- Some documents still reference docs/RULES_GUIDE.md, docs/ARCHITECTURE.md, and script/github_to_aws/; none of these exist. Do not go looking for them.
 
-## ルール追加の最小手順
+## Minimal steps for a new rule
 
-pkg/core/myrule.go に BaseRule を埋め込んだ struct を作り、Visit* メソッドで rule.Errorf(pos, ...) する。makeRules (pkg/core/linter.go) に登録し、pkg/core/myrule_test.go と上記の同期契約ぶんを揃える。実装規約は pkg/core/CLAUDE.md を参照。
+Create pkg/core/myrule.go with a struct embedding BaseRule and call rule.Errorf(pos, ...) from the Visit* methods. Register it in makeRules (pkg/core/linter.go), add pkg/core/myrule_test.go, and complete the sync contract above. Implementation conventions are in pkg/core/CLAUDE.md.

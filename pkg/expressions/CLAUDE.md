@@ -1,6 +1,6 @@
 # pkg/expressions
 
-- untrusted 入力のツリー (anti_untrustedmap.go) を変更するときは、BuiltinUntrustedInputs と CreateUntrustedInputsWithTaintedReusableWorkflowInputs が生成するコピー側の両方に反映されるかを確認する (reusable workflow 経路は後者を通る)。
-- ノード追加時、Children == nil (leaf) は単独出現で常に報告、非 nil (中間) は toJSON 等の関数引数内でのみ報告と、検出条件そのものが変わる。leaf/中間は意図して選ぶ。
-- anti_untrustedchecker.go のエラーメッセージ文言 "potentially untrusted" は pkg/core/taint.go が文字列マッチしている (IsUntrustedInput への移行途中)。文言を変えると taint 検出が黙って壊れるため、変更時は先に呼び出し元を移行する。
-- untrusted 検出は NewExprSemanticsChecker の第 1 引数 checkUntrustedInput=true のときだけ有効。呼び出し側 (pkg/core) がフラグを渡し忘れてもエラーにならず検出だけが全滅する。
+- When changing the untrusted-input tree (anti_untrustedmap.go), verify the change reaches both BuiltinUntrustedInputs and the copy produced by CreateUntrustedInputsWithTaintedReusableWorkflowInputs (the reusable-workflow path goes through the latter).
+- When adding a node, Children == nil makes it a leaf (always reported on its own) while non-nil makes it intermediate (reported only inside function arguments such as toJSON). The choice changes the detection condition itself, so pick leaf vs intermediate deliberately.
+- The error message wording "potentially untrusted" in anti_untrustedchecker.go is string-matched by pkg/core/taint.go (mid-migration to IsUntrustedInput). Changing the wording silently breaks taint detection; migrate that caller first.
+- Untrusted detection is active only when NewExprSemanticsChecker is constructed with checkUntrustedInput=true. A caller in pkg/core that forgets the flag gets no error — detection just silently disappears.

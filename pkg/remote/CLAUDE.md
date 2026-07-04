@@ -1,4 +1,4 @@
 # pkg/remote
 
-- fetcher.go の getToken は gh auth token / git credential fill をプローブする旧経路で、pkg/core/github_token.go の ResolveGitHubToken (#484 でプローブ廃止) とは意図的に別物として併存中。認証挙動の変更は両経路を確認する。
-- fetch 失敗・rate limit 時の方針はレイヤーごとに異なる: Scanner は Warning ログで続行、resolver (pkg/core/metadata.go) は即エラー返却 (キャッシュも retry もしない)、autofix は中断または書き込みスキップ。単一のグローバル方針は存在しないので、変更は呼び出し先の方針に合わせる。
+- getToken in fetcher.go is the legacy path that probes gh auth token / git credential fill. It deliberately coexists with ResolveGitHubToken in pkg/core/github_token.go (probing removed there by #484). Check both paths when changing auth behavior. NewFetcher returns an anonymous client when no token is found (it does not error).
+- Failure and rate-limit policy differs per layer: the Scanner logs a warning and continues, the resolver (pkg/core/metadata.go) returns the error immediately (no caching, no retry), and autofix aborts or skips the write. There is no single global policy — match the policy of the call site you are changing.

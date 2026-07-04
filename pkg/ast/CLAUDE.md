@@ -1,4 +1,4 @@
 # pkg/ast
 
-- ノード追加はこのパッケージだけで完結しない。pkg/core/parse_*.go の対応コンストラクタが Pos を埋める必要があり、この結合をコンパイラは検査しない。String ノードは pkg/core の newString 経由で構築しないと Quoted / Literal (YAML style フラグ) と BaseNode が欠落し、下流ルールが誤動作する。
-- RawYAMLValue 実装の position フィールド名 Posi は、インターフェースの Pos() メソッドとの同名衝突回避 (typo ではない)。
+- Adding a node type is not complete within this package: the matching constructor in pkg/core/parse_*.go must fill Pos, and the compiler does not check this coupling. String nodes must be built through newString in pkg/core, or the Quoted / Literal YAML style flags and BaseNode are lost and downstream rules misbehave.
+- The position field on RawYAMLValue implementations is named Posi to avoid colliding with the interface's Pos() method (not a typo).
