@@ -40,3 +40,31 @@ func TestMermaidBasicStructure(t *testing.T) {
 		t.Error("missing job subgraph cluster")
 	}
 }
+
+func TestMermaidEmphasis(t *testing.T) {
+	// 2 sink にファンアウトする untrusted チェーン
+	in := AssemblerInput{
+		FilePath: ".github/workflows/ci.yml", WorkflowName: "CI",
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true, SecretsAvailable: true, Pos: &ast.Position{Line: 2, Col: 3}}},
+			Permission: PermissionRef{Label: "contents:write", Pos: &ast.Position{Line: 4, Col: 3}}}},
+		Records: []SinkRecord{
+			{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9}, SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: SinkLog, RuleName: "secret-in-log"},
+			{JobID: "build", StepPos: &ast.Position{Line: 12, Col: 9}, SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: SinkNetwork, RuleName: "secret-exfiltration"},
+		},
+	}
+	out := NewMermaidRenderer().Render(Assemble(in))
+
+	if !strings.Contains(out, "%% blast-radius:") {
+		t.Error("missing summary comment line")
+	}
+	if !strings.Contains(out, "classDef untrusted") {
+		t.Error("missing untrusted classDef")
+	}
+	if !strings.Contains(out, "[&rarr;2 sinks]") {
+		t.Error("missing fan-out badge for shared source")
+	}
+	if !strings.Contains(out, "class ") || !strings.Contains(out, "fixhere") {
+		t.Error("missing leverage (fixhere) class assignment")
+	}
+}

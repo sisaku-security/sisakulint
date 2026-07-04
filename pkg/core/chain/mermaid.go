@@ -44,9 +44,13 @@ func nodeShape(n *Node) string {
 
 func (r *MermaidRenderer) Render(m *ChainModel) string {
 	var b strings.Builder
+
+	// ① blast-radius サマリ（mermaid コメント行）
+	fmt.Fprintf(&b, "%%%% blast-radius: untrusted:%d secrets:%d sinks:%d (%s)\n",
+		m.Summary.UntrustedTriggers, m.Summary.Secrets, m.Summary.Sinks, summarizeSinks(m.Summary))
+
 	b.WriteString("flowchart TD\n")
 
-	// job ごとに Action/Sink をクラスタ化。Trigger/Permission/Source は外側。
 	jobNodes := map[string][]*Node{}
 	var outer []*Node
 	for _, n := range m.Nodes {
@@ -57,7 +61,7 @@ func (r *MermaidRenderer) Render(m *ChainModel) string {
 		}
 	}
 	for _, n := range outer {
-		fmt.Fprintf(&b, "  %s\n", nodeShape(n))
+		fmt.Fprintf(&b, "  %s\n", nodeShapeWithBadge(n))
 	}
 	jobIDs := make([]string, 0, len(jobNodes))
 	for j := range jobNodes {
@@ -67,12 +71,11 @@ func (r *MermaidRenderer) Render(m *ChainModel) string {
 	for _, j := range jobIDs {
 		fmt.Fprintf(&b, "  subgraph job_%s[\"job: %s\"]\n", j, escapeLabel(j))
 		for _, n := range jobNodes[j] {
-			fmt.Fprintf(&b, "    %s\n", nodeShape(n))
+			fmt.Fprintf(&b, "    %s\n", nodeShapeWithBadge(n))
 		}
 		b.WriteString("  end\n")
 	}
 
-	// エッジ（m.Edges は Assemble で決定的順序済み）
 	for _, e := range m.Edges {
 		arrow := "-->"
 		if e.Kind.IsContext() {
@@ -80,5 +83,46 @@ func (r *MermaidRenderer) Render(m *ChainModel) string {
 		}
 		fmt.Fprintf(&b, "  %s %s|%s| %s\n", mermaidID(e.From), arrow, e.Kind.Label(), mermaidID(e.To))
 	}
+
+	// ②④ classDef と class 割当
+	b.WriteString("  classDef untrusted fill:#f88,stroke:#c00,color:#000\n")
+	b.WriteString("  classDef safe fill:#eee,stroke:#bbb,color:#999\n")
+	b.WriteString("  classDef fixhere stroke:#00a,stroke-width:3px\n")
+	for _, n := range m.Nodes {
+		cls := "safe"
+		if n.UntrustedReachable {
+			cls = "untrusted"
+		}
+		fmt.Fprintf(&b, "  class %s %s\n", mermaidID(n.ID), cls)
+	}
+	if m.LeverageID != "" {
+		fmt.Fprintf(&b, "  class %s fixhere\n", mermaidID(m.LeverageID))
+	}
 	return b.String()
+}
+
+func summarizeSinks(s Summary) string {
+	order := []SinkKind{SinkLog, SinkNetwork, SinkArtifact, SinkExpr, SinkBoundary}
+	parts := []string{}
+	for _, k := range order {
+		if c := s.SinkCountsByKind[k]; c > 0 {
+			parts = append(parts, fmt.Sprintf("%s:%d", k.String(), c))
+		}
+	}
+	return strings.Join(parts, "/")
+}
+
+// nodeShapeWithBadge は共有ノード(ChainCount>1)に [&rarr;N sinks] を、
+// レバレッジノードに 🔧 を付す。
+func nodeShapeWithBadge(n *Node) string {
+	label := n.Label
+	if n.Leverage {
+		label = "🔧 " + label
+	}
+	if n.ChainCount > 1 && (n.Kind == NodeTrigger || n.Kind == NodePermission || n.Kind == NodeSource) {
+		label = fmt.Sprintf("%s [&rarr;%d sinks]", label, n.ChainCount)
+	}
+	tmp := *n
+	tmp.Label = label
+	return nodeShape(&tmp)
 }
