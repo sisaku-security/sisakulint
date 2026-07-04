@@ -91,6 +91,21 @@ func TestIsUnsafeCheckoutRef(t *testing.T) {
 			want:     true,
 		},
 		{
+			name:     "head.label is unsafe",
+			refValue: "${{ github.event.pull_request.head.label }}",
+			want:     true,
+		},
+		{
+			name:     "snake_case steps output head_label is unsafe",
+			refValue: "${{ steps.pr.outputs.head_label }}",
+			want:     true,
+		},
+		{
+			name:     "compound ref mixing safe github.sha and head.label is unsafe",
+			refValue: "${{ github.sha }}-${{ github.event.pull_request.head.label }}",
+			want:     true,
+		},
+		{
 			name:     "unknown expression is unsafe (conservative)",
 			refValue: "${{ steps.unknown.outputs.something }}",
 			want:     true,
