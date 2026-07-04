@@ -1,0 +1,25 @@
+# E2E fixture for leakage-path chain visualization (`-format "{{mermaid .}}"`).
+#
+# No secrets, no untrusted input, read-only permissions, non-privileged
+# trigger: none of the flow rules that push chain.SinkRecord should fire, so
+# the assembled ChainModel has no dataflow (used-by/flows-to) edges — only
+# whatever context nodes JobContext always contributes. Used by
+# TestChainVizE2ESafeIsMinimal to confirm an empty/minimal graph reflects a
+# genuinely clean workflow rather than a rendering bug.
+name: chainviz safe
+on: push
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: static greeting
+        run: echo "hello world"
+      - name: safe output write
+        run: |
+          {
+            echo "result<<EOF"
+            echo "static-value"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

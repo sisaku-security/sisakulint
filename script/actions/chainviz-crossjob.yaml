@@ -1,0 +1,32 @@
+# E2E fixture for leakage-path chain visualization (`-format "{{mermaid .}}"`).
+#
+# Exercises the cross-job EdgeNeeds case in pkg/core/chain/assembler.go
+# (linkCrossJobNeeds): job "produce" writes an untrusted value to
+# $GITHUB_OUTPUT (output-clobbering-critical), and downstream job "consume"
+# reads it back via needs.produce.outputs.ref and passes it straight into a
+# curl URL (request-forgery-critical).
+#
+# Whether the chain graph actually draws a `-->|needs|` edge between the two
+# jobs' chains depends on RequestForgeryRule's deferred cross-job path
+# formatting SourceOrigin as "needs.produce.outputs.ref (tainted via ...)"
+# (see pkg/core/requestforgery.go VisitWorkflowPost) — see
+# pkg/core/chain_e2e_test.go for what was actually observed.
+name: chainviz cross job
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.get_ref.outputs.ref }}
+    steps:
+      - name: get_ref
+        id: get_ref
+        run: echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+  consume:
+    runs-on: ubuntu-latest
+    needs: [produce]
+    steps:
+      - name: use_ref
+        run: curl "https://example.com/${{ needs.produce.outputs.ref }}"

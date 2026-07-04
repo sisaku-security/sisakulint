@@ -1,0 +1,114 @@
+package core
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
+
+// runLinterMermaid lints a single fixture file with the {{mermaid .}} custom
+// error format and returns everything written to stdout. Single-file lints
+// go through Linter.LintFile (LintFiles delegates to it for a 1-element
+// slice), which independently assembles and sets the chain models since it
+// doesn't pass through the errgroup.Wait()-gated post-Wait section that
+// multi-file LintFiles uses (see the "単一ファイルパス" comment in
+// linter.go's LintFile).
+func runLinterMermaid(t *testing.T, path string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	linter, err := NewLinter(&buf, &LinterOptions{CustomErrorMessageFormat: "{{mermaid .}}"})
+	if err != nil {
+		t.Fatalf("NewLinter: %v", err)
+	}
+	if _, err := linter.LintFiles([]string{path}, nil); err != nil {
+		t.Fatalf("LintFiles: %v", err)
+	}
+	return buf.String()
+}
+
+// TestChainVizE2EBlastRadius exercises chainviz-blastradius.yaml end-to-end:
+// a single pull_request_target job whose secrets.DEPLOY_TOKEN env var fans
+// out to three different sink kinds (secret-in-log, secret-exfiltration,
+// secrets-in-artifacts). Confirmed against real `-format "{{mermaid .}}"`
+// output before writing these assertions.
+func TestChainVizE2EBlastRadius(t *testing.T) {
+	out := runLinterMermaid(t, "../../script/actions/chainviz-blastradius.yaml")
+	if !strings.Contains(out, "flowchart TD") {
+		t.Fatalf("no mermaid output:\n%s", out)
+	}
+	// All 3 sink kinds appear in the blast-radius summary comment line.
+	if !strings.Contains(out, "%% blast-radius: untrusted:1 secrets:2 sinks:3 (log:1/network:1/artifact:1)") {
+		t.Errorf("summary line missing or sink kinds incomplete:\n%s", out)
+	}
+	// secret-in-log and secret-exfiltration share the same secrets.DEPLOY_TOKEN
+	// source node (both read it from env), so the assembler fans it out with
+	// a "-> 2 sinks" badge instead of drawing two disconnected chains.
+	if !strings.Contains(out, `n_source_0_secrets_DEPLOY_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]`) {
+		t.Errorf("expected shared secrets.DEPLOY_TOKEN source node with fan-out badge:\n%s", out)
+	}
+	// untrusted-reachable emphasis is present (pull_request_target reaches everything here).
+	if !strings.Contains(out, "classDef untrusted") {
+		t.Error("missing untrusted emphasis classDef")
+	}
+	if !strings.Contains(out, "class n_trigger_pull_request_target fixhere") {
+		t.Errorf("expected the shared trigger to be marked as the leverage (fixhere) node:\n%s", out)
+	}
+}
+
+// TestChainVizE2ESafeIsMinimal exercises chainviz-safe.yaml: a push-triggered
+// job with read-only permissions, no secrets, and no untrusted input. No flow
+// rule pushes a SinkRecord, so the assembled graph must carry zero dataflow
+// (used-by/flows-to) edges — confirming an empty graph reflects a genuinely
+// clean workflow rather than a rendering bug that silently drops edges.
+func TestChainVizE2ESafeIsMinimal(t *testing.T) {
+	out := runLinterMermaid(t, "../../script/actions/chainviz-safe.yaml")
+	if !strings.Contains(out, "flowchart TD") {
+		t.Fatalf("no mermaid output:\n%s", out)
+	}
+	if strings.Contains(out, "|used-by|") || strings.Contains(out, "|flows-to|") {
+		t.Errorf("safe workflow produced dataflow edges:\n%s", out)
+	}
+	if !strings.Contains(out, "blast-radius: untrusted:0 secrets:0 sinks:0 ()") {
+		t.Errorf("expected an all-zero blast-radius summary for the safe fixture:\n%s", out)
+	}
+}
+
+// TestChainVizE2ECrossJobNeeds exercises chainviz-crossjob.yaml: job
+// "produce" writes github.head_ref (untrusted) to $GITHUB_OUTPUT, and
+// downstream job "consume" reads needs.produce.outputs.ref into a curl URL.
+//
+// KNOWN RISK (from the implementation plan): the assembler's EdgeNeeds only
+// draws when a rule's deferred cross-job SinkRecord.SourceOrigin literally
+// contains "needs.<job>.outputs.<name>". Verified against real output: both
+// CodeInjectionRule and RequestForgeryRule format their deferred cross-job
+// taintPath as fmt.Sprintf("%s (tainted via %s)", expr.raw, sources) in
+// VisitWorkflowPost (codeinjection.go, requestforgery.go), where expr.raw is
+// the untouched source text "needs.produce.outputs.ref" — so the pattern
+// does appear, and the -->|needs| edge is present in the real graph.
+func TestChainVizE2ECrossJobNeeds(t *testing.T) {
+	out := runLinterMermaid(t, "../../script/actions/chainviz-crossjob.yaml")
+	if !strings.Contains(out, "flowchart TD") {
+		t.Fatalf("no mermaid output:\n%s", out)
+	}
+	// Both jobs' sinks are present regardless of whether the needs edge draws.
+	if !strings.Contains(out, `subgraph job_produce["job: produce"]`) {
+		t.Errorf("missing produce job subgraph:\n%s", out)
+	}
+	if !strings.Contains(out, `subgraph job_consume["job: consume"]`) {
+		t.Errorf("missing consume job subgraph:\n%s", out)
+	}
+	if !strings.Contains(out, "sink_output_clobbering_critical_produce") {
+		t.Errorf("missing produce-side output-clobbering sink:\n%s", out)
+	}
+	if !strings.Contains(out, "sink_request_forgery_critical_consume") {
+		t.Errorf("missing consume-side request-forgery sink:\n%s", out)
+	}
+	// The cross-job edge itself: confirmed present against real output (see
+	// doc comment above), so this is a hard assertion, not a soft one.
+	if !strings.Contains(out, "-->|needs|") {
+		t.Errorf("expected a cross-job needs edge linking produce's action(s) to consume's tainted source:\n%s", out)
+	}
+	if !strings.Contains(out, "n_source_1_needs_produce_outputs_ref_(tainted_via_github_head_ref)") {
+		t.Errorf("expected the needs-derived source node naming the upstream job and its taint origin:\n%s", out)
+	}
+}

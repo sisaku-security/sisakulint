@@ -52,6 +52,9 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `secret-exfiltration-allowed-hosts.yaml` | Demonstrates the `secret-exfiltration.allowed-hosts` config — paired with a `.github/sisakulint.yaml` listing vendor/internal hosts the rule should trust |
 | `secret-exfiltration-per-workflow-override.yaml` | Demonstrates the `# sisakulint:secret-exfiltration.allowed-hosts:` per-workflow comment directive for scoping extra trusted hosts to a single workflow |
 | `dependabot-ecosystem.yaml` | Uses `actions/setup-node` (npm), `setup-go` (gomod), `setup-python` (pip), and `setup-java` (maven/gradle/sbt ambiguous) across separate jobs to exercise DependabotEcosystemRule on every supported setup-action shape. |
+| `chainviz-blastradius.yaml` | Leakage-path chain visualization (`-format "{{mermaid .}}"`) E2E fixture: a `pull_request_target` job whose `secrets.DEPLOY_TOKEN` fans out to three sink kinds — `echo` (secret-in-log), `curl` (secret-exfiltration), `actions/upload-artifact@v3` (secrets-in-artifacts). See `pkg/core/chain_e2e_test.go::TestChainVizE2EBlastRadius`. |
+| `chainviz-crossjob.yaml` | Chain visualization E2E fixture for the cross-job `EdgeNeeds` case: job `produce` writes `github.head_ref` to `$GITHUB_OUTPUT` (output-clobbering-critical), job `consume` reads `needs.produce.outputs.ref` into a `curl` URL (request-forgery-critical). See `pkg/core/chain_e2e_test.go::TestChainVizE2ECrossJobNeeds`. |
+| `chainviz-safe.yaml` | Chain visualization E2E fixture with no secrets/untrusted input and read-only permissions — asserts the assembled graph has zero dataflow edges (`used-by`/`flows-to`). See `pkg/core/chain_e2e_test.go::TestChainVizE2ESafeIsMinimal`. |
 
 ### Usage
 
