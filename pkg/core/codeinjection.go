@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -28,12 +29,20 @@ type CodeInjectionRule struct {
 	// pendingCrossJobChecks holds checks that couldn't be resolved because the upstream
 	// job hadn't been processed yet (reverse yaml order). Flushed in VisitWorkflowPost.
 	pendingCrossJobChecks []pendingCrossJobCheck
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // reportCodeInjectionError emits the appropriate Errorf for a code injection finding.
 // It centralises the message formatting that is shared between VisitJobPre (normal path)
-// and VisitWorkflowPost (deferred cross-job path).
-func (rule *CodeInjectionRule) reportCodeInjectionError(pos *ast.Position, taintPath string, isInRunScript bool) {
+// and VisitWorkflowPost (deferred cross-job path), and pushes a chain.SinkRecord for the
+// leakage-path chain visualization (`-format "{{mermaid .}}"`). step is the step the
+// finding was detected in; used only to build the collector's StepSummary.
+func (rule *CodeInjectionRule) reportCodeInjectionError(pos *ast.Position, taintPath string, isInRunScript bool, step *ast.Step) {
 	scriptType := "github-script"
 	if isInRunScript {
 		scriptType = "inline scripts"
@@ -52,6 +61,43 @@ func (rule *CodeInjectionRule) reportCodeInjectionError(pos *ast.Position, taint
 			taintPath, scriptType,
 		)
 	}
+
+	if rule.collector != nil {
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      pos,
+			StepSummary:  stepExecSummary(step),
+			SourceKind:   chain.SourceUntrusted,
+			SourceName:   taintPath,
+			SourceOrigin: taintPath,
+			SinkKind:     chain.SinkLog,
+			RuleName:     rule.RuleNames(),
+			Severity:     rule.severityLevel,
+		})
+	}
+}
+
+// stepExecSummary returns a short human-readable summary of a step's exec
+// block for the chain visualization's StepSummary field: "run: <script>" for
+// run: steps, "uses: <action>" for action steps, "" when step/exec is nil or
+// of a shape without a script/uses value. Shared by the untrusted-input-family
+// rules (code/envvar/envpath/output-clobbering/argument injection, request
+// forgery) since they all key sinks off the same two exec shapes.
+func stepExecSummary(step *ast.Step) string {
+	if step == nil || step.Exec == nil {
+		return ""
+	}
+	switch exec := step.Exec.(type) {
+	case *ast.ExecRun:
+		if exec.Run != nil {
+			return "run: " + exec.Run.Value
+		}
+	case *ast.ExecAction:
+		if exec.Uses != nil {
+			return "uses: " + exec.Uses.Value
+		}
+	}
+	return ""
 }
 
 // pendingCrossJobCheck stores a cross-job taint check that needs to be retried in VisitWorkflowPost.
@@ -66,6 +112,13 @@ type pendingCrossJobCheck struct {
 	commandName string
 	// reqForgerySeverity preserves the original severity from the sink analysis; used by request-forgery rule.
 	reqForgerySeverity RequestForgerySeverity
+	// consumerJobID is the lowercased ID of the job the check was queued from
+	// (captured from currentJobID at VisitJobPre queue-time). VisitWorkflowPost
+	// restores rule.currentJobID from this field before reporting, since by the
+	// time the deferred queue is flushed currentJobID would otherwise still
+	// hold whichever job was visited last — not necessarily this check's job.
+	// Used only for the chain-visualization SinkRecord.JobID.
+	consumerJobID string
 }
 
 // stepWithUntrustedInput tracks steps that need auto-fixing
@@ -140,6 +193,10 @@ func (rule *CodeInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Reset job-level state
 	rule.jobHasMatchingTriggers = false
 
@@ -221,7 +278,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 						isInRunScript: true,
 					})
 
-					rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), true)
+					rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), true, s)
 				}
 			}
 		}
@@ -250,7 +307,7 @@ func (rule *CodeInjectionRule) VisitJobPre(node *ast.Job) error {
 								scriptInput:   scriptInput,
 							})
 
-							rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), false)
+							rule.reportCodeInjectionError(expr.pos, strings.Join(untrustedPaths, "\", \""), false, s)
 						}
 					}
 				}
@@ -300,7 +357,11 @@ func (rule *CodeInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 
 		taintPath := fmt.Sprintf("%s (tainted via %s)", pending.expr.raw, strings.Join(sources, ", "))
 
-		rule.reportCodeInjectionError(pending.expr.pos, taintPath, pending.isInRunScript)
+		// Restore currentJobID to the job this check was queued from (VisitJobPre
+		// for every other job has since overwritten it) so the collector push
+		// inside reportCodeInjectionError attributes the finding correctly.
+		rule.currentJobID = pending.consumerJobID
+		rule.reportCodeInjectionError(pending.expr.pos, taintPath, pending.isInRunScript, pending.step)
 
 		// Wire up auto-fix, mirroring the normal path.
 		if pending.step != nil {
@@ -687,6 +748,7 @@ func (rule *CodeInjectionRule) addPendingCrossJobCheck(expr parsedExpression, st
 		step:          step,
 		isInRunScript: isInRunScript,
 		scriptInput:   scriptInput,
+		consumerJobID: rule.currentJobID,
 	})
 }
 
