@@ -1,0 +1,37 @@
+# Demonstrates workflows that still depend on the deprecated Node.js 20
+# action runtime (EOL 2026-04-30, removed from the runner on 2026-09-16).
+name: deprecated-node-runtime
+on: push
+
+# NG: pins the whole workflow to the EOL Node.js 20 runtime. This opt-out
+# stops working when node20 is removed from the runner on 2026-09-16.
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # NG: this variable was removed from the runner and has no effect.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: "true"
+    steps:
+      # NG: actions/checkout v4 declares `runs.using: node20`.
+      - uses: actions/checkout@v4
+      # NG: actions/setup-node v4 is node20, and Node.js 20 as a build
+      # target reached end-of-life on 2026-04-30.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # NG: actions/github-script v7 declares `runs.using: node20`.
+      - uses: actions/github-script@v7
+        with:
+          script: console.log("hello")
+      # NG: actions/upload-artifact v4 declares `runs.using: node20`.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

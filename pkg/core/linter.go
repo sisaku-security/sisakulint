@@ -654,6 +654,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUnsoundContainsRule(),                                      // Detects bypassable contains() function usage in conditions
 		NewSelfHostedRunnersRule(),                                    // Detects self-hosted runner usage which may be dangerous in public repos
 		NewArchivedUsesRule(),                                         // Detects usage of archived actions/reusable workflows
+		NewDeprecatedNodeRuntimeRule(actionMetadata),                  // Detects actions on the deprecated node20 runtime (EOL) and unsecure runtime pinning
 		NewUnpinnedImagesRule(),                                       // Detects container images not pinned by SHA256 digest
 		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
