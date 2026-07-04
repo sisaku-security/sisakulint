@@ -44,25 +44,21 @@ type DeprecatedNodeRuntimeRule struct {
 	metadataResolver ActionMetadataResolver
 }
 
-// nodeRuntimeUpgrade describes, for a well-known action, the newest major
-// version still running on node20 and the first major that declares node24.
-type nodeRuntimeUpgrade struct {
-	lastNode20Major  int
-	firstNode24Major int
-}
-
-// nodeRuntimeUpgrades is an embedded snapshot (verified 2026-07 against each
-// action's action.yml `runs.using` field). Maintained by hand: update an
-// entry when the listed action publishes a new major.
-var nodeRuntimeUpgrades = map[string]nodeRuntimeUpgrade{
-	"actions/checkout":          {lastNode20Major: 4, firstNode24Major: 5},
-	"actions/setup-node":        {lastNode20Major: 4, firstNode24Major: 5},
-	"actions/setup-python":      {lastNode20Major: 5, firstNode24Major: 6},
-	"actions/setup-go":          {lastNode20Major: 5, firstNode24Major: 6},
-	"actions/github-script":     {lastNode20Major: 7, firstNode24Major: 8},
-	"actions/cache":             {lastNode20Major: 4, firstNode24Major: 5},
-	"actions/upload-artifact":   {lastNode20Major: 4, firstNode24Major: 6},
-	"actions/download-artifact": {lastNode20Major: 6, firstNode24Major: 7},
+// nodeRuntimeFirstNode24Major maps well-known actions to the first major that
+// declares `runs.using: node24`; every lower major is treated as deprecated.
+// This single boundary intentionally covers gap majors such as
+// actions/upload-artifact v5, whose v5.0.0 tag still declares node20.
+// Maintained by hand (verified 2026-07 against each action's action.yml):
+// update an entry when the listed action publishes a new major.
+var nodeRuntimeFirstNode24Major = map[string]int{
+	"actions/checkout":          5,
+	"actions/setup-node":        5,
+	"actions/setup-python":      6,
+	"actions/setup-go":          6,
+	"actions/github-script":     8,
+	"actions/cache":             5,
+	"actions/upload-artifact":   6,
+	"actions/download-artifact": 7,
 }
 
 // deprecatedNodeRuntimes are `runs.using` values that no longer receive
@@ -110,10 +106,6 @@ func (rule *DeprecatedNodeRuntimeRule) VisitStep(step *ast.Step) error {
 
 	rule.checkEOLNodeBuildTarget(action)
 
-	// Resolver-first: the action.yml at the pinned ref is the ground truth.
-	// The embedded-table/comment heuristic only runs when resolution is
-	// unavailable, so a stale "# v5" comment next to a node24 SHA cannot
-	// produce a false positive as long as the resolver answers.
 	if meta := rule.resolveMetadata(uses); meta != nil && meta.Runs != nil {
 		using := strings.ToLower(meta.Runs.Using)
 		if reason, deprecated := deprecatedNodeRuntimes[using]; deprecated {
@@ -153,10 +145,10 @@ func (rule *DeprecatedNodeRuntimeRule) reportDeprecatedRuntime(step *ast.Step, a
 	upgradeHint := "Update the action to a version that declares node24, or contact the action maintainer."
 	fixable := false
 	owner, repo, ref := parseUsesValue(uses)
-	if upgrade, known := nodeRuntimeUpgrades[strings.ToLower(owner+"/"+repo)]; known && ref != "" {
+	if first, known := nodeRuntimeFirstNode24Major[strings.ToLower(owner+"/"+repo)]; known && ref != "" {
 		actionPath := strings.TrimSuffix(uses, "@"+ref)
-		upgradeHint = fmt.Sprintf("Update to %s@v%d or later, which runs on node24.", actionPath, upgrade.firstNode24Major)
-		if major, isTag := parseMajorFromRef(ref); isTag && major <= upgrade.lastNode20Major {
+		upgradeHint = fmt.Sprintf("Update to %s@v%d or later, which runs on node24.", actionPath, first)
+		if major, isTag := parseMajorFromRef(ref); isTag && major < first {
 			fixable = true
 		}
 	}
@@ -265,14 +257,14 @@ func parseMajorFromRef(ref string) (int, bool) {
 }
 
 // checkKnownNode20Action matches `uses:` against the embedded table of
-// popular actions with known node20 majors. Fallback path for when the
-// metadata resolver is unavailable.
+// popular actions. Fallback path for when the metadata resolver is
+// unavailable.
 func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, action *ast.ExecAction) {
 	owner, repo, ref := parseUsesValue(action.Uses.Value)
 	if owner == "" || repo == "" || ref == "" {
 		return
 	}
-	upgrade, known := nodeRuntimeUpgrades[strings.ToLower(owner+"/"+repo)]
+	first, known := nodeRuntimeFirstNode24Major[strings.ToLower(owner+"/"+repo)]
 	if !known {
 		return
 	}
@@ -290,14 +282,14 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 		}
 	}
 
-	if major > upgrade.lastNode20Major {
+	if major >= first {
 		return // already on a node24-capable major
 	}
 
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
 	rule.Errorf(action.Uses.Pos,
 		"action '%s@%s' runs on the deprecated Node.js 20 runtime (%s). Update to %s@v%d or later, which runs on node24. See %s",
-		actionPath, ref, deprecatedNodeRuntimes["node20"], actionPath, upgrade.firstNode24Major, nodeRuntimeDocURL)
+		actionPath, ref, deprecatedNodeRuntimes["node20"], actionPath, first, nodeRuntimeDocURL)
 	if fixable {
 		rule.AddAutoFixer(NewStepFixer(step, rule))
 	}
@@ -328,7 +320,7 @@ func (rule *DeprecatedNodeRuntimeRule) checkEOLNodeBuildTarget(action *ast.ExecA
 		return
 	}
 	raw := strings.TrimSpace(input.Value.Value)
-	if raw == "" || strings.Contains(raw, "${{") {
+	if raw == "" || input.Value.ContainsExpression() {
 		return
 	}
 	majorPart := strings.SplitN(strings.TrimPrefix(raw, "v"), ".", 2)[0]
@@ -352,17 +344,17 @@ func (rule *DeprecatedNodeRuntimeRule) FixStep(step *ast.Step) error {
 		return nil
 	}
 	owner, repo, ref := parseUsesValue(action.Uses.Value)
-	upgrade, known := nodeRuntimeUpgrades[strings.ToLower(owner+"/"+repo)]
+	first, known := nodeRuntimeFirstNode24Major[strings.ToLower(owner+"/"+repo)]
 	if !known {
 		return nil
 	}
 	major, isTag := parseMajorFromRef(ref)
-	if !isTag || major > upgrade.lastNode20Major {
+	if !isTag || major >= first {
 		return nil
 	}
 	// Preserve any subpath (e.g. actions/cache/restore@v4 must stay
 	// actions/cache/restore@v5, not become actions/cache@v5).
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
-	action.Uses.BaseNode.Value = fmt.Sprintf("%s@v%d", actionPath, upgrade.firstNode24Major)
+	action.Uses.BaseNode.Value = fmt.Sprintf("%s@v%d", actionPath, first)
 	return nil
 }

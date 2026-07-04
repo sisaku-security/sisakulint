@@ -80,6 +80,8 @@ func TestDeprecatedNodeRuntimeKnownActions(t *testing.T) {
 		{"github-script v7 is node20", "actions/github-script@v7", "", 1, 1},
 		{"github-script v8 is node24", "actions/github-script@v8", "", 0, 0},
 		{"download-artifact v6 is node20", "actions/download-artifact@v6", "", 1, 1},
+		{"upload-artifact v5 gap major is node20", "actions/upload-artifact@v5", "", 1, 1},
+		{"upload-artifact v6 is node24", "actions/upload-artifact@v6", "", 0, 0},
 		{"sha pinned with tag comment detected but not fixed", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "# v4.1.1", 1, 0},
 		{"sha pinned without comment falls through silently", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "", 0, 0},
 		{"unknown action is not matched", "someorg/someaction@v1", "", 0, 0},
@@ -166,8 +168,8 @@ func TestDeprecatedNodeRuntimeResolver(t *testing.T) {
 }
 
 // TestDeprecatedNodeRuntimeResolverFirst verifies that the resolved
-// action.yml wins over the embedded-table/comment heuristic: a stale "# v5"
-// comment next to a node24 SHA must not produce a false positive.
+// action.yml wins over the embedded-table/comment heuristic, so a stale
+// version comment next to a SHA pin cannot flip the verdict either way.
 func TestDeprecatedNodeRuntimeResolverFirst(t *testing.T) {
 	sha := "a309ff8b426b58ec0e2a45f0f869d46889d02405"
 
@@ -409,6 +411,7 @@ func TestDeprecatedNodeRuntimeFixStep(t *testing.T) {
 		{"cache restore subpath preserved", "actions/cache/restore@v4", "actions/cache/restore@v5"},
 		{"cache save subpath preserved", "actions/cache/save@v4", "actions/cache/save@v5"},
 		{"upload-artifact v4 bumped to v6", "actions/upload-artifact@v4", "actions/upload-artifact@v6"},
+		{"upload-artifact v5 gap major bumped to v6", "actions/upload-artifact@v5", "actions/upload-artifact@v6"},
 		{"github-script v7 bumped to v8", "actions/github-script@v7", "actions/github-script@v8"},
 		{"already node24 untouched", "actions/checkout@v5", "actions/checkout@v5"},
 		{"unknown action untouched", "someorg/someaction@v1", "someorg/someaction@v1"},
