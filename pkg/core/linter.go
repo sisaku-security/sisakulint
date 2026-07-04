@@ -120,6 +120,10 @@ type Linter struct {
 	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
 	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
 	loggedConfigs sync.Map
+	// remoteActionsCache は lint 実行全体で共有されるリモート action.yml の
+	// メタデータキャッシュ。per-file に生成すると同じアクションを何度も
+	// fetch してしまうため、Linter 単位で 1 つ持つ (内部は mutex で並行安全)。
+	remoteActionsCache *RemoteActionsMetadataCache
 }
 
 // NewLinterは新しいLinterインスタンスを作成する
@@ -196,11 +200,17 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 		}
 	}
 
+	var metadataDebug io.Writer
+	if logLevel >= LogLevelAllOutputIncludingDebug {
+		metadataDebug = logOutput
+	}
+
 	return &Linter{
 		projectInformation:       NewProjects(),
 		errorOutput:              errorOutput,
 		logOutput:                logOutput,
 		loggingLevel:             logLevel,
+		remoteActionsCache:       NewRemoteActionsMetadataCache(metadataDebug),
 		shellcheckExecutablePath: options.ShellcheckExecutable,
 		errorIgnorePatterns:      ignorePatterns,
 		defaultConfiguration:     config,
@@ -580,7 +590,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	return result, nil
 }
 
-func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, remoteActions *RemoteActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
 	// WorkflowTaintMap is shared between Critical and Medium variants of
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
@@ -590,7 +600,13 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 	if localActions != nil {
 		debugOut = localActions.dbg
 	}
-	actionMetadata := NewMultiActionMetadataResolver(localActions, NewRemoteActionsMetadataCache(debugOut))
+	// remoteActions is shared across all files of a lint run (passed down from
+	// the Linter) so each remote action.yml is fetched at most once per run.
+	// Tests and other callers may pass nil to get a per-call cache.
+	if remoteActions == nil {
+		remoteActions = NewRemoteActionsMetadataCache(debugOut)
+	}
+	actionMetadata := NewMultiActionMetadataResolver(localActions, remoteActions)
 
 	return []Rule{
 		// MatrixRule(),
@@ -719,7 +735,7 @@ func (l *Linter) validate(
 	// dependabot config / composite action / unparseable workflow would
 	// silently skip the rule-name check and the user's CLI typo would not
 	// be reported until a parseable workflow happened to reach validate().
-	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow)
+	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, l.remoteActionsCache, localReusableWorkflow)
 	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
 	if optErr != nil {
 		return nil, optErr
