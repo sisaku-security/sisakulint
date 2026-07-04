@@ -3,6 +3,8 @@ package core
 import (
 	"strings"
 	"testing"
+
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewSecretsInheritRule(t *testing.T) {
@@ -146,5 +148,54 @@ jobs:
 	}
 	if !strings.Contains(errMsg, "principle of least authority") {
 		t.Errorf("Error message should mention 'principle of least authority', got: %s", errMsg)
+	}
+}
+
+// TestSecretsInheritRule_PushesSinkRecord verifies that a detected
+// 'secrets: inherit' usage is also pushed to the chain.SinkCollector for the
+// leakage-path chain visualization feature (Milestone E task 16).
+func TestSecretsInheritRule_PushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	workflow := `
+on: push
+jobs:
+  call-workflow:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit
+`
+	collector := chain.NewSinkCollector()
+	rule := NewSecretsInheritRuleWithCacheAndCollector(nil, collector)
+	parsed, errs := Parse([]byte(workflow))
+	if len(errs) > 0 {
+		t.Fatalf("failed to parse workflow: %v", errs)
+	}
+
+	v := NewSyntaxTreeVisitor()
+	v.AddVisitor(rule)
+	if err := v.VisitTree(parsed); err != nil {
+		t.Fatalf("failed to visit tree: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkBoundary {
+		t.Errorf("SinkKind = %v, want SinkBoundary", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.JobID != "call-workflow" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "call-workflow")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
