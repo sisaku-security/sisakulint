@@ -121,7 +121,7 @@ type Linter struct {
 	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
 	loggedConfigs sync.Map
 	// remoteActionsCache は lint 実行全体で共有する remote action.yml の
-	// キャッシュ (per-file 生成だと同一アクションを重複 fetch するため)。
+	// キャッシュ。
 	remoteActionsCache *RemoteActionsMetadataCache
 }
 
@@ -599,7 +599,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 	if localActions != nil {
 		debugOut = localActions.dbg
 	}
-	// remoteActions is run-wide (from the Linter); nil gets a per-call cache.
+	// remoteActions is run-wide; nil gets a per-call cache.
 	if remoteActions == nil {
 		remoteActions = NewRemoteActionsMetadataCache(debugOut)
 	}
@@ -651,7 +651,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUnsoundContainsRule(),                                      // Detects bypassable contains() function usage in conditions
 		NewSelfHostedRunnersRule(),                                    // Detects self-hosted runner usage which may be dangerous in public repos
 		NewArchivedUsesRule(),                                         // Detects usage of archived actions/reusable workflows
-		NewDeprecatedNodeRuntimeRule(actionMetadata),                  // Detects actions on the deprecated node20 runtime (EOL) and unsecure runtime pinning
+		NewDeprecatedNodeRuntimeRule(actionMetadata),                  // Detects actions on the EOL node20 runtime and unsecure runtime pinning
 		NewUnpinnedImagesRule(),                                       // Detects container images not pinned by SHA256 digest
 		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
 		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands

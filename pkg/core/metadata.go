@@ -316,7 +316,7 @@ type remoteActionSpec struct {
 
 const (
 	// remoteMetadataFetchAttempts bounds retries per spec for transient
-	// errors (timeouts, 5xx). 404 is definitive and never retried.
+	// errors. 404 is definitive and never retried.
 	remoteMetadataFetchAttempts = 3
 	// remoteMetadataBreakerThreshold is the number of consecutive specs that
 	// must exhaust their retry budget before the circuit breaker opens.
@@ -456,9 +456,9 @@ func isRemoteNotFoundError(err error) bool {
 
 // resolveRemote fetches and parses the action metadata with bounded retries.
 // Caching policy:
-//   - parsed metadata        -> cached (definitive)
-//   - 404 on every candidate -> cached as nil (definitive: no metadata)
-//   - unparseable content    -> cached as nil (definitive: not an action)
+//   - parsed metadata        -> cached
+//   - 404 on every candidate -> cached as nil
+//   - unparseable content    -> cached as nil
 //   - transient failure      -> NOT cached; recorded in failed so repeat
 //     lookups fail fast this run and a fresh run can retry
 func (c *RemoteActionsMetadataCache) resolveRemote(spec string, actionSpec *remoteActionSpec) (*ActionMetadata, error) {

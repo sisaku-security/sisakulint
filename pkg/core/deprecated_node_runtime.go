@@ -11,17 +11,17 @@ import (
 )
 
 // DeprecatedNodeRuntimeRule detects workflows depending on deprecated
-// Node.js action runtimes (node20: EOL 2026-04-30, removed from the runner
-// 2026-09-16; node12/16: already removed).
+// Node.js action runtimes. node20 is EOL since 2026-04-30 and will be
+// removed from the runner on 2026-09-16; node12/16 are already removed.
 //
-// Detections (resolver-first: the resolved action.yml's `runs.using` is the
-// ground truth):
+// Detections, resolver-first: the resolved action.yml's `runs.using` is the
+// ground truth.
 //  1. actions declaring a deprecated runtime; auto-fix bumps well-known
 //     tags to the first node24-capable major
-//  2. composite actions with deprecated direct steps (depth-1, diagnose-only)
+//  2. composite actions with deprecated direct steps, depth-1, diagnose-only
 //  3. offline fallback via the embedded table when the resolver is unavailable
-//  4. env vars pinning the deprecated runtime (diagnose-only)
-//  5. EOL `node-version:` build targets in setup-node (diagnose-only)
+//  4. env vars pinning the deprecated runtime, diagnose-only
+//  5. EOL `node-version:` build targets in setup-node, diagnose-only
 //
 // See https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
 type DeprecatedNodeRuntimeRule struct {
@@ -31,8 +31,8 @@ type DeprecatedNodeRuntimeRule struct {
 
 // First major of each well-known action that declares `runs.using: node24`;
 // every lower major is deprecated, including gap majors such as
-// upload-artifact v5 (v5.0.0 still declares node20). Hand-maintained,
-// verified 2026-07 against each action.yml.
+// upload-artifact v5. Hand-maintained, verified 2026-07 against each
+// action.yml.
 var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/checkout":          5,
 	"actions/setup-node":        5,
@@ -141,7 +141,7 @@ func (rule *DeprecatedNodeRuntimeRule) reportDeprecatedRuntime(step *ast.Step, a
 }
 
 // checkCompositeTransitive reports deprecated runtimes in a composite's
-// direct steps (depth-1 only). Diagnose-only: the fix belongs to the
+// direct steps, depth-1 only. Diagnose-only: the fix belongs to the
 // composite's maintainer.
 func (rule *DeprecatedNodeRuntimeRule) checkCompositeTransitive(action *ast.ExecAction, parentSpec string, meta *ActionMetadata) {
 	for _, s := range meta.Runs.Steps {
@@ -247,7 +247,7 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	major, isTag := parseMajorFromRef(ref)
 	fixable := isTag
 	if !isTag {
-		// SHA pins carry the tag as a "# v4.1.1" comment (commit-sha auto-fix).
+		// SHA pins carry the tag as a "# v4.1.1" line comment.
 		comment := strings.TrimSpace(strings.TrimPrefix(action.Uses.BaseNode.LineComment, "#"))
 		if m, ok := parseMajorFromRef(comment); ok {
 			major = m
@@ -269,8 +269,8 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	}
 }
 
-// EOL dates of Node.js majors as build targets (distinct from the action
-// runtime). Source: https://github.com/nodejs/Release
+// EOL dates of Node.js majors as build targets.
+// Source: https://github.com/nodejs/Release
 var eolNodeBuildTargets = map[int]string{
 	12: "2022-04-30",
 	14: "2023-04-30",
