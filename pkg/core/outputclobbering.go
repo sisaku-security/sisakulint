@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"gopkg.in/yaml.v3"
 )
@@ -20,6 +21,12 @@ type OutputClobberingRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithOutputClobbering
 	workflow           *ast.Workflow
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // stepWithOutputClobbering tracks steps that need auto-fixing for output clobbering
@@ -86,6 +93,10 @@ func (rule *OutputClobberingRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
 
@@ -172,6 +183,21 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 							"output clobbering (medium): \"%s\" is potentially untrusted and written to $GITHUB_OUTPUT. Attackers can inject newlines to overwrite other output variables. Use heredoc syntax with unique delimiters: 'name<<EOF\\nvalue\\nEOF'",
 							strings.Join(untrustedPaths, "\", \""),
 						)
+					}
+
+					if rule.collector != nil {
+						sourceName := strings.Join(untrustedPaths, ", ")
+						rule.collector.Add(chain.SinkRecord{
+							JobID:        rule.currentJobID,
+							StepPos:      linePos,
+							StepSummary:  stepExecSummary(s),
+							SourceKind:   chain.SourceUntrusted,
+							SourceName:   sourceName,
+							SourceOrigin: sourceName,
+							SinkKind:     chain.SinkExpr,
+							RuleName:     rule.RuleNames(),
+							Severity:     rule.severityLevel,
+						})
 					}
 				}
 			}
