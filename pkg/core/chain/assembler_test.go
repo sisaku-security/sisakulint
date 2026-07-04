@@ -119,3 +119,46 @@ func TestAssembleNoRecordsNoDataflowEdges(t *testing.T) {
 		}
 	}
 }
+
+func TestAssembleChainCountAndReachable(t *testing.T) {
+	rec := func(sink SinkKind, rule string, line int) SinkRecord {
+		return SinkRecord{JobID: "build", StepPos: &ast.Position{Line: line, Col: 9},
+			SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SourceOrigin: "secrets.TOKEN",
+			SinkKind: sink, RuleName: rule}
+	}
+	in := AssemblerInput{
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true, SecretsAvailable: true}},
+			Permission: PermissionRef{Label: "contents:write"}}},
+		Records: []SinkRecord{rec(SinkLog, "secret-in-log", 10), rec(SinkNetwork, "secret-exfiltration", 12)},
+	}
+	m := Assemble(in)
+
+	// 共有 source は 2チェーンを通過
+	if n := nodeByID(m, "source:0:secrets.TOKEN"); n == nil || n.ChainCount != 2 {
+		t.Errorf("source ChainCount = %v, want 2", n)
+	}
+	// untrusted trigger から全ノードが到達可能
+	for _, n := range m.Nodes {
+		if !n.UntrustedReachable {
+			t.Errorf("node %q not marked UntrustedReachable", n.ID)
+		}
+	}
+}
+
+func TestAssembleUntrustedReachableSafeTrigger(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "push", Untrusted: false}},
+			Permission: PermissionRef{Label: "contents:read"}}},
+		Records: []SinkRecord{{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9},
+			SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: SinkLog, RuleName: "secret-in-log"}},
+	}
+	m := Assemble(in)
+	// secret source + safe trigger のみ: untrusted 到達はゼロ
+	for _, n := range m.Nodes {
+		if n.UntrustedReachable {
+			t.Errorf("node %q wrongly marked UntrustedReachable under safe trigger", n.ID)
+		}
+	}
+}

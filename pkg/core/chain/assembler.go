@@ -63,9 +63,60 @@ func Assemble(in AssemblerInput) *ChainModel {
 		}
 	}
 
+	computeChainCount(nodes, in)
+	computeUntrustedReachable(nodes, m.Edges)
+
 	m.Nodes = sortedNodes(nodes)
 	dedupEdges(m)
 	return m
+}
+
+// computeChainCount は各 record のパスが通過する全ノードの ChainCount を +1 する。
+func computeChainCount(nodes map[string]*Node, in AssemblerInput) {
+	ctxByJob := in.jobContextByID()
+	for _, r := range in.Records {
+		ids := []string{
+			fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName),
+			fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos)),
+			fmt.Sprintf("sink:%s:%s:%d:%d", r.RuleName, r.JobID, posLine(r.StepPos), posCol(r.StepPos)),
+		}
+		if jc, ok := ctxByJob[r.JobID]; ok {
+			ids = append(ids, "perm:"+jc.JobID)
+			for _, tr := range jc.Triggers {
+				ids = append(ids, "trigger:"+tr.Name)
+			}
+		}
+		for _, id := range ids {
+			if n, ok := nodes[id]; ok {
+				n.ChainCount++
+			}
+		}
+	}
+}
+
+// computeUntrustedReachable は untrusted trigger と untrusted source を種に前方 BFS。
+func computeUntrustedReachable(nodes map[string]*Node, edges []Edge) {
+	adj := map[string][]string{}
+	for _, e := range edges {
+		adj[e.From] = append(adj[e.From], e.To)
+	}
+	queue := []string{}
+	for id, n := range nodes {
+		if (n.Kind == NodeTrigger && n.Untrusted) || (n.Kind == NodeSource && n.Untrusted) {
+			n.UntrustedReachable = true
+			queue = append(queue, id)
+		}
+	}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, nxt := range adj[cur] {
+			if n, ok := nodes[nxt]; ok && !n.UntrustedReachable {
+				n.UntrustedReachable = true
+				queue = append(queue, nxt)
+			}
+		}
+	}
 }
 
 func posLine(p *ast.Position) int {
