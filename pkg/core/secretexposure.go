@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -51,6 +52,11 @@ type SecretExposureRule struct {
 	BaseRule
 	currentStep   *ast.Step   // Track current step being visited (for auto-fix context)
 	currentString *ast.String // Track current string being checked (for auto-fix context)
+	currentJobID  string      // Lowercased ID of the job currently being visited
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
 }
 
 // isValidSecretNameForDotNotation checks if a secret name is valid for dot notation access.
@@ -74,8 +80,22 @@ func NewSecretExposureRule() *SecretExposureRule {
 	}
 }
 
+// NewSecretExposureRuleWithCollector is like NewSecretExposureRule but additionally pushes a
+// chain.SinkRecord to collector for every detected secret exposure expression, feeding the
+// leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be nil, in which
+// case no records are pushed (equivalent to NewSecretExposureRule).
+func NewSecretExposureRuleWithCollector(collector *chain.SinkCollector) *SecretExposureRule {
+	r := NewSecretExposureRule()
+	r.collector = collector
+	return r
+}
+
 // VisitJobPre visits each job and checks for excessive secret exposure
 func (rule *SecretExposureRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Check job-level env
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
@@ -238,6 +258,45 @@ func (rule *SecretExposureRule) checkExpressionForSecretExposure(expr parsedExpr
 	})
 }
 
+// stepSummaryForCollector returns a short human-readable summary of the step
+// currently being checked, for the chain visualization's StepSummary field.
+// Returns "" when no step context is available (e.g. workflow/job-level env).
+func (rule *SecretExposureRule) stepSummaryForCollector() string {
+	if rule.currentStep == nil || rule.currentStep.Exec == nil {
+		return ""
+	}
+	switch exec := rule.currentStep.Exec.(type) {
+	case *ast.ExecRun:
+		if exec.Run != nil {
+			return exec.Run.Value
+		}
+	case *ast.ExecAction:
+		if exec.Uses != nil {
+			return "uses: " + exec.Uses.Value
+		}
+	}
+	return ""
+}
+
+// pushSinkRecord records a detected secret exposure expression for the
+// leakage-path chain visualization.
+func (rule *SecretExposureRule) pushSinkRecord(pos *ast.Position, sourceName, sourceOrigin string) {
+	if rule.collector == nil {
+		return
+	}
+	rule.collector.Add(chain.SinkRecord{
+		JobID:        rule.currentJobID,
+		StepPos:      pos,
+		StepSummary:  rule.stepSummaryForCollector(),
+		SourceKind:   chain.SourceSecret,
+		SourceName:   sourceName,
+		SourceOrigin: sourceOrigin,
+		SinkKind:     chain.SinkExpr,
+		RuleName:     rule.RuleNames(),
+		Severity:     "high",
+	})
+}
+
 // checkToJSONSecretsCall checks if a function call is toJSON(secrets)
 func (rule *SecretExposureRule) checkToJSONSecretsCall(funcCall *expressions.FuncCallNode, expr parsedExpression) {
 	// Function names are case-insensitive and normalized to lowercase
@@ -266,6 +325,7 @@ func (rule *SecretExposureRule) checkToJSONSecretsCall(funcCall *expressions.Fun
 			"Use specific secret references like secrets.MY_SECRET instead. "+
 			"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 	)
+	rule.pushSinkRecord(expr.pos, "secrets.*", "toJSON(secrets)")
 }
 
 // checkSecretsDynamicAccess checks if secrets are accessed dynamically via index notation
@@ -294,6 +354,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			secretName, normalizeSecretName(secretName),
 		)
+		rule.pushSinkRecord(expr.pos, "secrets."+secretName, "secrets['"+secretName+"']")
 
 		// Add auto-fixer ONLY if secret name is valid for dot notation
 		// Invalid names (with hyphens, dots, etc.) will get error but no auto-fix
@@ -317,6 +378,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			indexExpr.Callee,
 		)
+		rule.pushSinkRecord(expr.pos, "secrets.*", fmt.Sprintf("secrets[%s(...)]", indexExpr.Callee))
 	case *expressions.VariableNode:
 		// secrets[variable] - dynamic lookup
 		rule.Errorf(
@@ -327,16 +389,19 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 			indexExpr.Name,
 		)
+		rule.pushSinkRecord(expr.pos, "secrets.*", fmt.Sprintf("secrets[%s]", indexExpr.Name))
 	case *expressions.ObjectDerefNode:
 		// secrets[matrix.env] or similar - dynamic lookup via object property
+		inner := expr.raw[strings.Index(expr.raw, "[")+1 : strings.LastIndex(expr.raw, "]")]
 		rule.Errorf(
 			expr.pos,
 			"excessive secrets exposure: secrets[%s] uses dynamic property access to select secrets. "+
 				"This pattern exposes more secrets than necessary. "+
 				"Use conditional logic with explicit secret references instead. "+
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
-			expr.raw[strings.Index(expr.raw, "[")+1:strings.LastIndex(expr.raw, "]")],
+			inner,
 		)
+		rule.pushSinkRecord(expr.pos, "secrets.*", fmt.Sprintf("secrets[%s]", inner))
 	default:
 		// Any other dynamic access pattern
 		rule.Errorf(
@@ -346,6 +411,7 @@ func (rule *SecretExposureRule) checkSecretsDynamicAccess(indexAccess *expressio
 				"Use explicit secret references like secrets.MY_SECRET instead. "+
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexposure/",
 		)
+		rule.pushSinkRecord(expr.pos, "secrets.*", "secrets[...]")
 	}
 }
 

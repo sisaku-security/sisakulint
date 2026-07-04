@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewSecretExposureRule(t *testing.T) {
@@ -654,6 +655,58 @@ func TestIsValidSecretNameForDotNotation(t *testing.T) {
 					tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestSecretExposurePushesSinkRecord verifies that a detected secrets['NAME']
+// bracket-notation exposure is also pushed to the chain.SinkCollector for the
+// leakage-path chain visualization feature (Milestone E task 16).
+func TestSecretExposurePushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := NewSecretExposureRuleWithCollector(collector)
+
+	step := &ast.Step{
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"my_token": {
+					Name: &ast.String{Value: "MY_TOKEN"},
+					Value: &ast.String{
+						Value: "${{ secrets['MY_SECRET'] }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkExpr {
+		t.Errorf("SinkKind = %v, want SinkExpr", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.SourceName != "secrets.MY_SECRET" {
+		t.Errorf("SourceName = %q, want %q", r.SourceName, "secrets.MY_SECRET")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
 
