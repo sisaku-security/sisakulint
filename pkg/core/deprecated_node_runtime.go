@@ -10,46 +10,29 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
-// DeprecatedNodeRuntimeRule detects GitHub Actions workflows that depend on
-// the deprecated Node.js 20 action runtime (or the already-removed node12 /
-// node16 runtimes). Node.js 20 reached end-of-life on 2026-04-30; GitHub
-// switched the default action runtime to node24 on 2026-06-16 and will remove
-// node20 from the runner on 2026-09-16.
-// See https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+// DeprecatedNodeRuntimeRule detects workflows depending on deprecated
+// Node.js action runtimes (node20: EOL 2026-04-30, removed from the runner
+// 2026-09-16; node12/16: already removed).
 //
-// Detections (resolver-first):
-//  1. `uses:` references whose action.yml declares a deprecated runtime,
-//     resolved through ActionMetadataResolver (local `./` actions offline,
-//     remote actions via GitHub API). The resolved `runs.using` value is the
-//     ground truth, so SHA-pinned refs are detected without relying on line
-//     comments and the actual runtime (node12/16/20) is reported. Auto-fix
-//     bumps well-known action tags to the first node24-capable major
-//     (embedded table).
-//  2. Composite actions whose direct internal steps run on a deprecated
-//     runtime (depth-1, diagnose-only — the fix belongs to the action
-//     maintainer, so the report points at bumping the composite itself).
-//  3. Fallback when the resolver is unavailable (offline / API failure):
-//     well-known action majors from the embedded table, using the tag or the
-//     `# vX` line comment of SHA-pinned refs. Comments can be stale, so this
-//     path is heuristic by design.
-//  4. Workflow/job/step `env:` entries pinning the deprecated runtime:
-//     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION (time-limited opt-out that
-//     stops working on 2026-09-16) and FORCE_JAVASCRIPT_ACTIONS_TO_NODE20
-//     (removed from the runner; dead configuration). Diagnose-only.
-//  5. `actions/setup-node` with an EOL `node-version:` build target
-//     (Node.js <= 20). Diagnose-only because changing the build target is a
-//     semantic change the project owner must decide.
+// Detections (resolver-first: the resolved action.yml's `runs.using` is the
+// ground truth):
+//  1. actions declaring a deprecated runtime; auto-fix bumps well-known
+//     tags to the first node24-capable major
+//  2. composite actions with deprecated direct steps (depth-1, diagnose-only)
+//  3. offline fallback via the embedded table when the resolver is unavailable
+//  4. env vars pinning the deprecated runtime (diagnose-only)
+//  5. EOL `node-version:` build targets in setup-node (diagnose-only)
+//
+// See https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
 type DeprecatedNodeRuntimeRule struct {
 	BaseRule
 	metadataResolver ActionMetadataResolver
 }
 
-// nodeRuntimeFirstNode24Major maps well-known actions to the first major that
-// declares `runs.using: node24`; every lower major is treated as deprecated.
-// This single boundary intentionally covers gap majors such as
-// actions/upload-artifact v5, whose v5.0.0 tag still declares node20.
-// Maintained by hand (verified 2026-07 against each action's action.yml):
-// update an entry when the listed action publishes a new major.
+// First major of each well-known action that declares `runs.using: node24`;
+// every lower major is deprecated, including gap majors such as
+// upload-artifact v5 (v5.0.0 still declares node20). Hand-maintained,
+// verified 2026-07 against each action.yml.
 var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/checkout":          5,
 	"actions/setup-node":        5,
@@ -61,9 +44,8 @@ var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/download-artifact": 7,
 }
 
-// deprecatedNodeRuntimes are `runs.using` values that no longer receive
-// security updates. node12/node16 are already removed from the runner;
-// node20 is EOL and scheduled for removal on 2026-09-16.
+// deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
+// interpolated into reports.
 var deprecatedNodeRuntimes = map[string]string{
 	"node12": "removed from the runner",
 	"node16": "removed from the runner",
@@ -122,8 +104,7 @@ func (rule *DeprecatedNodeRuntimeRule) VisitStep(step *ast.Step) error {
 	return nil
 }
 
-// resolveMetadata wraps the resolver with nil/error handling. Resolution
-// failures are debug-logged and reported as nil so offline runs fall back to
+// resolveMetadata returns nil on resolution failure so callers fall back to
 // the embedded table silently.
 func (rule *DeprecatedNodeRuntimeRule) resolveMetadata(spec string) *ActionMetadata {
 	if rule.metadataResolver == nil {
@@ -137,9 +118,8 @@ func (rule *DeprecatedNodeRuntimeRule) resolveMetadata(spec string) *ActionMetad
 	return meta
 }
 
-// reportDeprecatedRuntime reports a resolver-confirmed deprecated runtime and
-// attaches the auto-fixer when the embedded table knows a node24-capable
-// major and the ref is a bumpable tag.
+// reportDeprecatedRuntime reports the finding; auto-fix only when the table
+// knows the target major and the ref is a bumpable tag.
 func (rule *DeprecatedNodeRuntimeRule) reportDeprecatedRuntime(step *ast.Step, action *ast.ExecAction, using, reason string) {
 	uses := action.Uses.Value
 	upgradeHint := "Update the action to a version that declares node24, or contact the action maintainer."
@@ -160,11 +140,9 @@ func (rule *DeprecatedNodeRuntimeRule) reportDeprecatedRuntime(step *ast.Step, a
 	}
 }
 
-// checkCompositeTransitive resolves the direct internal steps of a composite
-// action and reports the ones running on a deprecated runtime. Depth-1 only:
-// nested composite actions are not followed. Diagnose-only — the workflow
-// author cannot rewrite a third-party composite's internals; the actionable
-// remediation is bumping the composite itself.
+// checkCompositeTransitive reports deprecated runtimes in a composite's
+// direct steps (depth-1 only). Diagnose-only: the fix belongs to the
+// composite's maintainer.
 func (rule *DeprecatedNodeRuntimeRule) checkCompositeTransitive(action *ast.ExecAction, parentSpec string, meta *ActionMetadata) {
 	for _, s := range meta.Runs.Steps {
 		if s == nil || s.Uses == "" {
@@ -195,9 +173,8 @@ func (rule *DeprecatedNodeRuntimeRule) checkCompositeTransitive(action *ast.Exec
 	}
 }
 
-// resolveCompositeLocalSpec turns a composite-internal relative uses (e.g.
-// "./predicate" inside actions/attest-build-provenance@v2) into a resolvable
-// remote spec ("actions/attest-build-provenance/predicate@v2").
+// resolveCompositeLocalSpec turns a composite-internal "./sub" uses into
+// "owner/repo/sub@ref" so it can be resolved remotely.
 func resolveCompositeLocalSpec(parentSpec, rel string) string {
 	at := strings.LastIndex(parentSpec, "@")
 	if at <= 0 || at == len(parentSpec)-1 {
@@ -209,7 +186,7 @@ func resolveCompositeLocalSpec(parentSpec, rel string) string {
 		return ""
 	}
 	joined := pathpkg.Join(parentPath, rel)
-	// Reject anything escaping the parent repository (e.g. "../../x").
+	// Reject "../.." escapes out of the parent repository.
 	repoPrefix := parentParts[0] + "/" + parentParts[1]
 	if joined != repoPrefix && !strings.HasPrefix(joined, repoPrefix+"/") {
 		return ""
@@ -217,8 +194,8 @@ func resolveCompositeLocalSpec(parentSpec, rel string) string {
 	return joined + "@" + ref
 }
 
-// checkEnvFlags reports env entries that pin workflows to the deprecated
-// runtime. Matching is case-insensitive because GitHub env names are.
+// checkEnvFlags reports env vars pinning the deprecated runtime; GitHub env
+// names are case-insensitive.
 func (rule *DeprecatedNodeRuntimeRule) checkEnvFlags(env *ast.Env) {
 	if env == nil || env.Vars == nil {
 		return
@@ -242,8 +219,7 @@ func (rule *DeprecatedNodeRuntimeRule) checkEnvFlags(env *ast.Env) {
 
 var nodeMajorTagPattern = regexp.MustCompile(`^v(\d+)(?:\..*)?$`)
 
-// parseMajorFromRef extracts the major version from tag-style refs such as
-// "v4" or "v4.1.2". Returns false for branches, SHAs, and anything else.
+// parseMajorFromRef parses "v4" / "v4.1.2" tags; false for branches and SHAs.
 func parseMajorFromRef(ref string) (int, bool) {
 	m := nodeMajorTagPattern.FindStringSubmatch(ref)
 	if m == nil {
@@ -256,9 +232,8 @@ func parseMajorFromRef(ref string) (int, bool) {
 	return major, true
 }
 
-// checkKnownNode20Action matches `uses:` against the embedded table of
-// popular actions. Fallback path for when the metadata resolver is
-// unavailable.
+// checkKnownNode20Action is the offline fallback: match `uses:` against the
+// embedded table when the metadata resolver is unavailable.
 func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, action *ast.ExecAction) {
 	owner, repo, ref := parseUsesValue(action.Uses.Value)
 	if owner == "" || repo == "" || ref == "" {
@@ -272,8 +247,7 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	major, isTag := parseMajorFromRef(ref)
 	fixable := isTag
 	if !isTag {
-		// SHA-pinned refs carry the human-readable tag as a line comment when
-		// pinned by the commit-sha auto-fix (e.g. "# v4.1.1").
+		// SHA pins carry the tag as a "# v4.1.1" comment (commit-sha auto-fix).
 		comment := strings.TrimSpace(strings.TrimPrefix(action.Uses.BaseNode.LineComment, "#"))
 		if m, ok := parseMajorFromRef(comment); ok {
 			major = m
@@ -283,7 +257,7 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	}
 
 	if major >= first {
-		return // already on a node24-capable major
+		return
 	}
 
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
@@ -295,9 +269,8 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	}
 }
 
-// eolNodeBuildTargets are Node.js majors that are EOL as build targets
-// (distinct from the action runtime): 16 (2023-09-11), 18 (2025-04-30),
-// 20 (2026-04-30). Source: https://github.com/nodejs/Release
+// EOL dates of Node.js majors as build targets (distinct from the action
+// runtime). Source: https://github.com/nodejs/Release
 var eolNodeBuildTargets = map[int]string{
 	12: "2022-04-30",
 	14: "2023-04-30",
@@ -306,10 +279,8 @@ var eolNodeBuildTargets = map[int]string{
 	20: "2026-04-30",
 }
 
-// checkEOLNodeBuildTarget warns when actions/setup-node installs an EOL
-// Node.js as the build/test runtime. Diagnose-only: bumping the project's
-// Node target is a semantic change (package compatibility, engines field)
-// that the maintainer must drive, typically via Renovate/Dependabot.
+// checkEOLNodeBuildTarget flags EOL `node-version:` in actions/setup-node.
+// Diagnose-only: bumping the build target is the project owner's decision.
 func (rule *DeprecatedNodeRuntimeRule) checkEOLNodeBuildTarget(action *ast.ExecAction) {
 	owner, repo, _ := parseUsesValue(action.Uses.Value)
 	if !strings.EqualFold(owner, "actions") || !strings.EqualFold(repo, "setup-node") {
@@ -335,9 +306,8 @@ func (rule *DeprecatedNodeRuntimeRule) checkEOLNodeBuildTarget(action *ast.ExecA
 	}
 }
 
-// FixStep bumps a known node20-generation action tag to the first
-// node24-capable major (e.g. actions/checkout@v4 -> @v5). SHA-pinned refs are
-// left to the commit-sha rule to re-pin after the bump.
+// FixStep bumps a table-known tag to the first node24-capable major.
+// SHA-pinned refs are left to the commit-sha rule.
 func (rule *DeprecatedNodeRuntimeRule) FixStep(step *ast.Step) error {
 	action, ok := step.Exec.(*ast.ExecAction)
 	if !ok || action.Uses == nil {
@@ -352,8 +322,7 @@ func (rule *DeprecatedNodeRuntimeRule) FixStep(step *ast.Step) error {
 	if !isTag || major >= first {
 		return nil
 	}
-	// Preserve any subpath (e.g. actions/cache/restore@v4 must stay
-	// actions/cache/restore@v5, not become actions/cache@v5).
+	// Keep subpaths: actions/cache/restore@v4 -> actions/cache/restore@v5.
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
 	action.Uses.BaseNode.Value = fmt.Sprintf("%s@v%d", actionPath, first)
 	return nil

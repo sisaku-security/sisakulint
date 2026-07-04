@@ -289,19 +289,13 @@ type RemoteActionsMetadataCache struct {
 	fetcher     *remote.Fetcher
 	fetcherErr  error
 	cache       map[string]*ActionMetadata
-	// failed records specs whose fetch exhausted the retry budget on
-	// transient errors. Unlike cache (which stores definitive results such as
-	// parsed metadata or a confirmed 404), a failed entry keeps returning the
-	// original error so callers can tell "the action has no metadata" apart
-	// from "resolution was degraded this run" — a transient failure must
-	// never be converted into a silent nil, which would nondeterministically
-	// suppress every resolver-backed rule for the rest of the run.
+	// failed keeps transient-failure errors separate from cache so they are
+	// never converted into a definitive nil, which would silently suppress
+	// every resolver-backed rule for the rest of the run.
 	failed map[string]error
-	// consecutiveTransientFailures drives a run-wide circuit breaker: when
-	// this many spec resolutions in a row exhaust their retry budget without
-	// any success in between, the network is considered unavailable and
-	// further fetches fail fast instead of burning attempts*paths*timeout per
-	// remaining spec (e.g. a token set but no connectivity).
+	// consecutiveTransientFailures drives a run-wide circuit breaker: after
+	// this many spec resolutions fail in a row, further fetches fail fast
+	// instead of burning attempts*paths*timeout per remaining spec.
 	consecutiveTransientFailures int
 	breakerOpen                  bool
 	flight                       singleflight.Group
@@ -396,9 +390,8 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 		return nil, nil
 	}
 
-	// singleflight collapses concurrent lookups of the same spec (parallel
-	// files of a run share this cache), so each action.yml is in flight at
-	// most once regardless of how many workflows reference it.
+	// singleflight: each action.yml is in flight at most once across the
+	// parallel files sharing this cache.
 	v, err, _ := c.flight.Do(spec, func() (interface{}, error) {
 		if m, ok := c.readCache(spec); ok {
 			return m, nil
@@ -418,9 +411,9 @@ func (c *RemoteActionsMetadataCache) readFailed(spec string) error {
 	return c.failed[spec]
 }
 
-// noteTransientOutcome updates the circuit-breaker state. success resets the
-// consecutive-failure counter; a spec that exhausted its retry budget
-// increments it and may open the breaker for the rest of the run.
+// noteTransientOutcome updates the circuit-breaker state: success resets the
+// consecutive-failure counter; an exhausted retry budget increments it and
+// may open the breaker for the rest of the run.
 func (c *RemoteActionsMetadataCache) noteTransientOutcome(success bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -454,9 +447,8 @@ func (c *RemoteActionsMetadataCache) doFetch(ctx context.Context, repo *remote.R
 	return fetcher.FetchFile(ctx, repo, filePath, ref)
 }
 
-// isRemoteNotFoundError reports whether err is a definitive HTTP 404 — the
-// file does not exist at that ref. Everything else (timeouts, 5xx, decode
-// failures) is treated as transient and eligible for retry.
+// isRemoteNotFoundError reports a definitive HTTP 404; everything else is
+// treated as transient and eligible for retry.
 func isRemoteNotFoundError(err error) bool {
 	var ghErr *github.ErrorResponse
 	return errors.As(err, &ghErr) && ghErr.Response != nil && ghErr.Response.StatusCode == http.StatusNotFound
@@ -464,12 +456,11 @@ func isRemoteNotFoundError(err error) bool {
 
 // resolveRemote fetches and parses the action metadata with bounded retries.
 // Caching policy:
-//   - parsed metadata          -> cached (definitive)
-//   - 404 on every candidate   -> cached as nil (definitive: no metadata)
-//   - unparseable content      -> cached as nil (definitive: not an action)
-//   - transient failure        -> NOT cached; recorded in failed so repeat
-//     lookups this run return the error immediately instead of re-burning
-//     the retry budget, and a fresh run can succeed again
+//   - parsed metadata        -> cached (definitive)
+//   - 404 on every candidate -> cached as nil (definitive: no metadata)
+//   - unparseable content    -> cached as nil (definitive: not an action)
+//   - transient failure      -> NOT cached; recorded in failed so repeat
+//     lookups fail fast this run and a fresh run can retry
 func (c *RemoteActionsMetadataCache) resolveRemote(spec string, actionSpec *remoteActionSpec) (*ActionMetadata, error) {
 	if c.isBreakerOpen() {
 		return nil, errRemoteMetadataCircuitOpen
@@ -501,9 +492,8 @@ func (c *RemoteActionsMetadataCache) resolveRemote(spec string, actionSpec *remo
 					continue
 				}
 				if IsGitHubRateLimitError(err) {
-					// Retrying cannot succeed until the rate window resets.
-					// Not cached: a later authenticated run must be able to
-					// resolve this spec.
+					// Retrying cannot succeed until the rate window resets;
+					// not cached so a later authenticated run can resolve it.
 					return nil, fmt.Errorf("failed to fetch remote action metadata for %q: %w", spec, err)
 				}
 				transientErr = err
@@ -525,8 +515,7 @@ func (c *RemoteActionsMetadataCache) resolveRemote(spec string, actionSpec *remo
 		}
 
 		if transientErr == nil && notFound == len(paths) {
-			// Every candidate path answered 404: the action metadata does
-			// not exist at this ref. Definitive, not an error.
+			// All candidate paths 404'd: definitively no metadata at this ref.
 			c.writeCache(spec, nil)
 			c.noteTransientOutcome(true)
 			return nil, nil

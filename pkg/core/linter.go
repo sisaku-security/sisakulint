@@ -120,9 +120,8 @@ type Linter struct {
 	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
 	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
 	loggedConfigs sync.Map
-	// remoteActionsCache は lint 実行全体で共有されるリモート action.yml の
-	// メタデータキャッシュ。per-file に生成すると同じアクションを何度も
-	// fetch してしまうため、Linter 単位で 1 つ持つ (内部は mutex で並行安全)。
+	// remoteActionsCache は lint 実行全体で共有する remote action.yml の
+	// キャッシュ (per-file 生成だと同一アクションを重複 fetch するため)。
 	remoteActionsCache *RemoteActionsMetadataCache
 }
 
@@ -600,9 +599,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 	if localActions != nil {
 		debugOut = localActions.dbg
 	}
-	// remoteActions is shared across all files of a lint run (passed down from
-	// the Linter) so each remote action.yml is fetched at most once per run.
-	// Tests and other callers may pass nil to get a per-call cache.
+	// remoteActions is run-wide (from the Linter); nil gets a per-call cache.
 	if remoteActions == nil {
 		remoteActions = NewRemoteActionsMetadataCache(debugOut)
 	}
