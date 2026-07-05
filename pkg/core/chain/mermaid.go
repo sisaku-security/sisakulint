@@ -30,28 +30,31 @@ func mermaidID(id string) string {
 	return "n_" + sanitizeToken(id)
 }
 
-// escapeLabel は mermaid ラベル内のダブルクォートを実体参照に置換する。
+// escapeLabel は mermaid ラベル用に文字列を整形する。ノード定義は1行なので
+// 複数行 run スクリプト等の改行は空白へ畳み、ラベルを壊す " のみ実体参照へ置換
+// する。%q のような Go エスケープは使わない（\n / \\ をそのまま描画してしまう）。
 func escapeLabel(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
 	return strings.ReplaceAll(s, `"`, "&quot;")
 }
 
-// nodeShape は種別ごとの mermaid 形状で id["label"] を返す。
+// nodeShape は種別ごとの mermaid 形状で id["label"] を返す。ラベルは escapeLabel
+// 済みの生テキストを二重引用符で囲む（%q は使わない。#6 参照）。
 func nodeShape(n *Node) string {
 	id := mermaidID(n.ID)
 	label := escapeLabel(n.Label)
 	switch n.Kind {
 	case NodeTrigger:
-		return fmt.Sprintf("%s([%q])", id, label)
+		return fmt.Sprintf("%s([\"%s\"])", id, label)
 	case NodePermission:
-		return fmt.Sprintf("%s{{%q}}", id, label)
-	case NodeSource:
-		return fmt.Sprintf("%s[%q]", id, label)
-	case NodeAction:
-		return fmt.Sprintf("%s[%q]", id, label)
+		return fmt.Sprintf("%s{{\"%s\"}}", id, label)
 	case NodeSink:
-		return fmt.Sprintf("%s>%q]", id, label)
+		return fmt.Sprintf("%s>\"%s\"]", id, label)
+	default: // NodeSource, NodeAction
+		return fmt.Sprintf("%s[\"%s\"]", id, label)
 	}
-	return fmt.Sprintf("%s[%q]", id, label)
 }
 
 func (r *MermaidRenderer) Render(m *ChainModel) string {

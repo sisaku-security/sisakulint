@@ -225,3 +225,33 @@ func TestAssembleCrossJobNeeds(t *testing.T) {
 		t.Errorf("missing cross-job Needs edge %s -> %s", upAction, downSource)
 	}
 }
+
+// TestAssembleRecordOrderInvariant guards the determinism fix: getNode keeps
+// first-seen field values for shared nodes and SinkCollector.Add order is not
+// guaranteed, so Assemble sorts records first. Source A is referenced at lines
+// 5 and 15 (fan-out) with source B between them at line 10 — if the shared A
+// node took its Pos from whichever record arrived first, reversing the records
+// would reorder A vs B in the rendered output.
+func TestAssembleRecordOrderInvariant(t *testing.T) {
+	base := AssemblerInput{
+		FilePath: "x.yml", WorkflowName: "X",
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "push"}},
+			Permission: PermissionRef{Label: "contents:read"}}},
+	}
+	recs := []SinkRecord{
+		{JobID: "build", StepPos: &ast.Position{Line: 5, Col: 1}, SourceKind: SourceSecret, SourceName: "secrets.A", SinkKind: SinkLog, RuleName: "r1"},
+		{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 1}, SourceKind: SourceSecret, SourceName: "secrets.B", SinkKind: SinkLog, RuleName: "r2"},
+		{JobID: "build", StepPos: &ast.Position{Line: 15, Col: 1}, SourceKind: SourceSecret, SourceName: "secrets.A", SinkKind: SinkNetwork, RuleName: "r3"},
+	}
+	forward := base
+	forward.Records = recs
+	reversed := base
+	reversed.Records = []SinkRecord{recs[2], recs[1], recs[0]}
+
+	a := NewMermaidRenderer().Render(Assemble(forward))
+	b := NewMermaidRenderer().Render(Assemble(reversed))
+	if a != b {
+		t.Errorf("record order changes rendered output (non-deterministic):\n--- forward ---\n%s\n--- reversed ---\n%s", a, b)
+	}
+}

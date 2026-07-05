@@ -547,9 +547,14 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 		// 漏洩チェーン可視化: 単一ファイルパス（LintFiles の1ファイル呼び出しも含む）は
 		// errgroup.Wait() を使う post-Wait セクションを経由しないため、ここで個別に
 		// 組み立てる。mermaid フォーマット指定時のみ（無回帰保護）。
-		if l.errorFormatter.HasMermaid() && result.ParsedWorkflow != nil {
-			in := buildAssemblerInput(file, result.ParsedWorkflow, result.ChainRecords)
-			l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+		if l.errorFormatter.HasMermaid() {
+			if result.ParsedWorkflow != nil {
+				in := buildAssemblerInput(file, result.ParsedWorkflow, result.ChainRecords)
+				l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+			} else {
+				// パース不能ファイルでは残留 chains を消す（同一 Linter 再利用時の混入防止）。
+				l.errorFormatter.SetChains(nil)
+			}
 		}
 		if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, source); err != nil {
 			return nil, fmt.Errorf("error formatting output: %w", err)
@@ -593,9 +598,15 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	// 漏洩チェーン可視化: mermaid 指定時のみ組み立てる。LintFiles / LintFile と同じ
 	// 配線をこの Lint (=-remote 経路, command.go の runRemoteScan から呼ばれる) にも
 	// 適用し、3 エントリポイントを同期させる（未配線だと -remote で空グラフになる）。
-	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() && result != nil && result.ParsedWorkflow != nil {
-		in := buildAssemblerInput(filepath, result.ParsedWorkflow, result.ChainRecords)
-		l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() {
+		if result != nil && result.ParsedWorkflow != nil {
+			in := buildAssemblerInput(filepath, result.ParsedWorkflow, result.ChainRecords)
+			l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+		} else {
+			// パース不能ファイルでは前回 Lint 呼び出しの chains が残留しないよう明示的に消す
+			// (-remote は同一 Linter で複数ファイルを走査するため)。
+			l.errorFormatter.SetChains(nil)
+		}
 	}
 
 	if err != nil {

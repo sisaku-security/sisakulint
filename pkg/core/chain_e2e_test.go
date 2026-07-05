@@ -169,3 +169,35 @@ func TestChainVizE2EIgnoreFiltersRecords(t *testing.T) {
 		t.Errorf("non-ignored sinks should still render:\n%s", out)
 	}
 }
+
+// TestChainVizE2EStaleChainsClearedOnUnparseable guards the review fix (coderabbit):
+// a file with no ParsedWorkflow (here a composite action, short-circuited in
+// validate) must clear the formatter's chains, not re-render the previous file's
+// graph when one Linter scans multiple files (the -remote / reuse pattern).
+func TestChainVizE2EStaleChainsClearedOnUnparseable(t *testing.T) {
+	var buf bytes.Buffer
+	linter, err := NewLinter(&buf, &LinterOptions{CustomErrorMessageFormat: "{{mermaid .}}"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, err := os.ReadFile("../../script/actions/chainviz-blastradius.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := linter.Lint("blast.yml", wf, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "DEPLOY_TOKEN") {
+		t.Fatalf("first lint should render the graph:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	// composite action: top-level runs: key -> short-circuited, ParsedWorkflow nil
+	composite := []byte("name: x\nruns:\n  using: composite\n  steps:\n    - run: echo hi\n      shell: bash\n")
+	if _, err := linter.Lint("action.yml", composite, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "DEPLOY_TOKEN") {
+		t.Errorf("stale chain from the previous file leaked into an unparseable file's output:\n%s", buf.String())
+	}
+}

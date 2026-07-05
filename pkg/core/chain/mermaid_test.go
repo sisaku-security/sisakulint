@@ -233,3 +233,28 @@ func TestMermaidRenderIsParseable(t *testing.T) {
 		})
 	}
 }
+
+// TestMermaidLabelCollapsesNewlines pins the fix for %q-escaped multiline labels:
+// a multi-line run script must render on a single node-definition line (newlines
+// collapsed to spaces), never as a literal \n nor a node def split across lines.
+func TestMermaidLabelCollapsesNewlines(t *testing.T) {
+	in := AssemblerInput{
+		FilePath: "x.yml", WorkflowName: "X",
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "push"}},
+			Permission: PermissionRef{Label: "contents:read"}}},
+		Records: []SinkRecord{{
+			JobID: "build", StepPos: &ast.Position{Line: 5, Col: 1},
+			StepSummary: "run: echo a\necho b", SourceKind: SourceSecret, SourceName: "secrets.T",
+			SinkKind: SinkLog, RuleName: "secret-in-log",
+		}},
+	}
+	out := NewMermaidRenderer().Render(Assemble(in))
+	assertMermaidRenderable(t, out) // referential integrity catches a node def split by a raw newline
+	if strings.Contains(out, `\n`) {
+		t.Errorf("label contains a literal \\n (Go-escaped, not collapsed):\n%s", out)
+	}
+	if !strings.Contains(out, "run: echo a echo b") {
+		t.Errorf("multiline label not collapsed to a single spaced line:\n%s", out)
+	}
+}

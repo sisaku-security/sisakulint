@@ -321,7 +321,7 @@ func (rule *UnmaskedSecretExposureRule) reportUnmaskedSecretExposure(expr parsed
 		rule.collector.Add(chain.SinkRecord{
 			JobID:        rule.currentJobIDForCollector(),
 			StepPos:      expr.pos,
-			StepSummary:  rule.stepSummaryForCollector(),
+			StepSummary:  stepExecSummary(rule.currentStep),
 			SourceKind:   chain.SourceSecret,
 			SourceName:   secretRefFromFromJsonExpr(expr.raw),
 			SourceOrigin: expr.raw,
@@ -340,26 +340,6 @@ func (rule *UnmaskedSecretExposureRule) currentJobIDForCollector() string {
 		return ""
 	}
 	return strings.ToLower(rule.currentJob.ID.Value)
-}
-
-// stepSummaryForCollector returns a short human-readable summary of the step
-// currently being checked, for the chain visualization's StepSummary field.
-// Returns "" when no step context is available (e.g. workflow/job-level env).
-func (rule *UnmaskedSecretExposureRule) stepSummaryForCollector() string {
-	if rule.currentStep == nil || rule.currentStep.Exec == nil {
-		return ""
-	}
-	switch exec := rule.currentStep.Exec.(type) {
-	case *ast.ExecRun:
-		if exec.Run != nil {
-			return exec.Run.Value
-		}
-	case *ast.ExecAction:
-		if exec.Uses != nil {
-			return "uses: " + exec.Uses.Value
-		}
-	}
-	return ""
 }
 
 // secretRefFromFromJsonExpr extracts the "secrets.NAME" reference from an

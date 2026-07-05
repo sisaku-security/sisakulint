@@ -258,26 +258,6 @@ func (rule *SecretExposureRule) checkExpressionForSecretExposure(expr parsedExpr
 	})
 }
 
-// stepSummaryForCollector returns a short human-readable summary of the step
-// currently being checked, for the chain visualization's StepSummary field.
-// Returns "" when no step context is available (e.g. workflow/job-level env).
-func (rule *SecretExposureRule) stepSummaryForCollector() string {
-	if rule.currentStep == nil || rule.currentStep.Exec == nil {
-		return ""
-	}
-	switch exec := rule.currentStep.Exec.(type) {
-	case *ast.ExecRun:
-		if exec.Run != nil {
-			return exec.Run.Value
-		}
-	case *ast.ExecAction:
-		if exec.Uses != nil {
-			return "uses: " + exec.Uses.Value
-		}
-	}
-	return ""
-}
-
 // pushSinkRecord records a detected secret exposure expression for the
 // leakage-path chain visualization.
 func (rule *SecretExposureRule) pushSinkRecord(pos *ast.Position, sourceName, sourceOrigin string) {
@@ -287,7 +267,7 @@ func (rule *SecretExposureRule) pushSinkRecord(pos *ast.Position, sourceName, so
 	rule.collector.Add(chain.SinkRecord{
 		JobID:        rule.currentJobID,
 		StepPos:      pos,
-		StepSummary:  rule.stepSummaryForCollector(),
+		StepSummary:  stepExecSummary(rule.currentStep),
 		SourceKind:   chain.SourceSecret,
 		SourceName:   sourceName,
 		SourceOrigin: sourceOrigin,

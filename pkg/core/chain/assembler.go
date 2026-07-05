@@ -32,6 +32,36 @@ func Assemble(in AssemblerInput) *ChainModel {
 		m.Edges = append(m.Edges, Edge{From: from, To: to, Kind: k})
 	}
 
+	// SinkCollector.Add はルール並行実行時に呼び出し順が非決定になり得る
+	// (collector.go 参照)。共有ノード（同一 source を複数 record が参照する
+	// fan-out 等）は getNode の先着優先で Pos/JobID が確定するため、record を
+	// 決定的な全順序に並べてから処理し、実行毎の描画ブレを防ぐ。
+	// CLAUDE.md: 「Determinism is a hard requirement」。
+	sortedRecords := append([]SinkRecord(nil), in.Records...)
+	sort.Slice(sortedRecords, func(i, j int) bool {
+		a, b := sortedRecords[i], sortedRecords[j]
+		if la, lb := posLine(a.StepPos), posLine(b.StepPos); la != lb {
+			return la < lb
+		}
+		if ca, cb := posCol(a.StepPos), posCol(b.StepPos); ca != cb {
+			return ca < cb
+		}
+		if a.JobID != b.JobID {
+			return a.JobID < b.JobID
+		}
+		if a.RuleName != b.RuleName {
+			return a.RuleName < b.RuleName
+		}
+		if a.SourceKind != b.SourceKind {
+			return a.SourceKind < b.SourceKind
+		}
+		if a.SourceName != b.SourceName {
+			return a.SourceName < b.SourceName
+		}
+		return a.SinkKind < b.SinkKind
+	})
+	in.Records = sortedRecords
+
 	for _, r := range in.Records {
 		sourceID := fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName)
 		actionID := fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos))
