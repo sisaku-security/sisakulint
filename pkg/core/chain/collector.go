@@ -17,6 +17,7 @@ type SinkRecord struct {
 	SourceName   string // 例 "secrets.DEPLOY_TOKEN" / "github.event.issue.title"
 	SourceOrigin string // taint origin chain。"needs.build.outputs.ref" を含み得る
 	SinkKind     SinkKind
+	OutputName   string // Producer-side job output name for cross-job needs linking, when known.
 	RuleName     string
 	Severity     string
 }

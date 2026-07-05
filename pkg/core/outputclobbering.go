@@ -195,6 +195,7 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 							SourceName:   sourceName,
 							SourceOrigin: sourceName,
 							SinkKind:     chain.SinkExpr,
+							OutputName:   extractGitHubOutputName(line),
 							RuleName:     rule.RuleNames(),
 							Severity:     rule.severityLevel,
 						})
@@ -399,27 +400,9 @@ func (rule *OutputClobberingRule) transformToHeredocSyntax(script string, stepIn
 
 // transformOutputLine transforms a single output line to use heredoc syntax
 func (rule *OutputClobberingRule) transformOutputLine(line string, stepInfo *stepWithOutputClobbering, envVarMap map[string]string) []string {
-	// Extract the output name from patterns like:
-	// echo "name=value" >> $GITHUB_OUTPUT
-	// echo 'name=value' >> $GITHUB_OUTPUT
-
-	// Find the echo/printf command and extract content
-	outputPattern := regexp.MustCompile(`(echo|printf)\s+["']?([^"'=]+)=`)
-	matches := outputPattern.FindStringSubmatch(line)
-
-	var outputName string
-	if len(matches) >= 3 {
-		outputName = matches[2]
-	} else {
-		// Try to find output name from the content
-		// Pattern: something=value
-		contentPattern := regexp.MustCompile(`["']([a-zA-Z_][a-zA-Z0-9_]*)=`)
-		contentMatches := contentPattern.FindStringSubmatch(line)
-		if len(contentMatches) >= 2 {
-			outputName = contentMatches[1]
-		} else {
-			outputName = "OUTPUT"
-		}
+	outputName := extractGitHubOutputName(line)
+	if outputName == "" {
+		outputName = "OUTPUT"
 	}
 
 	// Replace untrusted expressions with env var references
@@ -477,6 +460,19 @@ func (rule *OutputClobberingRule) transformOutputLine(line string, stepInfo *ste
 		fmt.Sprintf(`  echo "%s"`, delimiter),
 		`} >> "$GITHUB_OUTPUT"`,
 	}
+}
+
+func extractGitHubOutputName(line string) string {
+	outputPattern := regexp.MustCompile(`(?:echo|printf)\s+["']?([A-Za-z_][A-Za-z0-9_-]*)=`)
+	if matches := outputPattern.FindStringSubmatch(line); len(matches) >= 2 {
+		return matches[1]
+	}
+
+	contentPattern := regexp.MustCompile(`["']([A-Za-z_][A-Za-z0-9_-]*)=`)
+	if matches := contentPattern.FindStringSubmatch(line); len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
 }
 
 // setRunScriptValueForOutput directly sets the run script value in a step's YAML node

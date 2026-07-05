@@ -63,7 +63,7 @@ func Assemble(in AssemblerInput) *ChainModel {
 	in.Records = sortedRecords
 
 	for _, r := range in.Records {
-		sourceID := fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName)
+		sourceID := sourceNodeID(r)
 		actionID := fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos))
 		sinkID := fmt.Sprintf("sink:%s:%s:%d:%d", r.RuleName, r.JobID, posLine(r.StepPos), posCol(r.StepPos))
 
@@ -106,17 +106,32 @@ func Assemble(in AssemblerInput) *ChainModel {
 	return m
 }
 
-var needsOutputPattern = regexp.MustCompile(`needs\.([A-Za-z0-9_-]+)\.outputs\.`)
+var needsOutputPattern = regexp.MustCompile(`needs\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)`)
 
-// linkCrossJobNeeds は SourceOrigin が needs.<job>.outputs.* を指す source に、
-// 上流 job の全 Action ノードから EdgeNeeds を張る。
+func sourceNodeID(r SinkRecord) string {
+	return fmt.Sprintf("source:%s:%d:%s", r.JobID, r.SourceKind, r.SourceName)
+}
+
+// linkCrossJobNeeds は SourceOrigin が needs.<job>.outputs.<name> を指す
+// source に、同じ job output を生成したことが分かっている上流 Action
+// ノードからだけ EdgeNeeds を張る。
 func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput) {
-	// job → その job の action ノード ID 群
-	actionsByJob := map[string][]string{}
-	for _, n := range nodes {
-		if n.Kind == NodeAction {
-			actionsByJob[n.JobID] = append(actionsByJob[n.JobID], n.ID)
+	// job -> output name -> that output's producer action node IDs.
+	actionsByJobOutput := map[string]map[string][]string{}
+	for _, r := range in.Records {
+		if r.OutputName == "" {
+			continue
 		}
+		actionID := fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos))
+		if _, ok := nodes[actionID]; !ok {
+			continue
+		}
+		jobID := strings.ToLower(r.JobID)
+		outputName := strings.ToLower(r.OutputName)
+		if actionsByJobOutput[jobID] == nil {
+			actionsByJobOutput[jobID] = map[string][]string{}
+		}
+		actionsByJobOutput[jobID][outputName] = append(actionsByJobOutput[jobID][outputName], actionID)
 	}
 	for _, r := range in.Records {
 		mm := needsOutputPattern.FindStringSubmatch(r.SourceOrigin)
@@ -124,11 +139,12 @@ func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput)
 			continue
 		}
 		upJob := strings.ToLower(mm[1])
-		sourceID := fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName)
+		outputName := strings.ToLower(mm[2])
+		sourceID := sourceNodeID(r)
 		if _, ok := nodes[sourceID]; !ok {
 			continue
 		}
-		for _, upActionID := range actionsByJob[upJob] {
+		for _, upActionID := range actionsByJobOutput[upJob][outputName] {
 			m.Edges = append(m.Edges, Edge{From: upActionID, To: sourceID, Kind: EdgeNeeds})
 		}
 	}
@@ -139,7 +155,7 @@ func computeChainCount(nodes map[string]*Node, in AssemblerInput) {
 	ctxByJob := in.jobContextByID()
 	for _, r := range in.Records {
 		ids := []string{
-			fmt.Sprintf("source:%d:%s", r.SourceKind, r.SourceName),
+			sourceNodeID(r),
 			fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos)),
 			fmt.Sprintf("sink:%s:%s:%d:%d", r.RuleName, r.JobID, posLine(r.StepPos), posCol(r.StepPos)),
 		}

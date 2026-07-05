@@ -48,7 +48,7 @@ func TestAssembleSingleChain(t *testing.T) {
 	// 5種のノードが1つずつ
 	for _, id := range []string{
 		"trigger:pull_request_target", "perm:build",
-		"source:0:secrets.TOKEN", "action:build:10:9",
+		"source:build:0:secrets.TOKEN", "action:build:10:9",
 		"sink:secret-exfiltration:build:10:9",
 	} {
 		if nodeByID(m, id) == nil {
@@ -59,10 +59,10 @@ func TestAssembleSingleChain(t *testing.T) {
 	if !hasEdge(m, "trigger:pull_request_target", "perm:build", EdgeGrants) {
 		t.Error("missing Grants edge")
 	}
-	if !hasEdge(m, "perm:build", "source:0:secrets.TOKEN", EdgeEnables) {
+	if !hasEdge(m, "perm:build", "source:build:0:secrets.TOKEN", EdgeEnables) {
 		t.Error("missing Enables edge")
 	}
-	if !hasEdge(m, "source:0:secrets.TOKEN", "action:build:10:9", EdgeUsedBy) {
+	if !hasEdge(m, "source:build:0:secrets.TOKEN", "action:build:10:9", EdgeUsedBy) {
 		t.Error("missing UsedBy edge")
 	}
 	if !hasEdge(m, "action:build:10:9", "sink:secret-exfiltration:build:10:9", EdgeFlowsTo) {
@@ -84,7 +84,7 @@ func TestAssembleFanOutSharedSource(t *testing.T) {
 	}
 	m := Assemble(in)
 	// 共有 source ノードは1つ、sink は2つ
-	if n := nodeByID(m, "source:0:secrets.TOKEN"); n == nil {
+	if n := nodeByID(m, "source:build:0:secrets.TOKEN"); n == nil {
 		t.Fatal("shared source node missing")
 	}
 	sinks := 0
@@ -135,7 +135,7 @@ func TestAssembleChainCountAndReachable(t *testing.T) {
 	m := Assemble(in)
 
 	// 共有 source は 2チェーンを通過
-	if n := nodeByID(m, "source:0:secrets.TOKEN"); n == nil || n.ChainCount != 2 {
+	if n := nodeByID(m, "source:build:0:secrets.TOKEN"); n == nil || n.ChainCount != 2 {
 		t.Errorf("source ChainCount = %v, want 2", n)
 	}
 	// untrusted trigger から全ノードが到達可能
@@ -160,6 +160,44 @@ func TestAssembleUntrustedReachableSafeTrigger(t *testing.T) {
 		if n.UntrustedReachable {
 			t.Errorf("node %q wrongly marked UntrustedReachable under safe trigger", n.ID)
 		}
+	}
+}
+
+func TestAssembleDoesNotShareSourceReachabilityAcrossJobs(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{
+			{JobID: "unsafe",
+				Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true, SecretsAvailable: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+			{JobID: "manual",
+				Triggers:   []TriggerRef{{Name: "workflow_dispatch", Untrusted: false, SecretsAvailable: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+		},
+		Records: []SinkRecord{
+			{JobID: "unsafe", StepPos: &ast.Position{Line: 10, Col: 1},
+				SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SourceOrigin: "secrets.TOKEN",
+				SinkKind: SinkLog, RuleName: "secret-in-log"},
+			{JobID: "manual", StepPos: &ast.Position{Line: 20, Col: 1},
+				SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SourceOrigin: "secrets.TOKEN",
+				SinkKind: SinkNetwork, RuleName: "secret-exfiltration"},
+		},
+	}
+
+	m := Assemble(in)
+
+	unsafeSink := nodeByID(m, "sink:secret-in-log:unsafe:10:1")
+	if unsafeSink == nil {
+		t.Fatal("missing unsafe job sink")
+	}
+	if !unsafeSink.UntrustedReachable {
+		t.Errorf("unsafe job sink should be reachable from pull_request_target")
+	}
+	manualSink := nodeByID(m, "sink:secret-exfiltration:manual:20:1")
+	if manualSink == nil {
+		t.Fatal("missing manual job sink")
+	}
+	if manualSink.UntrustedReachable {
+		t.Errorf("manual-only job sink should not be reachable through another job's shared secret source")
 	}
 }
 
@@ -210,19 +248,82 @@ func TestAssembleCrossJobNeeds(t *testing.T) {
 			// produce: untrusted 入力 → GITHUB_OUTPUT（sink=expr 相当の action）
 			{JobID: "produce", StepPos: &ast.Position{Line: 10, Col: 9},
 				SourceKind: SourceUntrusted, SourceName: "github.head_ref", SourceOrigin: "github.head_ref",
-				SinkKind: SinkExpr, RuleName: "output-clobbering-critical"},
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical", OutputName: "ref"},
 			// consume: needs.produce.outputs.ref を使う → network
 			{JobID: "consume", StepPos: &ast.Position{Line: 20, Col: 9},
 				SourceKind: SourceUntrusted, SourceName: "needs.produce.outputs.ref",
 				SourceOrigin: "needs.produce.outputs.ref",
-				SinkKind: SinkNetwork, RuleName: "request-forgery-critical"},
+				SinkKind:     SinkNetwork, RuleName: "request-forgery-critical"},
 		},
 	}
 	m := Assemble(in)
 	upAction := "action:produce:10:9"
-	downSource := "source:1:needs.produce.outputs.ref"
+	downSource := "source:consume:1:needs.produce.outputs.ref"
 	if !hasEdge(m, upAction, downSource, EdgeNeeds) {
 		t.Errorf("missing cross-job Needs edge %s -> %s", upAction, downSource)
+	}
+}
+
+func TestAssembleCrossJobNeedsDoesNotGuessWithoutProducerOutputName(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{
+			{JobID: "produce", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+			{JobID: "consume", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+		},
+		Records: []SinkRecord{
+			{JobID: "produce", StepPos: &ast.Position{Line: 10, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "github.head_ref", SourceOrigin: "github.head_ref",
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical"},
+			{JobID: "consume", StepPos: &ast.Position{Line: 20, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "needs.produce.outputs.ref",
+				SourceOrigin: "needs.produce.outputs.ref",
+				SinkKind:     SinkNetwork, RuleName: "request-forgery-critical"},
+		},
+	}
+	m := Assemble(in)
+
+	if hasEdge(m, "action:produce:10:9", "source:consume:1:needs.produce.outputs.ref", EdgeNeeds) {
+		t.Error("cross-job Needs edge should not be drawn when the producer output name is unknown")
+	}
+}
+
+func TestAssembleCrossJobNeedsLinksOnlyMatchingProducerOutput(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{
+			{JobID: "produce", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+			{JobID: "consume", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+		},
+		Records: []SinkRecord{
+			{JobID: "produce", StepPos: &ast.Position{Line: 5, Col: 9},
+				SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SourceOrigin: "secrets.TOKEN",
+				SinkKind: SinkLog, RuleName: "secret-in-log"},
+			{JobID: "produce", StepPos: &ast.Position{Line: 10, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "github.event.pull_request.body", SourceOrigin: "github.event.pull_request.body",
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical", OutputName: "body"},
+			{JobID: "produce", StepPos: &ast.Position{Line: 15, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "github.head_ref", SourceOrigin: "github.head_ref",
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical", OutputName: "ref"},
+			{JobID: "consume", StepPos: &ast.Position{Line: 20, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "needs.produce.outputs.ref",
+				SourceOrigin: "needs.produce.outputs.ref (tainted via github.head_ref)",
+				SinkKind:     SinkNetwork, RuleName: "request-forgery-critical"},
+		},
+	}
+	m := Assemble(in)
+	downSource := "source:consume:1:needs.produce.outputs.ref"
+
+	if hasEdge(m, "action:produce:5:9", downSource, EdgeNeeds) {
+		t.Error("unrelated producer action must not get a cross-job Needs edge")
+	}
+	if hasEdge(m, "action:produce:10:9", downSource, EdgeNeeds) {
+		t.Error("producer action for a different output must not get a cross-job Needs edge")
+	}
+	if !hasEdge(m, "action:produce:15:9", downSource, EdgeNeeds) {
+		t.Error("missing cross-job Needs edge from the matching producer output action")
 	}
 }
 

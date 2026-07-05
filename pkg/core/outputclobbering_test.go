@@ -542,6 +542,9 @@ func TestOutputClobberingCriticalPushesSinkRecord(t *testing.T) {
 	if r.JobID != "build" {
 		t.Errorf("JobID = %q, want %q", r.JobID, "build")
 	}
+	if r.OutputName != "title" {
+		t.Errorf("OutputName = %q, want %q", r.OutputName, "title")
+	}
 	if r.RuleName == "" || r.StepPos == nil {
 		t.Error("RuleName/StepPos must be populated")
 	}

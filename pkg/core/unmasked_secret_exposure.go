@@ -50,6 +50,8 @@ func NewUnmaskedSecretExposureRuleWithCollector(collector *chain.SinkCollector) 
 
 // VisitWorkflowPre checks workflow-level env for unmasked secret patterns
 func (rule *UnmaskedSecretExposureRule) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.currentJob = nil
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}
@@ -61,6 +63,7 @@ func (rule *UnmaskedSecretExposureRule) VisitJobPre(node *ast.Job) error {
 	rule.currentJob = node
 
 	// Check job-level env
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}

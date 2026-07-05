@@ -101,7 +101,7 @@ const (
 	EdgeEnables                 // Permission -> Source
 	EdgeUsedBy                  // Source -> Action
 	EdgeFlowsTo                 // Action -> Sink
-	EdgeNeeds                   // 上流 job の Action -> 下流 Source
+	EdgeNeeds                   // 上流 job output の Action -> 下流 Source
 )
 
 // IsContext は文脈エッジ（破線描画）なら true。

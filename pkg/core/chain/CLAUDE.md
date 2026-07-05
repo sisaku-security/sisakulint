@@ -16,7 +16,7 @@ IDs are stable strings used both for dedup (shared nodes across chains) and for 
 |---|---|---|
 | Trigger | `trigger:<name>` | Shared across all jobs in the file with the same event name |
 | Permission | `perm:<jobID>` | One per job |
-| Source | `source:<SourceKind int>:<SourceName>` | Shared whenever kind+name match — this is what makes fan-out badges possible |
+| Source | `source:<jobID>:<SourceKind int>:<SourceName>` | Shared within a job when kind+name match. Kept job-scoped so reachability from one job's trigger/permission context cannot traverse into another job that happens to reference the same secret/input name |
 | Action | `action:<jobID>:<line>:<col>` | One per step position |
 | Sink | `sink:<ruleName>:<jobID>:<line>:<col>` | Keyed by rule too, so two rules firing on the same line get distinct sink nodes |
 
@@ -31,7 +31,7 @@ Changing any of these formats changes which nodes get treated as "the same share
 
 - `Source → Action → Sink` (`EdgeUsedBy`, `EdgeFlowsTo`, and cross-job `EdgeNeeds`) are solid-line edges representing **proven dataflow**. `Assemble` draws them only from `SinkRecord`s that a rule actually pushed via `chain.SinkCollector` — see `TestAssembleNoRecordsNoDataflowEdges` in `assembler_test.go`, which asserts zero dataflow nodes/edges when `Records` is empty. Do not add a code path that infers or guesses a Source/Action/Sink node or edge from `JobContext` alone; if a rule didn't report it, it must not appear.
 - `Trigger → Permission → Source` (`EdgeGrants`, `EdgeEnables`) are dashed-line **context annotations** built from `AssemblerInput.JobContexts`, which the adapter derives from the AST (not from rule findings). They mean "this trigger/permission combination makes the source reachable," not "this trigger provably reaches this sink" — see `EdgeKind.IsContext()` and the renderer's solid-vs-dashed split in `mermaid.go`. Keep this distinction when adding new edge kinds: decide up front which half it belongs to and wire `IsContext()` accordingly.
-- `linkCrossJobNeeds` (assembler.go) only extends a chain across a `needs:` boundary when `SinkRecord.SourceOrigin` matches `needs\.([A-Za-z0-9_-]+)\.outputs\.` — and only to action nodes that already exist for that upstream job. No upstream action nodes (i.e., the upstream job pushed no `SinkRecord`) means no edge, not a fabricated one. See `docs/chain-visualization.md`'s "known v1 limitations" for which rules do and don't populate `SourceOrigin` this way today.
+- `linkCrossJobNeeds` (assembler.go) only extends a chain across a `needs:` boundary when the downstream `SinkRecord.SourceOrigin` matches `needs.<job>.outputs.<name>` and an upstream `SinkRecord` from that job has `OutputName` set to the same output. Missing producer metadata means no edge, not a fabricated one. See `docs/chain-visualization.md`'s "known v1 limitations" for which rules populate this metadata today.
 - Untrusted-ness of a `Source`/`Trigger` (`Node.Untrusted`, feeding `computeUntrustedReachable`'s BFS) is inherited from `SinkRecord.SourceKind` / `TriggerRef.Untrusted`, both decided upstream by `pkg/core` before this package ever sees them. Do not add a second `github.event.*` allowlist or regex here to re-derive it — that duplicates `pkg/expressions.BuiltinUntrustedInputs` and the two will drift (see the equivalent rule in `../CLAUDE.md`).
 
 ## Tests

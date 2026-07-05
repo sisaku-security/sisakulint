@@ -97,6 +97,7 @@ func (rule *SecretExposureRule) VisitJobPre(node *ast.Job) error {
 	}
 
 	// Check job-level env
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}
@@ -111,6 +112,8 @@ func (rule *SecretExposureRule) VisitJobPre(node *ast.Job) error {
 
 // VisitWorkflowPre checks workflow-level env
 func (rule *SecretExposureRule) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.currentJobID = ""
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}

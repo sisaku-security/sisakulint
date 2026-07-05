@@ -44,7 +44,7 @@ func TestChainVizE2EBlastRadius(t *testing.T) {
 	// secret-in-log and secret-exfiltration share the same secrets.DEPLOY_TOKEN
 	// source node (both read it from env), so the assembler fans it out with
 	// a "-> 2 sinks" badge instead of drawing two disconnected chains.
-	if !strings.Contains(out, `n_source_0_secrets_DEPLOY_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]`) {
+	if !strings.Contains(out, `n_source_build_0_secrets_DEPLOY_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]`) {
 		t.Errorf("expected shared secrets.DEPLOY_TOKEN source node with fan-out badge:\n%s", out)
 	}
 	// untrusted-reachable emphasis is present (pull_request_target reaches everything here).
@@ -78,14 +78,10 @@ func TestChainVizE2ESafeIsMinimal(t *testing.T) {
 // "produce" writes github.head_ref (untrusted) to $GITHUB_OUTPUT, and
 // downstream job "consume" reads needs.produce.outputs.ref into a curl URL.
 //
-// KNOWN RISK (from the implementation plan): the assembler's EdgeNeeds only
-// draws when a rule's deferred cross-job SinkRecord.SourceOrigin literally
-// contains "needs.<job>.outputs.<name>". Verified against real output: both
-// CodeInjectionRule and RequestForgeryRule format their deferred cross-job
-// taintPath as fmt.Sprintf("%s (tainted via %s)", expr.raw, sources) in
-// VisitWorkflowPost (codeinjection.go, requestforgery.go), where expr.raw is
-// the untouched source text "needs.produce.outputs.ref" — so the pattern
-// does appear, and the -->|needs| edge is present in the real graph.
+// EdgeNeeds draws only when the downstream SourceOrigin keeps the literal
+// "needs.<job>.outputs.<name>" expression and the producer-side SinkRecord
+// identifies the same OutputName, so the edge connects to the action that wrote
+// the referenced job output rather than every action in the producer job.
 func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	out := runLinterMermaid(t, "../../script/actions/chainviz-crossjob.yaml")
 	if !strings.Contains(out, "flowchart TD") {
@@ -104,15 +100,14 @@ func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	if !strings.Contains(out, "sink_request_forgery_critical_consume") {
 		t.Errorf("missing consume-side request-forgery sink:\n%s", out)
 	}
-	// The cross-job edge itself: confirmed present against real output (see
-	// doc comment above), so this is a hard assertion, not a soft one.
+	// The cross-job edge itself: confirmed present against real output.
 	if !strings.Contains(out, "-->|needs|") {
-		t.Errorf("expected a cross-job needs edge linking produce's action(s) to consume's tainted source:\n%s", out)
+		t.Errorf("expected a cross-job needs edge linking produce's output-writer action to consume's tainted source:\n%s", out)
 	}
 	// Node IDs are whitelist-sanitized to [A-Za-z0-9_], so the parens/spaces in
 	// the SourceName ("needs.produce.outputs.ref (tainted via github.head_ref)")
 	// collapse to underscores in the ID.
-	if !strings.Contains(out, "n_source_1_needs_produce_outputs_ref__tainted_via_github_head_ref_") {
+	if !strings.Contains(out, "n_source_consume_1_needs_produce_outputs_ref__tainted_via_github_head_ref_") {
 		t.Errorf("expected the needs-derived source node naming the upstream job and its taint origin:\n%s", out)
 	}
 }

@@ -710,6 +710,62 @@ func TestSecretExposurePushesSinkRecord(t *testing.T) {
 	}
 }
 
+func TestSecretExposureJobEnvSinkRecordDoesNotUsePreviousStepSummary(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := NewSecretExposureRuleWithCollector(collector)
+
+	firstJob := &ast.Job{
+		ID: &ast.String{Value: "first"},
+		Steps: []*ast.Step{{
+			Exec: &ast.ExecRun{Run: &ast.String{Value: "echo stale"}},
+			Env: &ast.Env{
+				Vars: map[string]*ast.EnvVar{
+					"MY_TOKEN": {
+						Value: &ast.String{
+							Value: "${{ secrets['MY_SECRET'] }}",
+							Pos:   &ast.Position{Line: 10, Col: 7},
+						},
+					},
+				},
+			},
+		}},
+	}
+	secondJob := &ast.Job{
+		ID: &ast.String{Value: "second"},
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"ALL_SECRETS": {
+					Value: &ast.String{
+						Value: "${{ toJSON(secrets) }}",
+						Pos:   &ast.Position{Line: 20, Col: 5},
+					},
+				},
+			},
+		},
+	}
+
+	if err := rule.VisitJobPre(firstJob); err != nil {
+		t.Fatalf("VisitJobPre(firstJob): %v", err)
+	}
+	if err := rule.VisitJobPre(secondJob); err != nil {
+		t.Fatalf("VisitJobPre(secondJob): %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 SinkRecords pushed, got %d", len(recs))
+	}
+	if recs[0].StepSummary != "run: echo stale" {
+		t.Fatalf("first StepSummary = %q, want %q", recs[0].StepSummary, "run: echo stale")
+	}
+	if recs[1].JobID != "second" {
+		t.Errorf("job-level record JobID = %q, want %q", recs[1].JobID, "second")
+	}
+	if recs[1].StepSummary != "" {
+		t.Errorf("job-level record StepSummary = %q, want empty", recs[1].StepSummary)
+	}
+}
+
 func TestSecretExposure_AutoFix_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name           string

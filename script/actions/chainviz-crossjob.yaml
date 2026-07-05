@@ -6,11 +6,10 @@
 # reads it back via needs.produce.outputs.ref and passes it straight into a
 # curl URL (request-forgery-critical).
 #
-# Whether the chain graph actually draws a `-->|needs|` edge between the two
-# jobs' chains depends on RequestForgeryRule's deferred cross-job path
-# formatting SourceOrigin as "needs.produce.outputs.ref (tainted via ...)"
-# (see pkg/core/requestforgery.go VisitWorkflowPost) — see
-# pkg/core/chain_e2e_test.go for what was actually observed.
+# The chain graph draws a `-->|needs|` edge because the producer-side
+# output-clobbering record identifies output `ref`, and RequestForgeryRule's
+# deferred cross-job path keeps SourceOrigin as
+# "needs.produce.outputs.ref (tainted via ...)".
 name: chainviz cross job
 on:
   pull_request_target:
