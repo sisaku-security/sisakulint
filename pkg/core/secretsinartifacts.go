@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,6 +23,13 @@ import (
 // Security severity: 7.5
 type SecretsInArtifactsRule struct {
 	BaseRule
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set at the top of VisitJobPre.
+	currentJobID string
 }
 
 // NewSecretsInArtifactsRule creates a new secrets-in-artifacts detection rule.
@@ -32,6 +40,47 @@ func NewSecretsInArtifactsRule() *SecretsInArtifactsRule {
 			RuleDesc: "Detects sensitive information that may be included in GitHub Actions artifacts. Uploading entire repositories or using older artifact upload versions can expose secrets like GITHUB_TOKEN or .env files. CWE-312.",
 		},
 	}
+}
+
+// NewSecretsInArtifactsRuleWithCollector is like NewSecretsInArtifactsRule but additionally
+// pushes a chain.SinkRecord to collector for every detected unsafe artifact upload, feeding the
+// leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be nil, in which
+// case no records are pushed (equivalent to NewSecretsInArtifactsRule).
+func NewSecretsInArtifactsRuleWithCollector(collector *chain.SinkCollector) *SecretsInArtifactsRule {
+	r := NewSecretsInArtifactsRule()
+	r.collector = collector
+	return r
+}
+
+// VisitJobPre records the current job ID (lowercased) so pushed SinkRecords can
+// be attributed to the correct job in the chain visualization.
+func (rule *SecretsInArtifactsRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+	return nil
+}
+
+// pushSinkRecord records a detected unsafe artifact upload for the leakage-path
+// chain visualization. No specific secret is isolated by this rule (it flags
+// structural risk — broad paths / default-included hidden files — rather than
+// a matched `secrets.NAME` reference), so SourceName uses the generic
+// "secrets.*" placeholder per the chain-visualization convention.
+func (rule *SecretsInArtifactsRule) pushSinkRecord(pos *ast.Position, uses, sourceOrigin string) {
+	if rule.collector == nil {
+		return
+	}
+	rule.collector.Add(chain.SinkRecord{
+		JobID:        rule.currentJobID,
+		StepPos:      pos,
+		StepSummary:  "uses: " + uses,
+		SourceKind:   chain.SourceSecret,
+		SourceName:   "secrets.*",
+		SourceOrigin: sourceOrigin,
+		SinkKind:     chain.SinkArtifact,
+		RuleName:     rule.RuleNames(),
+		Severity:     "medium",
+	})
 }
 
 // unsafeArtifactPaths contains patterns that indicate potentially dangerous artifact paths.
@@ -182,6 +231,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 			"secrets exposure risk: artifact upload path %q may include sensitive files. Avoid uploading directories that might contain credentials or tokens. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 			pathValue,
 		)
+		rule.pushSinkRecord(node.Pos, uses, "artifact path matches sensitive file pattern: "+pathValue)
 		// No auto-fix for this case as user may have intentional reasons
 		return nil
 	}
@@ -203,6 +253,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 			"secrets exposure risk: actions/upload-artifact@%s includes hidden files by default. This can expose .git directory containing GITHUB_TOKEN. Upgrade to v4+ or explicitly set 'include-hidden-files: false'. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 			version,
 		)
+		rule.pushSinkRecord(node.Pos, uses, "actions/upload-artifact@"+version+" includes hidden files (.git, credentials) by default")
 		rule.AddAutoFixer(NewStepFixer(node, rule))
 	}
 
@@ -215,6 +266,7 @@ func (rule *SecretsInArtifactsRule) VisitStep(node *ast.Step) error {
 					"secrets exposure risk: artifact upload with 'include-hidden-files: true' and path %q may expose sensitive files. Remove 'include-hidden-files: true' or use a specific directory. See https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/",
 					pathValue,
 				)
+				rule.pushSinkRecord(node.Pos, uses, "include-hidden-files: true, path: "+pathValue)
 				rule.AddAutoFixer(NewStepFixer(node, rule))
 			}
 		}

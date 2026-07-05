@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"gopkg.in/yaml.v3"
 	"mvdan.cc/sh/v3/syntax"
@@ -21,6 +22,12 @@ type EnvPathInjectionRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithEnvPathInjection
 	workflow           *ast.Workflow
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // stepWithEnvPathInjection tracks steps that need auto-fixing for PATH injection
@@ -82,6 +89,10 @@ func (rule *EnvPathInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
 
@@ -165,6 +176,21 @@ func (rule *EnvPathInjectionRule) VisitJobPre(node *ast.Job) error {
 							"PATH injection (medium): \"%s\" is potentially untrusted and written to $GITHUB_PATH. This can allow attackers to hijack command execution by prepending a malicious directory to PATH. Validate the path or use absolute paths instead. See https://sisaku-security.github.io/lint/docs/rules/envpathinjectionmedium/",
 							strings.Join(untrustedPaths, "\", \""),
 						)
+					}
+
+					if rule.collector != nil {
+						sourceName := strings.Join(untrustedPaths, ", ")
+						rule.collector.Add(chain.SinkRecord{
+							JobID:        rule.currentJobID,
+							StepPos:      linePos,
+							StepSummary:  stepExecSummary(s),
+							SourceKind:   chain.SourceUntrusted,
+							SourceName:   sourceName,
+							SourceOrigin: sourceName,
+							SinkKind:     chain.SinkExpr,
+							RuleName:     rule.RuleNames(),
+							Severity:     rule.severityLevel,
+						})
 					}
 				}
 			}

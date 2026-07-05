@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 // SecretsInheritRule detects excessive secret inheritance using 'secrets: inherit' in reusable workflow calls.
@@ -17,6 +18,10 @@ import (
 type SecretsInheritRule struct {
 	BaseRule
 	cache *LocalReusableWorkflowCache
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
 }
 
 // NewSecretsInheritRule creates a new SecretsInheritRule instance.
@@ -33,6 +38,16 @@ func NewSecretsInheritRule() *SecretsInheritRule {
 func NewSecretsInheritRuleWithCache(cache *LocalReusableWorkflowCache) *SecretsInheritRule {
 	rule := NewSecretsInheritRule()
 	rule.cache = cache
+	return rule
+}
+
+// NewSecretsInheritRuleWithCacheAndCollector is like NewSecretsInheritRuleWithCache but
+// additionally pushes a chain.SinkRecord to collector for every detected 'secrets: inherit'
+// usage, feeding the leakage-path chain visualization (`-format "{{mermaid .}}"`). collector
+// may be nil, in which case no records are pushed (equivalent to NewSecretsInheritRuleWithCache).
+func NewSecretsInheritRuleWithCacheAndCollector(cache *LocalReusableWorkflowCache, collector *chain.SinkCollector) *SecretsInheritRule {
+	rule := NewSecretsInheritRuleWithCache(cache)
+	rule.collector = collector
 	return rule
 }
 
@@ -57,6 +72,24 @@ func (rule *SecretsInheritRule) VisitJobPre(n *ast.Job) error {
 			"Explicitly specify only the secrets that are required by the called workflow instead of inheriting all secrets",
 		uses.Value,
 	)
+
+	if rule.collector != nil {
+		jobID := ""
+		if n.ID != nil {
+			jobID = strings.ToLower(n.ID.Value)
+		}
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        jobID,
+			StepPos:      uses.Pos,
+			StepSummary:  "uses: " + uses.Value,
+			SourceKind:   chain.SourceSecret,
+			SourceName:   "secrets.*",
+			SourceOrigin: "secrets: inherit",
+			SinkKind:     chain.SinkBoundary,
+			RuleName:     rule.RuleNames(),
+			Severity:     "medium",
+		})
+	}
 
 	// Add auto-fixer
 	fixer := rule.createAutoFixer(n)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 // コンソール出力時における色付けのための定数
@@ -220,6 +221,8 @@ type ErrorFormatter struct {
 	templateInstance *template.Template
 	ruleTemplates    map[string]*RuleTemplateField
 	m                sync.Mutex
+	chains           []*chain.ChainModel // {{mermaid .}} 用（post-Wait に SetChains で充填）
+	hasMermaid       bool                // format 文字列が mermaid 関数を参照するか（アセンブルのゲート）
 }
 
 // NewErrorformatterは新しいErrorFormatterインスタンスを作成する。
@@ -232,6 +235,11 @@ func NewErrorFormatter(format string) (*ErrorFormatter, error) {
 
 	ruleTemplates := map[string]*RuleTemplateField{
 		"syntax-check": {"syntax-check", "Check the Github Actions workflow syntax"},
+	}
+
+	formatter := &ErrorFormatter{
+		ruleTemplates: ruleTemplates,
+		hasMermaid:    strings.Contains(format, "mermaid"),
 	}
 
 	funcMap := template.FuncMap(map[string]interface{}{
@@ -260,13 +268,28 @@ func NewErrorFormatter(format string) (*ErrorFormatter, error) {
 		},
 
 		"sarif": toSARIF,
+
+		"mermaid": func(_ interface{}) (string, error) {
+			return renderModelsToMermaid(formatter.chains), nil
+		},
 	})
 	t, err := template.New("error formatter").Funcs(funcMap).Parse(unescapeBackslash(format))
 	if err != nil {
 		return nil, fmt.Errorf("failed to ast %q the specified format: %w", format, err)
 	}
-	return &ErrorFormatter{t, ruleTemplates, sync.Mutex{}}, nil
+	formatter.templateInstance = t
+	return formatter, nil
 }
+
+// SetChains は post-Wait で組み立てた ChainModel を {{mermaid .}} 用に登録する。
+func (formatter *ErrorFormatter) SetChains(models []*chain.ChainModel) {
+	formatter.m.Lock()
+	formatter.chains = models
+	formatter.m.Unlock()
+}
+
+// HasMermaid は format が mermaid 出力を要求しているかを返す（アセンブルのゲート）。
+func (formatter *ErrorFormatter) HasMermaid() bool { return formatter.hasMermaid }
 
 // PrintErrorsはテンプレートでフォーマットした後でエラーを出力する
 func (formatter *ErrorFormatter) Print(writer io.Writer, templateFields []*TemplateFields) error {

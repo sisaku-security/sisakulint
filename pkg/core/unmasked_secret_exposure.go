@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -19,6 +20,10 @@ type UnmaskedSecretExposureRule struct {
 	currentStep   *ast.Step   // Track current step being visited (for auto-fix context)
 	currentString *ast.String // Track current string being checked (for auto-fix context)
 	currentJob    *ast.Job    // Track current job being visited (for auto-fix context)
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
 }
 
 // NewUnmaskedSecretExposureRule creates a new UnmaskedSecretExposureRule
@@ -33,8 +38,20 @@ func NewUnmaskedSecretExposureRule() *UnmaskedSecretExposureRule {
 	}
 }
 
+// NewUnmaskedSecretExposureRuleWithCollector is like NewUnmaskedSecretExposureRule but
+// additionally pushes a chain.SinkRecord to collector for every detected unmasked derived
+// secret, feeding the leakage-path chain visualization (`-format "{{mermaid .}}"`). collector
+// may be nil, in which case no records are pushed (equivalent to NewUnmaskedSecretExposureRule).
+func NewUnmaskedSecretExposureRuleWithCollector(collector *chain.SinkCollector) *UnmaskedSecretExposureRule {
+	r := NewUnmaskedSecretExposureRule()
+	r.collector = collector
+	return r
+}
+
 // VisitWorkflowPre checks workflow-level env for unmasked secret patterns
 func (rule *UnmaskedSecretExposureRule) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.currentJob = nil
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}
@@ -46,6 +63,7 @@ func (rule *UnmaskedSecretExposureRule) VisitJobPre(node *ast.Job) error {
 	rule.currentJob = node
 
 	// Check job-level env
+	rule.currentStep = nil
 	if node.Env != nil {
 		rule.checkEnv(node.Env)
 	}
@@ -301,6 +319,50 @@ func (rule *UnmaskedSecretExposureRule) reportUnmaskedSecretExposure(expr parsed
 			"See https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/",
 		expr.raw,
 	)
+
+	if rule.collector != nil {
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobIDForCollector(),
+			StepPos:      expr.pos,
+			StepSummary:  stepExecSummary(rule.currentStep),
+			SourceKind:   chain.SourceSecret,
+			SourceName:   secretRefFromFromJsonExpr(expr.raw),
+			SourceOrigin: expr.raw,
+			SinkKind:     chain.SinkExpr,
+			RuleName:     rule.RuleNames(),
+			Severity:     "high",
+		})
+	}
+}
+
+// currentJobIDForCollector returns the lowercased ID of the job currently
+// being visited (tracked via currentJob, set in VisitJobPre), or "" when no
+// job context is available (e.g. workflow-level env checked in VisitWorkflowPre).
+func (rule *UnmaskedSecretExposureRule) currentJobIDForCollector() string {
+	if rule.currentJob == nil || rule.currentJob.ID == nil {
+		return ""
+	}
+	return strings.ToLower(rule.currentJob.ID.Value)
+}
+
+// secretRefFromFromJsonExpr extracts the "secrets.NAME" reference from an
+// expression like "fromJson(secrets.AZURE_CREDENTIALS).clientId" for use as
+// the chain visualization SourceName. Falls back to the generic "secrets.*"
+// when no identifier-shaped secret name can be isolated.
+func secretRefFromFromJsonExpr(expr string) string {
+	idx := strings.Index(expr, "secrets.")
+	if idx == -1 {
+		return "secrets.*"
+	}
+	start := idx + len("secrets.")
+	end := start
+	for end < len(expr) && isIdentChar(expr[end]) {
+		end++
+	}
+	if end == start {
+		return "secrets.*"
+	}
+	return "secrets." + expr[start:end]
 }
 
 // addAutoFixer adds an auto-fixer that inserts add-mask command

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
@@ -25,6 +26,12 @@ type ArgumentInjectionRule struct {
 	pendingCrossJobChecks []pendingCrossJobCheck
 	// pendingCrossJobSet deduplicates pending checks by expr.raw + commandName + step pointer.
 	pendingCrossJobSet map[string]bool
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 type stepWithArgumentInjection struct {
@@ -145,6 +152,10 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *ArgumentInjectionRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Initialize taint tracker per job for cross-job output registration.
 	rule.taintTracker = NewTaintTracker()
 	for _, s := range node.Steps {
@@ -325,15 +336,16 @@ func (rule *ArgumentInjectionRule) analyzeExpressions(
 				commandName: varUsage.CommandName,
 			})
 
-			rule.reportArgumentInjection(linePos, untrustedPaths, varUsage.CommandName)
+			rule.reportArgumentInjection(linePos, untrustedPaths, varUsage.CommandName, s)
 		}
 	}
 
 	return stepUntrusted
 }
 
-// reportArgumentInjection reports an argument injection vulnerability.
-func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, paths []string, cmdName string) {
+// reportArgumentInjection reports an argument injection vulnerability and pushes a
+// chain.SinkRecord for the leakage-path chain visualization (`-format "{{mermaid .}}"`).
+func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, paths []string, cmdName string, step *ast.Step) {
 	severity := "medium"
 	suffix := ""
 	if rule.checkPrivileged {
@@ -349,6 +361,21 @@ func (rule *ArgumentInjectionRule) reportArgumentInjection(pos *ast.Position, pa
 		cmdName,
 		suffix,
 	)
+
+	if rule.collector != nil {
+		sourceName := strings.Join(paths, ", ")
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      pos,
+			StepSummary:  stepExecSummary(step),
+			SourceKind:   chain.SourceUntrusted,
+			SourceName:   sourceName,
+			SourceOrigin: sourceName,
+			SinkKind:     chain.SinkNetwork,
+			RuleName:     rule.RuleNames(),
+			Severity:     rule.severityLevel,
+		})
+	}
 }
 
 // addPendingArgInjCrossJobCheck queues a needs.*.outputs.* expression for deferred cross-job resolution.
@@ -361,11 +388,12 @@ func (rule *ArgumentInjectionRule) addPendingArgInjCrossJobCheck(expr parsedExpr
 		return
 	}
 	rule.pendingCrossJobChecks = append(rule.pendingCrossJobChecks, pendingCrossJobCheck{
-		expr:        expr,
-		needsJobID:  parts[1],
-		outputName:  strings.Join(parts[3:], "."),
-		commandName: commandName,
-		step:        step,
+		expr:          expr,
+		needsJobID:    parts[1],
+		outputName:    strings.Join(parts[3:], "."),
+		commandName:   commandName,
+		step:          step,
+		consumerJobID: rule.currentJobID,
 	})
 }
 
@@ -407,6 +435,24 @@ func (rule *ArgumentInjectionRule) VisitWorkflowPost(node *ast.Workflow) error {
 			cmdDesc,
 			suffix,
 		)
+
+		if rule.collector != nil {
+			// Restore currentJobID to the job this check was queued from
+			// (VisitJobPre for every other job has since overwritten it) so
+			// the pushed record attributes the finding to the correct job.
+			rule.currentJobID = pending.consumerJobID
+			rule.collector.Add(chain.SinkRecord{
+				JobID:        rule.currentJobID,
+				StepPos:      pending.expr.pos,
+				StepSummary:  stepExecSummary(pending.step),
+				SourceKind:   chain.SourceUntrusted,
+				SourceName:   taintPath,
+				SourceOrigin: taintPath,
+				SinkKind:     chain.SinkNetwork,
+				RuleName:     rule.RuleNames(),
+				Severity:     rule.severityLevel,
+			})
+		}
 	}
 
 	rule.pendingCrossJobChecks = nil

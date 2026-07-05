@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 	"gopkg.in/yaml.v3"
 )
@@ -58,6 +59,13 @@ type SecretExfiltrationRule struct {
 	// and the originating source. Reported once per workflow in
 	// VisitWorkflowPost so users learn that an entry is silently inert.
 	invalidAllowedHostEntries []invalidAllowedHostEntry
+
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set at the top of VisitJobPre.
+	currentJobID string
 }
 
 // invalidAllowedHostEntry captures a rejected allowlist entry for diagnostic
@@ -246,6 +254,16 @@ func NewSecretExfiltrationRule() *SecretExfiltrationRule {
 				"See https://sisaku-security.github.io/lint/docs/rules/secretexfiltration/",
 		},
 	}
+}
+
+// NewSecretExfiltrationRuleWithCollector is like NewSecretExfiltrationRule but additionally
+// pushes a chain.SinkRecord to collector for every detected exfiltration pattern, feeding the
+// leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be nil, in which
+// case no records are pushed (equivalent to NewSecretExfiltrationRule).
+func NewSecretExfiltrationRuleWithCollector(collector *chain.SinkCollector) *SecretExfiltrationRule {
+	r := NewSecretExfiltrationRule()
+	r.collector = collector
+	return r
 }
 
 // VisitWorkflowPre captures workflow context and builds the effective
@@ -597,6 +615,9 @@ func walkYAMLComments(node *yaml.Node, visit func(string)) {
 
 // VisitJobPre visits each job and checks steps
 func (rule *SecretExfiltrationRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
 	for _, step := range node.Steps {
 		rule.currentStep = step
 		rule.checkStep(step)
@@ -1668,4 +1689,22 @@ func (rule *SecretExfiltrationRule) reportExfiltration(pattern exfiltrationPatte
 	}
 
 	rule.Error(pattern.position, msg)
+
+	if rule.collector != nil {
+		sourceOrigin := pattern.secretRef
+		if pattern.isEnvVarLeak {
+			sourceOrigin = fmt.Sprintf("$%s (%s)", pattern.envVarName, pattern.secretRef)
+		}
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      pattern.position,
+			StepSummary:  pattern.command, // e.g. "curl" / "wget" / "nc"
+			SourceKind:   chain.SourceSecret,
+			SourceName:   pattern.secretRef, // e.g. "secrets.API_TOKEN"
+			SourceOrigin: sourceOrigin,
+			SinkKind:     chain.SinkNetwork,
+			RuleName:     rule.RuleNames(),
+			Severity:     "high",
+		})
+	}
 }

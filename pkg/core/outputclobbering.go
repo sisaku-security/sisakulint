@@ -3,9 +3,11 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"gopkg.in/yaml.v3"
 )
@@ -20,6 +22,12 @@ type OutputClobberingRule struct {
 	checkPrivileged    bool   // true = check privileged triggers, false = check normal triggers
 	stepsWithUntrusted []*stepWithOutputClobbering
 	workflow           *ast.Workflow
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // stepWithOutputClobbering tracks steps that need auto-fixing for output clobbering
@@ -86,6 +94,10 @@ func (rule *OutputClobberingRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Check if workflow trigger matches what we're looking for
 	isPrivileged := rule.hasPrivilegedTriggers()
 
@@ -172,6 +184,29 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 							"output clobbering (medium): \"%s\" is potentially untrusted and written to $GITHUB_OUTPUT. Attackers can inject newlines to overwrite other output variables. Use heredoc syntax with unique delimiters: 'name<<EOF\\nvalue\\nEOF'",
 							strings.Join(untrustedPaths, "\", \""),
 						)
+					}
+
+					if rule.collector != nil {
+						sourceName := strings.Join(untrustedPaths, ", ")
+						stepOutputName := extractGitHubOutputName(line)
+						outputNames := exposedJobOutputNamesForStepOutput(node.Outputs, stepIDValue(s), stepOutputName)
+						recordOutputName := stepOutputName
+						if len(outputNames) > 0 {
+							recordOutputName = outputNames[0]
+						}
+						rule.collector.Add(chain.SinkRecord{
+							JobID:        rule.currentJobID,
+							StepPos:      linePos,
+							StepSummary:  stepExecSummary(s),
+							SourceKind:   chain.SourceUntrusted,
+							SourceName:   sourceName,
+							SourceOrigin: sourceName,
+							SinkKind:     chain.SinkExpr,
+							OutputName:   recordOutputName,
+							OutputNames:  outputNames,
+							RuleName:     rule.RuleNames(),
+							Severity:     rule.severityLevel,
+						})
 					}
 				}
 			}
@@ -373,27 +408,9 @@ func (rule *OutputClobberingRule) transformToHeredocSyntax(script string, stepIn
 
 // transformOutputLine transforms a single output line to use heredoc syntax
 func (rule *OutputClobberingRule) transformOutputLine(line string, stepInfo *stepWithOutputClobbering, envVarMap map[string]string) []string {
-	// Extract the output name from patterns like:
-	// echo "name=value" >> $GITHUB_OUTPUT
-	// echo 'name=value' >> $GITHUB_OUTPUT
-
-	// Find the echo/printf command and extract content
-	outputPattern := regexp.MustCompile(`(echo|printf)\s+["']?([^"'=]+)=`)
-	matches := outputPattern.FindStringSubmatch(line)
-
-	var outputName string
-	if len(matches) >= 3 {
-		outputName = matches[2]
-	} else {
-		// Try to find output name from the content
-		// Pattern: something=value
-		contentPattern := regexp.MustCompile(`["']([a-zA-Z_][a-zA-Z0-9_]*)=`)
-		contentMatches := contentPattern.FindStringSubmatch(line)
-		if len(contentMatches) >= 2 {
-			outputName = contentMatches[1]
-		} else {
-			outputName = "OUTPUT"
-		}
+	outputName := extractGitHubOutputName(line)
+	if outputName == "" {
+		outputName = "OUTPUT"
 	}
 
 	// Replace untrusted expressions with env var references
@@ -451,6 +468,63 @@ func (rule *OutputClobberingRule) transformOutputLine(line string, stepInfo *ste
 		fmt.Sprintf(`  echo "%s"`, delimiter),
 		`} >> "$GITHUB_OUTPUT"`,
 	}
+}
+
+func extractGitHubOutputName(line string) string {
+	outputPattern := regexp.MustCompile(`(?:echo|printf)\s+["']?([A-Za-z_][A-Za-z0-9_-]*)=`)
+	if matches := outputPattern.FindStringSubmatch(line); len(matches) >= 2 {
+		return matches[1]
+	}
+
+	contentPattern := regexp.MustCompile(`["']([A-Za-z_][A-Za-z0-9_-]*)=`)
+	if matches := contentPattern.FindStringSubmatch(line); len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
+}
+
+func stepIDValue(step *ast.Step) string {
+	if step == nil || step.ID == nil {
+		return ""
+	}
+	return step.ID.Value
+}
+
+func exposedJobOutputNamesForStepOutput(outputs map[string]*ast.Output, stepID, stepOutputName string) []string {
+	stepID = strings.ToLower(strings.TrimSpace(stepID))
+	stepOutputName = strings.ToLower(strings.TrimSpace(stepOutputName))
+	if len(outputs) == 0 || stepID == "" || stepOutputName == "" {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	names := []string{}
+	for mapName, output := range outputs {
+		if output == nil || output.Value == nil {
+			continue
+		}
+		for _, expr := range extractExpressionsFromString(output.Value.Value) {
+			parts := strings.Split(strings.ToLower(strings.TrimSpace(expr)), ".")
+			if len(parts) != 4 || parts[0] != "steps" || parts[2] != "outputs" {
+				continue
+			}
+			if parts[1] != stepID || parts[3] != stepOutputName {
+				continue
+			}
+			outputName := mapName
+			if output.Name != nil && output.Name.Value != "" {
+				outputName = output.Name.Value
+			}
+			key := strings.ToLower(outputName)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			names = append(names, outputName)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // setRunScriptValueForOutput directly sets the run script value in a step's YAML node

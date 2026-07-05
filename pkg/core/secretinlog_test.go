@@ -7,6 +7,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
 
@@ -1527,6 +1528,62 @@ func TestSecretInLog_CrossJob_NeedsOutputsDirectExpressionLeak_ReverseJobOrder(t
 	}
 }
 
+// TestSecretInLog_CrossJob_ReverseJobOrder_SinkRecordJobID pins the review fix:
+// when the deferred pendingNeedsSteps queue is flushed in VisitWorkflowPost, each
+// leak's chain SinkRecord must carry the consumer job's ID (captured at queue time),
+// not whichever job happened to be visited last. Here "downstream" (consumer) is
+// visited before "upstream" (producer), so a stale currentJobID would wrongly
+// attribute the sink to "upstream" and misplace it in the rendered graph.
+func TestSecretInLog_CrossJob_ReverseJobOrder_SinkRecordJobID(t *testing.T) {
+	t.Parallel()
+
+	step1 := mkRunStepForTest(t,
+		map[string]string{"SECRET_JSON": "${{ secrets.S }}"},
+		"D=$(echo \"$SECRET_JSON\" | jq -r .k)\necho \"token=$D\" >> $GITHUB_OUTPUT",
+	)
+	step1.ID = &ast.String{Value: "derive"}
+	producer := &ast.Job{
+		ID:    &ast.String{Value: "upstream"},
+		Steps: []*ast.Step{step1},
+		Outputs: map[string]*ast.Output{
+			"token": {
+				Name:  &ast.String{Value: "token"},
+				Value: &ast.String{Value: "${{ steps.derive.outputs.token }}"},
+			},
+		},
+	}
+	step2 := mkRunStepForTest(t, nil, `echo "got: ${{ needs.upstream.outputs.token }}"`)
+	consumer := &ast.Job{
+		ID:    &ast.String{Value: "downstream"},
+		Needs: []*ast.String{{Value: "upstream"}},
+		Steps: []*ast.Step{step2},
+	}
+
+	collector := chain.NewSinkCollector()
+	rule := NewSecretInLogRuleWithTaintMapAndCollector(NewWorkflowSecretTaintMap(), collector)
+	if err := rule.VisitWorkflowPre(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	// Consumer visited before producer forces the deferred pendingNeedsSteps path.
+	if err := rule.VisitJobPre(consumer); err != nil {
+		t.Fatalf("VisitJobPre(consumer): %v", err)
+	}
+	if err := rule.VisitJobPre(producer); err != nil {
+		t.Fatalf("VisitJobPre(producer): %v", err)
+	}
+	if err := rule.VisitWorkflowPost(&ast.Workflow{}); err != nil {
+		t.Fatalf("VisitWorkflowPost: %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected exactly 1 SinkRecord from the deferred flush, got %d", len(recs))
+	}
+	if recs[0].JobID != "downstream" {
+		t.Errorf("deferred cross-job sink attributed to wrong job: JobID = %q, want %q (the consumer that reads the tainted needs output)", recs[0].JobID, "downstream")
+	}
+}
+
 func TestSecretInLog_CrossJob_NeedsOutputsEnvExpressionLeak_ReverseJobOrder(t *testing.T) {
 	t.Parallel()
 
@@ -2260,5 +2317,43 @@ func TestSecretInLog_FunctionLocalChainsThroughArg(t *testing.T) {
 	msg := errs[0].Description
 	if !strings.Contains(msg, "$X") {
 		t.Errorf("error message %q should mention $X", msg)
+	}
+}
+
+// TestSecretInLogPushesSinkRecord verifies that a detected echo/printf leak of a
+// secret-sourced env var is also pushed to the chain.SinkCollector for the
+// leakage-path chain visualization feature (#milestone-D task 13).
+func TestSecretInLogPushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewSecretInLogRuleWithTaintMapAndCollector(NewWorkflowSecretTaintMap(), collector)
+
+	step := mkRunStepForTest(t,
+		map[string]string{"TOKEN": "${{ secrets.TOKEN }}"},
+		"echo \"$TOKEN\"",
+	)
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) == 0 {
+		t.Fatal("expected at least one SinkRecord pushed")
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkLog {
+		t.Errorf("SinkKind = %v, want SinkLog", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
 	}
 }

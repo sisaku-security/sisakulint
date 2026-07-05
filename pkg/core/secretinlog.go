@@ -9,6 +9,7 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
@@ -42,7 +43,21 @@ type SecretInLogRule struct {
 	crossStepOutputs map[string]map[string]string
 	// pendingNeedsSteps は、consumer job が producer job より先に現れた場合に、
 	// needs.*.outputs.* の解決を VisitWorkflowPost まで遅延するための step 集合。
-	pendingNeedsSteps []*ast.Step
+	// jobID を各要素に保持するのは、フラッシュ時 (VisitWorkflowPost) には
+	// currentJobID が最後に訪問した job を指してしまうため（codeinjection.go 等の
+	// pendingCrossJobCheck.consumerJobID と同じ理由）。
+	pendingNeedsSteps []pendingNeedsStep
+	// collector は漏洩チェーン可視化用の per-file SinkCollector（nil 許容）。
+	collector *chain.SinkCollector
+	// currentJobID は走査中の job ID（小文字）。VisitJobPre で設定される。
+	currentJobID string
+}
+
+// pendingNeedsStep は VisitWorkflowPost まで遅延される step と、それを queue した
+// consumer job の ID を保持する。
+type pendingNeedsStep struct {
+	step  *ast.Step
+	jobID string
 }
 
 // NewSecretInLogRule は新規ルールインスタンスを返す。
@@ -60,6 +75,16 @@ func NewSecretInLogRuleWithTaintMap(workflowSecretTaintMap *WorkflowSecretTaintM
 				"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
 		},
 	}
+}
+
+// NewSecretInLogRuleWithTaintMapAndCollector is like NewSecretInLogRuleWithTaintMap but
+// additionally pushes a chain.SinkRecord to collector for every detected leak, feeding the
+// leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be nil, in
+// which case no records are pushed (equivalent to NewSecretInLogRuleWithTaintMap).
+func NewSecretInLogRuleWithTaintMapAndCollector(workflowSecretTaintMap *WorkflowSecretTaintMap, collector *chain.SinkCollector) *SecretInLogRule {
+	r := NewSecretInLogRuleWithTaintMap(workflowSecretTaintMap)
+	r.collector = collector
+	return r
 }
 
 var secretEnvRefRe = regexp.MustCompile(`\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
@@ -586,6 +611,9 @@ func (rule *SecretInLogRule) VisitWorkflowPre(node *ast.Workflow) error {
 // Job 開始時に crossStepEnv をリセットし、ステップを順次処理することで
 // 前 step の `$GITHUB_ENV` 書き込みを後続 step の taint source として引き継ぐ。
 func (rule *SecretInLogRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
 	rule.jobEnvSecrets = rule.collectSecretEnvVars(node.Env)
 	rule.crossStepEnv = make(map[string]string)
 	rule.crossStepOutputs = make(map[string]map[string]string)
@@ -612,8 +640,12 @@ func (rule *SecretInLogRule) VisitWorkflowPost(node *ast.Workflow) error {
 		rule.crossStepOutputs = savedCrossStepOutputs
 	}()
 
-	for _, step := range rule.pendingNeedsSteps {
-		rule.checkPendingNeedsStep(step)
+	for _, pending := range rule.pendingNeedsSteps {
+		// フラッシュ時点で currentJobID は最後に訪問した job を指すため、
+		// この step を queue した consumer job に復元してから解析する
+		// (reportLeak/reportStepOutputLeak が SinkRecord.JobID に使う)。
+		rule.currentJobID = pending.jobID
+		rule.checkPendingNeedsStep(pending.step)
 	}
 	rule.pendingNeedsSteps = nil
 	return nil
@@ -633,7 +665,7 @@ func (rule *SecretInLogRule) checkStep(step *ast.Step) {
 		return
 	}
 	if rule.stepHasUnregisteredNeedsOutputReference(step, script) {
-		rule.pendingNeedsSteps = append(rule.pendingNeedsSteps, step)
+		rule.pendingNeedsSteps = append(rule.pendingNeedsSteps, pendingNeedsStep{step: step, jobID: rule.currentJobID})
 	}
 
 	// 初期 taint 集合を構築: workflow env, job env, crossStepEnv, step env の順で merge。
@@ -761,6 +793,19 @@ func (rule *SecretInLogRule) reportLeak(leak echoLeakOccurrence) {
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
 		leak.VarName, leak.Origin, leak.Command, suggestion,
 	)
+	if rule.collector != nil {
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      leak.Position,
+			StepSummary:  leak.Command, // 例 "echo" / "printf"
+			SourceKind:   chain.SourceSecret,
+			SourceName:   leak.Origin, // 例 "secrets.TOKEN"（shellvar: マーカーを含み得る＝v1 は生表示で可）
+			SourceOrigin: leak.Origin,
+			SinkKind:     chain.SinkLog,
+			RuleName:     rule.RuleNames(),
+			Severity:     "high",
+		})
+	}
 }
 
 // reportStepOutputLeak は stepOutputLeakOccurrence をエラーとして記録する。
@@ -781,6 +826,19 @@ func (rule *SecretInLogRule) reportStepOutputLeak(leak stepOutputLeakOccurrence)
 			"See https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/",
 		leak.Expr, leak.Origin, leak.Command,
 	)
+	if rule.collector != nil {
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      leak.Position,
+			StepSummary:  leak.Command,
+			SourceKind:   chain.SourceSecret,
+			SourceName:   leak.Origin,
+			SourceOrigin: leak.Origin,
+			SinkKind:     chain.SinkLog,
+			RuleName:     rule.RuleNames(),
+			Severity:     "high",
+		})
+	}
 }
 
 // addAutoFixerForLeak は add-mask 行を run スクリプトに挿入する auto-fixer を登録する。

@@ -3,9 +3,11 @@ package core
 import (
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewReusableWorkflowTaintRule(t *testing.T) {
@@ -356,6 +358,64 @@ func TestCheckWorkflowCallInputs_ChainDisabled_StillEmitsErrorf(t *testing.T) {
 	}
 	if got := len(cache.CallersOf("./.github/workflows/build.yml")); got != 0 {
 		t.Errorf("disabled mode should not record to cache, got %d", got)
+	}
+}
+
+// TestCheckWorkflowCallInputs_ChainDisabled_PushesSinkRecord verifies that the
+// single-file fallback path (chain resolution disabled) also pushes a
+// chain.SinkRecord for the leakage-path chain visualization (Milestone E task
+// 16), with SinkKind/Severity reflecting the caller-side boundary crossing.
+// The cross-file chain-enabled path (RecordCallerTaint -> ResolvePendingChains
+// in cross_file_taint.go) is architecturally separate (no Rule/collector
+// access) and is intentionally not covered here.
+func TestCheckWorkflowCallInputs_ChainDisabled_PushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	cache := NewLocalReusableWorkflowCache(nil /* no project => disabled */, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRuleWithCollector("./.github/workflows/ci.yml", cache, collector)
+	rule.hasPrivilegedTrigger = true
+
+	job := &ast.Job{
+		ID: &ast.String{Value: "call-build"},
+		WorkflowCall: &ast.WorkflowCall{
+			Uses: &ast.String{Value: "./.github/workflows/build.yml"},
+			Inputs: map[string]*ast.WorkflowCallInput{
+				"branch": {
+					Value: &ast.String{
+						Value: "${{ github.event.pull_request.head.ref }}",
+						Pos:   &ast.Position{Line: 5, Col: 9},
+					},
+				},
+			},
+		},
+	}
+	rule.checkWorkflowCallInputs(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("fallback mode should emit 1 error, got %d", got)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkBoundary {
+		t.Errorf("SinkKind = %v, want SinkBoundary", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceUntrusted {
+		t.Errorf("SourceKind = %v, want SourceUntrusted", r.SourceKind)
+	}
+	if r.Severity != "critical" {
+		t.Errorf("Severity = %q, want %q (rule.hasPrivilegedTrigger=true)", r.Severity, "critical")
+	}
+	if !strings.Contains(r.SourceName, "github.event.pull_request.head.ref") {
+		t.Errorf("SourceName = %q, want it to contain %q", r.SourceName, "github.event.pull_request.head.ref")
+	}
+	if r.JobID != "call-build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "call-build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }
 
@@ -830,5 +890,58 @@ func TestCheckTaintedInputUsage_ChainDisabled_PreservesLegacy(t *testing.T) {
 	}
 	if got := len(rule.AutoFixers()); got != 1 {
 		t.Errorf("disabled mode should still register legacy fixer, got %d", got)
+	}
+}
+
+// TestCheckTaintedInputUsage_ChainDisabled_PushesSinkRecord verifies that the
+// single-file fallback path (chain resolution disabled) also pushes a
+// chain.SinkRecord for the leakage-path chain visualization (Milestone E task
+// 16). This callee-only path has no caller-side privileged/normal signal, so
+// Severity defaults to "medium" (mirrors cross_file_taint.go's
+// emitCalleeSoloWarnings, which hardcodes "medium" for the analogous
+// callee-solo-no-caller case).
+func TestCheckTaintedInputUsage_ChainDisabled_PushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	cache := NewLocalReusableWorkflowCache(nil, "/cwd", nil)
+	rule := NewReusableWorkflowTaintRuleWithCollector("./.github/workflows/build.yml", cache, collector)
+	rule.isReusableWorkflow = true
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo ${{ inputs.title }}",
+				Pos:   &ast.Position{Line: 10, Col: 14},
+			},
+		},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "reusable-job"}, Steps: []*ast.Step{step}}
+	rule.checkTaintedInputUsageInSteps(job)
+
+	if got := len(rule.Errors()); got != 1 {
+		t.Fatalf("disabled mode should preserve legacy Errorf, got %d errors", got)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkBoundary {
+		t.Errorf("SinkKind = %v, want SinkBoundary", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceUntrusted {
+		t.Errorf("SourceKind = %v, want SourceUntrusted", r.SourceKind)
+	}
+	if r.Severity != "medium" {
+		t.Errorf("Severity = %q, want %q", r.Severity, "medium")
+	}
+	if r.SourceName != "inputs.title" {
+		t.Errorf("SourceName = %q, want %q", r.SourceName, "inputs.title")
+	}
+	if r.JobID != "reusable-job" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "reusable-job")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
 	}
 }

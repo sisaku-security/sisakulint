@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestNewUnmaskedSecretExposureRule(t *testing.T) {
@@ -670,6 +671,119 @@ func TestUnmaskedSecretExposure_AutoFixEdgeCases(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestUnmaskedSecretExposurePushesSinkRecord verifies that a detected
+// fromJson(secrets.X).y unmasked derived secret is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization feature
+// (Milestone E task 16).
+func TestUnmaskedSecretExposurePushesSinkRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewUnmaskedSecretExposureRuleWithCollector(collector)
+
+	step := &ast.Step{
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"test_var": {
+					Name: &ast.String{Value: "TEST_VAR"},
+					Value: &ast.String{
+						Value: "${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}",
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+	job := &ast.Job{ID: &ast.String{Value: "build"}, Steps: []*ast.Step{step}}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkExpr {
+		t.Errorf("SinkKind = %v, want SinkExpr", r.SinkKind)
+	}
+	if r.SourceKind != chain.SourceSecret {
+		t.Errorf("SourceKind = %v, want SourceSecret", r.SourceKind)
+	}
+	if r.SourceName != "secrets.AZURE_CREDENTIALS" {
+		t.Errorf("SourceName = %q, want %q", r.SourceName, "secrets.AZURE_CREDENTIALS")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
+	}
+	if r.RuleName == "" || r.StepPos == nil {
+		t.Error("RuleName/StepPos must be populated")
+	}
+}
+
+func TestUnmaskedSecretExposureJobEnvSinkRecordDoesNotUsePreviousStepSummary(t *testing.T) {
+	t.Parallel()
+
+	collector := chain.NewSinkCollector()
+	rule := NewUnmaskedSecretExposureRuleWithCollector(collector)
+
+	firstJob := &ast.Job{
+		ID: &ast.String{Value: "first"},
+		Steps: []*ast.Step{{
+			Exec: &ast.ExecRun{Run: &ast.String{Value: "echo stale"}},
+			Env: &ast.Env{
+				Vars: map[string]*ast.EnvVar{
+					"CLIENT_ID": {
+						Value: &ast.String{
+							Value: "${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}",
+							Pos:   &ast.Position{Line: 10, Col: 7},
+						},
+					},
+				},
+			},
+		}},
+	}
+	secondJob := &ast.Job{
+		ID: &ast.String{Value: "second"},
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"PASSWORD": {
+					Value: &ast.String{
+						Value: "${{ fromJson(secrets.DEPLOY_CREDS).password }}",
+						Pos:   &ast.Position{Line: 20, Col: 5},
+					},
+				},
+			},
+		},
+	}
+
+	if err := rule.VisitJobPre(firstJob); err != nil {
+		t.Fatalf("VisitJobPre(firstJob): %v", err)
+	}
+	if err := rule.VisitJobPre(secondJob); err != nil {
+		t.Fatalf("VisitJobPre(secondJob): %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 SinkRecords pushed, got %d", len(recs))
+	}
+	if recs[0].StepSummary != "run: echo stale" {
+		t.Fatalf("first StepSummary = %q, want %q", recs[0].StepSummary, "run: echo stale")
+	}
+	if recs[1].JobID != "second" {
+		t.Errorf("job-level record JobID = %q, want %q", recs[1].JobID, "second")
+	}
+	if recs[1].StepSummary != "" {
+		t.Errorf("job-level record StepSummary = %q, want empty", recs[1].StepSummary)
+	}
 }
 
 func TestUnmaskedSecretExposure_ComplexPatterns(t *testing.T) {

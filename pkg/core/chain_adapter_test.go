@@ -1,0 +1,90 @@
+package core
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
+)
+
+func TestValidateResultHasChainRecords(t *testing.T) {
+	var r ValidateResult
+	r.ChainRecords = []chain.SinkRecord{{JobID: "build"}}
+	if len(r.ChainRecords) != 1 {
+		t.Fatal("ChainRecords field missing or wrong type")
+	}
+}
+
+func TestBuildAssemblerInputTriggersAndPermissions(t *testing.T) {
+	wf := &ast.Workflow{
+		Name: &ast.String{Value: "CI"},
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}, Pos: &ast.Position{Line: 2, Col: 3}},
+		},
+		Permissions: &ast.Permissions{All: &ast.String{Value: "write-all"}, Pos: &ast.Position{Line: 3, Col: 3}},
+		Jobs: map[string]*ast.Job{
+			"build": {ID: &ast.String{Value: "build"}, Pos: &ast.Position{Line: 5, Col: 3}},
+		},
+	}
+	records := []chain.SinkRecord{{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9},
+		SourceKind: chain.SourceSecret, SourceName: "secrets.TOKEN", SinkKind: chain.SinkLog, RuleName: "secret-in-log"}}
+
+	in := buildAssemblerInput(".github/workflows/ci.yml", wf, records)
+
+	if in.WorkflowName != "CI" {
+		t.Errorf("WorkflowName = %q", in.WorkflowName)
+	}
+	if len(in.JobContexts) != 1 {
+		t.Fatalf("JobContexts len = %d, want 1", len(in.JobContexts))
+	}
+	jc := in.JobContexts[0]
+	if jc.JobID != "build" {
+		t.Errorf("JobID = %q", jc.JobID)
+	}
+	if len(jc.Triggers) != 1 || !jc.Triggers[0].Untrusted {
+		t.Errorf("expected 1 untrusted trigger, got %+v", jc.Triggers)
+	}
+}
+
+func TestRenderModelsToMermaid(t *testing.T) {
+	wf := &ast.Workflow{
+		Name: &ast.String{Value: "CI"},
+		On:   []ast.Event{&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}, Pos: &ast.Position{Line: 2, Col: 3}}},
+		Jobs: map[string]*ast.Job{"build": {ID: &ast.String{Value: "build"}}},
+	}
+	records := []chain.SinkRecord{{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9},
+		SourceKind: chain.SourceSecret, SourceName: "secrets.TOKEN", SinkKind: chain.SinkNetwork, RuleName: "secret-exfiltration"}}
+
+	in := buildAssemblerInput(".github/workflows/ci.yml", wf, records)
+	out := renderModelsToMermaid([]*chain.ChainModel{chain.Assemble(in)})
+
+	if !strings.Contains(out, "flowchart TD") {
+		t.Error("expected mermaid output")
+	}
+	if !strings.Contains(out, "ci.yml") {
+		t.Error("expected file path header in multi-model output")
+	}
+}
+
+// TestBuildAssemblerInputWorkflowCallUntrusted pins the review fix: a reusable
+// workflow triggered only by workflow_call (which is absent from PrivilegedTriggers)
+// must still be classified Untrusted, since its inputs come from the caller.
+func TestBuildAssemblerInputWorkflowCallUntrusted(t *testing.T) {
+	wf := &ast.Workflow{
+		Name: &ast.String{Value: "reusable"},
+		On:   []ast.Event{&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_call"}, Pos: &ast.Position{Line: 2, Col: 3}}},
+		Jobs: map[string]*ast.Job{"build": {ID: &ast.String{Value: "build"}}},
+	}
+	in := buildAssemblerInput("r.yml", wf, nil)
+	if len(in.JobContexts) != 1 || len(in.JobContexts[0].Triggers) != 1 {
+		t.Fatalf("unexpected job contexts: %+v", in.JobContexts)
+	}
+	tr := in.JobContexts[0].Triggers[0]
+	if tr.Name != "workflow_call" {
+		t.Fatalf("trigger name = %q, want workflow_call", tr.Name)
+	}
+	if !tr.Untrusted {
+		t.Error("workflow_call trigger must be marked Untrusted for reusable-workflow analysis")
+	}
+}

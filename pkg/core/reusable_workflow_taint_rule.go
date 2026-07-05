@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -29,6 +30,13 @@ type ReusableWorkflowTaintRule struct {
 	hasPrivilegedTrigger bool
 	// stepsWithTaintedInputs tracks steps that use tainted inputs
 	stepsWithTaintedInputs []*stepWithTaintedInput
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing). Only the single-file
+	// fallback Errorf paths push here; the cross-file chain-enabled path
+	// (RecordCallerTaint/RecordCalleeSink -> ResolvePendingChains in
+	// cross_file_taint.go) reports via FormattedError on a *LocalReusableWorkflowCache*
+	// method with no Rule/collector access, and is out of scope for this wiring.
+	collector *chain.SinkCollector
 }
 
 // stepWithTaintedInput tracks steps that use tainted inputs
@@ -55,6 +63,18 @@ func NewReusableWorkflowTaintRule(workflowPath string, cache *LocalReusableWorkf
 		workflowPath: workflowPath,
 		cache:        cache,
 	}
+}
+
+// NewReusableWorkflowTaintRuleWithCollector is like NewReusableWorkflowTaintRule but
+// additionally pushes a chain.SinkRecord to collector for every finding reported through
+// the single-file fallback path (chain resolution disabled or no caller/callee correlation
+// available), feeding the leakage-path chain visualization (`-format "{{mermaid .}}"`).
+// collector may be nil, in which case no records are pushed (equivalent to
+// NewReusableWorkflowTaintRule).
+func NewReusableWorkflowTaintRuleWithCollector(workflowPath string, cache *LocalReusableWorkflowCache, collector *chain.SinkCollector) *ReusableWorkflowTaintRule {
+	r := NewReusableWorkflowTaintRule(workflowPath, cache)
+	r.collector = collector
+	return r
 }
 
 // VisitWorkflowPre is called before visiting workflow children
@@ -147,6 +167,21 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 			"reusable workflow input taint (%s): input %q receives untrusted value %q which may be used unsafely in the called workflow %q. Consider validating or sanitizing the input. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
 			severity, inputName, strings.Join(untrustedPaths, ", "), call.Uses.Value,
 		)
+
+		if rule.collector != nil {
+			sourceName := strings.Join(untrustedPaths, ", ")
+			rule.collector.Add(chain.SinkRecord{
+				JobID:        strings.ToLower(jobIDOf(job)),
+				StepPos:      input.Value.Pos,
+				StepSummary:  "uses: " + call.Uses.Value,
+				SourceKind:   chain.SourceUntrusted,
+				SourceName:   sourceName,
+				SourceOrigin: sourceName,
+				SinkKind:     chain.SinkBoundary,
+				RuleName:     rule.RuleNames(),
+				Severity:     severity,
+			})
+		}
 	}
 }
 
@@ -249,6 +284,25 @@ func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
 			template = "tainted input in reusable workflow: %q may contain untrusted data passed from the caller workflow. Avoid using it directly in github-script. Instead, pass it through an environment variable. See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/"
 		}
 		rule.Errorf(usage.pos, template, usage.inputPath)
+
+		if rule.collector != nil {
+			rule.collector.Add(chain.SinkRecord{
+				JobID:        strings.ToLower(jobIDOf(job)),
+				StepPos:      usage.pos,
+				StepSummary:  stepExecSummary(step),
+				SourceKind:   chain.SourceUntrusted,
+				SourceName:   usage.inputPath,
+				SourceOrigin: usage.inputPath,
+				SinkKind:     chain.SinkBoundary,
+				RuleName:     rule.RuleNames(),
+				// This single-file fallback has no caller-side privileged/normal
+				// signal (the callee's own workflow_call trigger never counts as
+				// privileged, see isPrivilegedTrigger), so default to "medium" —
+				// mirroring cross_file_taint.go's emitCalleeSoloWarnings, which
+				// hardcodes "medium" for the analogous callee-solo-no-caller case.
+				Severity: "medium",
+			})
+		}
 	}
 	return stepTainted
 }

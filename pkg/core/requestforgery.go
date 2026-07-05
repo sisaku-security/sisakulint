@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 	"github.com/sisaku-security/sisakulint/pkg/shell"
 )
@@ -25,6 +26,12 @@ type RequestForgeryRule struct {
 	pendingCrossJobChecks []pendingCrossJobCheck
 	// pendingCrossJobSet deduplicates pending checks by expr.raw + step pointer.
 	pendingCrossJobSet map[string]bool
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 type stepWithRequestForgery struct {
@@ -111,6 +118,10 @@ func (rule *RequestForgeryRule) VisitWorkflowPre(node *ast.Workflow) error {
 }
 
 func (rule *RequestForgeryRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		rule.currentJobID = strings.ToLower(node.ID.Value)
+	}
+
 	// Initialize taint tracker per job for cross-job output registration.
 	rule.taintTracker = NewTaintTracker()
 	for _, s := range node.Steps {
@@ -216,7 +227,7 @@ func (rule *RequestForgeryRule) checkScriptWithAST(cmdCalls []shell.NetworkComma
 							command:  cmdCall.CommandName,
 						})
 
-						rule.reportError(pos.Pos, untrustedPaths, cmdCall.CommandName, severity)
+						rule.reportError(pos.Pos, untrustedPaths, cmdCall.CommandName, severity, step)
 					}
 				}
 			}
@@ -276,7 +287,7 @@ func (rule *RequestForgeryRule) checkScriptWithLines(script string, exprs []pars
 					linePos.Line += 1
 				}
 
-				rule.reportError(linePos, untrustedPaths, networkCmd, severity)
+				rule.reportError(linePos, untrustedPaths, networkCmd, severity, step)
 			}
 		}
 	}
@@ -376,7 +387,10 @@ func (rule *RequestForgeryRule) determineSeverity(line string, expr parsedExpres
 	return RequestForgerySeverityPath
 }
 
-func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []string, command string, severity RequestForgerySeverity) {
+// reportError emits the Errorf for a request-forgery finding and pushes a chain.SinkRecord
+// for the leakage-path chain visualization (`-format "{{mermaid .}}"`). step is the step the
+// finding was detected in; used only to build the collector's StepSummary.
+func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []string, command string, severity RequestForgerySeverity, step *ast.Step) {
 	var severityStr string
 	var riskDesc string
 
@@ -411,6 +425,24 @@ func (rule *RequestForgeryRule) reportError(pos *ast.Position, untrustedPaths []
 			command,
 		)
 	}
+
+	if rule.collector != nil {
+		sourceName := strings.Join(untrustedPaths, ", ")
+		rule.collector.Add(chain.SinkRecord{
+			JobID:        rule.currentJobID,
+			StepPos:      pos,
+			StepSummary:  stepExecSummary(step),
+			SourceKind:   chain.SourceUntrusted,
+			SourceName:   sourceName,
+			SourceOrigin: sourceName,
+			SinkKind:     chain.SinkNetwork,
+			RuleName:     rule.RuleNames(),
+			// SinkRecord.Severity tracks the checkPrivileged critical/medium
+			// axis (matching every other rule in this batch), not severityStr
+			// (which encodes the URL/host/path argument-position axis above).
+			Severity: rule.severityLevel,
+		})
+	}
 }
 
 func (rule *RequestForgeryRule) addPendingReqForgeryCrossJobCheck(expr parsedExpression, step *ast.Step, command string, severity RequestForgerySeverity) {
@@ -438,6 +470,7 @@ func (rule *RequestForgeryRule) addPendingReqForgeryCrossJobCheck(expr parsedExp
 		step:               step,
 		commandName:        command,
 		reqForgerySeverity: severity,
+		consumerJobID:      rule.currentJobID,
 	})
 }
 
@@ -462,7 +495,11 @@ func (rule *RequestForgeryRule) VisitWorkflowPost(node *ast.Workflow) error {
 		if cmdDesc == "" {
 			cmdDesc = "network command"
 		}
-		rule.reportError(pending.expr.pos, []string{taintPath}, cmdDesc, pending.reqForgerySeverity)
+		// Restore currentJobID to the job this check was queued from
+		// (VisitJobPre for every other job has since overwritten it) so the
+		// collector push inside reportError attributes the finding correctly.
+		rule.currentJobID = pending.consumerJobID
+		rule.reportError(pending.expr.pos, []string{taintPath}, cmdDesc, pending.reqForgerySeverity, pending.step)
 	}
 
 	rule.pendingCrossJobChecks = nil

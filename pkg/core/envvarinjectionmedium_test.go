@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 )
 
 func TestEnvVarInjectionMediumRule(t *testing.T) {
@@ -183,5 +184,59 @@ func TestEnvVarInjectionMedium_AutoFix(t *testing.T) {
 	// Check that env var was added
 	if step.Env == nil || len(step.Env.Vars) == 0 {
 		t.Error("expected env vars to be added")
+	}
+}
+
+// TestEnvVarInjectionMediumPushesSinkRecord verifies that a detected envvar
+// injection finding in a normal-trigger workflow is also pushed to the
+// chain.SinkCollector for the leakage-path chain visualization (Milestone E
+// task 16), with Severity reflecting the medium variant.
+func TestEnvVarInjectionMediumPushesSinkRecord(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := EnvVarInjectionMediumRuleWithCollector(nil, collector)
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request"}},
+		},
+	}
+	job := &ast.Job{
+		ID: &ast.String{Value: "build"},
+		Steps: []*ast.Step{
+			{
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: `echo "TITLE=${{ github.event.pull_request.title }}" >> "$GITHUB_ENV"`,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	if len(rule.Errors()) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(rule.Errors()))
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.SinkKind != chain.SinkExpr {
+		t.Errorf("SinkKind = %v, want SinkExpr", r.SinkKind)
+	}
+	if r.Severity != "medium" {
+		t.Errorf("Severity = %q, want %q", r.Severity, "medium")
+	}
+	if r.JobID != "build" {
+		t.Errorf("JobID = %q, want %q", r.JobID, "build")
 	}
 }

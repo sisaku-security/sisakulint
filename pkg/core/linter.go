@@ -17,6 +17,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/mattn/go-colorable"
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -437,6 +438,22 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		l.postProcessResolvedChains(ws.path, ws.result)
 	}
 
+	// 漏洩チェーン可視化: mermaid フォーマット指定時のみ組み立てる（無回帰保護）。
+	// ResolvePendingChains と同じ単一スレッド区間で実行するためロック不要
+	// (pkg/core/CLAUDE.md: この区間を Wait() より前に移動したり並列化すると data race になる)。
+	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() {
+		models := make([]*chain.ChainModel, 0, len(workspaces))
+		for i := range workspaces {
+			ws := &workspaces[i]
+			if ws.result == nil || ws.result.ParsedWorkflow == nil {
+				continue
+			}
+			in := buildAssemblerInput(ws.path, ws.result.ParsedWorkflow, ws.result.ChainRecords)
+			models = append(models, chain.Assemble(in))
+		}
+		l.errorFormatter.SetChains(models)
+	}
+
 	totalErrors := 0
 	// Preallocate allResult with the capacity equal to the number of workspaces
 	allResult := make([]*ValidateResult, 0, len(workspaces))
@@ -527,6 +544,18 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 		return nil, err
 	}
 	if l.errorFormatter != nil {
+		// 漏洩チェーン可視化: 単一ファイルパス（LintFiles の1ファイル呼び出しも含む）は
+		// errgroup.Wait() を使う post-Wait セクションを経由しないため、ここで個別に
+		// 組み立てる。mermaid フォーマット指定時のみ（無回帰保護）。
+		if l.errorFormatter.HasMermaid() {
+			if result.ParsedWorkflow != nil {
+				in := buildAssemblerInput(file, result.ParsedWorkflow, result.ChainRecords)
+				l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+			} else {
+				// パース不能ファイルでは残留 chains を消す（同一 Linter 再利用時の混入防止）。
+				l.errorFormatter.SetChains(nil)
+			}
+		}
 		if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, source); err != nil {
 			return nil, fmt.Errorf("error formatting output: %w", err)
 		}
@@ -566,6 +595,20 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 		l.postProcessResolvedChains(filepath, result)
 	}
 
+	// 漏洩チェーン可視化: mermaid 指定時のみ組み立てる。LintFiles / LintFile と同じ
+	// 配線をこの Lint (=-remote 経路, command.go の runRemoteScan から呼ばれる) にも
+	// 適用し、3 エントリポイントを同期させる（未配線だと -remote で空グラフになる）。
+	if l.errorFormatter != nil && l.errorFormatter.HasMermaid() {
+		if result != nil && result.ParsedWorkflow != nil {
+			in := buildAssemblerInput(filepath, result.ParsedWorkflow, result.ChainRecords)
+			l.errorFormatter.SetChains([]*chain.ChainModel{chain.Assemble(in)})
+		} else {
+			// パース不能ファイルでは前回 Lint 呼び出しの chains が残留しないよう明示的に消す
+			// (-remote は同一 Linter で複数ファイルを走査するため)。
+			l.errorFormatter.SetChains(nil)
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -580,7 +623,7 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 	return result, nil
 }
 
-func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache, collector *chain.SinkCollector) []Rule {
 	// WorkflowTaintMap is shared between Critical and Medium variants of
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
@@ -606,17 +649,17 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		DeprecatedCommandsRule(),
 		NewConditionalRule(),
 		TimeoutMinuteRule(),
-		CodeInjectionCriticalRule(wfTaintMap),   // Detects untrusted input in privileged workflow triggers
-		CodeInjectionMediumRule(wfTaintMap),     // Detects untrusted input in normal workflow triggers
-		EnvVarInjectionCriticalRule(wfTaintMap), // Detects envvar injection in privileged workflow triggers
-		EnvVarInjectionMediumRule(wfTaintMap),   // Detects envvar injection in normal workflow triggers
-		EnvPathInjectionCriticalRule(),          // Detects PATH injection in privileged workflow triggers
-		EnvPathInjectionMediumRule(),            // Detects PATH injection in normal workflow triggers
-		OutputClobberingCriticalRule(),          // Detects output clobbering in privileged workflow triggers
-		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
+		CodeInjectionCriticalRuleWithCollector(wfTaintMap, collector),   // Detects untrusted input in privileged workflow triggers; pushes SinkRecords for chain visualization
+		CodeInjectionMediumRuleWithCollector(wfTaintMap, collector),     // Detects untrusted input in normal workflow triggers; pushes SinkRecords for chain visualization
+		EnvVarInjectionCriticalRuleWithCollector(wfTaintMap, collector), // Detects envvar injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		EnvVarInjectionMediumRuleWithCollector(wfTaintMap, collector),   // Detects envvar injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		EnvPathInjectionCriticalRuleWithCollector(collector),            // Detects PATH injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		EnvPathInjectionMediumRuleWithCollector(collector),              // Detects PATH injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		OutputClobberingCriticalRuleWithCollector(collector),            // Detects output clobbering in privileged workflow triggers; pushes SinkRecords for chain visualization
+		OutputClobberingMediumRuleWithCollector(collector),              // Detects output clobbering in normal workflow triggers; pushes SinkRecords for chain visualization
 		CommitShaRule(gitHubToken),
 		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
-		NewDependabotEcosystemRule(filePath, isRemote),    // Checks dependabot config covers ecosystems from lockfiles and setup actions
+		NewDependabotEcosystemRule(filePath, isRemote),     // Checks dependabot config covers ecosystems from lockfiles and setup actions
 		NewDependencyReviewSettingsRule(),                  // Checks dependency-review-action settings against required permissions
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
@@ -624,38 +667,38 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		NewUntrustedCheckoutRule(),
 		NewCachePoisoningRule(actionMetadata),
 		NewCachePoisoningPoisonableStepRule(),
-		NewSecretExposureRule(),                                       // Detects toJSON(secrets) and secrets[dynamic-access]
-		NewUnmaskedSecretExposureRule(),                               // Detects fromJson(secrets.XXX).yyy unmasked exposure
-		NewImproperAccessControlRule(),                                // Detects improper access control with label-based approval and synchronize events
-		ImpostorCommitRuleFactory(),                                   // Detects impostor commits from fork network
-		NewUntrustedCheckoutTOCTOUCriticalRule(),                      // Detects TOCTOU with labeled event type and mutable refs
-		NewUntrustedCheckoutTOCTOUHighRule(),                          // Detects TOCTOU with deployment environment and mutable refs
-		NewRefConfusionRule(),                                         // Detects ref confusion attacks (same name branch and tag)
-		NewObfuscationRule(),                                          // Detects obfuscated workflow patterns
-		NewKnownVulnerableActionsRule(gitHubToken),                    // Detects actions with known security vulnerabilities
-		NewBotConditionsRule(),                                        // Detects spoofable bot detection conditions
-		NewArtipackedRule(),                                           // Detects credential leakage via artifact upload
-		NewUnsoundContainsRule(),                                      // Detects bypassable contains() function usage in conditions
-		NewSelfHostedRunnersRule(),                                    // Detects self-hosted runner usage which may be dangerous in public repos
-		NewArchivedUsesRule(),                                         // Detects usage of archived actions/reusable workflows
-		NewUnpinnedImagesRule(),                                       // Detects container images not pinned by SHA256 digest
-		NewSecretsInArtifactsRule(),                                   // Detects secrets exposure in artifact uploads (CWE-312)
-		NewSecretExfiltrationRule(),                                   // Detects secret exfiltration via network commands
-		NewSecretInLogRuleWithTaintMap(wfSecretTaintMap),              // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs
-		NewReusableWorkflowTaintRule(filePath, localReusableWorkflow), // Detects untrusted inputs passed to reusable workflows
-		NewDangerousTriggersCriticalRule(),                            // Detects dangerous triggers without any mitigations
-		NewDangerousTriggersMediumRule(),                              // Detects dangerous triggers with partial mitigations
-		NewSecretsInheritRuleWithCache(localReusableWorkflow),         // Detects excessive secret inheritance using 'secrets: inherit'
-		ArgumentInjectionCriticalRule(wfTaintMap),
-		ArgumentInjectionMediumRule(wfTaintMap),
-		RequestForgeryCriticalRule(wfTaintMap), // Detects SSRF vulnerabilities in privileged triggers
-		RequestForgeryMediumRule(wfTaintMap),   // Detects SSRF vulnerabilities in normal triggers
-		NewCacheBloatRule(),                    // Detects cache bloat risk with cache/restore and cache/save
-		NewAIActionUnrestrictedTriggerRule(),   // Detects AI actions with unrestricted user access (Clinejection attack pattern)
-		NewAIActionExcessiveToolsRule(),        // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
-		NewAIActionPromptInjectionRule(),       // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern)
-		NewAIActionUnsafeSandboxRule(),         // Detects unsafe sandbox settings in AI agent actions
-		NewAIActionExecutionOrderRule(),        // Detects AI agent actions that are not the last step in a job
+		NewSecretExposureRuleWithCollector(collector),                                         // Detects toJSON(secrets) and secrets[dynamic-access]; pushes SinkRecords for chain visualization
+		NewUnmaskedSecretExposureRuleWithCollector(collector),                                 // Detects fromJson(secrets.XXX).yyy unmasked exposure; pushes SinkRecords for chain visualization
+		NewImproperAccessControlRule(),                                                        // Detects improper access control with label-based approval and synchronize events
+		ImpostorCommitRuleFactory(),                                                           // Detects impostor commits from fork network
+		NewUntrustedCheckoutTOCTOUCriticalRule(),                                              // Detects TOCTOU with labeled event type and mutable refs
+		NewUntrustedCheckoutTOCTOUHighRule(),                                                  // Detects TOCTOU with deployment environment and mutable refs
+		NewRefConfusionRule(),                                                                 // Detects ref confusion attacks (same name branch and tag)
+		NewObfuscationRule(),                                                                  // Detects obfuscated workflow patterns
+		NewKnownVulnerableActionsRule(gitHubToken),                                            // Detects actions with known security vulnerabilities
+		NewBotConditionsRule(),                                                                // Detects spoofable bot detection conditions
+		NewArtipackedRuleWithCollector(collector),                                             // Detects credential leakage via artifact upload; pushes SinkRecords for chain visualization
+		NewUnsoundContainsRule(),                                                              // Detects bypassable contains() function usage in conditions
+		NewSelfHostedRunnersRule(),                                                            // Detects self-hosted runner usage which may be dangerous in public repos
+		NewArchivedUsesRule(),                                                                 // Detects usage of archived actions/reusable workflows
+		NewUnpinnedImagesRule(),                                                               // Detects container images not pinned by SHA256 digest
+		NewSecretsInArtifactsRuleWithCollector(collector),                                     // Detects secrets exposure in artifact uploads (CWE-312); pushes SinkRecords for chain visualization
+		NewSecretExfiltrationRuleWithCollector(collector),                                     // Detects secret exfiltration via network commands; pushes SinkRecords for chain visualization
+		NewSecretInLogRuleWithTaintMapAndCollector(wfSecretTaintMap, collector),               // Detects secret values printed to build logs via echo/printf of derived shell vars and secret-derived outputs; pushes SinkRecords for chain visualization
+		NewReusableWorkflowTaintRuleWithCollector(filePath, localReusableWorkflow, collector), // Detects untrusted inputs passed to reusable workflows; pushes SinkRecords for chain visualization (single-file fallback path only)
+		NewDangerousTriggersCriticalRule(),                                                    // Detects dangerous triggers without any mitigations
+		NewDangerousTriggersMediumRule(),                                                      // Detects dangerous triggers with partial mitigations
+		NewSecretsInheritRuleWithCacheAndCollector(localReusableWorkflow, collector),          // Detects excessive secret inheritance using 'secrets: inherit'; pushes SinkRecords for chain visualization
+		ArgumentInjectionCriticalRuleWithCollector(wfTaintMap, collector),                     // Detects argument injection in privileged workflow triggers; pushes SinkRecords for chain visualization
+		ArgumentInjectionMediumRuleWithCollector(wfTaintMap, collector),                       // Detects argument injection in normal workflow triggers; pushes SinkRecords for chain visualization
+		RequestForgeryCriticalRuleWithCollector(wfTaintMap, collector),                        // Detects SSRF vulnerabilities in privileged triggers; pushes SinkRecords for chain visualization
+		RequestForgeryMediumRuleWithCollector(wfTaintMap, collector),                          // Detects SSRF vulnerabilities in normal triggers; pushes SinkRecords for chain visualization
+		NewCacheBloatRule(),                                                                   // Detects cache bloat risk with cache/restore and cache/save
+		NewAIActionUnrestrictedTriggerRule(),                                                  // Detects AI actions with unrestricted user access (Clinejection attack pattern)
+		NewAIActionExcessiveToolsRule(),                                                       // Detects AI actions with dangerous tools in untrusted triggers (Clinejection attack pattern)
+		NewAIActionPromptInjectionRuleWithCollector(collector),                                // Detects untrusted input in AI agent prompt parameters (prompt injection, Clinejection attack pattern); pushes SinkRecords for chain visualization
+		NewAIActionUnsafeSandboxRule(),                                                        // Detects unsafe sandbox settings in AI agent actions
+		NewAIActionExecutionOrderRule(),                                                       // Detects AI agent actions that are not the last step in a job
 	}
 }
 
@@ -673,6 +716,7 @@ type ValidateResult struct {
 	Errors         []*LintingError
 	AutoFixers     []AutoFixer
 	Repository     string
+	ChainRecords   []chain.SinkRecord // 漏洩チェーン可視化用の per-file sink 記録
 }
 
 // isDependabotConfigFile checks if the given filepath is a dependabot configuration file
@@ -719,7 +763,8 @@ func (l *Linter) validate(
 	// dependabot config / composite action / unparseable workflow would
 	// silently skip the rule-name check and the user's CLI typo would not
 	// be reported until a parseable workflow happened to reach validate().
-	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow)
+	chainCollector := chain.NewSinkCollector()
+	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, localReusableWorkflow, chainCollector)
 	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
 	if optErr != nil {
 		return nil, optErr
@@ -839,7 +884,33 @@ func (l *Linter) validate(
 		ParsedWorkflow: parsedWorkflow,
 		Errors:         allErrors,
 		AutoFixers:     allAutoFixers,
+		ChainRecords:   l.filterIgnoredChainRecords(chainCollector.Records()),
 	}, nil
+}
+
+// filterIgnoredChainRecords drops SinkRecords whose rule name matches an
+// -ignore pattern, so the mermaid chain graph and its blast-radius counts
+// respect the same suppression as the textual findings. Mirrors the
+// pattern.MatchString(err.Type) filtering in filterAndSortErrors — a
+// SinkRecord's RuleName is the same canonical rule name as err.Type.
+func (l *Linter) filterIgnoredChainRecords(records []chain.SinkRecord) []chain.SinkRecord {
+	if len(l.errorIgnorePatterns) == 0 {
+		return records
+	}
+	filtered := make([]chain.SinkRecord, 0, len(records))
+	for _, rec := range records {
+		ignored := false
+		for _, pattern := range l.errorIgnorePatterns {
+			if pattern.MatchString(rec.RuleName) {
+				ignored = true
+				break
+			}
+		}
+		if !ignored {
+			filtered = append(filtered, rec)
+		}
+	}
+	return filtered
 }
 
 // filterAndSortErrors applies errorIgnorePatterns, sets FilePath, and stable-sorts.

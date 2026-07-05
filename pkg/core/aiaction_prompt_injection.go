@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
+	"github.com/sisaku-security/sisakulint/pkg/core/chain"
 	"github.com/sisaku-security/sisakulint/pkg/expressions"
 )
 
@@ -44,6 +45,12 @@ var aiPromptInputParams = []string{
 //	      prompt: "Please triage the issue. Title is in env var ISSUE_TITLE."
 type AIActionPromptInjectionRule struct {
 	BaseRule
+	// collector is the per-file SinkCollector for leakage-path chain
+	// visualization (nil-safe: nil disables pushing).
+	collector *chain.SinkCollector
+	// currentJobID is the lowercased ID of the job currently being visited,
+	// set in VisitJobPre.
+	currentJobID string
 }
 
 // NewAIActionPromptInjectionRule は新しいルールインスタンスを返す。
@@ -54,6 +61,25 @@ func NewAIActionPromptInjectionRule() *AIActionPromptInjectionRule {
 			RuleDesc: "Untrusted user input is directly interpolated into AI agent prompt",
 		},
 	}
+}
+
+// NewAIActionPromptInjectionRuleWithCollector is like NewAIActionPromptInjectionRule but
+// additionally pushes a chain.SinkRecord to collector for every detected finding, feeding
+// the leakage-path chain visualization (`-format "{{mermaid .}}"`). collector may be nil,
+// in which case no records are pushed (equivalent to NewAIActionPromptInjectionRule).
+func NewAIActionPromptInjectionRuleWithCollector(collector *chain.SinkCollector) *AIActionPromptInjectionRule {
+	r := NewAIActionPromptInjectionRule()
+	r.collector = collector
+	return r
+}
+
+// VisitJobPre tracks the lowercased ID of the job currently being visited, so
+// VisitStep's collector push can attribute findings to the right job.
+func (r *AIActionPromptInjectionRule) VisitJobPre(node *ast.Job) error {
+	if node.ID != nil {
+		r.currentJobID = strings.ToLower(node.ID.Value)
+	}
+	return nil
 }
 
 // VisitStep は各ステップを訪問し、AI エージェントアクションのプロンプトパラメータに
@@ -90,6 +116,21 @@ func (r *AIActionPromptInjectionRule) VisitStep(node *ast.Step) error {
 			formatPathList(untrustedPaths),
 			paramName,
 		)
+
+		if r.collector != nil {
+			sourceName := strings.Join(untrustedPaths, ", ")
+			r.collector.Add(chain.SinkRecord{
+				JobID:        r.currentJobID,
+				StepPos:      node.Pos,
+				StepSummary:  "uses: " + action.Uses.Value,
+				SourceKind:   chain.SourceUntrusted,
+				SourceName:   sourceName,
+				SourceOrigin: sourceName,
+				SinkKind:     chain.SinkLog,
+				RuleName:     r.RuleNames(),
+				Severity:     "high",
+			})
+		}
 	}
 
 	return nil
