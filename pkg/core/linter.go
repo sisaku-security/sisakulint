@@ -873,8 +873,33 @@ func (l *Linter) validate(
 		ParsedWorkflow: parsedWorkflow,
 		Errors:         allErrors,
 		AutoFixers:     allAutoFixers,
-		ChainRecords:   chainCollector.Records(),
+		ChainRecords:   l.filterIgnoredChainRecords(chainCollector.Records()),
 	}, nil
+}
+
+// filterIgnoredChainRecords drops SinkRecords whose rule name matches an
+// -ignore pattern, so the mermaid chain graph and its blast-radius counts
+// respect the same suppression as the textual findings. Mirrors the
+// pattern.MatchString(err.Type) filtering in filterAndSortErrors — a
+// SinkRecord's RuleName is the same canonical rule name as err.Type.
+func (l *Linter) filterIgnoredChainRecords(records []chain.SinkRecord) []chain.SinkRecord {
+	if len(l.errorIgnorePatterns) == 0 {
+		return records
+	}
+	filtered := make([]chain.SinkRecord, 0, len(records))
+	for _, rec := range records {
+		ignored := false
+		for _, pattern := range l.errorIgnorePatterns {
+			if pattern.MatchString(rec.RuleName) {
+				ignored = true
+				break
+			}
+		}
+		if !ignored {
+			filtered = append(filtered, rec)
+		}
+	}
+	return filtered
 }
 
 // filterAndSortErrors applies errorIgnorePatterns, sets FilePath, and stable-sorts.

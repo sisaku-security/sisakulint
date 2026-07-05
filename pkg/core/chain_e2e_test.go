@@ -139,3 +139,33 @@ func TestChainVizE2ELintEntryPointRendersMermaid(t *testing.T) {
 		t.Errorf("Lint() entry point produced no mermaid graph:\n%s", buf.String())
 	}
 }
+
+// TestChainVizE2EIgnoreFiltersRecords is the regression for PR #531's review
+// comment: -ignore must suppress a finding from the chain graph AND its
+// blast-radius counts, not just the textual output. Here -ignore secret-in-log
+// must drop the log sink and its "log:" tally while leaving the other two sinks.
+func TestChainVizE2EIgnoreFiltersRecords(t *testing.T) {
+	path := "../../script/actions/chainviz-blastradius.yaml"
+	var buf bytes.Buffer
+	linter, err := NewLinter(&buf, &LinterOptions{
+		CustomErrorMessageFormat: "{{mermaid .}}",
+		ErrorIgnorePatterns:      []string{"secret-in-log"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := linter.LintFiles([]string{path}, nil); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "secret_in_log") {
+		t.Errorf("-ignore secret-in-log must remove its sink node from the graph:\n%s", out)
+	}
+	if strings.Contains(out, "log:") {
+		t.Errorf("blast-radius summary still counts the ignored log sink:\n%s", out)
+	}
+	// The non-ignored sinks must remain — ignore is scoped, not a blanket wipe.
+	if !strings.Contains(out, "secret_exfiltration") || !strings.Contains(out, "secrets_in_artifacts") {
+		t.Errorf("non-ignored sinks should still render:\n%s", out)
+	}
+}
