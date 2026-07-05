@@ -4,6 +4,7 @@ package chain
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -150,5 +151,85 @@ func TestMermaidRenderSanitizesIDs(t *testing.T) {
 	// And the sanitized source is still present (proves the source rendered).
 	if !strings.Contains(out, "needs_a_outputs_x__tainted_via_github_head_ref___secrets__") {
 		t.Errorf("expected sanitized source node id in output:\n%s", out)
+	}
+}
+
+var (
+	reMermaidNodeDef = regexp.MustCompile(`^(n_[A-Za-z0-9_]+)[\[({>]`)
+	reMermaidEdge    = regexp.MustCompile(`^(n_[A-Za-z0-9_]+)\s+(?:-->|-\.->)\|[^|]*\|\s+(n_[A-Za-z0-9_]+)$`)
+	reMermaidClass   = regexp.MustCompile(`^class\s+(n_[A-Za-z0-9_]+)\s+\w+$`)
+)
+
+// assertMermaidRenderable encodes the two structural contracts a real mermaid
+// parser enforces, so a pure-Go test catches the classes of bug that only show
+// up when the graph is actually rendered:
+//  1. Type detection: the FIRST non-empty line must be the "flowchart TD"
+//     declaration. Anything before it (e.g. a leading %% comment) yields
+//     "No diagram type detected" — the exact bug this guards.
+//  2. Referential integrity: every node id used on an edge or a class line must
+//     have a corresponding node definition, or mermaid renders a dangling node.
+func assertMermaidRenderable(t *testing.T, out string) {
+	t.Helper()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	firstMeaningful := ""
+	for _, ln := range lines {
+		if strings.TrimSpace(ln) != "" {
+			firstMeaningful = strings.TrimSpace(ln)
+			break
+		}
+	}
+	if firstMeaningful != "flowchart TD" {
+		t.Fatalf("first meaningful line must be %q for mermaid type detection, got %q\n%s",
+			"flowchart TD", firstMeaningful, out)
+	}
+
+	defined := map[string]bool{}
+	for _, ln := range lines {
+		if m := reMermaidNodeDef.FindStringSubmatch(strings.TrimSpace(ln)); m != nil {
+			defined[m[1]] = true
+		}
+	}
+	for _, ln := range lines {
+		trimmed := strings.TrimSpace(ln)
+		if m := reMermaidEdge.FindStringSubmatch(trimmed); m != nil {
+			for _, id := range m[1:] {
+				if !defined[id] {
+					t.Errorf("edge references undefined node %q:\n%s", id, out)
+				}
+			}
+		}
+		if m := reMermaidClass.FindStringSubmatch(trimmed); m != nil {
+			if !defined[m[1]] {
+				t.Errorf("class line references undefined node %q:\n%s", m[1], out)
+			}
+		}
+	}
+}
+
+// TestMermaidRenderIsParseable is the regression guard for the "No diagram type
+// detected" bug (a leading %% comment shadowed the flowchart declaration) and
+// for dangling node references. It exercises a rich graph (fan-out, subgraph,
+// classes, leverage) and the degenerate empty graph.
+func TestMermaidRenderIsParseable(t *testing.T) {
+	fanOut := AssemblerInput{
+		FilePath: ".github/workflows/ci.yml", WorkflowName: "CI",
+		JobContexts: []JobContext{{JobID: "build",
+			Triggers:   []TriggerRef{{Name: "pull_request_target", Untrusted: true, SecretsAvailable: true, Pos: &ast.Position{Line: 2, Col: 3}}},
+			Permission: PermissionRef{Label: "contents:write", Pos: &ast.Position{Line: 4, Col: 3}}}},
+		Records: []SinkRecord{
+			{JobID: "build", StepPos: &ast.Position{Line: 10, Col: 9}, SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: SinkLog, RuleName: "secret-in-log"},
+			{JobID: "build", StepPos: &ast.Position{Line: 12, Col: 9}, SourceKind: SourceSecret, SourceName: "secrets.TOKEN", SinkKind: SinkNetwork, RuleName: "secret-exfiltration"},
+		},
+	}
+	cases := map[string]*ChainModel{
+		"sample": sampleModel(),
+		"fanout": Assemble(fanOut),
+		"empty":  Assemble(AssemblerInput{FilePath: "x.yml", WorkflowName: "X"}),
+	}
+	for name, m := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertMermaidRenderable(t, NewMermaidRenderer().Render(m))
+		})
 	}
 }

@@ -57,11 +57,12 @@ func nodeShape(n *Node) string {
 func (r *MermaidRenderer) Render(m *ChainModel) string {
 	var b strings.Builder
 
-	// ① blast-radius サマリ（mermaid コメント行）
-	fmt.Fprintf(&b, "%%%% blast-radius: untrusted:%d secrets:%d sinks:%d (%s)\n",
-		m.Summary.UntrustedTriggers, m.Summary.Secrets, m.Summary.Sinks, summarizeSinks(m.Summary))
-
+	// mermaid は先頭行で図種別を判定する（detectType）。flowchart 宣言より前に
+	// コメント行があると "No diagram type detected" になるため、必ず flowchart を
+	// 最初に出す。① blast-radius サマリは診断メタなので直後の本文コメント行に置く
 	b.WriteString("flowchart TD\n")
+	fmt.Fprintf(&b, "  %%%% blast-radius: untrusted:%d secrets:%d sinks:%d (%s)\n",
+		m.Summary.UntrustedTriggers, m.Summary.Secrets, m.Summary.Sinks, summarizeSinks(m.Summary))
 
 	jobNodes := map[string][]*Node{}
 	var outer []*Node
