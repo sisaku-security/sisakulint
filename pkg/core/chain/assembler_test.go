@@ -264,6 +264,32 @@ func TestAssembleCrossJobNeeds(t *testing.T) {
 	}
 }
 
+func TestAssembleCrossJobNeedsUsesProducerOutputNames(t *testing.T) {
+	in := AssemblerInput{
+		JobContexts: []JobContext{
+			{JobID: "produce", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+			{JobID: "consume", Triggers: []TriggerRef{{Name: "pull_request_target", Untrusted: true}},
+				Permission: PermissionRef{Label: "contents:write"}},
+		},
+		Records: []SinkRecord{
+			{JobID: "produce", StepPos: &ast.Position{Line: 10, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "github.event.pull_request.title", SourceOrigin: "github.event.pull_request.title",
+				SinkKind: SinkExpr, RuleName: "output-clobbering-critical",
+				OutputName: "title", OutputNames: []string{"pr_title", "title_alias"}},
+			{JobID: "consume", StepPos: &ast.Position{Line: 20, Col: 9},
+				SourceKind: SourceUntrusted, SourceName: "needs.produce.outputs.pr_title",
+				SourceOrigin: "needs.produce.outputs.pr_title (tainted via github.event.pull_request.title)",
+				SinkKind:     SinkNetwork, RuleName: "request-forgery-critical"},
+		},
+	}
+	m := Assemble(in)
+
+	if !hasEdge(m, "action:produce:10:9", "source:consume:1:needs.produce.outputs.pr_title", EdgeNeeds) {
+		t.Error("missing cross-job Needs edge through producer job output alias")
+	}
+}
+
 func TestAssembleCrossJobNeedsDoesNotGuessWithoutProducerOutputName(t *testing.T) {
 	in := AssemblerInput{
 		JobContexts: []JobContext{

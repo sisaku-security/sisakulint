@@ -3,13 +3,13 @@
 # Exercises the cross-job EdgeNeeds case in pkg/core/chain/assembler.go
 # (linkCrossJobNeeds): job "produce" writes an untrusted value to
 # $GITHUB_OUTPUT (output-clobbering-critical), and downstream job "consume"
-# reads it back via needs.produce.outputs.ref and passes it straight into a
+# reads it back via needs.produce.outputs.pr_ref and passes it straight into a
 # curl URL (request-forgery-critical).
 #
 # The chain graph draws a `-->|needs|` edge because the producer-side
-# output-clobbering record identifies output `ref`, and RequestForgeryRule's
+# output-clobbering record identifies the exposed job output `pr_ref`, and RequestForgeryRule's
 # deferred cross-job path keeps SourceOrigin as
-# "needs.produce.outputs.ref (tainted via ...)".
+# "needs.produce.outputs.pr_ref (tainted via ...)".
 name: chainviz cross job
 on:
   pull_request_target:
@@ -18,7 +18,7 @@ jobs:
   produce:
     runs-on: ubuntu-latest
     outputs:
-      ref: ${{ steps.get_ref.outputs.ref }}
+      pr_ref: ${{ steps.get_ref.outputs.ref }}
     steps:
       - name: get_ref
         id: get_ref
@@ -28,4 +28,4 @@ jobs:
     needs: [produce]
     steps:
       - name: use_ref
-        run: curl "https://example.com/${{ needs.produce.outputs.ref }}"
+        run: curl "https://example.com/${{ needs.produce.outputs.pr_ref }}"

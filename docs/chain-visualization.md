@@ -59,7 +59,7 @@ If you only remember one rule: **trust solid lines as fact, read dashed lines as
 
 The renderer layers four cues onto the base graph so the highest-impact fix is obvious without reading every node:
 
-1. **Blast-radius summary line** — a `%% blast-radius: ...` mermaid comment directly above the graph, e.g. `untrusted:1 secrets:2 sinks:3 (log:1/network:1/artifact:1)`. One line answers "how bad is this file" before you look at a single node.
+1. **Blast-radius summary line** — a `%% blast-radius: ...` mermaid comment directly under the `flowchart TD` declaration, e.g. `untrusted:1 secrets:2 sinks:3 (log:1/network:1/artifact:1)`. One line answers "how bad is this file" before you look at a single node.
 2. **Untrusted-reachable highlighting** — every node reachable from an untrusted trigger or untrusted source (via a forward BFS over the drawn edges) gets `classDef untrusted` (red fill). Everything else gets `classDef safe` (greyed out), so the parts of the graph that are actually attacker-reachable pop out visually.
 3. **Fan-out badges** — a shared Trigger/Permission/Source node that multiple chains pass through gets a `[&rarr;N sinks]` suffix on its label, where `N` is the number of chains (`ChainCount`) flowing through it. This is what makes a single leaked secret used in three places visually read as "one root cause, three symptoms" instead of three unrelated warnings.
 4. **Leverage marker (🔧)** — exactly one non-terminal node (a Trigger, Permission, or Source — never an Action/Sink) is picked as the highest-leverage fix point: the one with the largest `ChainCount`, tie-broken upstream-first (Trigger > Permission > Source) and then by ID. It gets a 🔧 prefix on its label and `classDef fixhere` (a thick blue outline). This is the "fix here, not there" node — mitigating it (e.g., scoping the permission, removing the trigger, rotating/removing the secret) collapses every chain that passes through it at once.
@@ -69,31 +69,33 @@ The renderer layers four cues onto the base graph so the highest-impact fix is o
 `script/actions/chainviz-blastradius.yaml` is a `pull_request_target` job whose `secrets.DEPLOY_TOKEN` is read by three separate steps — `echo` (secret-in-log), `curl` (secret-exfiltration), and `actions/upload-artifact@v3` (secrets-in-artifacts). Running `-format "{{mermaid .}}"` against it produces (abridged):
 
 ```
-%% blast-radius: untrusted:1 secrets:2 sinks:3 (log:1/network:1/artifact:1)
 flowchart TD
-  n_trigger_pull_request_target(["🔧 pull_request_target [&rarr;3 sinks]"])
-  n_perm_build{{"contents:write [&rarr;3 sinks]"}}
-  n_source_build_0_secrets_DEPLOY_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]
-  n_source_build_0_secrets_*["secrets.*"]
+  %% blast-radius: untrusted:1 secrets:2 sinks:3 (log:1/network:1/artifact:1)
+  n_trigger_x3A_pull_x5F_request_x5F_target(["🔧 pull_request_target [&rarr;3 sinks]"])
+  n_perm_x3A_build{{"contents:write [&rarr;3 sinks]"}}
+  n_source_x3A_build_x3A_0_x3A_secrets_x2E_DEPLOY_x5F_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]
+  n_source_x3A_build_x3A_0_x3A_secrets_x2E__x2A_["secrets.*"]
   subgraph job_build["job: build"]
-    n_action_build_33_7["echo"]
-    n_action_build_38_9["curl"]
-    n_action_build_39_9["uses: actions/upload-artifact@v3"]
-    n_sink_secret_in_log_build_33_7>"log"]
-    n_sink_secret_exfiltration_build_38_9>"network"]
-    n_sink_secrets_in_artifacts_build_39_9>"artifact"]
+    n_action_x3A_build_x3A_33_x3A_7["echo"]
+    n_action_x3A_build_x3A_38_x3A_9["curl"]
+    n_action_x3A_build_x3A_39_x3A_9["uses: actions/upload-artifact@v3"]
+    n_sink_x3A_secret_x2D_in_x2D_log_x3A_build_x3A_33_x3A_7>"log"]
+    n_sink_x3A_secret_x2D_exfiltration_x3A_build_x3A_38_x3A_9>"network"]
+    n_sink_x3A_secrets_x2D_in_x2D_artifacts_x3A_build_x3A_39_x3A_9>"artifact"]
   end
-  n_action_build_33_7 -->|flows-to| n_sink_secret_in_log_build_33_7
+  n_action_x3A_build_x3A_33_x3A_7 -->|flows-to| n_sink_x3A_secret_x2D_in_x2D_log_x3A_build_x3A_33_x3A_7
   ...
-  n_source_build_0_secrets_DEPLOY_TOKEN -->|used-by| n_action_build_33_7
-  n_source_build_0_secrets_DEPLOY_TOKEN -->|used-by| n_action_build_38_9
-  n_trigger_pull_request_target -.->|grants| n_perm_build
+  n_source_x3A_build_x3A_0_x3A_secrets_x2E_DEPLOY_x5F_TOKEN -->|used-by| n_action_x3A_build_x3A_33_x3A_7
+  n_source_x3A_build_x3A_0_x3A_secrets_x2E_DEPLOY_x5F_TOKEN -->|used-by| n_action_x3A_build_x3A_38_x3A_9
+  n_trigger_x3A_pull_x5F_request_x5F_target -.->|grants| n_perm_x3A_build
   ...
 ```
 
+Mermaid identifiers encode punctuation as `_xNN_` so distinct model IDs cannot collide; labels remain human-readable.
+
 Reading it: the summary line says one untrusted trigger reaches two distinct secret sources feeding three sinks across all three sink kinds. `secrets.DEPLOY_TOKEN` carries the `[&rarr;2 sinks]` badge because both `secret-in-log` and `secret-exfiltration` read the same env var — one leaked secret, two symptoms. `secrets.*` (secrets-in-artifacts' generic source placeholder; see `pkg/core/secretsinartifacts.go`) renders as its own node rather than joining the shared one, since that rule doesn't correlate to a specific secret name. The 🔧 marker sits on the `pull_request_target` trigger node — the highest-ChainCount non-terminal node — because removing or gating that trigger (or moving to least-privilege permissions) collapses all three findings at once, whereas fixing any single step only removes one symptom.
 
-`script/actions/chainviz-crossjob.yaml` demonstrates the cross-job case: job `produce` writes `github.head_ref` to output `ref` in `$GITHUB_OUTPUT`, and job `consume` reads `needs.produce.outputs.ref` straight into a `curl` URL. The graph draws a solid `-->|needs|` edge from the `produce` action that wrote `ref` to the tainted source node in `consume`'s chain, so the two jobs' subgraphs visibly connect into one attack path instead of reading as two unrelated findings.
+`script/actions/chainviz-crossjob.yaml` demonstrates the cross-job case: job `produce` writes `github.head_ref` to step output `ref` in `$GITHUB_OUTPUT`, exposes it as job output `pr_ref`, and job `consume` reads `needs.produce.outputs.pr_ref` straight into a `curl` URL. The graph draws a solid `-->|needs|` edge from the `produce` action that wrote `ref` to the tainted source node in `consume`'s chain, so the two jobs' subgraphs visibly connect into one attack path instead of reading as two unrelated findings.
 
 ### Coverage equals rule coverage
 
@@ -102,7 +104,7 @@ Reading it: the summary line says one untrusted trigger reaches two distinct sec
 ### Known v1 limitations
 
 1. **`reusable-workflow-taint` chains do not appear when scanning a real multi-file project.** The [reusable-workflow-taint rule]({{< ref "reusableworkflowtaint.md" >}}) correlates a caller's untrusted `with:` input against a callee's `inputs.*` sink across file boundaries. When cross-file chain resolution is enabled (i.e., a real directory scan where the callee can be resolved), that correlation is reported through `LocalReusableWorkflowCache`'s `ResolvePendingChains` → `FormattedError` path in `pkg/core/cross_file_taint.go`, which has no access to a `Rule` instance or its `chain.SinkCollector` — so no `SinkRecord` is pushed for it, and the chain never reaches the graph. Only the single-file fallback path (chain resolution disabled, e.g. a lone file with no resolvable caller/callee, such as a library caller with no project context) pushes a `SinkRecord` and shows up. The other 20 flow rules are unaffected and render normally in real scans.
-2. **Cross-job `needs` edges only draw when both sides carry enough metadata.** The assembler (`linkCrossJobNeeds` in `pkg/core/chain/assembler.go`) matches the downstream `SinkRecord.SourceOrigin` against `needs.<job>.outputs.<name>` and connects only upstream action records whose `SinkRecord.OutputName` is that same output name. `CodeInjectionRule` and `RequestForgeryRule`'s deferred cross-job path (`VisitWorkflowPost`) keep the literal `needs.<job>.outputs.<name>` in `SourceOrigin`, and `OutputClobberingRule` records the produced output name, so this edge appears for the current output-clobbering -> request-forgery/code-injection cases. If either side lacks that metadata, the graph shows both jobs' chains as disconnected rather than fabricating a link it can't prove.
+2. **Cross-job `needs` edges only draw when both sides carry enough metadata.** The assembler (`linkCrossJobNeeds` in `pkg/core/chain/assembler.go`) matches the downstream `SinkRecord.SourceOrigin` against `needs.<job>.outputs.<name>` and connects only upstream action records whose `SinkRecord.OutputNames` include that exposed job output name (falling back to `OutputName` for older single-output records). `CodeInjectionRule` and `RequestForgeryRule`'s deferred cross-job path (`VisitWorkflowPost`) keep the literal `needs.<job>.outputs.<name>` in `SourceOrigin`, and `OutputClobberingRule` records the produced job output name(s), so this edge appears for the current output-clobbering -> request-forgery/code-injection cases. If either side lacks that metadata, the graph shows both jobs' chains as disconnected rather than fabricating a link it can't prove.
 3. **A chained-derivation secret source may render as a separate node from the same secret referenced directly elsewhere.** When [secret-in-log]({{< ref "secretinlogrule.md" >}}) detects a leak through a shell-variable derivation chain (e.g. `Y="$TOKEN"; echo "$Y"`), the `Source` node is labeled with the raw `shellvar:` origin marker instead of the resolved `secrets.*` reference — `SecretInLogRule` deliberately keeps the marker raw so its autofix can resolve the mask target (see the shellvar-asymmetry note in `pkg/core/CLAUDE.md`). If another rule (e.g. [secret-exfiltration]({{< ref "secretexfiltration.md" >}})) references the same underlying secret directly, the two produce distinct `Source` nodes rather than one shared node with a fan-out badge. Single-hop leaks — the common case, and the one in the worked example above — resolve to `secrets.*` and share correctly; only multi-hop shell derivations are affected. This is a v1 display limitation, not a missed detection: both leaks are still reported.
 
 ### See also

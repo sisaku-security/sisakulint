@@ -550,6 +550,60 @@ func TestOutputClobberingCriticalPushesSinkRecord(t *testing.T) {
 	}
 }
 
+func TestOutputClobberingCollectorUsesExposedJobOutputNames(t *testing.T) {
+	collector := chain.NewSinkCollector()
+	rule := OutputClobberingCriticalRuleWithCollector(collector)
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}},
+		},
+	}
+	job := &ast.Job{
+		ID: &ast.String{Value: "produce"},
+		Outputs: map[string]*ast.Output{
+			"pr_title": {
+				Name:  &ast.String{Value: "pr_title"},
+				Value: &ast.String{Value: "${{ steps.meta.outputs.title }}"},
+			},
+			"title_alias": {
+				Name:  &ast.String{Value: "title_alias"},
+				Value: &ast.String{Value: "${{ steps.meta.outputs.title }}"},
+			},
+		},
+		Steps: []*ast.Step{
+			{
+				ID: &ast.String{Value: "meta"},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: `echo "title=${{ github.event.pull_request.title }}" >> "$GITHUB_OUTPUT"`,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre: %v", err)
+	}
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+
+	recs := collector.Records()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 SinkRecord pushed, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.OutputName != "pr_title" {
+		t.Errorf("OutputName = %q, want first exposed job output %q", r.OutputName, "pr_title")
+	}
+	if got, want := strings.Join(r.OutputNames, ","), "pr_title,title_alias"; got != want {
+		t.Errorf("OutputNames = %q, want %q", got, want)
+	}
+}
+
 // TestOutputClobberingMediumPushesSinkRecord verifies that a detected output
 // clobbering finding in a normal-trigger workflow is also pushed to the
 // chain.SinkCollector, with Severity reflecting the medium variant.

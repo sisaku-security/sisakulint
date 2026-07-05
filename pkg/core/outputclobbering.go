@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -187,6 +188,12 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 
 					if rule.collector != nil {
 						sourceName := strings.Join(untrustedPaths, ", ")
+						stepOutputName := extractGitHubOutputName(line)
+						outputNames := exposedJobOutputNamesForStepOutput(node.Outputs, stepIDValue(s), stepOutputName)
+						recordOutputName := stepOutputName
+						if len(outputNames) > 0 {
+							recordOutputName = outputNames[0]
+						}
 						rule.collector.Add(chain.SinkRecord{
 							JobID:        rule.currentJobID,
 							StepPos:      linePos,
@@ -195,7 +202,8 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 							SourceName:   sourceName,
 							SourceOrigin: sourceName,
 							SinkKind:     chain.SinkExpr,
-							OutputName:   extractGitHubOutputName(line),
+							OutputName:   recordOutputName,
+							OutputNames:  outputNames,
 							RuleName:     rule.RuleNames(),
 							Severity:     rule.severityLevel,
 						})
@@ -473,6 +481,50 @@ func extractGitHubOutputName(line string) string {
 		return matches[1]
 	}
 	return ""
+}
+
+func stepIDValue(step *ast.Step) string {
+	if step == nil || step.ID == nil {
+		return ""
+	}
+	return step.ID.Value
+}
+
+func exposedJobOutputNamesForStepOutput(outputs map[string]*ast.Output, stepID, stepOutputName string) []string {
+	stepID = strings.ToLower(strings.TrimSpace(stepID))
+	stepOutputName = strings.ToLower(strings.TrimSpace(stepOutputName))
+	if len(outputs) == 0 || stepID == "" || stepOutputName == "" {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	names := []string{}
+	for mapName, output := range outputs {
+		if output == nil || output.Value == nil {
+			continue
+		}
+		for _, expr := range extractExpressionsFromString(output.Value.Value) {
+			parts := strings.Split(strings.ToLower(strings.TrimSpace(expr)), ".")
+			if len(parts) != 4 || parts[0] != "steps" || parts[2] != "outputs" {
+				continue
+			}
+			if parts[1] != stepID || parts[3] != stepOutputName {
+				continue
+			}
+			outputName := mapName
+			if output.Name != nil && output.Name.Value != "" {
+				outputName = output.Name.Value
+			}
+			key := strings.ToLower(outputName)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			names = append(names, outputName)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // setRunScriptValueForOutput directly sets the run script value in a step's YAML node

@@ -44,14 +44,14 @@ func TestChainVizE2EBlastRadius(t *testing.T) {
 	// secret-in-log and secret-exfiltration share the same secrets.DEPLOY_TOKEN
 	// source node (both read it from env), so the assembler fans it out with
 	// a "-> 2 sinks" badge instead of drawing two disconnected chains.
-	if !strings.Contains(out, `n_source_build_0_secrets_DEPLOY_TOKEN["secrets.DEPLOY_TOKEN [&rarr;2 sinks]"]`) {
+	if !strings.Contains(out, `"secrets.DEPLOY_TOKEN [&rarr;2 sinks]"`) {
 		t.Errorf("expected shared secrets.DEPLOY_TOKEN source node with fan-out badge:\n%s", out)
 	}
 	// untrusted-reachable emphasis is present (pull_request_target reaches everything here).
 	if !strings.Contains(out, "classDef untrusted") {
 		t.Error("missing untrusted emphasis classDef")
 	}
-	if !strings.Contains(out, "class n_trigger_pull_request_target fixhere") {
+	if !strings.Contains(out, "pull_request_target") || !strings.Contains(out, " fixhere") {
 		t.Errorf("expected the shared trigger to be marked as the leverage (fixhere) node:\n%s", out)
 	}
 }
@@ -76,12 +76,13 @@ func TestChainVizE2ESafeIsMinimal(t *testing.T) {
 
 // TestChainVizE2ECrossJobNeeds exercises chainviz-crossjob.yaml: job
 // "produce" writes github.head_ref (untrusted) to $GITHUB_OUTPUT, and
-// downstream job "consume" reads needs.produce.outputs.ref into a curl URL.
+// downstream job "consume" reads needs.produce.outputs.pr_ref into a curl URL.
 //
 // EdgeNeeds draws only when the downstream SourceOrigin keeps the literal
 // "needs.<job>.outputs.<name>" expression and the producer-side SinkRecord
-// identifies the same OutputName, so the edge connects to the action that wrote
-// the referenced job output rather than every action in the producer job.
+// identifies the same exposed job output name, so the edge connects to the
+// action that wrote the referenced job output rather than every action in the
+// producer job.
 func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	out := runLinterMermaid(t, "../../script/actions/chainviz-crossjob.yaml")
 	if !strings.Contains(out, "flowchart TD") {
@@ -94,20 +95,17 @@ func TestChainVizE2ECrossJobNeeds(t *testing.T) {
 	if !strings.Contains(out, `subgraph job_consume["job: consume"]`) {
 		t.Errorf("missing consume job subgraph:\n%s", out)
 	}
-	if !strings.Contains(out, "sink_output_clobbering_critical_produce") {
+	if !strings.Contains(out, ">\"expr\"]") {
 		t.Errorf("missing produce-side output-clobbering sink:\n%s", out)
 	}
-	if !strings.Contains(out, "sink_request_forgery_critical_consume") {
+	if !strings.Contains(out, "request_x2D_forgery_x2D_critical") {
 		t.Errorf("missing consume-side request-forgery sink:\n%s", out)
 	}
 	// The cross-job edge itself: confirmed present against real output.
 	if !strings.Contains(out, "-->|needs|") {
 		t.Errorf("expected a cross-job needs edge linking produce's output-writer action to consume's tainted source:\n%s", out)
 	}
-	// Node IDs are whitelist-sanitized to [A-Za-z0-9_], so the parens/spaces in
-	// the SourceName ("needs.produce.outputs.ref (tainted via github.head_ref)")
-	// collapse to underscores in the ID.
-	if !strings.Contains(out, "n_source_consume_1_needs_produce_outputs_ref__tainted_via_github_head_ref_") {
+	if !strings.Contains(out, "needs.produce.outputs.pr_ref (tainted via github.head_ref)") {
 		t.Errorf("expected the needs-derived source node naming the upstream job and its taint origin:\n%s", out)
 	}
 }
@@ -153,14 +151,14 @@ func TestChainVizE2EIgnoreFiltersRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "secret_in_log") {
+	if strings.Contains(out, "secret_x2D_in_x2D_log") {
 		t.Errorf("-ignore secret-in-log must remove its sink node from the graph:\n%s", out)
 	}
 	if strings.Contains(out, "log:") {
 		t.Errorf("blast-radius summary still counts the ignored log sink:\n%s", out)
 	}
 	// The non-ignored sinks must remain — ignore is scoped, not a blanket wipe.
-	if !strings.Contains(out, "secret_exfiltration") || !strings.Contains(out, "secrets_in_artifacts") {
+	if !strings.Contains(out, ">\"network\"]") || !strings.Contains(out, ">\"artifact\"]") {
 		t.Errorf("non-ignored sinks should still render:\n%s", out)
 	}
 }

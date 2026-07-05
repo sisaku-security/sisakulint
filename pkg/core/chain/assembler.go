@@ -119,7 +119,8 @@ func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput)
 	// job -> output name -> that output's producer action node IDs.
 	actionsByJobOutput := map[string]map[string][]string{}
 	for _, r := range in.Records {
-		if r.OutputName == "" {
+		outputNames := producerOutputNames(r)
+		if len(outputNames) == 0 {
 			continue
 		}
 		actionID := fmt.Sprintf("action:%s:%d:%d", r.JobID, posLine(r.StepPos), posCol(r.StepPos))
@@ -127,11 +128,13 @@ func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput)
 			continue
 		}
 		jobID := strings.ToLower(r.JobID)
-		outputName := strings.ToLower(r.OutputName)
 		if actionsByJobOutput[jobID] == nil {
 			actionsByJobOutput[jobID] = map[string][]string{}
 		}
-		actionsByJobOutput[jobID][outputName] = append(actionsByJobOutput[jobID][outputName], actionID)
+		for _, outputName := range outputNames {
+			outputName = strings.ToLower(outputName)
+			actionsByJobOutput[jobID][outputName] = append(actionsByJobOutput[jobID][outputName], actionID)
+		}
 	}
 	for _, r := range in.Records {
 		mm := needsOutputPattern.FindStringSubmatch(r.SourceOrigin)
@@ -148,6 +151,29 @@ func linkCrossJobNeeds(m *ChainModel, nodes map[string]*Node, in AssemblerInput)
 			m.Edges = append(m.Edges, Edge{From: upActionID, To: sourceID, Kind: EdgeNeeds})
 		}
 	}
+}
+
+func producerOutputNames(r SinkRecord) []string {
+	raw := r.OutputNames
+	if len(raw) == 0 && r.OutputName != "" {
+		raw = []string{r.OutputName}
+	}
+
+	seen := map[string]bool{}
+	out := make([]string, 0, len(raw))
+	for _, name := range raw {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, name)
+	}
+	return out
 }
 
 // computeChainCount は各 record のパスが通過する全ノードの ChainCount を +1 する。

@@ -12,20 +12,25 @@ type MermaidRenderer struct{}
 
 func NewMermaidRenderer() *MermaidRenderer { return &MermaidRenderer{} }
 
-// sanitizeToken は [A-Za-z0-9_] 以外の全 rune を _ に写像し、mermaid の
-// 識別子として安全なトークンを返す。SourceName は括弧・カンマ・引用符・
-// アスタリスク（例: "expr (tainted via src)", "a, b", "secrets.*"）を含み得るため、
-// 個別置換ではなくホワイトリストで正規化する。
+// sanitizeToken は入力文字列を Mermaid 識別子で使える [A-Za-z0-9_]
+// だけのトークンに変換する。英数字はそのまま、それ以外の rune は
+// コードポイントで _xNN_ 形式にエンコードする。SourceName / JobID は
+// "." と "-" のように異なる記号を含み得るため、単純な "_" 置換では
+// 別ノードが同じ Mermaid ID に潰れる。エンコード delimiter に使う "_"
+// 自体も _x5F_ にすることで、この変換を衝突なしに保つ。
 func sanitizeToken(s string) string {
-	return strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
-			return r
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			continue
 		}
-		return '_'
-	}, s)
+		fmt.Fprintf(&b, "_x%X_", r)
+	}
+	return b.String()
 }
 
-// mermaidID は mermaid ノード ID に使えるよう記号を _ に正規化する。
+// mermaidID は mermaid ノード ID に使える衝突しない ID を返す。
 func mermaidID(id string) string {
 	return "n_" + sanitizeToken(id)
 }
