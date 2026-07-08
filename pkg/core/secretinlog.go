@@ -84,6 +84,9 @@ type stepOutputLeakOccurrence struct {
 // 以下のケースはビルドログに出力されないためスキップする:
 //   - コマンド置換 `$(...)` の内部（stdout はパイプに接続）
 //   - stdout をファイルにリダイレクトする Stmt（例: `echo "$X" >> "$GITHUB_OUTPUT"`、`echo "$X" > file.txt`）
+//   - パイプラインの終端コマンドが stdout をファイルにリダイレクトする場合
+//     （例: `echo "$X" | base64 --decode > file` — echo 自身の stdout はパイプに
+//     接続されるだけでログには現れない）
 //   - `printf -v VAR` 形式（stdout を出さず変数に格納）
 //
 // ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
@@ -104,8 +107,9 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			// stdout を「ログに出ない先」へリダイレクトしている Stmt は子ノードごとスキップ。
-			if stmtRedirectsStdoutAwayFromLog(stmt) {
+			// stdout を「ログに出ない先」へリダイレクトしている Stmt（パイプラインの
+			// 場合は終端コマンドのリダイレクト）は子ノードごとスキップ。
+			if !stmtOutputReachesLog(stmt) {
 				return false
 			}
 			currentVisible = scoped.At(stmt)
@@ -187,6 +191,24 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 			}
 		}
 	}
+}
+
+// stmtOutputReachesLog は stmt 自身の stdout が最終的にビルドログへ到達しうるかを
+// 判定する。パイプライン（`a | b | c`）は左結合で構文木が組まれるため、
+// 途中段（`a`, `b`）の stdout は次段の stdin に接続されるだけでログには現れず、
+// ログに現れうるのは常に最終段（`c`、BinaryCmd.Y）の stdout だけである。
+// 例えば `echo "$X" | base64 --decode > file` は、リダイレクト `> file` が
+// echo ではなく base64 側の Stmt に付与されるため、echo 単体を見ても
+// stmtRedirectsStdoutAwayFromLog は false を返してしまう。パイプラインの
+// 終端まで辿って判定することで、この種の false positive を防ぐ。
+func stmtOutputReachesLog(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return true
+	}
+	if bc, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && bc.Op == syntax.Pipe {
+		return stmtOutputReachesLog(bc.Y)
+	}
+	return !stmtRedirectsStdoutAwayFromLog(stmt)
 }
 
 // stmtRedirectsStdoutAwayFromLog は Stmt の Redirs に stdout をファイルへ送るものが
@@ -348,7 +370,7 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			if stmtRedirectsStdoutAwayFromLog(stmt) {
+			if !stmtOutputReachesLog(stmt) {
 				return false
 			}
 			return true
