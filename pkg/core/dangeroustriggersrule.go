@@ -261,19 +261,22 @@ func hasPermissionsRestriction(perms *ast.Permissions) bool {
 		return false
 	}
 
-	// If permissions.All is set
+	// If permissions.All is set to a scalar keyword, only write-all is not a
+	// restriction.
 	if perms.All != nil && perms.All.Value != "" {
 		value := strings.ToLower(perms.All.Value)
-		// Only "read-all" or empty is a restriction (write-all is not)
-		return value == "read-all" || value == "{}" || value == "none"
+		return value == "read-all" || value == "none"
 	}
 
-	// If individual scopes are set, it's a restriction (not write-all)
-	if len(perms.Scopes) > 0 {
-		return true
-	}
-
-	return false
+	// Any other explicit `permissions:` block restricts access (perms != nil was
+	// checked above, so the key is present):
+	//   - individual scopes, e.g. `permissions: { contents: read }`
+	//   - `permissions: {}` — an empty mapping that grants no permissions at all,
+	//     the most restrictive form and the exact value this rule's own message
+	//     and auto-fix recommend. It parses as an empty MappingNode and arrives
+	//     here with All == nil and no scopes, so the previous `value == "{}"`
+	//     scalar check never matched it (it is a mapping, not a scalar).
+	return true
 }
 
 // checkConditionForMitigations checks a condition string for security-related patterns

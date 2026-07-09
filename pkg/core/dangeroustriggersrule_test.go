@@ -230,10 +230,15 @@ func TestCheckMitigations(t *testing.T) {
 			},
 		},
 		{
-			name: "workflow with empty permissions",
+			// `permissions: {}` parses as an empty mapping: All is nil and there
+			// are no scopes (see parsePermissions). It grants no permissions at
+			// all, so it is a restriction. This previously constructed the AST as
+			// a scalar `All: "{}"`, which the parser never produces, and which
+			// masked the fact that the empty-mapping form was not recognized.
+			name: "workflow with empty permissions ({})",
 			workflow: &ast.Workflow{
 				Permissions: &ast.Permissions{
-					All: &ast.String{Value: "{}"},
+					Scopes: map[string]*ast.PermissionScope{},
 				},
 			},
 			want: MitigationStatus{
@@ -463,6 +468,37 @@ func TestDangerousTriggersCriticalRule(t *testing.T) {
 				},
 				Permissions: &ast.Permissions{
 					All: &ast.String{Value: "read-all", Pos: &ast.Position{Line: 3, Col: 1}},
+				},
+				Jobs: map[string]*ast.Job{
+					"test": {
+						Steps: []*ast.Step{
+							{
+								Exec: &ast.ExecRun{
+									Run: &ast.String{Value: "echo test"},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			// `permissions: {}` (empty mapping) grants no permissions and is the
+			// mitigation this rule's message and auto-fix recommend. The parser
+			// emits it as All == nil with no scopes, so it must be recognized as a
+			// restriction; otherwise the rule flags the very fix it suggests and
+			// its auto-fix does not converge.
+			name: "safe: pull_request_target with empty permissions ({})",
+			workflow: &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "pull_request_target", Pos: &ast.Position{Line: 2, Col: 1}},
+						Pos:  &ast.Position{Line: 2, Col: 1},
+					},
+				},
+				Permissions: &ast.Permissions{
+					Scopes: map[string]*ast.PermissionScope{},
 				},
 				Jobs: map[string]*ast.Job{
 					"test": {
