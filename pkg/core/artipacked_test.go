@@ -89,6 +89,11 @@ func TestArtipackedRule_getCheckoutVersion(t *testing.T) {
 		{"v6", "actions/checkout@v6", 6},
 		{"v6.0.0", "actions/checkout@v6.0.0", 6},
 		{"commit SHA", "actions/checkout@abc123def456789012345678901234567890abcd", 0},
+		// A full SHA whose first hex char is 6-9 must not be misread as a major
+		// version (regression: "8ade..." previously returned 8 -> treated as v8).
+		{"commit SHA leading 8", "actions/checkout@8ade1a2b3c4d5e6f70819a2b3c4d5e6f7081a2b3", 0},
+		{"commit SHA leading 3", "actions/checkout@3f2a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2", 0},
+		{"abbreviated SHA leading 7", "actions/checkout@7f8e9d0", 0},
 		{"invalid format", "actions/checkout", 0},
 		{"empty", "", 0},
 	}

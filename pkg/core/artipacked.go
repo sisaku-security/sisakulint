@@ -12,6 +12,14 @@ import (
 // checkoutVersionPattern is compiled once at package level for performance.
 var checkoutVersionPattern = regexp.MustCompile(`^v?(\d+)`)
 
+// commitSHAPattern matches a full or abbreviated commit SHA (7-40 hex chars).
+// A SHA pin does not encode a major version, so it must not be run through
+// checkoutVersionPattern (otherwise a SHA whose first hex char is 6-9, e.g.
+// "8ade...", would be misread as "v8" and its severity/credential-location
+// silently downgraded). actions/checkout only tags releases with semver
+// (vN[.M[.P]]), so any all-hex 7-40 char ref here is unambiguously a SHA.
+var commitSHAPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
+
 // persistCredentialsKey is the input key for persist-credentials in checkout action.
 const persistCredentialsKey = "persist-credentials"
 
@@ -151,7 +159,17 @@ func (rule *ArtipackedRule) getCheckoutVersion(uses string) int {
 		return 0
 	}
 
-	matches := checkoutVersionPattern.FindStringSubmatch(parts[1])
+	// A commit SHA pin does not encode a major version. Return 0 (unknown) so
+	// its leading hex digits are not misread as a version number, which would
+	// otherwise downgrade severity for SHAs starting with 6-9. Unknown versions
+	// are treated conservatively (credentials assumed in .git/config), matching
+	// the pre-existing behavior for non-numeric refs.
+	ref := parts[1]
+	if commitSHAPattern.MatchString(ref) {
+		return 0
+	}
+
+	matches := checkoutVersionPattern.FindStringSubmatch(ref)
 	if len(matches) >= 2 {
 		major, err := strconv.Atoi(matches[1])
 		if err != nil {
