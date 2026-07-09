@@ -1,0 +1,28 @@
+# Safe counterpart of deprecated-node-runtime.yaml: every action major
+# declares `runs.using: node24` and the build target is a supported Node.js.
+name: deprecated-node-runtime-safe
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # OK: actions/checkout v5+ declares `runs.using: node24`.
+      - uses: actions/checkout@v5
+      # OK: actions/setup-node v5+ is node24 and Node.js 24 is in support.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # OK: actions/github-script v8+ declares `runs.using: node24`.
+      - uses: actions/github-script@v8
+        with:
+          script: console.log("hello")
+      # OK: actions/upload-artifact v6+ declares `runs.using: node24`.
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/

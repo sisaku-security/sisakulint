@@ -52,6 +52,8 @@ Contains example GitHub Actions workflow files that demonstrate various security
 | `secret-exfiltration-allowed-hosts.yaml` | Demonstrates the `secret-exfiltration.allowed-hosts` config — paired with a `.github/sisakulint.yaml` listing vendor/internal hosts the rule should trust |
 | `secret-exfiltration-per-workflow-override.yaml` | Demonstrates the `# sisakulint:secret-exfiltration.allowed-hosts:` per-workflow comment directive for scoping extra trusted hosts to a single workflow |
 | `dependabot-ecosystem.yaml` | Uses `actions/setup-node` (npm), `setup-go` (gomod), `setup-python` (pip), and `setup-java` (maven/gradle/sbt ambiguous) across separate jobs to exercise DependabotEcosystemRule on every supported setup-action shape. |
+| `deprecated-node-runtime.yaml` | Actions on the deprecated Node.js 20 runtime (node20 majors of checkout/setup-node/github-script/upload-artifact), the `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` opt-out, the removed `FORCE_JAVASCRIPT_ACTIONS_TO_NODE20` flag, and an EOL `node-version:` build target |
+| `deprecated-node-runtime-safe.yaml` | Safe counterparts: node24-capable action majors and a supported `node-version` |
 
 ### Usage
 

@@ -1,9 +1,17 @@
 package core
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/google/go-github/v68/github"
+	"github.com/sisaku-security/sisakulint/pkg/remote"
 	"gopkg.in/yaml.v3"
 )
 
@@ -136,5 +144,195 @@ func TestRemoteActionsMetadataCacheDeferFetcherConstruction(t *testing.T) {
 		if c.fetcher != nil {
 			t.Fatalf("fetcher must remain nil after FindMetadata(%q)", spec)
 		}
+	}
+}
+
+// --- retry / caching policy tests for RemoteActionsMetadataCache. A
+// transient fetch failure must never be cached as "no metadata": that would
+// silently disable every resolver-backed rule for the rest of the run and
+// make lint results nondeterministic.
+
+func newTestRemoteCache(fetch func(ctx context.Context, repo *remote.RepositoryInfo, filePath, ref string) ([]byte, error)) *RemoteActionsMetadataCache {
+	c := NewRemoteActionsMetadataCache(nil)
+	c.fetchFile = fetch
+	c.sleep = func(time.Duration) {} // no backoff in tests
+	return c
+}
+
+func notFoundErr() error {
+	return &github.ErrorResponse{Response: &http.Response{StatusCode: http.StatusNotFound}}
+}
+
+func TestRemoteCacheRetriesTransientErrorThenSucceeds(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, filePath, _ string) ([]byte, error) {
+		calls++
+		if calls == 1 {
+			return nil, fmt.Errorf("dial tcp: i/o timeout")
+		}
+		if filePath == "action.yml" {
+			return []byte("runs:\n  using: node20\n"), nil
+		}
+		return nil, notFoundErr()
+	})
+
+	meta, err := c.FindMetadata("owner/repo@v1")
+	if err != nil {
+		t.Fatalf("expected retry to succeed, got error: %v", err)
+	}
+	if meta == nil || meta.Runs == nil || meta.Runs.Using != "node20" {
+		t.Fatalf("unexpected metadata: %v", meta)
+	}
+	// Cached: a second lookup must not fetch again.
+	before := calls
+	if _, err := c.FindMetadata("owner/repo@v1"); err != nil {
+		t.Fatal(err)
+	}
+	if calls != before {
+		t.Errorf("expected cache hit, but fetch was called again (%d -> %d)", before, calls)
+	}
+}
+
+func TestRemoteCacheDefinitive404IsNegativeCached(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, _, _ string) ([]byte, error) {
+		calls++
+		return nil, notFoundErr()
+	})
+
+	meta, err := c.FindMetadata("owner/repo@v1")
+	if err != nil {
+		t.Fatalf("definitive 404 must not be an error, got: %v", err)
+	}
+	if meta != nil {
+		t.Fatalf("expected nil metadata, got %v", meta)
+	}
+	if calls != 2 { // action.yml + action.yaml, no retries for 404
+		t.Errorf("expected 2 fetch calls, got %d", calls)
+	}
+	if _, err := c.FindMetadata("owner/repo@v1"); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Errorf("404 must be cached; got %d fetch calls after second lookup", calls)
+	}
+}
+
+func TestRemoteCacheTransientFailureIsNotSilentlyNil(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, _, _ string) ([]byte, error) {
+		calls++
+		return nil, fmt.Errorf("dial tcp: i/o timeout")
+	})
+
+	meta, err := c.FindMetadata("owner/repo@v1")
+	if err == nil {
+		t.Fatal("exhausted transient retries must surface an error, not a silent nil")
+	}
+	if meta != nil {
+		t.Fatalf("expected nil metadata, got %v", meta)
+	}
+	wantCalls := remoteMetadataFetchAttempts * 2 // both candidate paths per attempt
+	if calls != wantCalls {
+		t.Errorf("expected %d fetch calls, got %d", wantCalls, calls)
+	}
+	// Repeat lookups return the recorded error without re-burning the budget.
+	if _, err2 := c.FindMetadata("owner/repo@v1"); err2 == nil {
+		t.Fatal("expected recorded failure error on repeat lookup")
+	}
+	if calls != wantCalls {
+		t.Errorf("repeat lookup must not fetch again: %d calls", calls)
+	}
+}
+
+func TestRemoteCacheRateLimitAbortsWithoutRetryOrCaching(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, _, _ string) ([]byte, error) {
+		calls++
+		return nil, &github.RateLimitError{}
+	})
+
+	if _, err := c.FindMetadata("owner/repo@v1"); err == nil {
+		t.Fatal("expected rate-limit error")
+	}
+	if calls != 1 {
+		t.Errorf("rate limit must abort immediately, got %d fetch calls", calls)
+	}
+	// Not recorded as failed: a later lookup (e.g. after the window resets)
+	// is allowed to try again.
+	if _, err := c.FindMetadata("owner/repo@v1"); err == nil {
+		t.Fatal("expected rate-limit error on retry lookup")
+	}
+	if calls != 2 {
+		t.Errorf("rate-limited spec must stay retryable, got %d fetch calls", calls)
+	}
+}
+
+func TestRemoteCacheCircuitBreakerOpensAfterConsecutiveFailures(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, _, _ string) ([]byte, error) {
+		calls++
+		return nil, fmt.Errorf("dial tcp: network is unreachable")
+	})
+
+	for i := 0; i < remoteMetadataBreakerThreshold; i++ {
+		spec := fmt.Sprintf("owner/repo%d@v1", i)
+		if _, err := c.FindMetadata(spec); err == nil {
+			t.Fatalf("expected error for %s", spec)
+		}
+	}
+	before := calls
+	if _, err := c.FindMetadata("owner/last@v1"); !errors.Is(err, errRemoteMetadataCircuitOpen) {
+		t.Fatalf("expected circuit-open error, got: %v", err)
+	}
+	if calls != before {
+		t.Errorf("breaker open must fail fast without fetching, got %d extra calls", calls-before)
+	}
+}
+
+func TestRemoteCacheSingleflightCollapsesConcurrentLookups(t *testing.T) {
+	t.Parallel()
+
+	var mu sync.Mutex
+	calls := 0
+	release := make(chan struct{})
+	c := newTestRemoteCache(func(_ context.Context, _ *remote.RepositoryInfo, filePath, _ string) ([]byte, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		<-release
+		if filePath == "action.yml" {
+			return []byte("runs:\n  using: node24\n"), nil
+		}
+		return nil, notFoundErr()
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			meta, err := c.FindMetadata("owner/repo@v1")
+			if err != nil || meta == nil {
+				t.Errorf("unexpected result: %v %v", meta, err)
+			}
+		}()
+	}
+	close(release)
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 1 {
+		t.Errorf("expected 1 collapsed fetch, got %d", calls)
 	}
 }

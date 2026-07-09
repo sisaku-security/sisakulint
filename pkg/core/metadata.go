@@ -3,8 +3,10 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	pathpkg "path"
 	"path/filepath"
@@ -12,7 +14,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/go-github/v68/github"
 	"github.com/sisaku-security/sisakulint/pkg/remote"
+	"golang.org/x/sync/singleflight"
 	"gopkg.in/yaml.v3"
 )
 
@@ -285,7 +289,22 @@ type RemoteActionsMetadataCache struct {
 	fetcher     *remote.Fetcher
 	fetcherErr  error
 	cache       map[string]*ActionMetadata
-	dbg         io.Writer
+	// failed keeps transient-failure errors separate from cache so they are
+	// never converted into a definitive nil, which would silently suppress
+	// every resolver-backed rule for the rest of the run.
+	failed map[string]error
+	// consecutiveTransientFailures drives a run-wide circuit breaker: after
+	// this many spec resolutions fail in a row, further fetches fail fast
+	// instead of burning attempts*paths*timeout per remaining spec.
+	consecutiveTransientFailures int
+	breakerOpen                  bool
+	flight                       singleflight.Group
+	dbg                          io.Writer
+	// fetchFile is a test seam; when nil, the lazily-constructed
+	// remote.Fetcher is used.
+	fetchFile func(ctx context.Context, repo *remote.RepositoryInfo, filePath, ref string) ([]byte, error)
+	// sleep is a test seam for the retry backoff.
+	sleep func(time.Duration)
 }
 
 type remoteActionSpec struct {
@@ -295,8 +314,24 @@ type remoteActionSpec struct {
 	ref   string
 }
 
+const (
+	// remoteMetadataFetchAttempts bounds retries per spec for transient
+	// errors. 404 is definitive and never retried.
+	remoteMetadataFetchAttempts = 3
+	// remoteMetadataBreakerThreshold is the number of consecutive specs that
+	// must exhaust their retry budget before the circuit breaker opens.
+	remoteMetadataBreakerThreshold = 5
+)
+
+var errRemoteMetadataCircuitOpen = errors.New("remote action metadata resolution disabled for this run: too many consecutive network failures")
+
 func NewRemoteActionsMetadataCache(dbg io.Writer) *RemoteActionsMetadataCache {
-	return &RemoteActionsMetadataCache{cache: make(map[string]*ActionMetadata), dbg: dbg}
+	return &RemoteActionsMetadataCache{
+		cache:  make(map[string]*ActionMetadata),
+		failed: make(map[string]error),
+		dbg:    dbg,
+		sleep:  time.Sleep,
+	}
 }
 
 // ensureFetcher constructs the underlying remote.Fetcher on first use. The
@@ -346,15 +381,89 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 		c.debug("cache hit @ %s: %v", spec, m)
 		return m, nil
 	}
+	if err := c.readFailed(spec); err != nil {
+		return nil, err
+	}
 
 	actionSpec, ok := parseRemoteActionSpec(spec)
 	if !ok {
 		return nil, nil
 	}
 
+	// singleflight: each action.yml is in flight at most once across the
+	// parallel files sharing this cache.
+	v, err, _ := c.flight.Do(spec, func() (interface{}, error) {
+		if m, ok := c.readCache(spec); ok {
+			return m, nil
+		}
+		if err := c.readFailed(spec); err != nil {
+			return nil, err
+		}
+		return c.resolveRemote(spec, actionSpec)
+	})
+	meta, _ := v.(*ActionMetadata)
+	return meta, err
+}
+
+func (c *RemoteActionsMetadataCache) readFailed(spec string) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.failed[spec]
+}
+
+// noteTransientOutcome updates the circuit-breaker state: success resets the
+// consecutive-failure counter; an exhausted retry budget increments it and
+// may open the breaker for the rest of the run.
+func (c *RemoteActionsMetadataCache) noteTransientOutcome(success bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if success {
+		c.consecutiveTransientFailures = 0
+		return
+	}
+	c.consecutiveTransientFailures++
+	if !c.breakerOpen && c.consecutiveTransientFailures >= remoteMetadataBreakerThreshold {
+		c.breakerOpen = true
+		if c.dbg != nil {
+			fmt.Fprintf(c.dbg, "[RemoteActionsMetadataCache] circuit breaker opened after %d consecutive fetch failures; remote metadata resolution disabled for this run\n", c.consecutiveTransientFailures)
+		}
+	}
+}
+
+func (c *RemoteActionsMetadataCache) isBreakerOpen() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.breakerOpen
+}
+
+func (c *RemoteActionsMetadataCache) doFetch(ctx context.Context, repo *remote.RepositoryInfo, filePath, ref string) ([]byte, error) {
+	if c.fetchFile != nil {
+		return c.fetchFile(ctx, repo, filePath, ref)
+	}
 	fetcher := c.ensureFetcher()
 	if fetcher == nil {
-		return nil, nil
+		return nil, c.fetcherErr
+	}
+	return fetcher.FetchFile(ctx, repo, filePath, ref)
+}
+
+// isRemoteNotFoundError reports a definitive HTTP 404; everything else is
+// treated as transient and eligible for retry.
+func isRemoteNotFoundError(err error) bool {
+	var ghErr *github.ErrorResponse
+	return errors.As(err, &ghErr) && ghErr.Response != nil && ghErr.Response.StatusCode == http.StatusNotFound
+}
+
+// resolveRemote fetches and parses the action metadata with bounded retries.
+// Caching policy:
+//   - parsed metadata        -> cached
+//   - 404 on every candidate -> cached as nil
+//   - unparseable content    -> cached as nil
+//   - transient failure      -> NOT cached; recorded in failed so repeat
+//     lookups fail fast this run and a fresh run can retry
+func (c *RemoteActionsMetadataCache) resolveRemote(spec string, actionSpec *remoteActionSpec) (*ActionMetadata, error) {
+	if c.isBreakerOpen() {
+		return nil, errRemoteMetadataCircuitOpen
 	}
 
 	repo := &remote.RepositoryInfo{
@@ -364,32 +473,62 @@ func (c *RemoteActionsMetadataCache) FindMetadata(spec string) (*ActionMetadata,
 	}
 
 	var lastErr error
-	for _, metadataPath := range remoteActionMetadataPaths(actionSpec.dir) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		b, err := fetcher.FetchFile(ctx, repo, metadataPath, actionSpec.ref)
-		cancel()
-		if err != nil {
-			lastErr = err
-			continue
+	for attempt := 0; attempt < remoteMetadataFetchAttempts; attempt++ {
+		if attempt > 0 {
+			c.debug("retrying metadata fetch for %s (attempt %d/%d) after transient error: %v", spec, attempt+1, remoteMetadataFetchAttempts, lastErr)
+			c.sleep(time.Duration(attempt) * 500 * time.Millisecond)
 		}
 
-		var meta ActionMetadata
-		if err := yaml.Unmarshal(b, &meta); err != nil {
+		var transientErr error
+		notFound := 0
+		paths := remoteActionMetadataPaths(actionSpec.dir)
+		for _, metadataPath := range paths {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			b, err := c.doFetch(ctx, repo, metadataPath, actionSpec.ref)
+			cancel()
+			if err != nil {
+				if isRemoteNotFoundError(err) {
+					notFound++
+					continue
+				}
+				if IsGitHubRateLimitError(err) {
+					// Retrying cannot succeed until the rate window resets;
+					// not cached so a later authenticated run can resolve it.
+					return nil, fmt.Errorf("failed to fetch remote action metadata for %q: %w", spec, err)
+				}
+				transientErr = err
+				continue
+			}
+
+			var meta ActionMetadata
+			if err := yaml.Unmarshal(b, &meta); err != nil {
+				c.writeCache(spec, nil)
+				c.noteTransientOutcome(true)
+				msg := strings.ReplaceAll(err.Error(), "\n", " ")
+				return nil, fmt.Errorf("failed to parse remote action metadata file %q: %s", metadataPath, msg)
+			}
+
+			c.debug("detected remote action metadata @ %s: %v", spec, &meta)
+			c.writeCache(spec, &meta)
+			c.noteTransientOutcome(true)
+			return &meta, nil
+		}
+
+		if transientErr == nil && notFound == len(paths) {
+			// All candidate paths 404'd: definitively no metadata at this ref.
 			c.writeCache(spec, nil)
-			msg := strings.ReplaceAll(err.Error(), "\n", " ")
-			return nil, fmt.Errorf("failed to parse remote action metadata file %q: %s", metadataPath, msg)
+			c.noteTransientOutcome(true)
+			return nil, nil
 		}
-
-		c.debug("detected remote action metadata @ %s: %v", spec, &meta)
-		c.writeCache(spec, &meta)
-		return &meta, nil
+		lastErr = transientErr
 	}
 
-	c.writeCache(spec, nil)
-	if lastErr != nil {
-		return nil, fmt.Errorf("failed to fetch remote action metadata for %q: %w", spec, lastErr)
-	}
-	return nil, nil
+	err := fmt.Errorf("failed to fetch remote action metadata for %q after %d attempts: %w", spec, remoteMetadataFetchAttempts, lastErr)
+	c.mu.Lock()
+	c.failed[spec] = err
+	c.mu.Unlock()
+	c.noteTransientOutcome(false)
+	return nil, err
 }
 
 func parseRemoteActionSpec(spec string) (*remoteActionSpec, bool) {

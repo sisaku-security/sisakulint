@@ -40,7 +40,7 @@ sisakulint categorizes security rules by severity based on CVSS scores, attack i
 | Severity | Count | CVSS Range | Description |
 |----------|-------|------------|-------------|
 | **Critical** | 14 | 9.0-10.0 | Immediate risk, can lead to RCE or full compromise |
-| **High** | 17 | 7.0-8.9 | Significant risk, enables serious attacks |
+| **High** | 18 | 7.0-8.9 | Significant risk, enables serious attacks |
 | **Medium** | 14 | 4.0-6.9 | Moderate risk, requires specific conditions |
 | **Low** | 5 | 0.1-3.9 | Best practices, minimal direct security impact |
 
@@ -83,6 +83,7 @@ sisakulint categorizes security rules by severity based on CVSS scores, attack i
 | [unmasked-secret-exposure]({{< ref "unmaskedsecretexposure.md" >}}) | High | Detects unmasked secrets derived from fromJson() | Yes |
 | [improper-access-control]({{< ref "improperaccesscontrol.md" >}}) | High | Detects improper access control with label-based approval | Yes |
 | [known-vulnerable-actions]({{< ref "knownvulnerableactions.md" >}}) | Varies | Detects actions with known CVEs (inherits advisory severity) | Yes |
+| [deprecated-node-runtime]({{< ref "deprecatednoderuntime.md" >}}) | 7/10 | Detects actions on the EOL Node.js 20 runtime (removed from runners 2026-09-16) | Yes |
 | [credentials]({{< ref "credentialsrule.md" >}}) | High | Detects hardcoded credentials | Yes |
 
 ### Medium Severity Rules (4.0-6.9)
