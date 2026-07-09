@@ -336,6 +336,68 @@ func TestOutputClobberingCritical_InlineExprFlaggedEvenWhenAlsoInEnv(t *testing.
 	}
 }
 
+// TestOutputClobberingCritical_AutoFixAfterEnvIndirection reproduces the fixer
+// interaction behind the tool-induced false negative: when another fixer (e.g.
+// code-injection) runs first, it moves the untrusted expression into a step env
+// var and rewrites the write to `echo "title=$PR_TITLE" >> $GITHUB_OUTPUT` with
+// no inline ${{ }}. Env indirection does not stop newline clobbering, so the
+// heredoc transform must still recognize and wrap the env-var form; otherwise the
+// auto-fix leaves a clobberable line that the rule then no longer detects.
+func TestOutputClobberingCritical_AutoFixAfterEnvIndirection(t *testing.T) {
+	rule := OutputClobberingCriticalRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "pull_request_target"}},
+		},
+	}
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: `echo "title=${{ github.event.pull_request.title }}" >> "$GITHUB_OUTPUT"`,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			},
+		},
+	}
+
+	// Detection runs on the original inline form and registers the step.
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected the inline form to be detected")
+	}
+
+	step := job.Steps[0]
+
+	// Simulate code-injection's fix having run first: the untrusted expression is
+	// now carried by a step env var and the run line reads $PR_TITLE.
+	step.Env = &ast.Env{
+		Vars: map[string]*ast.EnvVar{
+			"pr_title": {
+				Name:  &ast.String{Value: "PR_TITLE"},
+				Value: &ast.String{Value: "${{ github.event.pull_request.title }}"},
+			},
+		},
+	}
+	step.Exec.(*ast.ExecRun).Run.Value = `echo "title=$PR_TITLE" >> "$GITHUB_OUTPUT"`
+
+	if err := rule.FixStep(step); err != nil {
+		t.Fatalf("FixStep() returned error: %v", err)
+	}
+
+	got := step.Exec.(*ast.ExecRun).Run.Value
+	if !strings.Contains(got, "<<EOF") {
+		t.Errorf("expected heredoc wrapping of the env-indirected write, got:\n%s", got)
+	}
+	if !strings.Contains(got, "title<<") {
+		t.Errorf("expected the output name 'title' preserved in the heredoc, got:\n%s", got)
+	}
+}
+
 func TestOutputClobberingCritical_VariousOutputPatterns(t *testing.T) {
 	tests := []struct {
 		name       string
