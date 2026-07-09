@@ -7,10 +7,20 @@ import "gopkg.in/yaml.v3"
 // - workflow_run: Triggered by completion of another workflow (may be from PR)
 // - pull_request_target: Runs in the context of the base branch but with PR info
 // - issue_comment: Triggered by comments which can be from external contributors
+// - issues: Can be opened/edited by external users
+// - discussion_comment: Triggered by untrusted discussion comments
+// - pull_request_review: Review body is attacker-controlled
+//
+// This mirrors the canonical PrivilegedTriggers set (privilegedtriggers.go); the
+// artifact-poisoning-medium rule previously used a narrower 3-entry subset, so a
+// third-party artifact download under e.g. an `issues` trigger was a false negative.
 var UntrustedTriggers = map[string]bool{
 	"workflow_run":        true,
 	"pull_request_target": true,
 	"issue_comment":       true,
+	"issues":              true,
+	"discussion_comment":  true,
+	"pull_request_review": true,
 }
 
 // AddPathToWithSection adds or updates the path input in the with section of a step node.
