@@ -286,10 +286,17 @@ func TestOutputClobberingCritical_AutoFix(t *testing.T) {
 	}
 }
 
-func TestOutputClobberingCritical_EnvVarDefinedInStep(t *testing.T) {
+// TestOutputClobberingCritical_InlineExprFlaggedEvenWhenAlsoInEnv checks that an
+// inline ${{ ... }} written to $GITHUB_OUTPUT is still flagged when the same
+// expression also happens to be defined in the step env. Defining an env var does
+// not remove the inline interpolation on this line, and env indirection would not
+// stop newline clobbering even if the line used $PR_TITLE — only a heredoc does.
+// (The rule previously suppressed this case, mirroring the injection-family rules
+// where env indirection *is* the mitigation; that suppression hid a real
+// vulnerability here.)
+func TestOutputClobberingCritical_InlineExprFlaggedEvenWhenAlsoInEnv(t *testing.T) {
 	rule := OutputClobberingCriticalRule()
 
-	// Create workflow with privileged trigger
 	workflow := &ast.Workflow{
 		On: []ast.Event{
 			&ast.WebhookEvent{
@@ -298,7 +305,8 @@ func TestOutputClobberingCritical_EnvVarDefinedInStep(t *testing.T) {
 		},
 	}
 
-	// Create job with env var already defined
+	// The expression is defined in the step env, but the run line still writes the
+	// inline ${{ ... }} form (not $PR_TITLE) to $GITHUB_OUTPUT without a heredoc.
 	job := &ast.Job{
 		Steps: []*ast.Step{
 			{
@@ -320,16 +328,11 @@ func TestOutputClobberingCritical_EnvVarDefinedInStep(t *testing.T) {
 		},
 	}
 
-	// Visit workflow and job
 	_ = rule.VisitWorkflowPre(workflow)
 	_ = rule.VisitJobPre(job)
 
-	errors := rule.Errors()
-	if len(errors) != 0 {
-		t.Errorf("expected no errors when env var is already defined, got %d", len(errors))
-		for _, err := range errors {
-			t.Logf("  error: %s", err.Description)
-		}
+	if len(rule.Errors()) == 0 {
+		t.Error("expected the inline GITHUB_OUTPUT write to be flagged even though the expression is also defined in env (env definition does not make the inline, non-heredoc write safe)")
 	}
 }
 
