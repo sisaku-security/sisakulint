@@ -254,35 +254,7 @@ func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool
 // 1 つ以上含まれていれば true を返す。`>&2` (DplOut) や `/dev/stderr` 等の
 // ログに出力される宛先は除外する。
 func stmtRedirectsStdoutAwayFromLog(stmt *syntax.Stmt) bool {
-	if stmt == nil {
-		return false
-	}
-	for _, r := range stmt.Redirs {
-		if r == nil {
-			continue
-		}
-		// 対象は stdout への書き込み系オペレータのみ。
-		switch r.Op {
-		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
-		default:
-			continue
-		}
-		// fd 指定がある場合、stdout (fd1) 以外のリダイレクトは無視。
-		if r.N != nil && r.N.Value != "" && r.N.Value != "1" {
-			continue
-		}
-		// リダイレクト先がログに現れる特殊デバイス／fd の場合は「ログから逸らしていない」と判定。
-		target := wordLiteralValue(r.Word)
-		switch target {
-		case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
-			continue
-		}
-		if wordIsEnvVarRef(r.Word) == "GITHUB_STEP_SUMMARY" {
-			continue
-		}
-		return true
-	}
-	return false
+	return !stmtOutputReachesLogFrom(stmt, true)
 }
 
 // wordLiteralValue は Word 全体を可能な限り文字列リテラルとして抽出する。
