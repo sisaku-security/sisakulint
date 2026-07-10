@@ -137,6 +137,7 @@ var networkCommands = []networkCommand{
 			"travis-ci.com",
 			"app.terraform.io",
 			"hashicorp.com",
+			"oauth2.googleapis.com/token",
 		},
 	},
 	{
