@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
       - uses: reviewdog/action-setup@v1
         with:
           reviewdog_version: v0.20.1 # Optional. [latest,nightly,v.X.Y.Z]
