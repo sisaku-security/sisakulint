@@ -895,6 +895,10 @@ func TestSecretInLog_PipelineWithoutFileRedirect_StillFlagged(t *testing.T) {
 			name:      "echo piped into base64 decode, no redirect",
 			runScript: `echo "$TOKEN" | base64 --decode`,
 		},
+		{
+			name:      "producer overrides pipe with stderr",
+			runScript: `echo "$TOKEN" >&2 | cat > /tmp/out`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -920,6 +924,29 @@ func TestSecretInLog_PipelineWithoutFileRedirect_StillFlagged(t *testing.T) {
 					tc.runScript, got, rule.Errors())
 			}
 		})
+	}
+}
+
+func TestSecretInLog_PipeAllRedirectToFile_NotFlagged(t *testing.T) {
+	t.Parallel()
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{Run: &ast.String{
+			Value: `echo "$TOKEN" |& cat > /tmp/out`,
+			Pos:   &ast.Position{Line: 1, Col: 1},
+		}},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("both outputs are redirected to a file: got %d findings, want 0: %v", got, rule.Errors())
 	}
 }
 

@@ -99,6 +99,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 	// currentVisible は最後に visit した *syntax.Stmt の visible map。
 	// 内側の CallExpr などは同じ stmt スコープにいるため、これを使って lookup する。
 	var currentVisible map[string]shell.Entry
+	pipelineVisibility := make(map[*syntax.Stmt]bool)
 
 	syntax.Walk(file, func(node syntax.Node) bool {
 		// コマンド置換の内部は stdout がパイプに接続されるため、
@@ -107,9 +108,14 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			// stdout を「ログに出ない先」へリダイレクトしている Stmt（パイプラインの
-			// 場合は終端コマンドのリダイレクト）は子ノードごとスキップ。
-			if !stmtOutputReachesLog(stmt) {
+			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+				if _, recorded := pipelineVisibility[stmt]; !recorded {
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+				}
+				return true
+			}
+			visible, inPipeline := pipelineVisibility[stmt]
+			if (!inPipeline && stmtRedirectsStdoutAwayFromLog(stmt)) || (inPipeline && !visible) {
 				return false
 			}
 			currentVisible = scoped.At(stmt)
@@ -193,22 +199,55 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 	}
 }
 
-// stmtOutputReachesLog は stmt 自身の stdout が最終的にビルドログへ到達しうるかを
-// 判定する。パイプライン（`a | b | c`）は左結合で構文木が組まれるため、
-// 途中段（`a`, `b`）の stdout は次段の stdin に接続されるだけでログには現れず、
-// ログに現れうるのは常に最終段（`c`、BinaryCmd.Y）の stdout だけである。
-// 例えば `echo "$X" | base64 --decode > file` は、リダイレクト `> file` が
-// echo ではなく base64 側の Stmt に付与されるため、echo 単体を見ても
-// stmtRedirectsStdoutAwayFromLog は false を返してしまう。パイプラインの
-// 終端まで辿って判定することで、この種の false positive を防ぐ。
-func stmtOutputReachesLog(stmt *syntax.Stmt) bool {
+// recordPipelineOutputVisibility records whether each pipeline stage's stdout
+// can reach the job log. Pipeline fds are installed before command redirects,
+// so a stage-local redirect can override the pipe independently of the terminal
+// stage's destination.
+func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool, visibility map[*syntax.Stmt]bool) bool {
 	if stmt == nil {
-		return true
+		return downstreamReachesLog
 	}
-	if bc, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && bc.Op == syntax.Pipe {
-		return stmtOutputReachesLog(bc.Y)
+	stageReachesLog := stmtOutputReachesLogFrom(stmt, downstreamReachesLog)
+	binary, isPipeline := stmt.Cmd.(*syntax.BinaryCmd)
+	if !isPipeline || !isPipelineBinaryCmd(binary) {
+		visibility[stmt] = stageReachesLog
+		return stageReachesLog
 	}
-	return !stmtRedirectsStdoutAwayFromLog(stmt)
+
+	visibility[stmt] = true // Keep walking; only leaf stages may be pruned.
+	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility)
+	recordPipelineOutputVisibility(binary.X, terminalReachesLog, visibility)
+	return terminalReachesLog
+}
+
+func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool {
+	if stmt == nil {
+		return downstreamReachesLog
+	}
+	result := downstreamReachesLog
+	for _, redirect := range stmt.Redirs {
+		if redirect == nil || (redirect.N != nil && redirect.N.Value != "" && redirect.N.Value != "1") {
+			continue
+		}
+		switch redirect.Op {
+		case syntax.DplOut:
+			if wordLiteralValue(redirect.Word) == "2" {
+				result = true
+			}
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
+			switch wordLiteralValue(redirect.Word) {
+			case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
+				result = true
+			default:
+				if wordIsEnvVarRef(redirect.Word) == "GITHUB_STEP_SUMMARY" {
+					result = true
+				} else {
+					result = false
+				}
+			}
+		}
+	}
+	return result
 }
 
 // stmtRedirectsStdoutAwayFromLog は Stmt の Redirs に stdout をファイルへ送るものが
@@ -365,12 +404,20 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 	}
 
 	var leaks []stepOutputLeakOccurrence
+	pipelineVisibility := make(map[*syntax.Stmt]bool)
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			if !stmtOutputReachesLog(stmt) {
+			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+				if _, recorded := pipelineVisibility[stmt]; !recorded {
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+				}
+				return true
+			}
+			visible, inPipeline := pipelineVisibility[stmt]
+			if (!inPipeline && stmtRedirectsStdoutAwayFromLog(stmt)) || (inPipeline && !visible) {
 				return false
 			}
 			return true
