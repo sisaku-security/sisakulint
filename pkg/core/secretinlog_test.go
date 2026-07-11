@@ -827,6 +827,129 @@ func TestSecretInLog_StdoutRedirectToFile_NotFlagged(t *testing.T) {
 	}
 }
 
+// echo/printf の出力がパイプラインの終端コマンドでファイルへリダイレクトされる場合、
+// echo 自身の Stmt にはリダイレクトが付かない（パイプライン終端の Stmt に付く）ため
+// 見逃されないことを確認する。実例: 証明書/APIキーを base64 デコードして
+// ファイルへ書き出す一般的な CI イディオム（`echo "$SECRET" | base64 --decode > file`）。
+func TestSecretInLog_PipelineRedirectToFile_NotFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "echo piped into base64 decode redirected to file",
+			runScript: `echo "$CERT_P12_BASE64" | base64 --decode > /tmp/cert.p12`,
+		},
+		{
+			name:      "printf piped into base64 decode appended to file",
+			runScript: `printf '%s' "$CERT_P12_BASE64" | base64 --decode >> /tmp/cert.p12`,
+		},
+		{
+			name:      "three-stage pipeline, terminal redirected to file",
+			runScript: `echo "$CERT_P12_BASE64" | base64 --decode | tee /tmp/cert.p12 > /dev/null`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"cert": {
+						Name:  &ast.String{Value: "CERT_P12_BASE64"},
+						Value: &ast.String{Value: "${{ secrets.DEVELOPER_ID_CERT_P12 }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 0 {
+				t.Errorf("script %q: pipeline redirected to file must not leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// パイプラインの終端コマンドがログに出る先（リダイレクトなし、あるいは stderr 等）に
+// 出力する場合は、途中段が secret を扱っていても引き続き leak として検出されるべき。
+func TestSecretInLog_PipelineWithoutFileRedirect_StillFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "echo piped through tr, no redirect",
+			runScript: `echo "$TOKEN" | tr a-z A-Z`,
+		},
+		{
+			name:      "echo piped into base64 decode, no redirect",
+			runScript: `echo "$TOKEN" | base64 --decode`,
+		},
+		{
+			name:      "producer overrides pipe with stderr",
+			runScript: `echo "$TOKEN" >&2 | cat > /tmp/out`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("script %q: pipeline without file redirect must still leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+func TestSecretInLog_PipeAllRedirectToFile_NotFlagged(t *testing.T) {
+	t.Parallel()
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"token": {
+				Name:  &ast.String{Value: "TOKEN"},
+				Value: &ast.String{Value: "${{ secrets.API }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{Run: &ast.String{
+			Value: `echo "$TOKEN" |& cat > /tmp/out`,
+			Pos:   &ast.Position{Line: 1, Col: 1},
+		}},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 0 {
+		t.Fatalf("both outputs are redirected to a file: got %d findings, want 0: %v", got, rule.Errors())
+	}
+}
+
 // Finding 6: `>&2` や `/dev/stderr` は GitHub Actions のビルドログに引き続き出力されるため、
 // redirect による suppress の対象外とする（leak として検出されるべき）。
 func TestSecretInLog_StderrRedirect_StillFlagged(t *testing.T) {

@@ -84,6 +84,9 @@ type stepOutputLeakOccurrence struct {
 // 以下のケースはビルドログに出力されないためスキップする:
 //   - コマンド置換 `$(...)` の内部（stdout はパイプに接続）
 //   - stdout をファイルにリダイレクトする Stmt（例: `echo "$X" >> "$GITHUB_OUTPUT"`、`echo "$X" > file.txt`）
+//   - パイプラインの終端コマンドが stdout をファイルにリダイレクトする場合
+//     （例: `echo "$X" | base64 --decode > file` — echo 自身の stdout はパイプに
+//     接続されるだけでログには現れない）
 //   - `printf -v VAR` 形式（stdout を出さず変数に格納）
 //
 // ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
@@ -96,6 +99,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 	// currentVisible は最後に visit した *syntax.Stmt の visible map。
 	// 内側の CallExpr などは同じ stmt スコープにいるため、これを使って lookup する。
 	var currentVisible map[string]shell.Entry
+	pipelineVisibility := make(map[*syntax.Stmt]bool)
 
 	syntax.Walk(file, func(node syntax.Node) bool {
 		// コマンド置換の内部は stdout がパイプに接続されるため、
@@ -104,8 +108,14 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			// stdout を「ログに出ない先」へリダイレクトしている Stmt は子ノードごとスキップ。
-			if stmtRedirectsStdoutAwayFromLog(stmt) {
+			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+				if _, recorded := pipelineVisibility[stmt]; !recorded {
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+				}
+				return true
+			}
+			visible, inPipeline := pipelineVisibility[stmt]
+			if (!inPipeline && stmtRedirectsStdoutAwayFromLog(stmt)) || (inPipeline && !visible) {
 				return false
 			}
 			currentVisible = scoped.At(stmt)
@@ -189,39 +199,62 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 	}
 }
 
+// recordPipelineOutputVisibility records whether each pipeline stage's stdout
+// can reach the job log. Pipeline fds are installed before command redirects,
+// so a stage-local redirect can override the pipe independently of the terminal
+// stage's destination.
+func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool, visibility map[*syntax.Stmt]bool) bool {
+	if stmt == nil {
+		return downstreamReachesLog
+	}
+	stageReachesLog := stmtOutputReachesLogFrom(stmt, downstreamReachesLog)
+	binary, isPipeline := stmt.Cmd.(*syntax.BinaryCmd)
+	if !isPipeline || !isPipelineBinaryCmd(binary) {
+		visibility[stmt] = stageReachesLog
+		return stageReachesLog
+	}
+
+	visibility[stmt] = true // Keep walking; only leaf stages may be pruned.
+	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility)
+	recordPipelineOutputVisibility(binary.X, terminalReachesLog, visibility)
+	return terminalReachesLog
+}
+
+func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool {
+	if stmt == nil {
+		return downstreamReachesLog
+	}
+	result := downstreamReachesLog
+	for _, redirect := range stmt.Redirs {
+		if redirect == nil || (redirect.N != nil && redirect.N.Value != "" && redirect.N.Value != "1") {
+			continue
+		}
+		switch redirect.Op {
+		case syntax.DplOut:
+			if wordLiteralValue(redirect.Word) == "2" {
+				result = true
+			}
+		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
+			switch wordLiteralValue(redirect.Word) {
+			case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
+				result = true
+			default:
+				if wordIsEnvVarRef(redirect.Word) == "GITHUB_STEP_SUMMARY" {
+					result = true
+				} else {
+					result = false
+				}
+			}
+		}
+	}
+	return result
+}
+
 // stmtRedirectsStdoutAwayFromLog は Stmt の Redirs に stdout をファイルへ送るものが
 // 1 つ以上含まれていれば true を返す。`>&2` (DplOut) や `/dev/stderr` 等の
 // ログに出力される宛先は除外する。
 func stmtRedirectsStdoutAwayFromLog(stmt *syntax.Stmt) bool {
-	if stmt == nil {
-		return false
-	}
-	for _, r := range stmt.Redirs {
-		if r == nil {
-			continue
-		}
-		// 対象は stdout への書き込み系オペレータのみ。
-		switch r.Op {
-		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
-		default:
-			continue
-		}
-		// fd 指定がある場合、stdout (fd1) 以外のリダイレクトは無視。
-		if r.N != nil && r.N.Value != "" && r.N.Value != "1" {
-			continue
-		}
-		// リダイレクト先がログに現れる特殊デバイス／fd の場合は「ログから逸らしていない」と判定。
-		target := wordLiteralValue(r.Word)
-		switch target {
-		case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
-			continue
-		}
-		if wordIsEnvVarRef(r.Word) == "GITHUB_STEP_SUMMARY" {
-			continue
-		}
-		return true
-	}
-	return false
+	return !stmtOutputReachesLogFrom(stmt, true)
 }
 
 // wordLiteralValue は Word 全体を可能な限り文字列リテラルとして抽出する。
@@ -343,12 +376,20 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 	}
 
 	var leaks []stepOutputLeakOccurrence
+	pipelineVisibility := make(map[*syntax.Stmt]bool)
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
 			return false
 		}
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
-			if stmtRedirectsStdoutAwayFromLog(stmt) {
+			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
+				if _, recorded := pipelineVisibility[stmt]; !recorded {
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+				}
+				return true
+			}
+			visible, inPipeline := pipelineVisibility[stmt]
+			if (!inPipeline && stmtRedirectsStdoutAwayFromLog(stmt)) || (inPipeline && !visible) {
 				return false
 			}
 			return true
