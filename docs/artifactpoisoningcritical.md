@@ -295,9 +295,20 @@ steps:
 
 **Mitigation**: Use unique artifact names with workflow/run IDs, validate sources
 
+### Detection Scope
+
+`actions/download-artifact` defaults to the artifacts uploaded earlier in the **current run**. It only
+reaches into a different, potentially less-trusted run when the workflow itself has a privileged trigger
+(`workflow_run`, `pull_request_target`, `issue_comment`, `issues`, `discussion_comment`,
+`pull_request_review`, `workflow_call`) or the step explicitly sets `run-id`/`repository`. Without one of
+those, every artifact in the run was uploaded by an equally-trusted sibling job (e.g. a matrix build
+fanning into a packaging/publish job via `needs:`), so this rule does not fire — there is no untrusted
+producer for the download to poison.
+
 ### Detection Patterns
 
-The artifact-poisoning rule detects the following unsafe patterns:
+The artifact-poisoning rule detects the following unsafe patterns, in jobs where the workflow can be
+reached from one of the privileged triggers above:
 
 1. **Missing path parameter**:
    ```yaml
