@@ -11,6 +11,13 @@ type ArtifactPoisoning struct {
 	BaseRule
 	hasCheckout   bool // Tracks if the current job checks out the repository
 	currentRunsOn *ast.Runner
+	// workflowTriggers stores all trigger names from the workflow, collected in VisitWorkflowPre.
+	workflowTriggers []string
+	// jobHasPrivilegedTrigger indicates whether the current job can execute on a trigger
+	// that lets a less-trusted actor influence this run (see JobTriggerAnalyzer.HasPrivilegedTrigger).
+	// Without one, actions/download-artifact can only ever fetch artifacts uploaded earlier
+	// in this SAME run by equally-trusted sibling jobs, so there is no untrusted producer to poison.
+	jobHasPrivilegedTrigger bool
 }
 
 func ArtifactPoisoningRule() *ArtifactPoisoning {
@@ -173,6 +180,24 @@ func isUnsafePath(path string, runnerOS string) bool {
 	return true
 }
 
+// VisitWorkflowPre collects the workflow's triggers so VisitJobPre can determine
+// whether a job's download-artifact steps could plausibly consume an artifact
+// produced by a less-trusted actor.
+func (rule *ArtifactPoisoning) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.workflowTriggers = nil
+	for _, event := range node.On {
+		switch e := event.(type) {
+		case *ast.WebhookEvent:
+			if e.Hook != nil {
+				rule.workflowTriggers = append(rule.workflowTriggers, e.Hook.Value)
+			}
+		case *ast.WorkflowCallEvent:
+			rule.workflowTriggers = append(rule.workflowTriggers, "workflow_call")
+		}
+	}
+	return nil
+}
+
 // VisitJobPre tracks whether the current job checks out the repository.
 // Jobs without checkout have no source code to overwrite, making artifact
 // poisoning non-exploitable even with workspace-relative paths.
@@ -187,12 +212,32 @@ func (rule *ArtifactPoisoning) VisitJobPre(job *ast.Job) error {
 			}
 		}
 	}
+
+	// Use JobTriggerAnalyzer (not workflow.On directly) so job-level if: conditions
+	// that filter out a privileged trigger are respected, same as codeinjection.go.
+	analyzer := NewJobTriggerAnalyzer(rule.workflowTriggers)
+	rule.jobHasPrivilegedTrigger = analyzer.HasPrivilegedTrigger(job)
+
 	return nil
 }
 
 // VisitJobPost is a no-op but required by the Rule interface.
 func (rule *ArtifactPoisoning) VisitJobPost(job *ast.Job) error {
 	return nil
+}
+
+// hasCrossRunArtifactInputs reports whether a download-artifact step explicitly
+// targets a different run/repository (via the 'run-id' or 'repository' inputs),
+// which is the only way it can fetch an artifact from outside the current run
+// when the workflow itself has no privileged trigger.
+func hasCrossRunArtifactInputs(action *ast.ExecAction) bool {
+	for _, name := range []string{"run-id", "repository"} {
+		input, ok := action.Inputs[name]
+		if ok && input != nil && input.Value != nil && strings.TrimSpace(input.Value.Value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
@@ -209,6 +254,18 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	// This prevents false positives in publish/deploy jobs that only download
 	// artifacts to package and publish them (e.g., PyPI, npm publishing)
 	if !rule.hasCheckout {
+		return nil
+	}
+
+	// Skip if this download can only ever pull artifacts uploaded earlier in this SAME
+	// run. actions/download-artifact defaults to the current run; it only reaches into a
+	// different (potentially less-trusted) run when the workflow itself is invoked from one
+	// (workflow_run, pull_request_target, etc. - see JobTriggerAnalyzer.HasPrivilegedTrigger)
+	// or the step explicitly targets a foreign run via 'run-id'/'repository'. Without either,
+	// every artifact in this run was uploaded by an equally-trusted sibling job, so there is
+	// no untrusted producer for "artifact poisoning" to poison. This is the same fan-out/fan-in
+	// pattern GitHub's own docs recommend for splitting a build across OS runners.
+	if !rule.jobHasPrivilegedTrigger && !hasCrossRunArtifactInputs(action) {
 		return nil
 	}
 
