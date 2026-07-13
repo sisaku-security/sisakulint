@@ -10,7 +10,7 @@ before:
 builds:
   - <<: &build_defaults
       main: ./cmd/sisakulint
-      ldflags: -s -w -X github.com/sisaku-security/sisakulint/pkg/core.versionInfo={{.Version}}"
+      ldflags: -s -w -X github.com/sisaku-security/sisakulint/pkg/core.versionInfo={{.Version}}
       env:
         - CGO_ENABLED=0
     id: macos
