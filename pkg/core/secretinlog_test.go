@@ -981,6 +981,18 @@ func TestSecretInLog_PipeToOpaqueCommand_NotFlagged(t *testing.T) {
 			name:      "opaque command behind sudo",
 			runScript: `printf '%s' "$TOKEN" | sudo ./deploy --token-stdin`,
 		},
+		{
+			name:      "bash running an opaque script file",
+			runScript: `echo "$TOKEN" | bash deploy.sh`,
+		},
+		{
+			name:      "ssh running an opaque remote command",
+			runScript: `echo "$TOKEN" | ssh build-host ./deploy --stdin`,
+		},
+		{
+			name:      "kubectl exec with opaque entrypoint",
+			runScript: `echo "$TOKEN" | kubectl exec -i pod -- ./entrypoint`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1034,6 +1046,19 @@ func TestSecretInLog_PipeToStdinForwardingCommand_StillFlagged(t *testing.T) {
 		{name: "subshell consumer is conservatively flagged", runScript: `echo "$TOKEN" | (cat)`},
 		{name: "producer redirects stdout to stderr before piping", runScript: `printf '%s\n' "$TOKEN" >&2 | wc -l`},
 		{name: "mid-pipeline tee to /dev/stderr with opaque terminal", runScript: `printf '%s\n' "$TOKEN" | tee /dev/stderr | ./cli --secret-stdin`},
+		{name: "less degrades to cat on a non-tty CI runner", runScript: `echo "$TOKEN" | less`},
+		{name: "pv copies stdin to stdout", runScript: `echo "$TOKEN" | pv`},
+		{name: "parallel forwards stdin into command lines", runScript: `echo "$TOKEN" | parallel echo`},
+		{name: "busybox applet multiplexer", runScript: `echo "$TOKEN" | busybox cat`},
+		{name: "backslash-escaped command name", runScript: `echo "$TOKEN" | \cat`},
+		{name: "bash -c with quoted body is unresolvable", runScript: `echo "$TOKEN" | bash -c 'cat'`},
+		{name: "bare sh executes stdin as a script", runScript: `echo "$TOKEN" | sh`},
+		{name: "ssh with a forwarding remote command", runScript: `echo "$TOKEN" | ssh build-host cat`},
+		{name: "docker run -i with a forwarding command", runScript: `echo "$TOKEN" | docker run -i alpine cat`},
+		{name: "shell function consumer defined in the script", runScript: "filter() { grep -v debug; }\necho \"$TOKEN\" | filter"},
+		{name: "here-string into tee /dev/stderr with opaque terminal", runScript: `tee /dev/stderr <<< "$TOKEN" | ./cli`},
+		{name: "sudo tee to /dev/stderr with stdout dropped", runScript: `printf '%s' "$TOKEN" | sudo tee /dev/stderr > /dev/null`},
+		{name: "dd of=/dev/stderr with stdout dropped", runScript: `echo "$TOKEN" | dd of=/dev/stderr > /dev/null`},
 	}
 
 	for _, tc := range tests {

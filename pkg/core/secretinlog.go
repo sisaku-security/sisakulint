@@ -106,6 +106,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 	// 内側の CallExpr などは同じ stmt スコープにいるため、これを使って lookup する。
 	var currentVisible map[string]shell.Entry
 	pipelineVisibility := make(map[*syntax.Stmt]bool)
+	shellFuncs := collectShellFuncNames(file)
 
 	syntax.Walk(file, func(node syntax.Node) bool {
 		// コマンド置換の内部は stdout がパイプに接続されるため、
@@ -116,7 +117,7 @@ func (rule *SecretInLogRule) findEchoLeaks(file *syntax.File, scoped *shell.Scop
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
 			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
 				if _, recorded := pipelineVisibility[stmt]; !recorded {
-					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility, shellFuncs)
 				}
 				return true
 			}
@@ -209,21 +210,41 @@ func (rule *SecretInLogRule) collectRedirectSinkLeaks(
 // can reach the job log. Pipeline fds are installed before command redirects,
 // so a stage-local redirect can override the pipe independently of the terminal
 // stage's destination.
-func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool, visibility map[*syntax.Stmt]bool) bool {
+func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool, visibility map[*syntax.Stmt]bool, shellFuncs map[string]bool) bool {
 	if stmt == nil {
 		return downstreamReachesLog
 	}
 	stageReachesLog := stmtOutputReachesLogFrom(stmt, downstreamReachesLog)
 	binary, isPipeline := stmt.Cmd.(*syntax.BinaryCmd)
 	if !isPipeline || !isPipelineBinaryCmd(binary) {
+		// `tee /dev/stderr` や `dd of=/dev/stderr` のように、ステージ自身が stdin を
+		// ログに出るデバイスへ複製する場合は、stdout の行き先（パイプ先の opaque な
+		// コマンドやリダイレクト）に関係なくログへ到達する。
+		if !stageReachesLog && stmtCopiesStdinToLogDevice(stmt) {
+			stageReachesLog = true
+		}
 		visibility[stmt] = stageReachesLog
 		return stageReachesLog
 	}
 
 	visibility[stmt] = true // Keep walking; only leaf stages may be pruned.
-	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility)
-	recordPipelineOutputVisibility(binary.X, pipeProducerDownstreamReachesLog(binary.Y, terminalReachesLog), visibility)
+	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility, shellFuncs)
+	recordPipelineOutputVisibility(binary.X, pipeProducerDownstreamReachesLog(binary.Y, terminalReachesLog, shellFuncs), visibility, shellFuncs)
 	return terminalReachesLog
+}
+
+// collectShellFuncNames はスクリプト内で定義されたシェル関数名を収集する。
+// パイプの consumer が定義済み関数の場合、本文の解析はせず保守的に
+// forwarding 扱い（= 検出維持）にするために使う。
+func collectShellFuncNames(file *syntax.File) map[string]bool {
+	funcs := make(map[string]bool)
+	syntax.Walk(file, func(node syntax.Node) bool {
+		if decl, ok := node.(*syntax.FuncDecl); ok && decl.Name != nil {
+			funcs[decl.Name.Value] = true
+		}
+		return true
+	})
+	return funcs
 }
 
 // stdinForwardingCommands は stdin の内容（またはその変換結果）を stdout へ流しうる
@@ -239,23 +260,29 @@ var stdinForwardingCommands = map[string]bool{
 	"column": true, "cut": true, "dd": true, "egrep": true, "envsubst": true,
 	"expand": true, "fgrep": true, "fmt": true, "fold": true, "gawk": true,
 	"grep": true, "gunzip": true, "gzip": true, "head": true, "hexdump": true,
-	"iconv": true, "jq": true, "mawk": true, "nl": true, "od": true,
-	"openssl": true, "paste": true, "rev": true, "rg": true, "sed": true,
-	"sort": true, "strings": true, "tac": true, "tail": true, "tee": true,
-	"tr": true, "unexpand": true, "uniq": true, "xargs": true, "xxd": true,
-	"xzcat": true, "yq": true, "zcat": true,
+	"iconv": true, "jq": true, "less": true, "mawk": true, "more": true,
+	"nl": true, "od": true, "openssl": true, "parallel": true, "paste": true,
+	"pv": true, "rev": true, "rg": true, "sed": true, "sort": true,
+	"strings": true, "tac": true, "tail": true, "tee": true, "tr": true,
+	"unexpand": true, "uniq": true, "xargs": true, "xxd": true, "xzcat": true,
+	"yq": true, "zcat": true,
 }
 
-// pipeWrapperCommands は実コマンドを引数に取って実行するラッパー。consumer の
-// 実効コマンド判定時にこれらを見つけたら、引数側に forwarding コマンドが
-// 含まれるかで判定する（例: `sudo tee /etc/x`, `env cat`）。
+// pipeWrapperCommands は実コマンドを引数に取って実行するラッパー類。権限系
+// （sudo/doas）、環境系（env/nice/…）に加え、applet 多重化（busybox）、
+// インタープリタ（sh/bash/…）、リモート・コンテナ実行（ssh/docker/kubectl 等）
+// も stdin を内側のコマンドへ引き渡すためここに含める。consumer の実効コマンド
+// 判定時にこれらを見つけたら、引数側に forwarding コマンドが含まれるかで
+// 判定する（例: `sudo tee /etc/x`, `env cat`, `busybox cat`, `ssh host cat`）。
 var pipeWrapperCommands = map[string]bool{
-	"command": true, "doas": true, "env": true, "nice": true, "nohup": true,
-	"setsid": true, "stdbuf": true, "sudo": true, "time": true, "timeout": true,
+	"bash": true, "busybox": true, "command": true, "dash": true, "doas": true,
+	"docker": true, "env": true, "kubectl": true, "nice": true, "nohup": true,
+	"podman": true, "setsid": true, "sh": true, "ssh": true, "stdbuf": true,
+	"sudo": true, "time": true, "timeout": true, "zsh": true,
 }
 
 // logVisibleDevicePaths は書き込むとビルドログに表示されるデバイスパス。
-// stmtOutputReachesLogFrom のリダイレクト判定と teeWritesToLogDevice で共用する。
+// stmtOutputReachesLogFrom のリダイレクト判定と stmtCopiesStdinToLogDevice で共用する。
 var logVisibleDevicePaths = map[string]bool{
 	"/dev/stderr": true, "/dev/stdout": true, "/dev/tty": true,
 	"/dev/fd/1": true, "/dev/fd/2": true,
@@ -267,13 +294,14 @@ var logVisibleDevicePaths = map[string]bool{
 // 到達するかどうか。
 //   - Y が stdin を stdout へ流しうるコマンド（stdinForwardingCommands）なら、
 //     X のデータは Y の stdout を経由するため terminalReachesLog に従う。
-//   - Y が tee でログに出るデバイス（/dev/stderr 等）へ書く場合、stdout の
-//     行き先に関係なく true（例: `printf '%s' "$X" | tee /dev/stderr | ./cli`）。
+//     Y 自身のデバイス書き込み（`tee /dev/stderr` 等）は recordPipelineOutputVisibility
+//     のステージ可視性側で terminalReachesLog に織り込み済み。
 //   - Y の正体が特定できて上記以外なら stdin は内部で消費されるとみなし false
 //     （`printf '%s' "$X" | ./cli --secret-stdin` の誤検知対策; #551）。
-//   - Y が Block / Subshell / if 等の複合コマンド、またはコマンド名が動的で
-//     特定できない場合は、保守的に terminalReachesLog に従う（検出を維持）。
-func pipeProducerDownstreamReachesLog(consumer *syntax.Stmt, terminalReachesLog bool) bool {
+//   - Y が Block / Subshell / if 等の複合コマンド、スクリプト内で定義された
+//     シェル関数、またはコマンド名が動的で特定できない場合は、保守的に
+//     terminalReachesLog に従う（検出を維持）。
+func pipeProducerDownstreamReachesLog(consumer *syntax.Stmt, terminalReachesLog bool, shellFuncs map[string]bool) bool {
 	if consumer == nil || consumer.Cmd == nil {
 		return terminalReachesLog
 	}
@@ -281,58 +309,101 @@ func pipeProducerDownstreamReachesLog(consumer *syntax.Stmt, terminalReachesLog 
 	if !ok || len(call.Args) == 0 {
 		return terminalReachesLog
 	}
-	if teeWritesToLogDevice(call) {
-		return true
-	}
-	if pipeConsumerForwardsStdin(call) {
+	if pipeConsumerForwardsStdin(call, shellFuncs) {
 		return terminalReachesLog
 	}
 	return false
 }
 
 // pipeConsumerForwardsStdin は consumer の CallExpr が stdin の内容を stdout へ
-// 流しうるかを返す。コマンド名はパスの basename に正規化して判定し
-// （`/usr/bin/tee`, `./cli`）、sudo/env 等のラッパー越しの場合は引数のいずれかが
-// forwarding コマンドかどうかで判定する。特定できない場合（クォート・変数展開・
-// 動的な引数）は保守的に true を返し、検出を維持する。
-func pipeConsumerForwardsStdin(call *syntax.CallExpr) bool {
-	lit := leadingBareLiteral(call.Args[0])
-	if lit == "" {
-		return true // コマンド名が動的で特定不能 → 保守的に forwarding 扱い
+// 流しうるかを返す。コマンド名は先頭のバックスラッシュ（`\cat`）を除去した上で
+// パスの basename に正規化して判定し（`/usr/bin/tee`, `./cli`）、sudo/env/busybox
+// 等のラッパー越しの場合は引数のいずれかが forwarding コマンドかどうかで判定する。
+// 特定できない場合（クォート・変数展開・動的な引数・定義済みシェル関数）は
+// 保守的に true を返し、検出を維持する。
+func pipeConsumerForwardsStdin(call *syntax.CallExpr, shellFuncs map[string]bool) bool {
+	name := bareCommandName(call.Args[0])
+	if name == "" {
+		return true // コマンド名が動的・エスケープ付きで特定不能 → 保守的に forwarding 扱い
 	}
-	name := path.Base(lit)
+	if shellFuncs[name] {
+		return true // スクリプト内定義の関数は本文を追跡しないため保守的に forwarding 扱い
+	}
 	if stdinForwardingCommands[name] {
 		return true
 	}
 	if !pipeWrapperCommands[name] {
 		return false // 正体を特定できた opaque なコマンド
 	}
-	// ラッパー越し（`sudo -u root tee /etc/x`, `env FOO=bar cat` 等）。
-	// フラグや代入を厳密に解釈する代わりに、引数のどこかに forwarding コマンドが
-	// 現れるかで判定する。引数が動的で読み切れない場合も保守的に forwarding 扱い。
+	if len(call.Args) == 1 {
+		// 引数なしのラッパー/インタープリタ。`| sh` は stdin をスクリプトとして
+		// 実行し、エラーメッセージ経由で内容がログへ出うるため保守的に扱う。
+		return true
+	}
+	// ラッパー越し（`sudo -u root tee /etc/x`, `env FOO=bar cat`, `ssh host cat` 等）。
+	// フラグや代入を厳密に解釈する代わりに、引数のどこかに forwarding コマンド
+	// （または定義済み関数）が現れるかで判定する。引数が動的で読み切れない場合も
+	// 保守的に forwarding 扱い（`bash -c 'cat'` はクォートされた本文がこれに該当する）。
 	for _, arg := range call.Args[1:] {
-		argLit := leadingBareLiteral(arg)
-		if argLit == "" {
+		argName := bareCommandName(arg)
+		if argName == "" {
 			return true
 		}
-		if stdinForwardingCommands[path.Base(argLit)] {
+		if stdinForwardingCommands[argName] || shellFuncs[argName] {
 			return true
 		}
 	}
 	return false
 }
 
-// teeWritesToLogDevice は `tee /dev/stderr` のように tee の書き込み先引数に
-// ログへ表示されるデバイスが含まれる場合に true を返す。tee の stdout が
-// 下流で捨てられても、デバイス書き込み経由で stdin の内容がログへ到達する。
-func teeWritesToLogDevice(call *syntax.CallExpr) bool {
-	lit := leadingBareLiteral(call.Args[0])
-	if lit == "" || path.Base(lit) != "tee" {
+// bareCommandName は Word から実行コマンド名を解決する。alias 抑止用の先頭
+// バックスラッシュ（`\cat`）を除去し、パス付き起動（`/usr/bin/tee`, `./cli`）は
+// basename に正規化する。クォート・変数展開・中間エスケープなどで確実に
+// 特定できない場合は "" を返す（呼び出し側は保守的に扱うこと）。
+func bareCommandName(word *syntax.Word) string {
+	lit := strings.TrimPrefix(leadingBareLiteral(word), `\`)
+	if lit == "" || strings.Contains(lit, `\`) {
+		return ""
+	}
+	return path.Base(lit)
+}
+
+// stmtCopiesStdinToLogDevice は Stmt が stdin をログに出るデバイスへ複製する
+// コマンド（`tee /dev/stderr`, `dd of=/dev/stderr`。sudo/busybox 等のラッパー越しを
+// 含む）である場合に true を返す。stdout がパイプやリダイレクトで捨てられても、
+// デバイス書き込み経由で stdin の内容がビルドログへ到達する。
+func stmtCopiesStdinToLogDevice(stmt *syntax.Stmt) bool {
+	if stmt == nil || stmt.Cmd == nil {
 		return false
 	}
-	for _, arg := range call.Args[1:] {
-		if logVisibleDevicePaths[wordLiteralValue(arg)] {
-			return true
+	call, ok := stmt.Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return false
+	}
+	name := bareCommandName(call.Args[0])
+	args := call.Args[1:]
+	if pipeWrapperCommands[name] {
+		name = ""
+		for i, arg := range args {
+			if n := bareCommandName(arg); n == "tee" || n == "dd" {
+				name, args = n, args[i+1:]
+				break
+			}
+		}
+	}
+	switch name {
+	case "tee":
+		for _, arg := range args {
+			if logVisibleDevicePaths[wordLiteralValue(arg)] {
+				return true
+			}
+		}
+	case "dd":
+		for _, arg := range args {
+			if v := wordLiteralValue(arg); strings.HasPrefix(v, "of=") &&
+				logVisibleDevicePaths[strings.TrimPrefix(v, "of=")] {
+				return true
+			}
 		}
 	}
 	return false
@@ -493,6 +564,7 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 
 	var leaks []stepOutputLeakOccurrence
 	pipelineVisibility := make(map[*syntax.Stmt]bool)
+	shellFuncs := collectShellFuncNames(file)
 	syntax.Walk(file, func(node syntax.Node) bool {
 		if _, isCmdSubst := node.(*syntax.CmdSubst); isCmdSubst {
 			return false
@@ -500,7 +572,7 @@ func (rule *SecretInLogRule) findStepOutputExpressionLeaks(script string, runStr
 		if stmt, isStmt := node.(*syntax.Stmt); isStmt {
 			if binary, ok := stmt.Cmd.(*syntax.BinaryCmd); ok && isPipelineBinaryCmd(binary) {
 				if _, recorded := pipelineVisibility[stmt]; !recorded {
-					recordPipelineOutputVisibility(stmt, true, pipelineVisibility)
+					recordPipelineOutputVisibility(stmt, true, pipelineVisibility, shellFuncs)
 				}
 				return true
 			}
