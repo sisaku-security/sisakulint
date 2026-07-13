@@ -1,6 +1,7 @@
 package core
 
 import (
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -87,6 +88,11 @@ type stepOutputLeakOccurrence struct {
 //   - パイプラインの終端コマンドが stdout をファイルにリダイレクトする場合
 //     （例: `echo "$X" | base64 --decode > file` — echo 自身の stdout はパイプに
 //     接続されるだけでログには現れない）
+//   - パイプの consumer が stdin を内部で消費するだけの opaque なコマンドの場合
+//     （例: `printf '%s' "$X" | ./cli --secret-stdin` — 値は次のコマンドの stdin に
+//     渡るだけでログには現れない。cat/tee/tr/base64 等 stdin を stdout へ流しうる
+//     既知のフィルタへのパイプは引き続き検出する。詳細は
+//     pipeProducerDownstreamReachesLog を参照）
 //   - `printf -v VAR` 形式（stdout を出さず変数に格納）
 //
 // ただし `>&2` / `/dev/stderr` / `/dev/stdout` / `/dev/tty` への出力は GitHub Actions の
@@ -216,8 +222,120 @@ func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool
 
 	visibility[stmt] = true // Keep walking; only leaf stages may be pruned.
 	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility)
-	recordPipelineOutputVisibility(binary.X, terminalReachesLog, visibility)
+	recordPipelineOutputVisibility(binary.X, pipeProducerDownstreamReachesLog(binary.Y, terminalReachesLog), visibility)
 	return terminalReachesLog
+}
+
+// stdinForwardingCommands は stdin の内容（またはその変換結果）を stdout へ流しうる
+// コマンド群。パイプの producer (`echo "$X" | cmd`) から見て、これらへ渡した値は
+// consumer の stdout 経由でビルドログに到達しうるため、producer の可視性は下流の
+// 可視性に従わせる。これ以外の正体を特定できたコマンドは stdin を内部で消費する
+// だけとみなす（例: `./cli --secret-stdin`, `docker login --password-stdin`, `wc`,
+// `sha256sum`）。collectRedirectSinkLeaks / collectHeredocEnvWrites が扱う cat/tee/dd
+// （stdin を無変換で複製する passthrough）より広い概念で、内容を選別・変換して
+// 出力するフィルタも含む。迷ったら追加する側（= 検出を維持する側）に倒すこと。
+var stdinForwardingCommands = map[string]bool{
+	"awk": true, "base32": true, "base64": true, "bzcat": true, "cat": true,
+	"column": true, "cut": true, "dd": true, "egrep": true, "envsubst": true,
+	"expand": true, "fgrep": true, "fmt": true, "fold": true, "gawk": true,
+	"grep": true, "gunzip": true, "gzip": true, "head": true, "hexdump": true,
+	"iconv": true, "jq": true, "mawk": true, "nl": true, "od": true,
+	"openssl": true, "paste": true, "rev": true, "rg": true, "sed": true,
+	"sort": true, "strings": true, "tac": true, "tail": true, "tee": true,
+	"tr": true, "unexpand": true, "uniq": true, "xargs": true, "xxd": true,
+	"xzcat": true, "yq": true, "zcat": true,
+}
+
+// pipeWrapperCommands は実コマンドを引数に取って実行するラッパー。consumer の
+// 実効コマンド判定時にこれらを見つけたら、引数側に forwarding コマンドが
+// 含まれるかで判定する（例: `sudo tee /etc/x`, `env cat`）。
+var pipeWrapperCommands = map[string]bool{
+	"command": true, "doas": true, "env": true, "nice": true, "nohup": true,
+	"setsid": true, "stdbuf": true, "sudo": true, "time": true, "timeout": true,
+}
+
+// logVisibleDevicePaths は書き込むとビルドログに表示されるデバイスパス。
+// stmtOutputReachesLogFrom のリダイレクト判定と teeWritesToLogDevice で共用する。
+var logVisibleDevicePaths = map[string]bool{
+	"/dev/stderr": true, "/dev/stdout": true, "/dev/tty": true,
+	"/dev/fd/1": true, "/dev/fd/2": true,
+}
+
+// pipeProducerDownstreamReachesLog は pipe junction `X | Y` において X の stdout
+// （= Y の stdin）に書いた内容がビルドログへ到達しうるかを返す。
+// terminalReachesLog は Y 側（パイプライン終端まで含む）の stdout がログに
+// 到達するかどうか。
+//   - Y が stdin を stdout へ流しうるコマンド（stdinForwardingCommands）なら、
+//     X のデータは Y の stdout を経由するため terminalReachesLog に従う。
+//   - Y が tee でログに出るデバイス（/dev/stderr 等）へ書く場合、stdout の
+//     行き先に関係なく true（例: `printf '%s' "$X" | tee /dev/stderr | ./cli`）。
+//   - Y の正体が特定できて上記以外なら stdin は内部で消費されるとみなし false
+//     （`printf '%s' "$X" | ./cli --secret-stdin` の誤検知対策; #551）。
+//   - Y が Block / Subshell / if 等の複合コマンド、またはコマンド名が動的で
+//     特定できない場合は、保守的に terminalReachesLog に従う（検出を維持）。
+func pipeProducerDownstreamReachesLog(consumer *syntax.Stmt, terminalReachesLog bool) bool {
+	if consumer == nil || consumer.Cmd == nil {
+		return terminalReachesLog
+	}
+	call, ok := consumer.Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return terminalReachesLog
+	}
+	if teeWritesToLogDevice(call) {
+		return true
+	}
+	if pipeConsumerForwardsStdin(call) {
+		return terminalReachesLog
+	}
+	return false
+}
+
+// pipeConsumerForwardsStdin は consumer の CallExpr が stdin の内容を stdout へ
+// 流しうるかを返す。コマンド名はパスの basename に正規化して判定し
+// （`/usr/bin/tee`, `./cli`）、sudo/env 等のラッパー越しの場合は引数のいずれかが
+// forwarding コマンドかどうかで判定する。特定できない場合（クォート・変数展開・
+// 動的な引数）は保守的に true を返し、検出を維持する。
+func pipeConsumerForwardsStdin(call *syntax.CallExpr) bool {
+	lit := leadingBareLiteral(call.Args[0])
+	if lit == "" {
+		return true // コマンド名が動的で特定不能 → 保守的に forwarding 扱い
+	}
+	name := path.Base(lit)
+	if stdinForwardingCommands[name] {
+		return true
+	}
+	if !pipeWrapperCommands[name] {
+		return false // 正体を特定できた opaque なコマンド
+	}
+	// ラッパー越し（`sudo -u root tee /etc/x`, `env FOO=bar cat` 等）。
+	// フラグや代入を厳密に解釈する代わりに、引数のどこかに forwarding コマンドが
+	// 現れるかで判定する。引数が動的で読み切れない場合も保守的に forwarding 扱い。
+	for _, arg := range call.Args[1:] {
+		argLit := leadingBareLiteral(arg)
+		if argLit == "" {
+			return true
+		}
+		if stdinForwardingCommands[path.Base(argLit)] {
+			return true
+		}
+	}
+	return false
+}
+
+// teeWritesToLogDevice は `tee /dev/stderr` のように tee の書き込み先引数に
+// ログへ表示されるデバイスが含まれる場合に true を返す。tee の stdout が
+// 下流で捨てられても、デバイス書き込み経由で stdin の内容がログへ到達する。
+func teeWritesToLogDevice(call *syntax.CallExpr) bool {
+	lit := leadingBareLiteral(call.Args[0])
+	if lit == "" || path.Base(lit) != "tee" {
+		return false
+	}
+	for _, arg := range call.Args[1:] {
+		if logVisibleDevicePaths[wordLiteralValue(arg)] {
+			return true
+		}
+	}
+	return false
 }
 
 func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool {
@@ -235,15 +353,13 @@ func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool
 				result = true
 			}
 		case syntax.RdrOut, syntax.AppOut, syntax.RdrClob:
-			switch wordLiteralValue(redirect.Word) {
-			case "/dev/stderr", "/dev/stdout", "/dev/tty", "/dev/fd/1", "/dev/fd/2":
+			switch {
+			case logVisibleDevicePaths[wordLiteralValue(redirect.Word)]:
+				result = true
+			case wordIsEnvVarRef(redirect.Word) == "GITHUB_STEP_SUMMARY":
 				result = true
 			default:
-				if wordIsEnvVarRef(redirect.Word) == "GITHUB_STEP_SUMMARY" {
-					result = true
-				} else {
-					result = false
-				}
+				result = false
 			}
 		}
 	}

@@ -950,6 +950,118 @@ func TestSecretInLog_PipeAllRedirectToFile_NotFlagged(t *testing.T) {
 	}
 }
 
+// TestSecretInLog_PipeToOpaqueCommand_NotFlagged は printf/echo の stdout が
+// パイプ経由で stdin を内部で消費するだけの opaque なコマンドに渡る場合
+// （値はビルドログに現れない）は leak として扱わないことを検証する。
+// 実例: larksuite/cli の `printf '%s\n' "$SECRET" | ./lark-cli config init --app-secret-stdin`（#551）。
+func TestSecretInLog_PipeToOpaqueCommand_NotFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "relative-path CLI reading secret from stdin",
+			runScript: `printf '%s\n' "$TOKEN" | ./cli config init --secret-stdin`,
+		},
+		{
+			name:      "docker login with password-stdin",
+			runScript: `echo "$TOKEN" | docker login --username bot --password-stdin`,
+		},
+		{
+			name:      "wc consumes stdin and prints only counts",
+			runScript: `echo "$TOKEN" | wc -l`,
+		},
+		{
+			name:      "sha256sum prints only the digest",
+			runScript: `printf '%s' "$TOKEN" | sha256sum`,
+		},
+		{
+			name:      "opaque command behind sudo",
+			runScript: `printf '%s' "$TOKEN" | sudo ./deploy --token-stdin`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 0 {
+				t.Errorf("script %q: piping into an opaque command's stdin must not be flagged; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// TestSecretInLog_PipeToStdinForwardingCommand_StillFlagged は stdin の内容を
+// stdout へ流しうるコマンド（cat/tee/dd や sudo/env ラッパー・パス付き起動を含む）
+// へのパイプ、および consumer の正体を特定できない場合は、引き続きビルドログ
+// への漏洩として検出し続けることを検証する。
+func TestSecretInLog_PipeToStdinForwardingCommand_StillFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{name: "tee", runScript: `printf '%s\n' "$TOKEN" | tee /tmp/out.txt`},
+		{name: "cat", runScript: `printf '%s\n' "$TOKEN" | cat`},
+		{name: "dd", runScript: `printf '%s\n' "$TOKEN" | dd of=/tmp/out.txt`},
+		{name: "tee behind sudo", runScript: `echo "$TOKEN" | sudo tee /etc/config.json`},
+		{name: "tee behind sudo with flags", runScript: `echo "$TOKEN" | sudo -u root tee /etc/config.json`},
+		{name: "absolute-path tee", runScript: `echo "$TOKEN" | /usr/bin/tee /tmp/out.txt`},
+		{name: "cat behind env", runScript: `echo "$TOKEN" | env LC_ALL=C cat`},
+		{name: "xargs forwards stdin into a command line", runScript: `echo "$TOKEN" | xargs echo`},
+		{name: "quoted command name is unresolvable", runScript: `echo "$TOKEN" | "cat"`},
+		{name: "dynamic command name is unresolvable", runScript: `echo "$TOKEN" | $RUNNER`},
+		{name: "block consumer is conservatively flagged", runScript: `echo "$TOKEN" | { cat; }`},
+		{name: "subshell consumer is conservatively flagged", runScript: `echo "$TOKEN" | (cat)`},
+		{name: "producer redirects stdout to stderr before piping", runScript: `printf '%s\n' "$TOKEN" >&2 | wc -l`},
+		{name: "mid-pipeline tee to /dev/stderr with opaque terminal", runScript: `printf '%s\n' "$TOKEN" | tee /dev/stderr | ./cli --secret-stdin`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("script %q: piping into a forwarding/unresolvable consumer must still be flagged; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
 // Finding 6: `>&2` や `/dev/stderr` は GitHub Actions のビルドログに引き続き出力されるため、
 // redirect による suppress の対象外とする（leak として検出されるべき）。
 func TestSecretInLog_StderrRedirect_StillFlagged(t *testing.T) {
