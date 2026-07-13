@@ -140,7 +140,14 @@ func (rule *OutputClobberingRule) VisitJobPre(node *ast.Job) error {
 				}
 
 				untrustedPaths := rule.checkUntrustedInput(expr)
-				if len(untrustedPaths) > 0 && !rule.isDefinedInEnv(expr, s.Env) {
+				// An inline ${{ ... }} written to $GITHUB_OUTPUT without a heredoc
+				// is vulnerable regardless of whether the same expression is also
+				// defined in the step env: defining an env var does not remove the
+				// inline interpolation on this line, and env indirection would not
+				// stop newline clobbering even if it were used. (Moving the value to
+				// env is the mitigation for shell code-injection, not for output
+				// clobbering — the fix here is heredoc syntax.)
+				if len(untrustedPaths) > 0 {
 					if stepUntrusted == nil {
 						stepUntrusted = &stepWithOutputClobbering{step: s}
 					}
@@ -586,37 +593,4 @@ func (rule *OutputClobberingRule) checkUntrustedInput(expr parsedExpression) []s
 	}
 
 	return paths
-}
-
-// isDefinedInEnv checks if the expression is defined in the step's env section
-func (rule *OutputClobberingRule) isDefinedInEnv(expr parsedExpression, env *ast.Env) bool {
-	if env == nil {
-		return false
-	}
-
-	normalizedExpr := normalizeExpression(expr.raw)
-
-	if env.Vars != nil {
-		for _, envVar := range env.Vars {
-			if envVar.Value != nil && envVar.Value.ContainsExpression() {
-				envExprs := extractExpressionsFromString(envVar.Value.Value)
-				for _, envExpr := range envExprs {
-					if normalizeExpression(envExpr) == normalizedExpr {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	if env.Expression != nil && env.Expression.ContainsExpression() {
-		envExprs := extractExpressionsFromString(env.Expression.Value)
-		for _, envExpr := range envExprs {
-			if normalizeExpression(envExpr) == normalizedExpr {
-				return true
-			}
-		}
-	}
-
-	return false
 }
