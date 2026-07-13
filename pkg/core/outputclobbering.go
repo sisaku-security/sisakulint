@@ -340,13 +340,21 @@ func (rule *OutputClobberingRule) transformToHeredocSyntax(script string, stepIn
 	// Track which lines have been transformed
 	transformedLines := make(map[int]bool)
 
-	// First, identify lines that need transformation
+	// First, identify lines that need transformation.
+	//
+	// A GITHUB_OUTPUT write needs a heredoc if it carries an untrusted value,
+	// whether the value still appears inline as ${{ ... }} or has already been
+	// moved into a step env var by another fixer that ran first (code-injection
+	// rewrites `echo "x=${{ expr }}"` into `echo "x=$EXPR"` + `env: EXPR: ${{ expr }}`).
+	// Env indirection alone does not prevent newline clobbering, so both forms
+	// must be wrapped; matching only the inline form would leave the env-var form
+	// unwrapped and silently vulnerable.
 	for i, line := range lines {
 		if !githubOutputPattern.MatchString(line) {
 			continue
 		}
 
-		// Check if this line has any untrusted expressions
+		// Inline `${{ expr }}` form.
 		for _, untrustedInfo := range stepInfo.untrustedExprs {
 			exprPattern1 := fmt.Sprintf("${{ %s }}", untrustedInfo.expr.raw)
 			exprPattern2 := fmt.Sprintf("${{%s}}", untrustedInfo.expr.raw)
@@ -355,6 +363,11 @@ func (rule *OutputClobberingRule) transformToHeredocSyntax(script string, stepIn
 				transformedLines[i] = true
 				break
 			}
+		}
+
+		// Env-var-indirected form (e.g. after code-injection's fix).
+		if !transformedLines[i] && rule.lineReferencesUntrustedEnvVar(line, stepInfo) {
+			transformedLines[i] = true
 		}
 	}
 
@@ -593,4 +606,58 @@ func (rule *OutputClobberingRule) checkUntrustedInput(expr parsedExpression) []s
 	}
 
 	return paths
+}
+
+// lineReferencesUntrustedEnvVar reports whether the line reads a step env var
+// (as $NAME or ${NAME}) whose value carries one of this step's untrusted
+// expressions. Another fixer (e.g. code-injection) may have already rewritten an
+// inline ${{ ... }} into such an env var; the resulting `echo "$NAME" >> $GITHUB_OUTPUT`
+// is still newline-clobber vulnerable and must be wrapped in a heredoc. The env
+// var is resolved by matching the expression it carries (not by recomputing a
+// name), so it stays correct even if fixers name their env vars differently.
+func (rule *OutputClobberingRule) lineReferencesUntrustedEnvVar(line string, stepInfo *stepWithOutputClobbering) bool {
+	step := stepInfo.step
+	if step == nil || step.Env == nil || step.Env.Vars == nil {
+		return false
+	}
+
+	for _, envVar := range step.Env.Vars {
+		if envVar.Name == nil || envVar.Value == nil || !envVar.Value.ContainsExpression() {
+			continue
+		}
+
+		// Does this env var carry one of the untrusted expressions we flagged?
+		carriesUntrusted := false
+		for _, envExpr := range extractExpressionsFromString(envVar.Value.Value) {
+			for _, untrustedInfo := range stepInfo.untrustedExprs {
+				if normalizeExpression(envExpr) == normalizeExpression(untrustedInfo.expr.raw) {
+					carriesUntrusted = true
+					break
+				}
+			}
+			if carriesUntrusted {
+				break
+			}
+		}
+		if !carriesUntrusted {
+			continue
+		}
+
+		if referencesShellVar(line, envVar.Name.Value) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// referencesShellVar reports whether line reads the shell variable name as $NAME
+// or ${NAME}. The unbraced form requires a trailing word boundary so that $FOO
+// does not match a reference to $FOOBAR.
+func referencesShellVar(line, name string) bool {
+	if name == "" {
+		return false
+	}
+	q := regexp.QuoteMeta(name)
+	return regexp.MustCompile(`\$` + q + `\b|\$\{` + q + `\}`).MatchString(line)
 }
