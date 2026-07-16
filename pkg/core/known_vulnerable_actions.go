@@ -132,6 +132,21 @@ func isFullLengthCommitSHA(ref string) bool {
 	return matched
 }
 
+// preciseSemverPattern matches refs that already pin an exact major.minor.patch
+// version (e.g. "v1.2.3", "1.2.3-beta.1"). Bare major or major.minor refs like
+// "v4" or "v4.1" are intentionally excluded: GitHub Actions convention (and
+// e.g. GHSA-cxww-7g56-2vh6's own advisory text) treats these as floating
+// pointers that are expected to always resolve to the latest, most-patched
+// release, so they must never be compared as if they were literally "4.0.0".
+var preciseSemverPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+`)
+
+// isPreciseSemver reports whether ref already pins an exact major.minor.patch
+// version and can therefore be used directly as a version string without
+// resolving it through the GitHub API first.
+func isPreciseSemver(ref string) bool {
+	return preciseSemverPattern.MatchString(ref)
+}
+
 // resolveTagFromCommitSHA resolves a commit SHA to the best matching tag
 func (rule *KnownVulnerableActionsRule) resolveTagFromCommitSHA(ctx context.Context, owner, repo, sha string) (string, error) {
 	gh := rule.getClient()
@@ -187,8 +202,19 @@ func (rule *KnownVulnerableActionsRule) getVersionFromRef(ctx context.Context, o
 	} else {
 		sha, err = rule.resolveSymbolicRef(ctx, owner, repo, ref)
 		if err != nil {
-			// If we can't resolve the ref, use it directly (it might be a valid version tag)
-			return ref, nil
+			// If we can't resolve the ref via the API (rate limit, network
+			// error, etc.), only fall back to using it directly when it's
+			// already an exact version (e.g. "v1.2.3"). A bare major/minor
+			// ref like "v4" is NOT a version by itself — it's a floating
+			// pointer that GitHub Actions convention guarantees always
+			// resolves to the latest patched release. Treating "v4" as
+			// literally "4.0.0" would match it against any advisory whose
+			// vulnerable range starts at ">= 4.0.0", producing a false
+			// positive for every unresolved bare major tag.
+			if isPreciseSemver(ref) {
+				return ref, nil
+			}
+			return "", err
 		}
 	}
 
@@ -199,8 +225,12 @@ func (rule *KnownVulnerableActionsRule) getVersionFromRef(ctx context.Context, o
 	}
 
 	if tag == "" {
-		// No tag found, use the original ref
-		return ref, nil
+		// No tag found. Same reasoning as above: only trust the raw ref if
+		// it's already an exact version; otherwise skip rather than guess.
+		if isPreciseSemver(ref) {
+			return ref, nil
+		}
+		return "", fmt.Errorf("no matching version tag found for %s/%s@%s", owner, repo, ref)
 	}
 
 	return tag, nil
