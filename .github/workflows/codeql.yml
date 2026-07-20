@@ -63,7 +63,7 @@ jobs:
               --search '"[CodeQL] Weekly scan needs attention" in:title' \
               --limit 10 \
               --json number,title \
-              --jq '.[] | select(.title == "[CodeQL] Weekly scan needs attention") | .number'
+              --jq '[.[] | select(.title == "[CodeQL] Weekly scan needs attention") | .number][0] // empty'
           )"
 
           if [[ "$RUN_CONCLUSION" == "success" ]]; then

@@ -6,7 +6,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files under .gi
 
 ```bash
 go build ./cmd/sisakulint
-go test ./...                          # quality assurance is local-only; CI runs no tests
+go test -race ./...                    # CI also runs tests with the race detector
 sisakulint script/actions/<file>.yaml  # manual fixture verification
 sisakulint -fix dry-run                # preview fixes
 sisakulint -debug
@@ -20,7 +20,7 @@ The source of truth for the rule inventory is the slice returned by makeRules in
 
 ## Project-wide facts that are easy to misread but correct
 
-- CI runs neither go test nor any linter. CI.yaml only echoes the gofmt diff and never fails. A push verifies nothing, so passing go test ./... locally before committing is part of the definition of done.
+- CI enforces gofmt, runs go test with the race detector, and checks reachable vulnerabilities with govulncheck. Keep the same checks green locally before committing.
 - Adding a rule is a multi-file sync contract: register in makeRules, add docs/<slug>.md, update the manually tallied severity counts table in docs/_index.md, add script/actions/<rule>.yaml and <rule>-safe.yaml, and update the table in script/README.md. Code plus tests alone is incomplete.
 - The effective config file is .github/sisakulint.yaml or .yml. The .github/action.yaml that -init generates is never read by the loader; this mismatch is known and the file is gitignored.
 - Two GitHub API token resolution paths coexist. The primary CLI path is ResolveGitHubToken in pkg/core/github_token.go with priority -github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN and no subprocess probing per #484. getToken in pkg/remote/fetcher.go is the legacy path that still probes gh auth token and git credential fill; it serves -remote scans and the RemoteActionsMetadataCache. Identify which path you are on before touching auth.
