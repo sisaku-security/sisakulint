@@ -629,7 +629,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
 		CommitShaRule(gitHubToken),
 		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
-		NewDependabotEcosystemRule(filePath, isRemote),    // Checks dependabot config covers ecosystems from lockfiles and setup actions
+		NewDependabotEcosystemRule(filePath, isRemote),     // Checks dependabot config covers ecosystems from lockfiles and setup actions
 		NewDependencyReviewSettingsRule(),                  // Checks dependency-review-action settings against required permissions
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
