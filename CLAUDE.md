@@ -26,7 +26,7 @@ The source of truth for the rule inventory is the slice returned by makeRules in
 - Two GitHub API token resolution paths coexist. The primary CLI path is ResolveGitHubToken in pkg/core/github_token.go with priority -github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN and no subprocess probing per #484. getToken in pkg/remote/fetcher.go is the legacy path that still probes gh auth token and git credential fill; it serves -remote scans and the RemoteActionsMetadataCache. Identify which path you are on before touching auth.
 - Exit codes: 0 = clean / 1 = findings / 2 = invalid options / 3 = fatal error, which also covers a GitHub API rate limit hit during -fix on per #474.
 - The missing-timeout-minutes rule is opt-in: it stays registered but disabled until -enable-rule missing-timeout-minutes is passed.
-- The authoritative Go version is go.mod and .go-version, currently 1.25.10. CI.yaml and the Dockerfile pin 1.24.0 and release.yml pins 1.25; they lag behind, so do not treat them as reference.
+- The authoritative Go version is go.mod and .go-version, currently 1.25.12. CI and release workflows read go.mod.
 - Releases fire only on a v*.*.* tag push. A push to main deploys nothing.
 - Some documents still reference docs/RULES_GUIDE.md, docs/ARCHITECTURE.md, and script/github_to_aws/; none of these exist. Do not go looking for them.
 

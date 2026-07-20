@@ -5,15 +5,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   # Maintain dependence for golang
   - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-
-  # Maintain dependence for Dockerfile
-  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"

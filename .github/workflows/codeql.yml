@@ -1,30 +1,100 @@
 name: "CodeQL"
 on:
+  workflow_dispatch:
   schedule:
     - cron: "28 4 * * 6"
-permissions:
-  actions: read
-  contents: read
-  security-events: write
+permissions: {}
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest  # GoはLinuxで動作するため、ubuntu-latestを使用
     timeout-minutes: 120    # Goの解析に適したタイムアウトを設定
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
         language: ["go"]  # Goのみを指定
     steps:
       - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v3
+        uses: github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
         with:
           languages: ${{ matrix.language }}
       - name: Autobuild
-        uses: github/codeql-action/autobuild@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v3
+        uses: github/codeql-action/autobuild@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v3
+        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4.37.1
         with:
           category: "/language:${{matrix.language}}"
+          wait-for-processing: true
+
+  announce:
+    name: Announce CodeQL problems
+    needs: analyze
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      security-events: read
+    steps:
+      - name: Update tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_CONCLUSION: ${{ needs.analyze.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          issue_title="[CodeQL] Weekly scan needs attention"
+          alerts_url="https://github.com/${GITHUB_REPOSITORY}/security/code-scanning?query=is%3Aopen+tool%3ACodeQL"
+          issue_number="$(
+            gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --search '"[CodeQL] Weekly scan needs attention" in:title' \
+              --limit 10 \
+              --json number,title \
+              --jq '.[] | select(.title == "[CodeQL] Weekly scan needs attention") | .number'
+          )"
+
+          if [[ "$RUN_CONCLUSION" == "success" ]]; then
+            alert_count="$(
+              gh api \
+                --method GET \
+                "repos/${GITHUB_REPOSITORY}/code-scanning/alerts" \
+                -f state=open \
+                -f tool_name=CodeQL \
+                -f per_page=100 \
+                --jq 'length'
+            )"
+          else
+            alert_count="unknown"
+          fi
+
+          if [[ "$RUN_CONCLUSION" != "success" || "$alert_count" -gt 0 ]]; then
+            body="$(printf '%s\n\n- Workflow conclusion: `%s`\n- Open CodeQL alerts: `%s`\n- [Workflow run](%s)\n- [Code scanning alerts](%s)' \
+              'The weekly CodeQL scan needs attention.' \
+              "$RUN_CONCLUSION" \
+              "$alert_count" \
+              "$RUN_URL" \
+              "$alerts_url")"
+
+            if [[ -n "$issue_number" ]]; then
+              gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$body"
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$issue_title" --body "$body"
+            fi
+          elif [[ -n "$issue_number" ]]; then
+            gh issue close "$issue_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --comment "The latest CodeQL scan succeeded and has no open CodeQL alerts. Closing this tracking issue."
+          fi

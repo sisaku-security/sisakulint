@@ -1,23 +1,32 @@
+name: reviewdog
+
 on:
   pull_request:
     types: [opened, synchronize]
+
+permissions: {}
+
 jobs:
   run_reviewdog:
     permissions:
-      checks: write
       contents: read
       pull-requests: write
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.3
-      - uses: reviewdog/action-setup@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
         with:
           reviewdog_version: v0.20.1 # Optional. [latest,nightly,v.X.Y.Z]
       - name: Build sisakulint
         run: |
-          go build -o sisakulint ./cmd/sisakulint
-          sudo mv sisakulint /usr/local/bin
+          go build -o "$RUNNER_TEMP/sisakulint" ./cmd/sisakulint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Run reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
