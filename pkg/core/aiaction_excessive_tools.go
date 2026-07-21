@@ -19,11 +19,11 @@ var dangerousAITools = []string{
 // aiExcessiveToolsUntrustedTriggers は信頼されていないユーザーからのトリガーイベント一覧。
 // これらのイベントは任意の GitHub ユーザーが発生させることができる。
 var aiExcessiveToolsUntrustedTriggers = map[string]bool{
-	"issues":               true,
-	"issue_comment":        true,
-	"discussion":           true,
-	"pull_request_target":  true,
-	"workflow_run":         true,
+	"issues":              true,
+	"issue_comment":       true,
+	"discussion":          true,
+	"pull_request_target": true,
+	"workflow_run":        true,
 }
 
 // AIActionExcessiveToolsRule は信頼されていないトリガーで危険なツール (Bash/Write/Edit) を
