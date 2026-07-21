@@ -578,3 +578,83 @@ func TestFilterVulnerableVersions(t *testing.T) {
 		})
 	}
 }
+
+func TestIsPreciseSemver(t *testing.T) {
+	tests := []struct {
+		ref  string
+		want bool
+	}{
+		{"v1.2.3", true},
+		{"1.2.3", true},
+		{"v4.1.3-beta.1", true},
+		{"v4", false},
+		{"v4.1", false},
+		{"4", false},
+		{"main", false},
+		{"release", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ref, func(t *testing.T) {
+			if got := isPreciseSemver(tt.ref); got != tt.want {
+				t.Errorf("isPreciseSemver(%q) = %v, want %v", tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
+// newTestRuleWithServer builds a KnownVulnerableActionsRule whose GitHub
+// client talks to a local httptest server, so getVersionFromRef exercises
+// real HTTP failure paths instead of mocking resolveSymbolicRef directly.
+func newTestRuleWithServer(t *testing.T, handler http.HandlerFunc) *KnownVulnerableActionsRule {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	rule := NewKnownVulnerableActionsRule("test-token")
+	client := rule.getClient()
+	baseURL, err := url.Parse(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("url.Parse: %v", err)
+	}
+	client.BaseURL = baseURL
+	return rule
+}
+
+// TestGetVersionFromRefSkipsBareMajorTagOnResolutionFailure reproduces the
+// false-positive scenario found in a real scan: a workflow pins an action by
+// its bare major-version tag (e.g. "actions/download-artifact@v4", the
+// GitHub-recommended pattern), and the GitHub API call to resolve that tag to
+// a commit fails (rate limit, network error, etc). Before the fix,
+// getVersionFromRef fell back to using "v4" directly as the version string,
+// which isVersionAffected then parsed as "4.0.0" -- the earliest, most
+// vulnerable release of that major line -- guaranteeing a false positive
+// against any advisory with a vulnerable range starting at ">= 4.0.0".
+func TestGetVersionFromRefSkipsBareMajorTagOnResolutionFailure(t *testing.T) {
+	rule := newTestRuleWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	version, err := rule.getVersionFromRef(context.Background(), "actions", "download-artifact", "v4")
+	if err == nil {
+		t.Fatalf("getVersionFromRef(..., %q) = (%q, nil), want an error so the caller skips the vulnerability check instead of misreading the bare tag as version %q", "v4", version, version)
+	}
+}
+
+// TestGetVersionFromRefUsesPreciseVersionOnResolutionFailure ensures the fix
+// doesn't regress the legitimate case: a ref that is already an exact
+// version (e.g. "v1.2.3") is safe to use directly even if the API call
+// fails, since there's no ambiguity to resolve.
+func TestGetVersionFromRefUsesPreciseVersionOnResolutionFailure(t *testing.T) {
+	rule := newTestRuleWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	version, err := rule.getVersionFromRef(context.Background(), "actions", "download-artifact", "v1.2.3")
+	if err != nil {
+		t.Fatalf("getVersionFromRef(..., %q) returned unexpected error: %v", "v1.2.3", err)
+	}
+	if version != "v1.2.3" {
+		t.Errorf("getVersionFromRef(..., %q) = %q, want %q", "v1.2.3", version, "v1.2.3")
+	}
+}
