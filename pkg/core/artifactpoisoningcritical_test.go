@@ -627,6 +627,18 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
 
+			// workflow_run matches the rule's documented threat model (a privileged
+			// consumer workflow downloading artifacts from a less-trusted producer run),
+			// so these path-safety cases exercise the rule with a trigger that keeps it active.
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_run"}},
+				},
+			}
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
+
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
 				RunsOn: tt.runsOn,
@@ -659,6 +671,117 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn tests that the rule does NOT flag a workflow
+// whose only triggers are trusted (push tag / workflow_dispatch) and which passes
+// artifacts between its own jobs via needs: - the standard multi-OS build fan-in
+// pattern. actions/download-artifact defaults to the current run, so without a
+// privileged trigger there is no less-trusted producer that could poison the
+// artifact. Regression test for the OpenLogi/OpenLogi release.yml false positive.
+func TestArtifactPoisoning_SameRunFanIn(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+		},
+	}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+	}
+
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v8"},
+			Inputs: map[string]*ast.Input{
+				"name": {
+					Name:  &ast.String{Value: "name"},
+					Value: &ast.String{Value: "signed-windows-build"},
+				},
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "signed-zip"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+			downloadStep,
+		},
+	}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+	if err := rule.VisitStep(downloadStep); err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	if errors := rule.Errors(); len(errors) != 0 {
+		t.Errorf("VisitStep() for same-run fan-in without a privileged trigger got %d errors, want 0. This is a false positive.", len(errors))
+		for i, e := range errors {
+			t.Logf("Error %d: %s", i, e.Description)
+		}
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn_ExplicitCrossRun tests that an explicit
+// cross-run download (run-id input set) still gets flagged even without a
+// privileged trigger, since it deliberately reaches outside the current run.
+func TestArtifactPoisoning_SameRunFanIn_ExplicitCrossRun(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+		},
+	}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+	}
+
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v8"},
+			Inputs: map[string]*ast.Input{
+				"run-id": {
+					Name:  &ast.String{Value: "run-id"},
+					Value: &ast.String{Value: "${{ inputs.source_run_id }}"},
+				},
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+			downloadStep,
+		},
+	}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+	if err := rule.VisitStep(downloadStep); err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	if errors := rule.Errors(); len(errors) != 1 {
+		t.Errorf("VisitStep() for explicit cross-run download got %d errors, want 1", len(errors))
 	}
 }
 
@@ -913,6 +1036,17 @@ func TestArtifactPoisoning_Integration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
+
+			// workflow_run keeps the rule active for these path-safety/autofix cases;
+			// see TestArtifactPoisoning_SameRunFanIn for the no-privileged-trigger case.
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_run"}},
+				},
+			}
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
 
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
