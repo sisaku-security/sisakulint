@@ -226,18 +226,60 @@ func (rule *ArtifactPoisoning) VisitJobPost(job *ast.Job) error {
 	return nil
 }
 
-// hasCrossRunArtifactInputs reports whether a download-artifact step explicitly
-// targets a different run/repository (via the 'run-id' or 'repository' inputs),
-// which is the only way it can fetch an artifact from outside the current run
-// when the workflow itself has no privileged trigger.
+// hasCrossRunArtifactInputs reports whether a download-artifact step is actually
+// configured to fetch an artifact from a different run/repository.
+//
+// In actions/download-artifact the cross-run/cross-repo fetch (options.findBy) is
+// populated ONLY inside the `if (inputs.token)` branch: without a github-token the
+// run-id and repository inputs are ignored and the action reads the CURRENT run.
+// This gate is invariant across download-artifact v4.0.0..v8.0.1. So a genuine
+// foreign target requires BOTH a github-token AND a run-id/repository that resolves
+// somewhere other than this run/repo. A token-less run-id/repository (the action
+// silently ignores it), or one pinned back to the current context via
+// github.run_id/github.repository, still resolves to this same run and is not a
+// cross-run poisoning vector.
 func hasCrossRunArtifactInputs(action *ast.ExecAction) bool {
+	// No github-token => the action cannot reach another run; run-id/repository are ignored.
+	if !hasNonEmptyInput(action, "github-token") {
+		return false
+	}
 	for _, name := range []string{"run-id", "repository"} {
 		input, ok := action.Inputs[name]
-		if ok && input != nil && input.Value != nil && strings.TrimSpace(input.Value.Value) != "" {
-			return true
+		if !ok || input == nil || input.Value == nil {
+			continue
 		}
+		value := strings.TrimSpace(input.Value.Value)
+		if value == "" {
+			continue
+		}
+		// A self-reference (run-id: ${{ github.run_id }} / repository: ${{ github.repository }})
+		// pins the download back to the current run/repo => not a foreign target.
+		if name == "run-id" && isCurrentContextExpr(value, "github.run_id") {
+			continue
+		}
+		if name == "repository" && isCurrentContextExpr(value, "github.repository") {
+			continue
+		}
+		return true
 	}
 	return false
+}
+
+// hasNonEmptyInput reports whether the action sets input `name` to a non-blank value.
+func hasNonEmptyInput(action *ast.ExecAction, name string) bool {
+	input, ok := action.Inputs[name]
+	return ok && input != nil && input.Value != nil && strings.TrimSpace(input.Value.Value) != ""
+}
+
+// isCurrentContextExpr reports whether value is exactly the single GitHub expression
+// ctx (e.g. "${{ github.run_id }}"), i.e. a redundant self-reference to the current
+// run/repo rather than a foreign one.
+func isCurrentContextExpr(value, ctx string) bool {
+	s := strings.TrimSpace(value)
+	if !strings.HasPrefix(s, "${{") || !strings.HasSuffix(s, "}}") {
+		return false
+	}
+	return strings.TrimSpace(s[3:len(s)-2]) == ctx
 }
 
 func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
@@ -261,7 +303,8 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	// run. actions/download-artifact defaults to the current run; it only reaches into a
 	// different (potentially less-trusted) run when the workflow itself is invoked from one
 	// (workflow_run, pull_request_target, etc. - see JobTriggerAnalyzer.HasPrivilegedTrigger)
-	// or the step explicitly targets a foreign run via 'run-id'/'repository'. Without either,
+	// or the step is actually configured to reach a foreign run (github-token + a
+	// non-self 'run-id'/'repository'; see hasCrossRunArtifactInputs). Without either,
 	// every artifact in this run was uploaded by an equally-trusted sibling job, so there is
 	// no untrusted producer for "artifact poisoning" to poison. This is the same fan-out/fan-in
 	// pattern GitHub's own docs recommend for splitting a build across OS runners.
