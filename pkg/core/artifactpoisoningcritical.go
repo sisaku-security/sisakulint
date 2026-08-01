@@ -9,8 +9,9 @@ import (
 
 type ArtifactPoisoning struct {
 	BaseRule
-	hasCheckout   bool // Tracks if the current job checks out the repository
-	currentRunsOn *ast.Runner
+	hasCheckout           bool // Tracks if the current job checks out the repository
+	currentRunsOn         *ast.Runner
+	hasTrustedOnlyTrigger bool // Set by VisitWorkflowPre; true when no trigger lets an attacker without existing write access influence this run
 }
 
 func ArtifactPoisoningRule() *ArtifactPoisoning {
@@ -173,6 +174,35 @@ func isUnsafePath(path string, runnerOS string) bool {
 	return true
 }
 
+// VisitWorkflowPre determines whether every trigger of this workflow already
+// requires existing repository write access (e.g. push, workflow_dispatch).
+//
+// actions/download-artifact, absent an explicit run-id input, can only ever
+// fetch artifacts uploaded earlier in the SAME run. So the only way to poison
+// what it downloads is to control an earlier job in that same run. When every
+// trigger already gates on write access, whoever could do that already has
+// full repository access, so the workspace-relative path adds no exploitable
+// risk beyond what that access already grants. This mirrors the untrusted-
+// trigger precondition artifact-poisoning-medium already applies.
+//
+// hasTrustedOnlyTrigger defaults to false (its Go zero value) so callers that
+// never invoke VisitWorkflowPre - e.g. VisitStep unit tests exercising path
+// logic in isolation - keep flagging exactly as before.
+func (rule *ArtifactPoisoning) VisitWorkflowPre(node *ast.Workflow) error {
+	rule.hasTrustedOnlyTrigger = true
+	for _, event := range node.On {
+		webhookEvent, ok := event.(*ast.WebhookEvent)
+		if !ok {
+			continue
+		}
+		if UntrustedTriggers[webhookEvent.EventName()] {
+			rule.hasTrustedOnlyTrigger = false
+			break
+		}
+	}
+	return nil
+}
+
 // VisitJobPre tracks whether the current job checks out the repository.
 // Jobs without checkout have no source code to overwrite, making artifact
 // poisoning non-exploitable even with workspace-relative paths.
@@ -209,6 +239,12 @@ func (rule *ArtifactPoisoning) VisitStep(step *ast.Step) error {
 	// This prevents false positives in publish/deploy jobs that only download
 	// artifacts to package and publish them (e.g., PyPI, npm publishing)
 	if !rule.hasCheckout {
+		return nil
+	}
+
+	// Skip if no attacker without existing write access can reach this run -
+	// see VisitWorkflowPre for the reasoning.
+	if rule.hasTrustedOnlyTrigger {
 		return nil
 	}
 

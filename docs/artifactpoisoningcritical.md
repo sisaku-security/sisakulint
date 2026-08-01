@@ -323,6 +323,20 @@ The artifact-poisoning rule detects the following unsafe patterns:
        path: .  # Current directory - unsafe
    ```
 
+### Scope: Trigger Context
+
+`actions/download-artifact`, unless given an explicit `run-id`, can only fetch
+artifacts uploaded earlier in the *same* workflow run. Poisoning what it
+downloads therefore requires controlling an earlier job in that same run.
+When a workflow's only triggers already require existing repository write
+access (e.g. `push`, `workflow_dispatch`), whoever could do that already has
+full repository access, so this rule does not fire — there is no attacker
+without that access who could reach the run at all. The rule still fires as
+soon as any trigger listed in [Attack Vector 1](#attack-vector-1-pull-request-poisoning)
+(`workflow_run`, `pull_request_target`, etc.) is present, since those let
+less-trusted code influence an earlier job. This mirrors the same
+untrusted-trigger precondition `artifact-poisoning-medium` already applies.
+
 ### Safe Patterns
 
 The rule recognizes these patterns as safe:

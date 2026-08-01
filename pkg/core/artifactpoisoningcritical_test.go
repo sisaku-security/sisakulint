@@ -714,6 +714,93 @@ func TestArtifactPoisoning_JobWithoutCheckout(t *testing.T) {
 	}
 }
 
+// TestArtifactPoisoning_TrustedOnlyTrigger verifies that a workflow whose only
+// triggers already require existing repository write access (push,
+// workflow_dispatch) is not flagged: actions/download-artifact without run-id
+// can only pull artifacts uploaded earlier in the SAME run, so whoever could
+// poison that artifact already has the access the workspace-relative path
+// would supposedly grant them. This mirrors the release job in
+// Noelo-Lab/kuna's release.yml, which downloads its own build/specs outputs
+// to "dist" and only re-uploads them via `gh release create`.
+func TestArtifactPoisoning_TrustedOnlyTrigger(t *testing.T) {
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v4"},
+			Inputs: map[string]*ast.Input{
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	jobWithCheckout := &ast.Job{
+		Steps: []*ast.Step{
+			{
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/checkout@v4"},
+				},
+			},
+			downloadStep,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		triggers   []string
+		wantErrors int
+	}{
+		{
+			name:       "push and workflow_dispatch only - no error",
+			triggers:   []string{"push", "workflow_dispatch"},
+			wantErrors: 0,
+		},
+		{
+			name:       "workflow_run present - still errors",
+			triggers:   []string{"workflow_run"},
+			wantErrors: 1,
+		},
+		{
+			name:       "pull_request_target present - still errors",
+			triggers:   []string{"push", "pull_request_target"},
+			wantErrors: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := ArtifactPoisoningRule()
+
+			events := make([]ast.Event, 0, len(tt.triggers))
+			for _, trigger := range tt.triggers {
+				events = append(events, &ast.WebhookEvent{Hook: &ast.String{Value: trigger}})
+			}
+			workflow := &ast.Workflow{On: events}
+
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
+			if err := rule.VisitJobPre(jobWithCheckout); err != nil {
+				t.Fatalf("VisitJobPre() unexpected error: %v", err)
+			}
+			if err := rule.VisitStep(downloadStep); err != nil {
+				t.Errorf("VisitStep() unexpected error: %v", err)
+			}
+
+			errors := rule.Errors()
+			if len(errors) != tt.wantErrors {
+				t.Errorf("VisitStep() got %d errors, want %d", len(errors), tt.wantErrors)
+				for i, e := range errors {
+					t.Logf("Error %d: %s", i, e.Description)
+				}
+			}
+		})
+	}
+}
+
 func TestArtifactPoisoning_FixStep(t *testing.T) {
 	tests := []struct {
 		name      string
