@@ -91,7 +91,7 @@ func TestKnownVulnerableActionsRuleExplicitTokenOverridesEnvironment(t *testing.
 }
 
 func TestMakeRulesPassesGitHubTokenToKnownVulnerableActionsRule(t *testing.T) {
-	rules := makeRules(".github/workflows/ci.yml", false, "flag-token", nil, nil, nil)
+	rules := makeRules(".github/workflows/ci.yml", false, "flag-token", nil, nil, nil, nil, true, true)
 
 	for _, rule := range rules {
 		known, ok := rule.(*KnownVulnerableActionsRule)

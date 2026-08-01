@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/remote"
@@ -56,6 +58,8 @@ $ sisakulint -format "{{sarif .}}"
 # Remote scanning: scan GitHub repositories directly via API
 
 $ sisakulint -remote owner/repo
+$ sisakulint -remote owner/repo -pr 123
+$ sisakulint -remote https://github.com/owner/repo/pull/123
 $ sisakulint -remote "org:kubernetes"
 $ sisakulint -remote owner/repo -r -D 5
 
@@ -129,7 +133,7 @@ func (cmd *Command) runLint(args []string, linterOpts *LinterOptions, initConfig
 // runAutofix returns true if any fixer hit the GitHub API rate limit, so
 // Main can surface a non-zero exit and skip the affected file's write
 // (issue #474).
-func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) (rateLimited bool) {
+func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool, baseDir string) (rateLimited bool) {
 	for _, res := range results {
 		if len(res.AutoFixers) == 0 {
 			continue
@@ -166,10 +170,14 @@ func (cmd *Command) runAutofix(results []*ValidateResult, isDryRun bool) (rateLi
 			fmt.Fprintf(cmd.Stderr, "Skipping write for %s due to GitHub API rate limit; re-run after authenticating to complete the fix.\n", res.FilePath)
 			continue
 		}
-		err = os.WriteFile(res.FilePath, data, 0644) //nolint:gosec // auto-fix overwrites existing workflow files; preserving 0644 for git and CI compatibility
+		writePath := res.FilePath
+		if baseDir != "" && !filepath.IsAbs(writePath) {
+			writePath = filepath.Join(baseDir, writePath)
+		}
+		err = os.WriteFile(writePath, data, 0644) //nolint:gosec // auto-fix overwrites existing workflow files; preserving 0644 for git and CI compatibility
 		if err != nil {
 			fmt.Fprintf(cmd.Stderr, "Error while writing the fixed workflow: %v\n", err)
-			err := os.WriteFile(res.FilePath, res.Source, 0644) //nolint:gosec // restore original workflow file
+			err := os.WriteFile(writePath, res.Source, 0644) //nolint:gosec // restore original workflow file
 			if err != nil {
 				fmt.Fprintf(cmd.Stderr, "Error while restoring the original workflow: %v\n", err)
 			}
@@ -200,6 +208,17 @@ func (e *enabledRuleFlags) Set(v string) error {
 	return nil
 }
 
+type remoteTargetFlags []string
+
+func (t *remoteTargetFlags) String() string {
+	return "repository-relative workflow path to report or fix"
+}
+
+func (t *remoteTargetFlags) Set(v string) error {
+	*t = append(*t, v)
+	return nil
+}
+
 // todo: sisakulintのmain関数
 func (cmd *Command) Main(args []string) int {
 	var showVersion bool
@@ -216,6 +235,10 @@ func (cmd *Command) Main(args []string) int {
 	var parallelism int
 	var limit int
 	var githubTokenFlag string
+	var pullRequest int
+	var expectedHeadSHA string
+	var remoteCheckoutDir string
+	var remoteTargets remoteTargetFlags
 
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(cmd.Stderr)
@@ -234,6 +257,10 @@ func (cmd *Command) Main(args []string) int {
 	flags.StringVar(&linterOpts.StdinInputFileName, "stdin-filename", "", "File name when reading input from stdin")
 	flags.StringVar(&autoFixMode, "fix", "off", "Enable auto-fix mode. Available options: off, on, dry-run")
 	flags.StringVar(&remoteInput, "remote", "", "Remote repository to scan (owner/repo, URL, or search query like 'org:kubernetes')")
+	flags.IntVar(&pullRequest, "pr", 0, "Pull request number to scan at its immutable head (-remote only)")
+	flags.StringVar(&expectedHeadSHA, "expected-head-sha", "", "Fail if the pull request head no longer matches this SHA (-remote -pr only)")
+	flags.StringVar(&remoteCheckoutDir, "remote-checkout-dir", "", "Extract the pull request snapshot into this new directory instead of a temporary directory (-remote -pr only)")
+	flags.Var(&remoteTargets, "remote-target", "Repository-relative changed workflow path to report or fix; repeatable (-remote -pr only)")
 	flags.BoolVar(&recursive, "r", false, "Enable recursive scanning of reusable workflows (-remote only)")
 	flags.IntVar(&maxDepth, "D", 3, "Max recursion depth for recursive scanning (-remote only)")
 	flags.IntVar(&parallelism, "p", 3, "Number of parallel scans (-remote only)")
@@ -258,6 +285,28 @@ func (cmd *Command) Main(args []string) int {
 	if autoFixMode != "off" && autoFixMode != "on" && autoFixMode != FileFixDryRun {
 		fmt.Fprintf(cmd.Stderr, "Invalid value for -fix: %s\n", autoFixMode)
 		return ExitStatusInvalidCommandOption
+	}
+	if pullRequest < 0 {
+		fmt.Fprintln(cmd.Stderr, "Invalid value for -pr: must not be negative")
+		return ExitStatusInvalidCommandOption
+	}
+	if remoteInput == "" && (pullRequest != 0 || expectedHeadSHA != "" || remoteCheckoutDir != "" || len(remoteTargets) > 0) {
+		fmt.Fprintln(cmd.Stderr, "-pr, -expected-head-sha, -remote-checkout-dir, and -remote-target require -remote")
+		return ExitStatusInvalidCommandOption
+	}
+	if pullRequest == 0 && remoteInput != "" && (expectedHeadSHA != "" || remoteCheckoutDir != "" || len(remoteTargets) > 0) {
+		parsed, err := remote.ParseInput(remoteInput)
+		if err != nil || parsed.PullNumber == 0 {
+			fmt.Fprintln(cmd.Stderr, "-expected-head-sha, -remote-checkout-dir, and -remote-target require a pull request URL or -pr")
+			return ExitStatusInvalidCommandOption
+		}
+	}
+	if remoteInput != "" && autoFixMode == "on" && remoteCheckoutDir == "" {
+		parsed, _ := remote.ParseInput(remoteInput)
+		if pullRequest > 0 || (parsed != nil && parsed.PullNumber > 0) {
+			fmt.Fprintln(cmd.Stderr, "-remote pull request scans require -remote-checkout-dir when -fix on is used")
+			return ExitStatusInvalidCommandOption
+		}
 	}
 
 	if showVersion {
@@ -294,6 +343,29 @@ func (cmd *Command) Main(args []string) int {
 	}
 
 	if remoteInput != "" {
+		parsed, err := remote.ParseInput(remoteInput)
+		if err != nil {
+			fmt.Fprintf(cmd.Stderr, "Invalid remote input: %v\n", err)
+			return ExitStatusInvalidCommandOption
+		}
+		if parsed.PullNumber > 0 {
+			if pullRequest > 0 && pullRequest != parsed.PullNumber {
+				fmt.Fprintf(cmd.Stderr, "Pull request number mismatch: URL specifies #%d but -pr specifies #%d\n", parsed.PullNumber, pullRequest)
+				return ExitStatusInvalidCommandOption
+			}
+			pullRequest = parsed.PullNumber
+		}
+		if pullRequest > 0 {
+			return cmd.runRemotePullRequestScan(
+				parsed,
+				pullRequest,
+				expectedHeadSHA,
+				remoteCheckoutDir,
+				remoteTargets,
+				autoFixMode,
+				&linterOpts,
+			)
+		}
 		return cmd.runRemoteScan(remoteInput, &linterOpts, &remote.ScannerOptions{
 			Parallelism: parallelism,
 			Recursive:   recursive,
@@ -301,6 +373,7 @@ func (cmd *Command) Main(args []string) int {
 			Limit:       limit,
 			Verbose:     linterOpts.IsVerboseOutputEnabled,
 			Output:      cmd.Stderr,
+			GitHubToken: linterOpts.GitHubToken,
 		})
 	}
 
@@ -318,7 +391,7 @@ func (cmd *Command) Main(args []string) int {
 	}
 	if hasErrors {
 		if enableAutofix {
-			if rateLimited := cmd.runAutofix(errs, autoFixMode == FileFixDryRun); rateLimited {
+			if rateLimited := cmd.runAutofix(errs, autoFixMode == FileFixDryRun, ""); rateLimited {
 				fmt.Fprintln(cmd.Stderr,
 					"sisakulint: commit-sha autofix aborted because the GitHub API rate limit was exceeded. "+
 						"Re-run with GITHUB_TOKEN / GH_TOKEN / SISAKULINT_GITHUB_TOKEN set or with -github-token to complete the fix.")
@@ -378,4 +451,162 @@ func (cmd *Command) runRemoteScan(input string, linterOpts *LinterOptions, scann
 
 	fmt.Fprintf(cmd.Stdout, "No problems found.\n")
 	return ExitStatusSuccessNoProblem
+}
+
+// runRemotePullRequestScan materializes the exact PR head as a local project,
+// analyses every workflow for repository and cross-file context, and reports
+// (or fixes) only workflows changed by the pull request.
+func (cmd *Command) runRemotePullRequestScan(
+	input *remote.ParsedInput,
+	pullNumber int,
+	expectedHeadSHA string,
+	checkoutDir string,
+	requestedTargets []string,
+	autoFixMode string,
+	linterOpts *LinterOptions,
+) int {
+	if input.Type == remote.InputTypeSearchQuery || input.Owner == "" || input.Repo == "" {
+		fmt.Fprintln(cmd.Stderr, "Pull request scanning requires a single owner/repo repository")
+		return ExitStatusInvalidCommandOption
+	}
+	if input.Ref != "" {
+		fmt.Fprintln(cmd.Stderr, "A /tree/<ref> URL cannot be combined with pull request scanning")
+		return ExitStatusInvalidCommandOption
+	}
+
+	var fetcher *remote.Fetcher
+	var err error
+	if linterOpts.GitHubToken == "" {
+		// Keep direct CLI scans compatible with gh auth and git credential
+		// fallback when no flag/environment token was supplied.
+		fetcher, err = remote.NewFetcher(1)
+	} else {
+		fetcher, err = remote.NewFetcherWithToken(1, linterOpts.GitHubToken)
+	}
+	if err != nil {
+		fmt.Fprintf(cmd.Stderr, "Error initializing remote fetcher: %v\n", err)
+		return ExitStatusFailure
+	}
+	snapshot, err := fetcher.MaterializePullRequest(
+		context.Background(),
+		input.Owner,
+		input.Repo,
+		pullNumber,
+		&remote.PullRequestSnapshotOptions{
+			ExpectedHeadSHA: expectedHeadSHA,
+			Destination:     checkoutDir,
+		},
+	)
+	if err != nil {
+		fmt.Fprintf(cmd.Stderr, "Error preparing pull request snapshot: %v\n", err)
+		return ExitStatusFailure
+	}
+	defer func() {
+		if err := snapshot.Close(); err != nil {
+			fmt.Fprintf(cmd.Stderr, "Warning: failed to remove pull request snapshot: %v\n", err)
+		}
+	}()
+
+	targets, err := selectRemoteTargets(requestedTargets, snapshot.TargetWorkflowPaths)
+	if err != nil {
+		fmt.Fprintf(cmd.Stderr, "Invalid remote target: %v\n", err)
+		return ExitStatusInvalidCommandOption
+	}
+	if len(targets) == 0 {
+		if linterOpts.IsVerboseOutputEnabled {
+			fmt.Fprintf(cmd.Stderr, "Pull request #%d has no changed workflow files at %s\n", pullNumber, snapshot.HeadSHA)
+		}
+		return ExitStatusSuccessNoProblem
+	}
+	if len(snapshot.WorkflowPaths) == 0 {
+		fmt.Fprintln(cmd.Stderr, "Pull request snapshot contains no workflow files")
+		return ExitStatusFailure
+	}
+
+	linterOpts.IsRemote = false
+	linterOpts.CurrentWorkingDirectoryPath = snapshot.Root
+	linterOpts.ReportFilePaths = targets
+	linterOpts.DisableRepositoryFileAutoFixers = true
+	linter, err := NewLinter(cmd.Stdout, linterOpts)
+	if err != nil {
+		fmt.Fprintf(cmd.Stderr, "Error initializing linter: %v\n", err)
+		return ExitStatusFailure
+	}
+
+	workflowFiles := make([]string, 0, len(snapshot.WorkflowPaths))
+	for _, workflow := range snapshot.WorkflowPaths {
+		workflowFiles = append(workflowFiles, filepath.Join(snapshot.Root, filepath.FromSlash(workflow)))
+	}
+	results, err := linter.LintFiles(workflowFiles, nil)
+	if err != nil {
+		fmt.Fprintf(cmd.Stderr, "Error linting pull request snapshot: %v\n", err)
+		return ExitStatusFailure
+	}
+
+	targetResults := filterRemoteResults(results, targets)
+	hasErrors := false
+	for _, result := range targetResults {
+		if len(result.Errors) > 0 {
+			hasErrors = true
+			break
+		}
+	}
+	if !hasErrors {
+		return ExitStatusSuccessNoProblem
+	}
+
+	if autoFixMode == "on" || autoFixMode == FileFixDryRun {
+		if rateLimited := cmd.runAutofix(targetResults, autoFixMode == FileFixDryRun, snapshot.Root); rateLimited {
+			fmt.Fprintln(cmd.Stderr,
+				"sisakulint: commit-sha autofix aborted because the GitHub API rate limit was exceeded. "+
+					"Re-run with GITHUB_TOKEN / GH_TOKEN / SISAKULINT_GITHUB_TOKEN set or with -github-token to complete the fix.")
+			return ExitStatusFailure
+		}
+	}
+	return ExitStatusSuccessProblemFound
+}
+
+func selectRemoteTargets(requested, changed []string) ([]string, error) {
+	changedSet := make(map[string]struct{}, len(changed))
+	for _, target := range changed {
+		changedSet[normalizeReportPath(target)] = struct{}{}
+	}
+	if len(requested) == 0 {
+		result := append([]string(nil), changed...)
+		sort.Strings(result)
+		return result, nil
+	}
+
+	seen := make(map[string]struct{}, len(requested))
+	result := make([]string, 0, len(requested))
+	for _, target := range requested {
+		normalized := normalizeReportPath(target)
+		if filepath.IsAbs(target) || normalized == "." || normalized == ".." || strings.HasPrefix(normalized, "../") {
+			return nil, fmt.Errorf("unsafe repository-relative path %q", target)
+		}
+		if _, ok := changedSet[normalized]; !ok {
+			return nil, fmt.Errorf("%q is not a changed workflow in this pull request", target)
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func filterRemoteResults(results []*ValidateResult, targets []string) []*ValidateResult {
+	targetSet := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		targetSet[normalizeReportPath(target)] = struct{}{}
+	}
+	filtered := make([]*ValidateResult, 0, len(targets))
+	for _, result := range results {
+		if _, ok := targetSet[normalizeReportPath(result.FilePath)]; ok {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered
 }

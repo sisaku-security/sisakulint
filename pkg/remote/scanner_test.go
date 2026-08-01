@@ -284,6 +284,27 @@ func TestNewScanner_Validation(t *testing.T) {
 	}
 }
 
+func TestNewScannerPreservesEnvironmentTokenFallback(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "fallback-token")
+	t.Setenv("GH_TOKEN", "")
+
+	scanner, err := NewScanner(&ScannerOptions{
+		Parallelism: 1,
+		Limit:       1,
+		LintFunc:    func(string, []byte) (bool, error) { return false, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, ok := scanner.fetcher.client.Client().Transport.(*tokenTransport)
+	if !ok {
+		t.Fatalf("transport = %T, want *tokenTransport", scanner.fetcher.client.Client().Transport)
+	}
+	if transport.token != "fallback-token" {
+		t.Fatalf("transport token = %q, want environment fallback token", transport.token)
+	}
+}
+
 func TestFetchSingleWorkflowUsesRequestedRef(t *testing.T) {
 	const wantRef = "v1.2.3"
 	const workflowPath = ".github/workflows/reusable.yml"
@@ -322,6 +343,39 @@ func TestFetchSingleWorkflowUsesRequestedRef(t *testing.T) {
 	}
 	if string(workflow.Content) != "name: reusable\non: workflow_call\n" {
 		t.Fatalf("workflow content = %q", string(workflow.Content))
+	}
+}
+
+func TestFetchRepositoriesPreservesTreeURLRef(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"repo","full_name":"owner/repo","owner":{"login":"owner"}}`)
+	}))
+	defer server.Close()
+
+	baseURL, err := url.Parse(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := github.NewClient(server.Client())
+	client.BaseURL = baseURL
+	client.UploadURL = baseURL
+	fetcher := &Fetcher{client: client, limit: 1}
+
+	repositories, err := fetcher.FetchRepositories(context.Background(), &ParsedInput{
+		Type:  InputTypeURL,
+		Owner: "owner",
+		Repo:  "repo",
+		Ref:   "feature/ref",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repositories) != 1 || repositories[0].Ref != "feature/ref" {
+		t.Fatalf("repositories = %#v, want propagated ref", repositories)
 	}
 }
 

@@ -47,6 +47,7 @@ Static-analysis tools sit upstream of runtime tools — sisakulint catches bugs 
 ## Table of contents
 
 - [Quick start](#quick-start)
+- [Remote pull request scans](#remote-pull-request-scans)
 - [Installation](#installation)
 - [What it detects](#what-it-detects)
 - [Rule reference](#rule-reference)
@@ -84,6 +85,38 @@ sisakulint -enable-rule missing-timeout-minutes   # opt-in rule
 ```
 
 Exit codes: `0` = clean, `1` = findings, `2` = bad CLI args, `3` = fatal error.
+
+---
+
+## Remote pull request scans
+
+Scan the exact PR head without cloning it yourself:
+
+```bash
+sisakulint -remote sisaku-security/sisakulint-agent -pr 18
+
+# Service/CI callers should pin the webhook revision to prevent stale jobs from
+# scanning a newer head. Repeat -remote-target to limit report/fix scope while
+# every workflow in the snapshot remains available for cross-file analysis.
+sisakulint \
+  -remote sisaku-security/sisakulint-agent \
+  -pr 18 \
+  -expected-head-sha 0123456789abcdef0123456789abcdef01234567 \
+  -remote-target .github/workflows/deploy.yml \
+  -format "{{sarif .}}"
+```
+
+Pull request URLs are recognized as well (`-remote https://github.com/owner/repo/pull/18`).
+The command downloads an archive at the resolved immutable head SHA, safely
+materializes the complete repository, analyses all workflows with local project
+context, and reports only workflows changed in the PR. Private repositories
+require `-github-token` or one of the documented token environment variables.
+
+`-fix dry-run` can preview remote fixes. Applying `-fix on` requires a new,
+explicit `-remote-checkout-dir`; sisakulint never writes directly to GitHub.
+PR-mode fixes are limited to the explicitly selected workflow files. Fixers
+which mutate repository files such as `.github/dependabot.yaml` remain enabled
+for local scans but are disabled for this workflow-only response contract.
 
 ---
 

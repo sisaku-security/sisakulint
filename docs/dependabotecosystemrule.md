@@ -18,7 +18,8 @@ The `github-actions` ecosystem is intentionally out of scope here; it is handled
 - **Lockfile Signals**: Infers ecosystems from lockfiles in the repository root.
 - **Setup-action Signals**: Infers ecosystems from `setup-*` actions in workflow steps.
 - **Local-scan Only**: Reads the local filesystem to locate lockfiles and the Dependabot config. The
-  check is skipped in remote-scan mode.
+  check is skipped in legacy API-only remote-scan mode. Pull-request snapshot
+  scans materialize repository context locally and therefore run this check.
 - **Diagnose-only**: Reports findings only; it does not auto-fix the Dependabot configuration.
 - **Renovate Aware**: When a Renovate configuration extends a broad preset (e.g.
   `config:recommended`), the check is skipped entirely. Otherwise only the ecosystems Renovate
@@ -103,7 +104,8 @@ updates:
 
 ### Limitations
 
-- Local-scan only; remote-scan mode skips the check.
+- Requires local repository context. Legacy API-only remote scans skip the
+  check; pull-request snapshot scans provide that context and run it.
 - Lockfiles are inferred from the repository root only (no recursive scan), so monorepo dependencies
   nested in subdirectories are not detected.
 - Matching is based on the presence of a `package-ecosystem`; the Dependabot `directory` value is not

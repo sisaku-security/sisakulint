@@ -3,6 +3,7 @@ package remote
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -17,10 +18,12 @@ const (
 
 // ParsedInput represents parsed input
 type ParsedInput struct {
-	Type  InputType
-	Owner string // for URL/OwnerRepo
-	Repo  string // for URL/OwnerRepo
-	Query string // for search
+	Type       InputType
+	Owner      string // for URL/OwnerRepo
+	Repo       string // for URL/OwnerRepo
+	Query      string // for search
+	Ref        string // for /tree/<ref> URLs
+	PullNumber int    // for /pull/<number> URLs
 }
 
 // ParseInput automatically detects and parses the input string
@@ -49,17 +52,51 @@ func parseURL(input string) (*ParsedInput, error) {
 		return nil, fmt.Errorf("URLs other than github.com are not supported: %s", u.Host)
 	}
 
-	// Expecting /owner/repo format
-	parts := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
+	// Expecting /owner/repo with an optional /tree/<ref> or /pull/<number>
+	// suffix. In particular, do not silently discard a pull request number:
+	// doing so scans the default branch while presenting a PR URL to the user.
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(u.Path, "/"), "/"), "/")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid GitHub URL format: %s", input)
 	}
+	owner := parts[0]
+	repo := strings.TrimSuffix(parts[1], ".git")
+	if owner == "" || repo == "" {
+		return nil, fmt.Errorf("invalid GitHub URL format: %s", input)
+	}
 
-	return &ParsedInput{
+	parsed := &ParsedInput{
 		Type:  InputTypeURL,
-		Owner: parts[0],
-		Repo:  parts[1],
-	}, nil
+		Owner: owner,
+		Repo:  repo,
+	}
+	if len(parts) == 2 {
+		return parsed, nil
+	}
+
+	switch parts[2] {
+	case "tree":
+		if len(parts) < 4 {
+			return nil, fmt.Errorf("GitHub tree URL is missing a ref: %s", input)
+		}
+		parsed.Ref = strings.Join(parts[3:], "/")
+	case "pull":
+		if len(parts) < 4 {
+			return nil, fmt.Errorf("GitHub pull request URL is missing a number: %s", input)
+		}
+		number, err := strconv.Atoi(parts[3])
+		if err != nil || number <= 0 {
+			return nil, fmt.Errorf("invalid GitHub pull request number %q", parts[3])
+		}
+		if len(parts) > 5 || (len(parts) > 4 && parts[4] != "files" && parts[4] != "commits" && parts[4] != "checks") {
+			return nil, fmt.Errorf("unsupported GitHub pull request URL path: %s", input)
+		}
+		parsed.PullNumber = number
+	default:
+		return nil, fmt.Errorf("unsupported GitHub URL path: %s", input)
+	}
+
+	return parsed, nil
 }
 
 func parseOwnerRepo(input string) (*ParsedInput, error) {

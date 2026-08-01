@@ -51,6 +51,7 @@ type ScannerOptions struct {
 	Verbose     bool
 	Output      io.Writer
 	LintFunc    LintFunc
+	GitHubToken string
 }
 
 // NewScanner creates a new Scanner
@@ -68,7 +69,15 @@ func NewScanner(opts *ScannerOptions) (*Scanner, error) {
 		return nil, fmt.Errorf("LintFunc is not specified")
 	}
 
-	fetcher, err := NewFetcher(opts.Limit)
+	var fetcher *Fetcher
+	var err error
+	if opts.GitHubToken == "" {
+		// Preserve the library/CLI fallback chain (environment, gh CLI, then
+		// git credential) when no explicit token was resolved by the caller.
+		fetcher, err = NewFetcher(opts.Limit)
+	} else {
+		fetcher, err = NewFetcherWithToken(opts.Limit, opts.GitHubToken)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Fetcher: %w", err)
 	}
@@ -152,7 +161,7 @@ func (s *Scanner) scanRepository(ctx context.Context, repo *RepositoryInfo) *Sca
 		fmt.Fprintf(s.output, "Scanning repository: %s\n", repo.FullName)
 	}
 
-	workflows, err := s.fetcher.FetchWorkflows(ctx, repo)
+	workflows, err := s.fetcher.FetchWorkflowsAtRef(ctx, repo, repo.Ref)
 	if err != nil {
 		return &ScanResult{
 			Repository: repo,

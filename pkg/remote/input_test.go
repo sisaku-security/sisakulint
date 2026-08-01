@@ -64,12 +64,14 @@ func TestParseInput_OwnerRepo(t *testing.T) {
 
 func TestParseInput_URL(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		wantType  InputType
-		wantOwner string
-		wantRepo  string
-		wantErr   bool
+		name           string
+		input          string
+		wantType       InputType
+		wantOwner      string
+		wantRepo       string
+		wantRef        string
+		wantPullNumber int
+		wantErr        bool
 	}{
 		{
 			name:      "valid https URL",
@@ -85,7 +87,24 @@ func TestParseInput_URL(t *testing.T) {
 			wantType:  InputTypeURL,
 			wantOwner: "owner",
 			wantRepo:  "repo",
+			wantRef:   "main",
 			wantErr:   false,
+		},
+		{
+			name:           "pull request URL",
+			input:          "https://github.com/sisaku-security/sisakulint-agent/pull/18#issuecomment-5027897981",
+			wantType:       InputTypeURL,
+			wantOwner:      "sisaku-security",
+			wantRepo:       "sisakulint-agent",
+			wantPullNumber: 18,
+		},
+		{
+			name:           "pull request files URL",
+			input:          "https://github.com/owner/repo/pull/42/files",
+			wantType:       InputTypeURL,
+			wantOwner:      "owner",
+			wantRepo:       "repo",
+			wantPullNumber: 42,
 		},
 		{
 			name:    "non-github URL",
@@ -95,6 +114,16 @@ func TestParseInput_URL(t *testing.T) {
 		{
 			name:    "invalid URL path",
 			input:   "https://github.com/onlyowner",
+			wantErr: true,
+		},
+		{
+			name:    "invalid pull request number",
+			input:   "https://github.com/owner/repo/pull/not-a-number",
+			wantErr: true,
+		},
+		{
+			name:    "unsupported trailing path",
+			input:   "https://github.com/owner/repo/issues/1",
 			wantErr: true,
 		},
 	}
@@ -117,6 +146,12 @@ func TestParseInput_URL(t *testing.T) {
 			}
 			if got.Repo != tt.wantRepo {
 				t.Errorf("ParseInput() Repo = %v, want %v", got.Repo, tt.wantRepo)
+			}
+			if got.Ref != tt.wantRef {
+				t.Errorf("ParseInput() Ref = %v, want %v", got.Ref, tt.wantRef)
+			}
+			if got.PullNumber != tt.wantPullNumber {
+				t.Errorf("ParseInput() PullNumber = %v, want %v", got.PullNumber, tt.wantPullNumber)
 			}
 		})
 	}

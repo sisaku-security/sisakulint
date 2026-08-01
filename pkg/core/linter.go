@@ -84,6 +84,16 @@ type LinterOptions struct {
 	// GitHubToken は GitHub API を呼ぶルールに提示するトークン。
 	// 空文字なら未認証 60 req/h 制限が適用される。
 	GitHubToken string
+	// ReportFilePaths limits rendered findings to the listed repository-relative
+	// paths while still analysing every file passed to LintFiles. This is used
+	// for pull-request scans: unchanged workflows provide cross-file context but
+	// do not create unrelated review findings. An empty slice reports all files.
+	ReportFilePaths []string
+	// DisableRepositoryFileAutoFixers prevents fixers from mutating files other
+	// than the workflow represented by a ValidateResult. Pull-request API scans
+	// enable this because their fix response contract returns workflow targets
+	// only; silently modifying and then discarding a project file is unsafe.
+	DisableRepositoryFileAutoFixers bool
 }
 
 // Linterは、workflowをlintするための構造体
@@ -117,6 +127,11 @@ type Linter struct {
 	// gitHubToken は GitHub API を呼ぶルールに提示するトークン。
 	// 空文字なら未認証 60 req/h 制限が適用される。
 	gitHubToken string
+	// reportFilePaths is the normalized set corresponding to
+	// LinterOptions.ReportFilePaths. nil means report every result.
+	reportFilePaths map[string]struct{}
+	// disableRepositoryFileAutoFixers mirrors the corresponding option.
+	disableRepositoryFileAutoFixers bool
 	// loggedConfigs は、`setting configuration: ...` をすでに出力済みの *Config を
 	// 追跡し、複数ファイル並行 validate でログが重複しないようにするためのセット。
 	loggedConfigs sync.Map
@@ -129,6 +144,9 @@ type Linter struct {
 // outパラメータは、Linterインスタンスからのエラーを出力するために使用される。出力を望まない場合は、io.Discardを設定してください。
 // optsパラメータは、lintの動作を設定するLinterOptionsインスタンス
 func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
+	if options == nil {
+		options = &LinterOptions{}
+	}
 	//log levelの設定
 	var logLevel = LogLevelNoOutput
 	if options.IsVerboseOutputEnabled {
@@ -204,23 +222,50 @@ func NewLinter(errorOutput io.Writer, options *LinterOptions) (*Linter, error) {
 		metadataDebug = logOutput
 	}
 
+	var reportFilePaths map[string]struct{}
+	if len(options.ReportFilePaths) > 0 {
+		reportFilePaths = make(map[string]struct{}, len(options.ReportFilePaths))
+		for _, path := range options.ReportFilePaths {
+			normalized := normalizeReportPath(path)
+			reportFilePaths[normalized] = struct{}{}
+		}
+	}
+
 	return &Linter{
-		projectInformation:       NewProjects(),
-		errorOutput:              errorOutput,
-		logOutput:                logOutput,
-		loggingLevel:             logLevel,
-		remoteActionsCache:       NewRemoteActionsMetadataCache(metadataDebug),
-		shellcheckExecutablePath: options.ShellcheckExecutable,
-		errorIgnorePatterns:      ignorePatterns,
-		defaultConfiguration:     config,
-		boilerplateGeneration:    boiler,
-		errorFormatter:           errorFormatter,
-		currentWorkingDirectory:  workDir,
-		modifyCheckRules:         options.OnCheckRulesModified,
-		isRemote:                 options.IsRemote,
-		enabledOptInRules:        options.EnabledOptInRules,
-		gitHubToken:              options.GitHubToken,
+		projectInformation:              NewProjects(),
+		errorOutput:                     errorOutput,
+		logOutput:                       logOutput,
+		loggingLevel:                    logLevel,
+		remoteActionsCache:              NewRemoteActionsMetadataCache(metadataDebug),
+		shellcheckExecutablePath:        options.ShellcheckExecutable,
+		errorIgnorePatterns:             ignorePatterns,
+		defaultConfiguration:            config,
+		boilerplateGeneration:           boiler,
+		errorFormatter:                  errorFormatter,
+		currentWorkingDirectory:         workDir,
+		modifyCheckRules:                options.OnCheckRulesModified,
+		isRemote:                        options.IsRemote,
+		enabledOptInRules:               options.EnabledOptInRules,
+		gitHubToken:                     options.GitHubToken,
+		reportFilePaths:                 reportFilePaths,
+		disableRepositoryFileAutoFixers: options.DisableRepositoryFileAutoFixers,
 	}, nil
+}
+
+func normalizeReportPath(path string) string {
+	return filepath.ToSlash(filepath.Clean(path))
+}
+
+func (l *Linter) shouldReport(path string) bool {
+	if l.reportFilePaths == nil {
+		return true
+	}
+	_, ok := l.reportFilePaths[normalizeReportPath(path)]
+	return ok
+}
+
+func (l *Linter) shouldReportProjectFindings(path string) bool {
+	return l.shouldReport(path)
 }
 
 // logはlog levelがDetailedOutput以上の場合にログを出力する
@@ -450,7 +495,9 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 	// Preallocate allResult with the capacity equal to the number of workspaces
 	allResult := make([]*ValidateResult, 0, len(workspaces))
 	for i := range workspaces {
-		totalErrors += len(workspaces[i].result.Errors)
+		if l.shouldReport(workspaces[i].result.FilePath) {
+			totalErrors += len(workspaces[i].result.Errors)
+		}
 		allResult = append(allResult, workspaces[i].result)
 	}
 
@@ -458,6 +505,9 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 		templateFields := make([]*TemplateFields, 0, totalErrors)
 		for i := range workspaces {
 			ws := &workspaces[i]
+			if !l.shouldReport(ws.result.FilePath) {
+				continue
+			}
 			for _, err := range ws.result.Errors {
 				templateFields = append(templateFields, err.ExtractTemplateFields(ws.source))
 			}
@@ -470,6 +520,9 @@ func (l *Linter) LintFiles(filepaths []string, project *Project) ([]*ValidateRes
 	} else {
 		for i := range workspaces {
 			ws := &workspaces[i]
+			if !l.shouldReport(ws.result.FilePath) {
+				continue
+			}
 			l.displayErrors(ws.result.Errors, ws.source)
 			//allErrors = append(allErrors, ws.result.Errors...)
 			//allAutoFixers = append(allAutoFixers, ws.result.AutoFixers...)
@@ -535,12 +588,14 @@ func (l *Linter) LintFile(file string, project *Project) (*ValidateResult, error
 	if err != nil {
 		return nil, err
 	}
-	if l.errorFormatter != nil {
-		if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, source); err != nil {
-			return nil, fmt.Errorf("error formatting output: %w", err)
+	if l.shouldReport(result.FilePath) {
+		if l.errorFormatter != nil {
+			if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, source); err != nil {
+				return nil, fmt.Errorf("error formatting output: %w", err)
+			}
+		} else {
+			l.displayErrors(result.Errors, source)
 		}
-	} else {
-		l.displayErrors(result.Errors, source)
 	}
 	return result, nil
 }
@@ -579,17 +634,19 @@ func (l *Linter) Lint(filepath string, content []byte, project *Project) (*Valid
 		return nil, err
 	}
 
-	if l.errorFormatter != nil {
-		if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, content); err != nil {
-			return nil, fmt.Errorf("error formatting output: %w", err)
+	if l.shouldReport(result.FilePath) {
+		if l.errorFormatter != nil {
+			if err := l.errorFormatter.PrintErrors(l.errorOutput, result.Errors, content); err != nil {
+				return nil, fmt.Errorf("error formatting output: %w", err)
+			}
+		} else {
+			l.displayErrors(result.Errors, content)
 		}
-	} else {
-		l.displayErrors(result.Errors, content)
 	}
 	return result, nil
 }
 
-func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, remoteActions *RemoteActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache) []Rule {
+func makeRules(filePath string, isRemote bool, gitHubToken string, localActions *LocalActionsMetadataCache, remoteActions *RemoteActionsMetadataCache, localReusableWorkflow *LocalReusableWorkflowCache, project *Project, reportProjectFindings bool, allowRepositoryFileAutoFixers bool) []Rule {
 	// WorkflowTaintMap is shared between Critical and Medium variants of
 	// CodeInjection, EnvVarInjection, ArgumentInjection, and RequestForgery rules
 	// to enable cross-job taint propagation tracking via needs.*.outputs.*
@@ -604,6 +661,17 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		remoteActions = NewRemoteActionsMetadataCache(debugOut)
 	}
 	actionMetadata := NewMultiActionMetadataResolver(localActions, remoteActions)
+	dependabotGitHubActions := NewDependabotGitHubActionsRule(filePath, isRemote)
+	dependabotGitHubActions.allowRepositoryFileAutoFixers = allowRepositoryFileAutoFixers
+	dependabotEcosystem := NewDependabotEcosystemRule(filePath, isRemote)
+	dependabotEcosystem.reportProjectFindings = reportProjectFindings
+	// Library and remote-snapshot callers may lint a project whose root differs
+	// from the process working directory. Prefer the already-resolved Project
+	// over rediscovering the root from a display-relative workflow path.
+	if project != nil && !isRemote {
+		dependabotGitHubActions.projectRoot = project.RootDirectory()
+		dependabotEcosystem.projectRoot = project.RootDirectory()
+	}
 
 	return []Rule{
 		// MatrixRule(),
@@ -628,9 +696,9 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		OutputClobberingCriticalRule(),          // Detects output clobbering in privileged workflow triggers
 		OutputClobberingMediumRule(),            // Detects output clobbering in normal workflow triggers
 		CommitShaRule(gitHubToken),
-		NewDependabotGitHubActionsRule(filePath, isRemote), // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
-		NewDependabotEcosystemRule(filePath, isRemote),     // Checks dependabot config covers ecosystems from lockfiles and setup actions
-		NewDependencyReviewSettingsRule(),                  // Checks dependency-review-action settings against required permissions
+		dependabotGitHubActions,           // Checks dependabot.yaml has github-actions ecosystem when unpinned actions found
+		dependabotEcosystem,               // Checks dependabot config covers ecosystems from lockfiles and setup actions
+		NewDependencyReviewSettingsRule(), // Checks dependency-review-action settings against required permissions
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
 		NewActionListRule(),
@@ -733,7 +801,7 @@ func (l *Linter) validate(
 	// dependabot config / composite action / unparseable workflow would
 	// silently skip the rule-name check and the user's CLI typo would not
 	// be reported until a parseable workflow happened to reach validate().
-	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, l.remoteActionsCache, localReusableWorkflow)
+	rules := makeRules(filePath, l.isRemote, l.gitHubToken, localActions, l.remoteActionsCache, localReusableWorkflow, project, l.shouldReportProjectFindings(filePath), !l.disableRepositoryFileAutoFixers)
 	filteredRules, optErr := applyOptInRules(rules, l.enabledOptInRules)
 	if optErr != nil {
 		return nil, optErr
