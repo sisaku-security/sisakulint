@@ -627,6 +627,18 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
 
+			// workflow_run matches the rule's documented threat model (a privileged
+			// consumer workflow downloading artifacts from a less-trusted producer run),
+			// so these path-safety cases exercise the rule with a trigger that keeps it active.
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_run"}},
+				},
+			}
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
+
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
 				RunsOn: tt.runsOn,
@@ -657,6 +669,252 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				for i, e := range errors {
 					t.Logf("Error %d: %s", i, e.Description)
 				}
+			}
+		})
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn tests that the rule does NOT flag a workflow
+// whose only triggers are trusted (push tag / workflow_dispatch) and which passes
+// artifacts between its own jobs via needs: - the standard multi-OS build fan-in
+// pattern. actions/download-artifact defaults to the current run, so without a
+// privileged trigger there is no less-trusted producer that could poison the
+// artifact. Regression test for the OpenLogi/OpenLogi release.yml false positive.
+func TestArtifactPoisoning_SameRunFanIn(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+		},
+	}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+	}
+
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v8"},
+			Inputs: map[string]*ast.Input{
+				"name": {
+					Name:  &ast.String{Value: "name"},
+					Value: &ast.String{Value: "signed-windows-build"},
+				},
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "signed-zip"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+			downloadStep,
+		},
+	}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+	if err := rule.VisitStep(downloadStep); err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	if errors := rule.Errors(); len(errors) != 0 {
+		t.Errorf("VisitStep() for same-run fan-in without a privileged trigger got %d errors, want 0. This is a false positive.", len(errors))
+		for i, e := range errors {
+			t.Logf("Error %d: %s", i, e.Description)
+		}
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn_ExplicitCrossRun tests that a GENUINE
+// cross-run download still gets flagged even without a privileged trigger.
+// A genuine cross-run fetch needs both a github-token and a foreign run-id:
+// actions/download-artifact only reaches another run inside its `if (inputs.token)`
+// branch, so a run-id combined with a token actually fetches from that other,
+// potentially less-trusted run. (The token-less case is exercised separately in
+// TestArtifactPoisoning_SameRunFanIn_TokenlessRunID, where the action ignores
+// run-id and the rule must NOT fire.)
+func TestArtifactPoisoning_SameRunFanIn_ExplicitCrossRun(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+		},
+	}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+	}
+
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v8"},
+			Inputs: map[string]*ast.Input{
+				"run-id": {
+					Name:  &ast.String{Value: "run-id"},
+					Value: &ast.String{Value: "${{ inputs.source_run_id }}"},
+				},
+				"github-token": {
+					Name:  &ast.String{Value: "github-token"},
+					Value: &ast.String{Value: "${{ secrets.CROSS_RUN_TOKEN }}"},
+				},
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+			downloadStep,
+		},
+	}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+	if err := rule.VisitStep(downloadStep); err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	if errors := rule.Errors(); len(errors) != 1 {
+		t.Errorf("VisitStep() for explicit cross-run download got %d errors, want 1", len(errors))
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn_TokenlessRunID tests that a run-id WITHOUT a
+// github-token is NOT flagged on a non-privileged trigger. actions/download-artifact
+// only populates its cross-run fetch (findBy) inside `if (inputs.token)`; without a
+// token the run-id input is silently ignored and the current run is used, so there
+// is no foreign (potentially untrusted) producer and no artifact-poisoning vector.
+// This is the corrected behavior: a token-less run-id is a misconfiguration, not a
+// cross-run download, and must not raise a false positive.
+func TestArtifactPoisoning_SameRunFanIn_TokenlessRunID(t *testing.T) {
+	rule := ArtifactPoisoningRule()
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+		},
+	}
+	if err := rule.VisitWorkflowPre(workflow); err != nil {
+		t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+	}
+
+	downloadStep := &ast.Step{
+		ID: &ast.String{Value: "download"},
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/download-artifact@v8"},
+			Inputs: map[string]*ast.Input{
+				"run-id": {
+					Name:  &ast.String{Value: "run-id"},
+					Value: &ast.String{Value: "${{ inputs.source_run_id }}"},
+				},
+				"path": {
+					Name:  &ast.String{Value: "path"},
+					Value: &ast.String{Value: "dist"},
+				},
+			},
+		},
+		Pos: &ast.Position{Line: 10, Col: 5},
+	}
+
+	job := &ast.Job{
+		Steps: []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+			downloadStep,
+		},
+	}
+
+	if err := rule.VisitJobPre(job); err != nil {
+		t.Fatalf("VisitJobPre() unexpected error: %v", err)
+	}
+	if err := rule.VisitStep(downloadStep); err != nil {
+		t.Errorf("VisitStep() unexpected error: %v", err)
+	}
+
+	if errors := rule.Errors(); len(errors) != 0 {
+		t.Errorf("VisitStep() for a token-less run-id got %d errors, want 0. Without a github-token the action ignores run-id and reads the current run, so this is a false positive.", len(errors))
+	}
+}
+
+// TestArtifactPoisoning_SameRunFanIn_RedundantSelfRunID tests that run-id/repository
+// pinned back to the current context (github.run_id / github.repository) is NOT
+// flagged, even alongside a github-token. Such a self-reference resolves to this same
+// run/repo, so it is not a cross-run fetch and must not raise a false positive.
+func TestArtifactPoisoning_SameRunFanIn_RedundantSelfRunID(t *testing.T) {
+	cases := []struct {
+		name  string
+		key   string
+		value string
+	}{
+		{"run-id self", "run-id", "${{ github.run_id }}"},
+		{"repository self", "repository", "${{ github.repository }}"},
+		{"run-id self extra spaces", "run-id", "${{   github.run_id   }}"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := ArtifactPoisoningRule()
+
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_dispatch"}},
+				},
+			}
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
+
+			downloadStep := &ast.Step{
+				ID: &ast.String{Value: "download"},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/download-artifact@v8"},
+					Inputs: map[string]*ast.Input{
+						tc.key: {
+							Name:  &ast.String{Value: tc.key},
+							Value: &ast.String{Value: tc.value},
+						},
+						"github-token": {
+							Name:  &ast.String{Value: "github-token"},
+							Value: &ast.String{Value: "${{ secrets.GITHUB_TOKEN }}"},
+						},
+						"path": {
+							Name:  &ast.String{Value: "path"},
+							Value: &ast.String{Value: "dist"},
+						},
+					},
+				},
+				Pos: &ast.Position{Line: 10, Col: 5},
+			}
+
+			job := &ast.Job{
+				Steps: []*ast.Step{
+					{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/checkout@v4"}}},
+					downloadStep,
+				},
+			}
+
+			if err := rule.VisitJobPre(job); err != nil {
+				t.Fatalf("VisitJobPre() unexpected error: %v", err)
+			}
+			if err := rule.VisitStep(downloadStep); err != nil {
+				t.Errorf("VisitStep() unexpected error: %v", err)
+			}
+
+			if errors := rule.Errors(); len(errors) != 0 {
+				t.Errorf("VisitStep() for a redundant self-reference (%s=%s) got %d errors, want 0. It pins the download to the current run/repo, so this is a false positive.", tc.key, tc.value, len(errors))
 			}
 		})
 	}
@@ -913,6 +1171,17 @@ func TestArtifactPoisoning_Integration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rule := ArtifactPoisoningRule()
+
+			// workflow_run keeps the rule active for these path-safety/autofix cases;
+			// see TestArtifactPoisoning_SameRunFanIn for the no-privileged-trigger case.
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{Hook: &ast.String{Value: "workflow_run"}},
+				},
+			}
+			if err := rule.VisitWorkflowPre(workflow); err != nil {
+				t.Fatalf("VisitWorkflowPre() unexpected error: %v", err)
+			}
 
 			// Simulate a job with checkout to enable artifact poisoning detection
 			jobWithCheckout := &ast.Job{
