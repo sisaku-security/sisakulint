@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v68/github"
 )
@@ -16,6 +17,7 @@ type RepositoryInfo struct {
 	Owner    string
 	Name     string
 	FullName string // "owner/repo"
+	Ref      string // optional immutable or named ref for workflow retrieval
 }
 
 // WorkflowFile represents workflow file information
@@ -27,26 +29,38 @@ type WorkflowFile struct {
 
 // Fetcher retrieves repositories and workflows from GitHub API
 type Fetcher struct {
-	client *github.Client
-	limit  int
+	client        *github.Client
+	archiveClient *http.Client
+	// allowInsecureArchive is test-only; production archive URLs must use TLS.
+	allowInsecureArchive bool
+	limit                int
 }
 
 // NewFetcher creates a new Fetcher
 func NewFetcher(limit int) (*Fetcher, error) {
-	var httpClient *http.Client
+	return NewFetcherWithToken(limit, getToken())
+}
 
-	token := getToken()
+// NewFetcherWithToken creates a Fetcher with an explicitly resolved token.
+// CLI callers should use this constructor so -github-token and the standard
+// environment fallback chain are shared by remote scans and lint rules.
+// The fetcher targets GitHub.com; custom API base URLs and GitHub Enterprise
+// Server are not currently supported.
+func NewFetcherWithToken(limit int, token string) (*Fetcher, error) {
+	apiClient := &http.Client{Timeout: 2 * time.Minute}
 	if token != "" {
-		httpClient = &http.Client{
-			Transport: &tokenTransport{token: token},
+		apiClient.Transport = &tokenTransport{
+			token: token,
+			base:  http.DefaultTransport,
 		}
 	}
 
-	client := github.NewClient(httpClient)
+	client := github.NewClient(apiClient)
 
 	return &Fetcher{
-		client: client,
-		limit:  limit,
+		client:        client,
+		archiveClient: newArchiveHTTPClient(),
+		limit:         limit,
 	}, nil
 }
 
@@ -95,19 +109,41 @@ func getTokenFromGitCredential() (string, error) {
 // tokenTransport is a Transport that adds token to GitHub API requests
 type tokenTransport struct {
 	token string
+	base  http.RoundTripper
 }
 
 func (t *tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
 	clonedReq := req.Clone(req.Context())
+	// Never forward a GitHub token to the signed archive host (or any other
+	// redirect target). The archive downloader intentionally uses a separate
+	// unauthenticated client as a second line of defense.
+	if !isGitHubAPIHost(req.URL.Hostname()) {
+		clonedReq.Header.Del("Authorization")
+		return base.RoundTrip(clonedReq)
+	}
 	clonedReq.Header.Set("Authorization", "Bearer "+t.token)
-	return http.DefaultTransport.RoundTrip(clonedReq)
+	return base.RoundTrip(clonedReq)
+}
+
+func isGitHubAPIHost(host string) bool {
+	return host == "api.github.com" || host == "uploads.github.com"
 }
 
 // FetchRepositories retrieves repositories based on input
 func (f *Fetcher) FetchRepositories(ctx context.Context, input *ParsedInput) ([]*RepositoryInfo, error) {
 	switch input.Type {
 	case InputTypeURL, InputTypeOwnerRepo:
-		return f.fetchSingleRepo(ctx, input.Owner, input.Repo)
+		repositories, err := f.fetchSingleRepo(ctx, input.Owner, input.Repo)
+		if err == nil && input.Ref != "" {
+			for _, repository := range repositories {
+				repository.Ref = input.Ref
+			}
+		}
+		return repositories, err
 	case InputTypeSearchQuery:
 		return f.searchRepositories(ctx, input.Query)
 	default:
@@ -160,12 +196,22 @@ func (f *Fetcher) searchRepositories(ctx context.Context, query string) ([]*Repo
 
 // FetchWorkflows retrieves workflow files from repository
 func (f *Fetcher) FetchWorkflows(ctx context.Context, repo *RepositoryInfo) ([]*WorkflowFile, error) {
+	return f.FetchWorkflowsAtRef(ctx, repo, "")
+}
+
+// FetchWorkflowsAtRef retrieves workflow files from a repository at ref.
+// An empty ref preserves the GitHub API default-branch behavior.
+func (f *Fetcher) FetchWorkflowsAtRef(ctx context.Context, repo *RepositoryInfo, ref string) ([]*WorkflowFile, error) {
+	var getOptions *github.RepositoryContentGetOptions
+	if ref != "" {
+		getOptions = &github.RepositoryContentGetOptions{Ref: ref}
+	}
 	_, contents, _, err := f.client.Repositories.GetContents(
 		ctx,
 		repo.Owner,
 		repo.Name,
 		".github/workflows",
-		nil,
+		getOptions,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch workflow directory: %w", err)
@@ -186,7 +232,7 @@ func (f *Fetcher) FetchWorkflows(ctx context.Context, repo *RepositoryInfo) ([]*
 			repo.Owner,
 			repo.Name,
 			content.GetPath(),
-			nil,
+			getOptions,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch workflow file %s: %w", content.GetPath(), err)

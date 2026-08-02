@@ -46,6 +46,10 @@ type DependabotEcosystemRule struct {
 	workflowPath string
 	isRemote     bool
 	projectRoot  string
+	// reportProjectFindings is false for context-only workflows in a
+	// pull-request scan. Those workflows must not consume the run-wide dedupe
+	// key for root-lockfile findings that should be anchored to a target file.
+	reportProjectFindings bool
 	// setupActionReqs collects ecosystem requirements derived from setup actions in the
 	// current workflow, anchored to the step position for precise reporting.
 	setupActionReqs []ecosystemRequirement
@@ -69,8 +73,9 @@ func NewDependabotEcosystemRule(workflowPath string, isRemote bool) *DependabotE
 			RuleName: "dependabot-ecosystem",
 			RuleDesc: "Check if dependabot config covers package ecosystems detected from lockfiles and setup actions",
 		},
-		workflowPath: workflowPath,
-		isRemote:     isRemote,
+		workflowPath:          workflowPath,
+		isRemote:              isRemote,
+		reportProjectFindings: true,
 	}
 	if !isRemote {
 		rule.projectRoot = dependabotFindProjectRoot(workflowPath)
@@ -224,6 +229,9 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		// workflow files does not emit the same line-1 warning N times. Setup-action
 		// findings carry a step anchor and stay per-workflow.
 		if req.pos == nil {
+			if !rule.reportProjectFindings {
+				continue
+			}
 			repoKey := rule.projectRoot + "\x00" + req.label + "\x00" + key
 			if _, loaded := dependabotEcosystemReported.LoadOrStore(repoKey, struct{}{}); loaded {
 				continue

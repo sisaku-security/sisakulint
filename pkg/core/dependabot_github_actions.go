@@ -25,6 +25,10 @@ type DependabotGitHubActionsRule struct {
 	// isRemote indicates whether we are running in remote scan mode.
 	// In remote mode the dependabot file cannot be checked via the local filesystem.
 	isRemote bool
+	// allowRepositoryFileAutoFixers is false when a caller can only persist the
+	// workflow file returned in ValidateResult, such as repository-mode API
+	// scans. Local CLI scans keep the historical project-file fixes enabled.
+	allowRepositoryFileAutoFixers bool
 }
 
 // NewDependabotGitHubActionsRule creates a new DependabotGitHubActionsRule instance.
@@ -37,9 +41,10 @@ func NewDependabotGitHubActionsRule(workflowPath string, isRemote bool) *Dependa
 			RuleName: "dependabot-github-actions",
 			RuleDesc: "Check if dependabot.yaml has github-actions ecosystem configured when unpinned actions are detected",
 		},
-		workflowPath:   workflowPath,
-		alreadyChecked: make(map[string]bool),
-		isRemote:       isRemote,
+		workflowPath:                  workflowPath,
+		alreadyChecked:                make(map[string]bool),
+		isRemote:                      isRemote,
+		allowRepositoryFileAutoFixers: true,
 	}
 	// Find project root from workflow path only for local scans
 	if !isRemote {
@@ -142,9 +147,11 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 			"dependabot.yaml does not exist. Without Dependabot, major version updates (e.g., v3 -> v4) for GitHub Actions won't be automated. "+
 				"Create .github/dependabot.yaml with github-actions ecosystem. See https://sisaku-security.github.io/lint/docs/rules/dependabotgithubactionsrule/",
 		)
-		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
-			return createDependabotFile(rule.projectRoot)
-		}))
+		if rule.allowRepositoryFileAutoFixers {
+			rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
+				return createDependabotFile(rule.projectRoot)
+			}))
+		}
 		return nil
 	}
 
@@ -162,9 +169,11 @@ func (rule *DependabotGitHubActionsRule) VisitWorkflowPost(_ *ast.Workflow) erro
 				"Without it, major version updates (e.g., v3 -> v4) for GitHub Actions won't be automated. "+
 				"See https://sisaku-security.github.io/lint/docs/rules/dependabotgithubactionsrule/",
 		)
-		rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
-			return updateDependabotFile(dependabotPath)
-		}))
+		if rule.allowRepositoryFileAutoFixers {
+			rule.AddAutoFixer(NewFuncFixer(rule.RuleName, func() error {
+				return updateDependabotFile(dependabotPath)
+			}))
+		}
 	}
 
 	return nil
