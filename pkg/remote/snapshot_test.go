@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-github/v68/github"
@@ -102,9 +103,9 @@ func TestMaterializePullRequestUsesVerifiedImmutableHead(t *testing.T) {
 }
 
 func TestMaterializePullRequestRejectsChangedHeadBeforeDownloading(t *testing.T) {
-	requestCount := 0
+	var requestCount atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 		if r.URL.Path != "/repos/owner/repo/pulls/9" {
 			t.Fatalf("unexpected request after head mismatch: %s", r.URL.Path)
 		}
@@ -124,15 +125,15 @@ func TestMaterializePullRequestRejectsChangedHeadBeforeDownloading(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "pull request head changed") {
 		t.Fatalf("error = %v, want head changed error", err)
 	}
-	if requestCount != 1 {
-		t.Fatalf("request count = %d, want 1", requestCount)
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("request count = %d, want 1", got)
 	}
 }
 
 func TestMaterializePullRequestRejectsGitHubFileListTruncation(t *testing.T) {
-	requestCount := 0
+	var requestCount atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 		if r.URL.Path != "/repos/owner/repo/pulls/10" {
 			t.Fatalf("unexpected request after file-limit rejection: %s", r.URL.Path)
 		}
@@ -152,21 +153,21 @@ func TestMaterializePullRequestRejectsGitHubFileListTruncation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "file listing limit") {
 		t.Fatalf("error = %v, want file-list limit error", err)
 	}
-	if requestCount != 1 {
-		t.Fatalf("request count = %d, want 1", requestCount)
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("request count = %d, want 1", got)
 	}
 }
 
 func TestMaterializePullRequestRejectsRevisionChangeDuringFileListing(t *testing.T) {
 	const changedHeadSHA = "fedcba9876543210fedcba9876543210fedcba98"
-	pullRequestReads := 0
-	archiveRequested := false
+	var pullRequestReads atomic.Int64
+	var archiveRequested atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/owner/repo/pulls/11":
-			pullRequestReads++
+			readCount := pullRequestReads.Add(1)
 			headSHA := snapshotTestSHA
-			if pullRequestReads > 1 {
+			if readCount > 1 {
 				headSHA = changedHeadSHA
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -175,7 +176,7 @@ func TestMaterializePullRequestRejectsRevisionChangeDuringFileListing(t *testing
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `[{"filename":".github/workflows/ci.yml","status":"modified"}]`)
 		default:
-			archiveRequested = true
+			archiveRequested.Store(true)
 			t.Fatalf("unexpected request after revision change: %s", r.URL.Path)
 		}
 	}))
@@ -192,11 +193,43 @@ func TestMaterializePullRequestRejectsRevisionChangeDuringFileListing(t *testing
 	if err == nil || !strings.Contains(err.Error(), "pull request revision changed") {
 		t.Fatalf("error = %v, want revision changed error", err)
 	}
-	if pullRequestReads != 2 {
-		t.Fatalf("pull request read count = %d, want 2", pullRequestReads)
+	if got := pullRequestReads.Load(); got != 2 {
+		t.Fatalf("pull request read count = %d, want 2", got)
 	}
-	if archiveRequested {
+	if archiveRequested.Load() {
 		t.Fatal("archive was requested after the pull request revision changed")
+	}
+}
+
+func TestNewArchiveHTTPClientRedirectPolicy(t *testing.T) {
+	checkRedirect := newArchiveHTTPClient().CheckRedirect
+	if checkRedirect == nil {
+		t.Fatal("CheckRedirect is nil")
+	}
+
+	valid, err := http.NewRequest(http.MethodGet, "https://objects.githubusercontent.com/archive.tar.gz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid.Header.Set("Authorization", "Bearer secret")
+	if err := checkRedirect(valid, nil); err != nil {
+		t.Fatalf("valid redirect rejected: %v", err)
+	}
+	if got := valid.Header.Get("Authorization"); got != "" {
+		t.Fatalf("Authorization header was retained: %q", got)
+	}
+
+	insecure, err := http.NewRequest(http.MethodGet, "http://objects.githubusercontent.com/archive.tar.gz", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkRedirect(insecure, nil); err == nil || !strings.Contains(err.Error(), "must use HTTPS") {
+		t.Fatalf("insecure redirect error = %v", err)
+	}
+
+	via := make([]*http.Request, maxArchiveRedirects)
+	if err := checkRedirect(valid, via); err == nil || !strings.Contains(err.Error(), "too many archive redirects") {
+		t.Fatalf("redirect limit error = %v", err)
 	}
 }
 
@@ -230,11 +263,34 @@ func TestFetchPullRequestWorkflowPathsPaginates(t *testing.T) {
 	}
 }
 
+func TestFetchPullRequestWorkflowPathsRejectsExcessivePages(t *testing.T) {
+	var requestCount atomic.Int64
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Link", fmt.Sprintf(`<%s/repos/owner/repo/pulls/3/files?page=1>; rel="next"`, server.URL))
+		fmt.Fprint(w, `[]`)
+	}))
+	defer server.Close()
+
+	fetcher := newSnapshotTestFetcher(t, server)
+	_, err := fetcher.fetchPullRequestWorkflowPaths(context.Background(), "owner", "repo", 3)
+	maxPages := maxPullRequestFiles/100 + 1
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("exceeded %d pages", maxPages)) {
+		t.Fatalf("error = %v, want page-limit error", err)
+	}
+	if got := requestCount.Load(); got != int64(maxPages) {
+		t.Fatalf("request count = %d, want %d", got, maxPages)
+	}
+}
+
 func TestExtractTarRejectsUnsafeEntries(t *testing.T) {
 	tests := []struct {
 		name     string
 		header   tar.Header
 		contents string
+		wantErr  string
 	}{
 		{
 			name: "parent traversal",
@@ -245,6 +301,7 @@ func TestExtractTarRejectsUnsafeEntries(t *testing.T) {
 				Typeflag: tar.TypeReg,
 			},
 			contents: "x",
+			wantErr:  "unsafe repository archive path",
 		},
 		{
 			name: "symlink",
@@ -254,6 +311,7 @@ func TestExtractTarRejectsUnsafeEntries(t *testing.T) {
 				Mode:     0o777,
 				Typeflag: tar.TypeSymlink,
 			},
+			wantErr: "unsupported repository archive entry type",
 		},
 	}
 
@@ -277,7 +335,20 @@ func TestExtractTarRejectsUnsafeEntries(t *testing.T) {
 			if err == nil {
 				t.Fatal("extractTar unexpectedly accepted unsafe entry")
 			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
 		})
+	}
+}
+
+func TestEnsureTargetsExistRejectsMissingWorkflow(t *testing.T) {
+	err := ensureTargetsExist(
+		[]string{".github/workflows/missing.yml"},
+		[]string{".github/workflows/present.yml"},
+	)
+	if err == nil || !strings.Contains(err.Error(), "is missing from pull request head snapshot") {
+		t.Fatalf("error = %v, want missing-workflow error", err)
 	}
 }
 

@@ -88,7 +88,7 @@ func parseURL(input string) (*ParsedInput, error) {
 		if err != nil || number <= 0 {
 			return nil, fmt.Errorf("invalid GitHub pull request number %q", parts[3])
 		}
-		if len(parts) > 5 || (len(parts) > 4 && parts[4] != "files" && parts[4] != "commits" && parts[4] != "checks") {
+		if len(parts) > 4 && parts[4] != "files" && parts[4] != "commits" && parts[4] != "checks" {
 			return nil, fmt.Errorf("unsupported GitHub pull request URL path: %s", input)
 		}
 		parsed.PullNumber = number

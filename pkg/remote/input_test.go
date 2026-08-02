@@ -91,6 +91,14 @@ func TestParseInput_URL(t *testing.T) {
 			wantErr:   false,
 		},
 		{
+			name:      "URL with slash-containing ref",
+			input:     "https://github.com/owner/repo/tree/feature/nested",
+			wantType:  InputTypeURL,
+			wantOwner: "owner",
+			wantRepo:  "repo",
+			wantRef:   "feature/nested",
+		},
+		{
 			name:           "pull request URL",
 			input:          "https://github.com/sisaku-security/sisakulint-agent/pull/18#issuecomment-5027897981",
 			wantType:       InputTypeURL,
@@ -105,6 +113,19 @@ func TestParseInput_URL(t *testing.T) {
 			wantOwner:      "owner",
 			wantRepo:       "repo",
 			wantPullNumber: 42,
+		},
+		{
+			name:           "pull request commit URL",
+			input:          "https://github.com/owner/repo/pull/42/commits/0123456789abcdef",
+			wantType:       InputTypeURL,
+			wantOwner:      "owner",
+			wantRepo:       "repo",
+			wantPullNumber: 42,
+		},
+		{
+			name:    "unsupported pull request subpath",
+			input:   "https://github.com/owner/repo/pull/42/unknown/value",
+			wantErr: true,
 		},
 		{
 			name:    "non-github URL",

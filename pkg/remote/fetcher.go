@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v68/github"
 )
@@ -43,8 +44,10 @@ func NewFetcher(limit int) (*Fetcher, error) {
 // NewFetcherWithToken creates a Fetcher with an explicitly resolved token.
 // CLI callers should use this constructor so -github-token and the standard
 // environment fallback chain are shared by remote scans and lint rules.
+// The fetcher targets GitHub.com; custom API base URLs and GitHub Enterprise
+// Server are not currently supported.
 func NewFetcherWithToken(limit int, token string) (*Fetcher, error) {
-	apiClient := &http.Client{}
+	apiClient := &http.Client{Timeout: 2 * time.Minute}
 	if token != "" {
 		apiClient.Transport = &tokenTransport{
 			token: token,
@@ -117,7 +120,7 @@ func (t *tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	clonedReq := req.Clone(req.Context())
 	// Never forward a GitHub token to the signed archive host (or any other
 	// redirect target). The archive downloader intentionally uses a separate
-	// unauthenticated client as a second line of defence.
+	// unauthenticated client as a second line of defense.
 	if !isGitHubAPIHost(req.URL.Hostname()) {
 		clonedReq.Header.Del("Authorization")
 		return base.RoundTrip(clonedReq)
@@ -197,7 +200,7 @@ func (f *Fetcher) FetchWorkflows(ctx context.Context, repo *RepositoryInfo) ([]*
 }
 
 // FetchWorkflowsAtRef retrieves workflow files from a repository at ref.
-// An empty ref preserves the GitHub API default-branch behaviour.
+// An empty ref preserves the GitHub API default-branch behavior.
 func (f *Fetcher) FetchWorkflowsAtRef(ctx context.Context, repo *RepositoryInfo, ref string) ([]*WorkflowFile, error) {
 	var getOptions *github.RepositoryContentGetOptions
 	if ref != "" {

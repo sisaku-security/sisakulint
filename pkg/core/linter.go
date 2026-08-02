@@ -85,7 +85,7 @@ type LinterOptions struct {
 	// 空文字なら未認証 60 req/h 制限が適用される。
 	GitHubToken string
 	// ReportFilePaths limits rendered findings to the listed repository-relative
-	// paths while still analysing every file passed to LintFiles. This is used
+	// paths while still analyzing every file passed to LintFiles. This is used
 	// for pull-request scans: unchanged workflows provide cross-file context but
 	// do not create unrelated review findings. An empty slice reports all files.
 	ReportFilePaths []string

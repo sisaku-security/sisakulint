@@ -108,15 +108,19 @@ sisakulint \
 
 Pull request URLs are recognized as well (`-remote https://github.com/owner/repo/pull/18`).
 The command downloads an archive at the resolved immutable head SHA, safely
-materializes the complete repository, analyses all workflows with local project
-context, and reports only workflows changed in the PR. Private repositories
-require `-github-token` or one of the documented token environment variables.
+materializes the complete repository, analyzes all workflows with local project
+context, and reports only workflows changed in the PR. Private repositories can
+authenticate with `-github-token`, `SISAKULINT_GITHUB_TOKEN`, `GITHUB_TOKEN`,
+`GH_TOKEN`, an existing `gh auth` session, or Git credentials. Remote scanning
+currently supports GitHub.com only; GitHub Enterprise Server and custom GitHub
+API base URLs are not supported.
 
 `-fix dry-run` can preview remote fixes. Applying `-fix on` requires a new,
 explicit `-remote-checkout-dir`; sisakulint never writes directly to GitHub.
-PR-mode fixes are limited to the explicitly selected workflow files. Fixers
-which mutate repository files such as `.github/dependabot.yaml` remain enabled
-for local scans but are disabled for this workflow-only response contract.
+PR-mode fixes are limited to workflows changed in the PR and, when provided,
+the `-remote-target` selection. Fixers which mutate repository files such as
+`.github/dependabot.yaml` remain enabled for local scans but are disabled for
+this workflow-only response contract.
 
 ---
 

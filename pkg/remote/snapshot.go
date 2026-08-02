@@ -240,7 +240,11 @@ func (f *Fetcher) fetchPullRequestWorkflowPaths(
 	options := &github.ListOptions{PerPage: 100}
 	seen := make(map[string]struct{})
 	var targets []string
-	for {
+	maxPages := maxPullRequestFiles/options.PerPage + 1
+	for page := 0; ; page++ {
+		if page >= maxPages {
+			return nil, fmt.Errorf("pull request file listing exceeded %d pages", maxPages)
+		}
 		files, response, err := f.client.PullRequests.ListFiles(ctx, owner, repo, pullNumber, options)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list pull request files: %w", err)
@@ -306,13 +310,11 @@ func (f *Fetcher) downloadAndExtractArchive(ctx context.Context, archiveURL *url
 		return fmt.Errorf("failed to open repository archive: %w", err)
 	}
 	defer gzipReader.Close()
-	if err := extractTar(gzipReader, root); err != nil {
-		return err
-	}
+	extractErr := extractTar(gzipReader, root)
 	if compressed.count > defaultMaxArchiveBytes {
 		return fmt.Errorf("repository archive exceeds compressed size limit of %d bytes", defaultMaxArchiveBytes)
 	}
-	return nil
+	return extractErr
 }
 
 type countingReader struct {
@@ -395,7 +397,7 @@ func extractTar(reader io.Reader, root string) error {
 			if err := os.MkdirAll(destination, 0o755); err != nil {
 				return fmt.Errorf("failed to create archive directory %q: %w", rel, err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if header.Size < 0 || header.Size > defaultMaxFileBytes {
 				return fmt.Errorf("repository archive file %q exceeds size limit", rel)
 			}

@@ -211,7 +211,10 @@ func (e *enabledRuleFlags) Set(v string) error {
 type remoteTargetFlags []string
 
 func (t *remoteTargetFlags) String() string {
-	return "repository-relative workflow path to report or fix"
+	if t == nil {
+		return ""
+	}
+	return strings.Join(*t, ",")
 }
 
 func (t *remoteTargetFlags) Set(v string) error {
