@@ -1309,3 +1309,77 @@ func TestImpostorCommitRule_BranchHeadAPIUnavailable_FallthroughToReachability(t
 		t.Errorf("unexpected error: %v", result.err)
 	}
 }
+
+// TestImpostorCommitRule_OldMajorReleasePushedPastCompareWindow reproduces a false
+// positive seen on actions/checkout@93cb6efe.. (sisakuintel-worker issue: scan of
+// yc-software/qm, 2026-08-02): the SHA is exactly the v5.0.1 release commit, but is
+// not the default-branch tip nor any branch HEAD (actions/checkout ships v5.x from a
+// long-lived releases/v5 branch, not main). Newer v6.x/v7.x tags sort before it, so it
+// only becomes provable via ancestry from the v5.1.0 tag — which sat at index 11,
+// past the old maxTagCompareCommits of 10. It must be reachable within the new limit.
+func TestImpostorCommitRule_OldMajorReleasePushedPastCompareWindow(t *testing.T) {
+	t.Parallel()
+
+	const releaseSha = "93cb6efe18208431cddfb8368fd83d5badbf9bfd"
+	const v510Sha = "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"
+
+	// 11 newer tags (v7.0.1 down to v6-beta) sort ahead of v5.1.0/v5.0.1/v5,
+	// mirroring the real actions/checkout tag listing order.
+	newerTags := []string{
+		"v7.0.1", "v7.0.0", "v7", "v6.1.0", "v6.0.3",
+		"v6.0.2", "v6.0.1", "v6.0.0", "v6", "v6-beta",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			var b strings.Builder
+			b.WriteString("[")
+			for _, name := range newerTags {
+				fmt.Fprintf(&b, `{"name":%q,"commit":{"sha":"1111111111111111111111111111111111111111"}},`, name)
+			}
+			fmt.Fprintf(&b, `{"name":"v5.1.0","commit":{"sha":"%s"}},`, v510Sha)
+			fmt.Fprintf(&b, `{"name":"v5.0.1","commit":{"sha":"%s"}}`, releaseSha)
+			b.WriteString("]")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(b.String()))
+		case strings.Contains(path, "/branches-where-head"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"name":"main","commit":{"sha":"2222222222222222222222222222222222222222"}}]`))
+		case strings.HasSuffix(path, "/repos/actions/checkout"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// Diverged from main and from every newer major-version tag; only
+			// v5.1.0 (the real ancestor) reports "behind".
+			if strings.Contains(path, v510Sha) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"behind","ahead_by":0,"behind_by":2,"commits":[],"files":[]}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":1,"behind_by":0,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("actions", "checkout", releaseSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false: SHA is a genuine old-major-version release reachable via an ancestor tag, but got flagged as impostor")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+}

@@ -29,7 +29,17 @@ const (
 
 // maxTagCompareCommits limits the number of per-tag CompareCommits API calls
 // to avoid exhausting rate limits.
-const maxTagCompareCommits = 10
+//
+// Tags are returned by the GitHub API newest-first across ALL major version
+// lines, not just the one the checked SHA belongs to. A repo that has cut N
+// newer major releases pushes every tag from the SHA's own line out of the
+// comparison window, even though the SHA is a genuine historical release
+// (e.g. actions/checkout@93cb6ef.. is exactly the v5.0.1 tag commit, but with
+// v6.x/v7.x tags sorted first it lands at index 11 — past the old limit of
+// 10 — so none of the remaining tags could prove ancestry and it was flagged
+// as an impostor). 30 leaves headroom for several more major lines before
+// this recurs, while staying well under the fetch cap (maxTagPages * 100).
+const maxTagCompareCommits = 30
 
 // loggedImpostorErrors deduplicates per-(owner/repo@sha) "Error verifying commit"
 // debug lines across rule instances (one rule is built per workflow file, so
