@@ -243,12 +243,26 @@ func (project *parser) parseConcurrency(pos *ast.Position, node *yaml.Node) *ast
 				groupFound = true
 			case "cancel-in-progress":
 				ret.CancelInProgress = project.parseBool(kv.val)
+			case "queue":
+				ret.Queue = project.parseString(kv.val, false)
 			default:
-				project.unexpectedKey(kv.key, "concurrency", []string{"group", "cancel-in-progress"})
+				project.unexpectedKey(kv.key, "concurrency", []string{"group", "cancel-in-progress", "queue"})
 			}
 		}
 		if !groupFound {
 			project.errorAt(pos, "section is missing required key \"group\", \"cancel-in-progress\"")
+		}
+
+		if ret.Queue != nil && !ret.Queue.ContainsExpression() {
+			switch ret.Queue.Value {
+			case "single", "max":
+				if ret.Queue.Value == "max" && ret.CancelInProgress != nil &&
+					ret.CancelInProgress.Expression == nil && ret.CancelInProgress.Value {
+					project.errorAt(ret.Queue.Pos, "\"queue: max\" cannot be combined with \"cancel-in-progress: true\" in \"concurrency\" section")
+				}
+			default:
+				project.errorfAt(ret.Queue.Pos, "value %q is invalid for \"queue\" of \"concurrency\" section. expected \"single\" or \"max\"", ret.Queue.Value)
+			}
 		}
 	}
 	return ret
