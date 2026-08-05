@@ -101,6 +101,7 @@ The following patterns are intentionally excluded from detection because their o
 - **Direct `${{ secrets.X }}` expression written to `$GITHUB_OUTPUT`** — when a producer step has no env-derived shell taint and writes `${{ secrets.X }}` directly (e.g. `echo "token=${{ secrets.X }}" >> $GITHUB_OUTPUT`), no leak is reported for downstream `${{ steps.<id>.outputs.* }}` or `${{ needs.<job>.outputs.* }}` expansion. GitHub Actions auto-masks any occurrence of a `secrets.*` value across the entire run, so the same value is masked when the downstream step expands the output. This rule only tracks shell-derived values whose auto-mask coverage is broken (jq / sed / base64 / etc.).
 - **`printf -v VAR ...`** — captures to a shell variable instead of printing.
 - **Inside command substitutions** — `VAR=$(echo "$SECRET")` does not leak because the inner stdout is captured by `$(...)`.
+- **Piped into an opaque stdin-consuming command** — `printf '%s' "$SECRET" | ./cli --secret-stdin` (or `docker login --password-stdin`, `wc`, `sha256sum`, …) does not leak: the value is consumed as the next command's stdin and never reaches the log. Piping into a command that can forward stdin to its own stdout (`cat`, `tee`, `dd`, `tr`, `base64`, `grep`, `sed`, …) is still flagged, following the pipeline terminal's visibility, and a stage that copies stdin to a log-visible device (`tee /dev/stderr`, `dd of=/dev/stderr`) is flagged regardless of where its stdout goes. Wrappers (`sudo tee`, `env cat`, `busybox cat`, `ssh host cat`, `docker run -i … cat`) and path-prefixed or backslash-escaped invocations (`/usr/bin/tee`, `\cat`) are resolved; consumers that cannot be identified (quoted or dynamic command names, `{ …; }` blocks, subshells, shell functions defined in the script) are conservatively treated as forwarding.
 
 #### Patterns the rule does not analyze at all (known blind spots)
 
@@ -113,8 +114,8 @@ These are real leakage paths that this rule does **not** currently detect. They 
 - **Process substitution `>(cmd)` / `<(cmd)`** — sink detection does not descend into process substitutions.
 - **Environment-dumping commands** — `env`, `printenv`, `declare -p`, `set` (with no args), `export -p`, and similar commands print every environment variable (including tainted derived values written to `$GITHUB_ENV`) but are not sinks in this rule.
 - **Indirect expansion / arrays** — `${!VAR}` indirect expansion resolves a variable name stored in another variable, and array element reads (`${arr[i]}`) are not followed back to the array's source assignment. Taint on these forms can be missed.
-- **Pipeline downstream commands** — for `cmd1 | cmd2`, only `cmd1` is analyzed as a possible sink (when it is `echo` / `printf`). `cmd2` is not individually inspected.
-- **`logger`, `xargs`, `systemd-cat`, `wall`, and other log-emitting sinks** — not yet in the sink list.
+- **Pipeline downstream commands as sinks** — for `cmd1 | cmd2`, only `cmd1` is analyzed as a possible sink (when it is `echo` / `printf`). `cmd2`'s own arguments are not inspected as sinks, and the forwarding classification of `cmd2` is name-based (basename plus `sudo`/`env`-style wrapper resolution): a stdin-forwarding binary invoked under an unrecognized name (renamed, aliased, or via an unusual wrapper) is treated as opaque and the upstream `echo`/`printf` is not flagged.
+- **`logger`, `systemd-cat`, `wall`, and other log-emitting sinks** — not yet in the sink list. (`xargs` is covered as a stdin-forwarding pipe consumer — `echo "$TOKEN" | xargs …` flags the upstream `echo` — but `xargs` invocations outside a tainted pipe are not analyzed.)
 
 ### Auto-Fix
 
@@ -240,7 +241,7 @@ must be masked before the leak is suppressed.
 ### Scope Limitations
 
 - **Cross-job output propagation depends on explicit job outputs** — the rule tracks values that flow from `steps.<id>.outputs.*` into `jobs.<job>.outputs` and then into `needs.<job>.outputs.*`. It does not infer arbitrary filesystem, artifact, cache, or service-container transfer between jobs.
-- **`logger` and pipe-consuming commands not yet covered** — `logger`, `xargs`, and similar sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream source if it is `echo`/`printf`, but the downstream command is not individually analyzed.
+- **`logger` and similar sinks not yet covered** — `logger`, `systemd-cat`, and similar log-emitting sinks are not yet detected. Pipes (`cmd1 | cmd2`) flag the upstream `echo`/`printf` only when `cmd2` is recognized as a stdin-forwarding filter (`cat`, `tee`, `tr`, `base64`, `xargs`, …) whose pipeline output reaches the log; `cmd2` itself is not individually analyzed as a sink.
 - **Reusable workflow boundaries** — taint does not cross `workflow_call` boundaries; that is a planned follow-up (see #433).
 - **Composite / JS / Docker action internals are not parsed** — only `run:` blocks in the analyzed workflow are inspected. Leaks inside a `uses:`-referenced action are invisible.
 - **Dynamic shell function dispatch is not resolved** — direct function calls are analyzed, but variable-driven calls such as `$cmd "$TOKEN"` are treated as statically unresolved.
