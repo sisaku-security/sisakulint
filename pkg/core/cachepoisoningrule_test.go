@@ -487,7 +487,10 @@ func TestCachePoisoningRuleChecksHierarchyForCompositeCacheAction(t *testing.T) 
 
 	workflowYAML := `
 name: Bundle Size
-on: [pull_request_target, workflow_dispatch]
+on:
+  pull_request_target: {}
+  repository_dispatch:
+    types: [poison-cache]
 jobs:
   benchmark-pr:
     runs-on: ubuntu-latest
@@ -2730,9 +2733,9 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 		errorContains  string
 	}{
 		{
-			name: "external trigger + push to default branch",
+			name: "repository_dispatch + push to default branch",
 			triggers: []ast.Event{
-				&ast.WorkflowDispatchEvent{},
+				&ast.RepositoryDispatchEvent{},
 				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
 			},
 			expectedErrors: 1,
@@ -2756,12 +2759,22 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 			errorContains:  "cache hierarchy exploitation risk",
 		},
 		{
-			name: "workflow_dispatch only (no push)",
+			// workflow_dispatch requires an actor with existing write access to trigger,
+			// so it is not an attacker-controllable path (sisakulint#571) and must not be
+			// flagged by this check, with or without a push trigger present.
+			name: "workflow_dispatch only (no push, safe)",
 			triggers: []ast.Event{
 				&ast.WorkflowDispatchEvent{},
 			},
-			expectedErrors: 1,
-			errorContains:  "writes to default branch cache",
+			expectedErrors: 0,
+		},
+		{
+			name: "workflow_dispatch + push to default branch (safe)",
+			triggers: []ast.Event{
+				&ast.WorkflowDispatchEvent{},
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+			expectedErrors: 0,
 		},
 		{
 			name: "push only (safe)",
