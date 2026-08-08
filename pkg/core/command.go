@@ -252,7 +252,7 @@ func (cmd *Command) Main(args []string) int {
 	flags.BoolVar(&generateBoilerplate, "boilerplate", false, "Generate a costomized template file for GitHub Actions workflow")
 	flags.StringVar(&linterOpts.CustomErrorMessageFormat, "format", "", "Custom template to format error messages in Go template syntax.")
 	flags.StringVar(&linterOpts.ConfigurationFilePath, "config-file", "", "File path to config file")
-	flags.BoolVar(&initConfig, "init", false, "Generate default config file at .github/action.yaml in current project. see : https://docs.github.com/ja/actions/creating-actions/metadata-syntax-for-github-actions#github-actions%E3%81%AEyaml%E6%A7%8B%E6%96%87%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6")
+	flags.BoolVar(&initConfig, "init", false, "Generate default config file at .github/sisakulint.yaml in current project")
 	flags.BoolVar(&generateActionList, "generate-action-list", false, "Generate action list configuration from existing workflow files")
 	flags.BoolVar(&linterOpts.IsVerboseOutputEnabled, "verbose", false, "Enable verbose output")
 	flags.BoolVar(&linterOpts.IsDebugOutputEnabled, "debug", false, "Enable debug output (for development)")
