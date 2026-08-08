@@ -2736,7 +2736,7 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
 			},
 			expectedErrors: 1,
-			errorContains:  "cache hierarchy exploitation risk",
+			errorContains:  "cache hierarchy exploitation risk (medium)",
 		},
 		{
 			name: "schedule + push to default branch",
@@ -2745,7 +2745,7 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
 			},
 			expectedErrors: 1,
-			errorContains:  "cache hierarchy exploitation risk",
+			errorContains:  "cache hierarchy exploitation risk (medium)",
 		},
 		{
 			name: "repository_dispatch only (no push)",
@@ -2753,7 +2753,7 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 				&ast.RepositoryDispatchEvent{},
 			},
 			expectedErrors: 1,
-			errorContains:  "cache hierarchy exploitation risk",
+			errorContains:  "cache hierarchy exploitation risk (medium)",
 		},
 		{
 			name: "workflow_dispatch only (no push)",
@@ -2761,7 +2761,7 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 				&ast.WorkflowDispatchEvent{},
 			},
 			expectedErrors: 1,
-			errorContains:  "writes to default branch cache",
+			errorContains:  "cache hierarchy exploitation risk (medium)",
 		},
 		{
 			name: "push only (safe)",
