@@ -1,0 +1,9 @@
+on:
+  push:
+    tags:
+      - "v*"
+jobs:
+  build:
+    uses: ./script/actions/cross-file-taint-callee-checkout.yaml
+    with:
+      ref: ${{ github.sha }}

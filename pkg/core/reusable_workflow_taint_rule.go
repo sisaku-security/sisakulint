@@ -121,23 +121,52 @@ func (rule *ReusableWorkflowTaintRule) checkWorkflowCallInputs(job *ast.Job) {
 			continue
 		}
 		untrustedPaths := rule.findUntrustedExpressionsInString(input.Value)
-		if len(untrustedPaths) == 0 {
+
+		// IsUnsafeCheckoutRef additionally catches values like
+		// github.event.pull_request.head.sha that findUntrustedExpressionsInString
+		// deliberately excludes: a commit SHA can't carry shell metacharacters, so
+		// it's not a code-injection risk, but it's still an attacker-chosen commit
+		// that must not be treated as safe to check out. Only recorded when the
+		// general check found nothing, so it doesn't duplicate an already-covered
+		// (and already unrestricted-by-sink-type) CallerTaint entry.
+		checkoutOnlyUnsafe := len(untrustedPaths) == 0 && IsUnsafeCheckoutRef(input.Value.Value)
+
+		if len(untrustedPaths) == 0 && !checkoutOnlyUnsafe {
 			continue
 		}
 
 		if chainEnabled {
-			rule.cache.RecordCallerTaint(calleeSpec, &CallerTaint{
-				CallerWorkflowPath:   rule.workflowPath,
-				InputName:            strings.ToLower(inputName),
-				UntrustedSources:     untrustedPaths,
-				Pos:                  input.Value.Pos,
-				JobID:                jobIDOf(job),
-				HasPrivilegedTrigger: rule.hasPrivilegedTrigger,
-			})
+			if len(untrustedPaths) > 0 {
+				rule.cache.RecordCallerTaint(calleeSpec, &CallerTaint{
+					CallerWorkflowPath:   rule.workflowPath,
+					InputName:            strings.ToLower(inputName),
+					UntrustedSources:     untrustedPaths,
+					Pos:                  input.Value.Pos,
+					JobID:                jobIDOf(job),
+					HasPrivilegedTrigger: rule.hasPrivilegedTrigger,
+				})
+			}
+			if checkoutOnlyUnsafe {
+				rule.cache.RecordCallerTaint(calleeSpec, &CallerTaint{
+					CallerWorkflowPath:   rule.workflowPath,
+					InputName:            strings.ToLower(inputName),
+					UntrustedSources:     []string{strings.TrimSpace(input.Value.Value)},
+					Pos:                  input.Value.Pos,
+					JobID:                jobIDOf(job),
+					HasPrivilegedTrigger: rule.hasPrivilegedTrigger,
+					CheckoutRefOnly:      true,
+				})
+			}
 			continue
 		}
 
-		// Fallback (single-file lint mode / no project): keep existing per-file behavior.
+		// Fallback (single-file lint mode / no project): keep existing per-file
+		// behavior. checkoutOnlyUnsafe-only findings have no legacy message here;
+		// untrusted-checkout's own (non-deferring, cache-less) fallback covers
+		// this case in single-file mode.
+		if len(untrustedPaths) == 0 {
+			continue
+		}
 		severity := "medium"
 		if rule.hasPrivilegedTrigger {
 			severity = "critical"
@@ -191,6 +220,21 @@ func (rule *ReusableWorkflowTaintRule) checkTaintedInputUsageInSteps(job *ast.Jo
 			}
 		}
 
+		// Sink (NEW): actions/checkout ref: — a tainted input used as the
+		// checked-out ref lets a malicious caller make this workflow build
+		// and execute attacker-chosen code with its privileges.
+		if step.Exec.Kind() == ast.ExecKindAction {
+			action := step.Exec.(*ast.ExecAction)
+			if action.Uses != nil && strings.HasPrefix(action.Uses.Value, "actions/checkout@") {
+				if refInput, ok := action.Inputs["ref"]; ok && refInput != nil && refInput.Value != nil {
+					stepTainted = rule.recordOrReportSinks(
+						rule.findTaintedInputUsagesInString(refInput.Value),
+						SinkCheckoutRef, step, job, calleeSpec, chainEnabled, stepTainted,
+					)
+				}
+			}
+		}
+
 		// Sink (NEW): env: direct interpolation
 		if step.Env != nil && step.Env.Vars != nil {
 			for _, envVar := range step.Env.Vars {
@@ -232,10 +276,13 @@ func (rule *ReusableWorkflowTaintRule) recordOrReportSinks(
 			})
 			continue
 		}
-		// Fallback: legacy per-file behavior. SinkEnv has no fallback message
-		// historically, so we skip emitting it in disabled mode (preserves
-		// existing test expectations for run/script sinks).
-		if sinkType == SinkEnv {
+		// Fallback: legacy per-file behavior. SinkEnv and SinkCheckoutRef have
+		// no fallback message historically, so we skip emitting them in
+		// disabled mode (preserves existing test expectations for run/script
+		// sinks). SinkCheckoutRef is additionally covered by untrusted-checkout
+		// in this mode, since chain resolution isn't available to corroborate
+		// whether an untrusted caller actually reaches this sink.
+		if sinkType == SinkEnv || sinkType == SinkCheckoutRef {
 			continue
 		}
 		isInRunScript := sinkType == SinkRun
