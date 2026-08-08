@@ -596,14 +596,16 @@ key: cache-${{ github.event.comment.body }}
 
 ### Cache Hierarchy Exploitation
 
-GitHub Actions caches are scoped by branch - PRs can read caches from their base branch. This creates a risk where attackers can poison the default branch cache, affecting all downstream PRs.
+GitHub Actions caches are scoped by branch - PRs can read caches from their base branch. This creates a risk where the default branch cache is poisoned, affecting all downstream PRs.
+
+**Severity: Medium.** Unlike the untrusted-trigger checks above (`issue_comment`, `pull_request_target`, `workflow_run`), this pattern is not reachable by unprivileged external contributors: `workflow_dispatch` can only be triggered by someone who already has write access to the repository (GitHub requires permission to edit the workflow file to dispatch it), `repository_dispatch` requires a pre-authorized token, and `schedule` fires automatically with no attacker action at all. This finding is a defense-in-depth / insider-threat concern — a collaborator with existing write access could poison the cache stealthily instead of pushing an obviously malicious commit — rather than an externally-exploitable vulnerability.
 
 #### Attack Scenario
 
-1. **Attacker triggers workflow_dispatch**: Manually triggers a workflow on the default branch
+1. **Collaborator with write access triggers workflow_dispatch**: Manually triggers a workflow on the default branch (or waits for a scheduled run)
 2. **Poisoned cache is written**: Malicious content is cached under the default branch scope
 3. **PRs read poisoned cache**: All subsequent PRs inherit the poisoned cache from the base branch
-4. **Supply chain compromise**: Malicious code executes in PR builds
+4. **Supply chain compromise**: Malicious code executes in PR builds, without leaving a suspicious commit in `git log`
 
 #### Detection Conditions
 
@@ -612,14 +614,14 @@ The rule detects two patterns:
 **Pattern 1: External trigger + push to default branch**
 ```yaml
 on:
-  workflow_dispatch:  # External trigger - can be triggered by attackers
+  workflow_dispatch:  # Requires existing write access to trigger manually
   push:
     branches: [main]  # Writes to default branch cache
 
 jobs:
   build:
     steps:
-      - uses: actions/cache@v3  # WARNING: Cache hierarchy exploitation risk
+      - uses: actions/cache@v3  # WARNING: Cache hierarchy exploitation risk (medium)
 ```
 
 **Pattern 2: External trigger only (no push filter)**
@@ -639,10 +641,10 @@ jobs:
 ```bash
 $ sisakulint ./workflow.yaml
 
-./workflow.yaml:10:9: cache hierarchy exploitation risk: workflow with external triggers
-(workflow_dispatch, push) and push to default branch can be exploited to poison caches.
-Attacker can trigger workflow_dispatch/schedule to write malicious cache that all PRs will read.
-Consider using PR-scoped cache keys or separate workflows [cache-poisoning]
+./workflow.yaml:10:9: cache hierarchy exploitation risk (medium): workflow with external triggers
+(workflow_dispatch, push) and push to default branch can be exploited to poison caches. A
+collaborator with write access (able to trigger workflow_dispatch/schedule) can write malicious
+cache that all PRs will read. Consider using PR-scoped cache keys or separate workflows [cache-poisoning]
 ```
 
 #### Mitigation Strategies for Cache Hierarchy Exploitation
@@ -654,7 +656,7 @@ Consider using PR-scoped cache keys or separate workflows [cache-poisoning]
 
 2. **Separate workflows**: Use different workflows for external triggers and PR builds
 
-3. **Restrict workflow_dispatch**: Limit who can trigger workflows manually
+3. **Restrict workflow_dispatch**: Limit who can trigger workflows manually (defense-in-depth against a compromised or malicious collaborator account)
 
 4. **Use PR-scoped cache keys**: Include PR number in cache keys for PR builds
    ```yaml
