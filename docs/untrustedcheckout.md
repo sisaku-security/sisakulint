@@ -233,6 +233,19 @@ The rule has very few false positives because:
    - `ref: main` (literal branch names - safe)
    - `pull_request` trigger (no privileges - safe)
 
+**`workflow_call` + `${{ inputs.X }}` refs:** unlike the other three privileged
+triggers, `workflow_call` grants no attacker-controlled event context by
+itself — `inputs.*` is populated entirely by whatever the calling workflow
+puts in its `with:` block. A bare `ref: ${{ inputs.commit }}` in a reusable
+release/build workflow is only actually dangerous if some caller in the
+project passes untrusted data into that input. When the project is linted
+with chain resolution enabled, this rule defers such refs to the
+[reusable-workflow-taint](./reusableworkflowtaint.md) rule's cross-file
+analysis, which reports critical only when an untrusted caller is actually
+found, and medium otherwise. Without chain resolution (single-file lint),
+this rule keeps its original conservative critical behavior. See
+[sisakulint#550](https://github.com/sisaku-security/sisakulint/issues/550).
+
 ### References
 
 #### GitHub Documentation
