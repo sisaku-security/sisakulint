@@ -2,6 +2,7 @@ package core
 
 import (
 	pathpkg "path"
+	"regexp"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -88,6 +89,12 @@ func isWindowsAbsPath(path string) bool {
 		path[1] == ':' && (path[2] == '\\' || path[2] == '/')
 }
 
+// runnerTempExprRe matches a leading `${{ runner.temp }}` expression. Actions ignores
+// whitespace and case inside `${{ }}`, so `${{runner.temp}}` and `${{ RUNNER.TEMP }}`
+// resolve to the same directory and must be accepted too. Matching the exact spelling
+// only meant the equivalent forms were reported.
+var runnerTempExprRe = regexp.MustCompile(`(?i)^\$\{\{\s*runner\.temp\s*\}\}`)
+
 // isRunnerTempPath reports whether path is rooted at the runner's temporary
 // directory with no path-traversal segments.
 //
@@ -96,29 +103,32 @@ func isWindowsAbsPath(path string) bool {
 // the string as-is and resolves it relative to its working directory, producing a
 // directory literally named `$RUNNER_TEMP` inside GITHUB_WORKSPACE. Treating it as
 // safe inverted the verdict for the one case it was meant to allow.
+//
+// The input is trimmed here rather than at the call site: isUnsafePath trims before
+// calling, artifactpoisoningmedium.go does not, and the two rules disagreed on the
+// same string when it had leading whitespace.
 func isRunnerTempPath(path string) bool {
-	for _, prefix := range []string{"${{ runner.temp }}"} {
-		if !strings.HasPrefix(path, prefix) {
-			continue
-		}
-		rest := strings.TrimPrefix(path, prefix)
-		if rest == "" {
-			return true
-		}
-		if rest[0] != '/' && rest[0] != '\\' {
-			// e.g. "${{ runner.tempDir }}" — not the same variable
-			return false
-		}
-		for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
-			return r == '/' || r == '\\'
-		}) {
-			if part == ".." {
-				return false
-			}
-		}
+	path = strings.TrimSpace(path)
+	loc := runnerTempExprRe.FindStringIndex(path)
+	if loc == nil {
+		return false
+	}
+	rest := path[loc[1]:]
+	if rest == "" {
 		return true
 	}
-	return false
+	if rest[0] != '/' && rest[0] != '\\' {
+		// e.g. "${{ runner.temp }}x" or a longer context name — not the same directory
+		return false
+	}
+	for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
+		if part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // isSafeUnixPath reports whether an absolute Unix path (must start with "/")

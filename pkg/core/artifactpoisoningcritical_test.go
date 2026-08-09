@@ -211,6 +211,15 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "runner.temp path traversal", path: "${{ runner.temp }}/../_work/repo", runnerOS: "linux", wantUnsafe: true},
 		{name: "runner.tempDir is not runner.temp", path: "${{ runner.tempDir }}/artifacts", runnerOS: "linux", wantUnsafe: true},
 		{name: "RUNNER_TEMP path traversal", path: "$RUNNER_TEMP/../_work/repo", runnerOS: "linux", wantUnsafe: true},
+		// Actions ignores whitespace and case inside `${{ }}`; all three spellings resolve
+		// to the same directory, so all three must be accepted.
+		{name: "runner.temp spaced", path: "${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp compact", path: "${{runner.temp}}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp uppercase", path: "${{ RUNNER.TEMP }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp leading whitespace", path: "  ${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		// Not rooted at the expression, so not the same directory.
+		{name: "runner.temp with prefix", path: "prefix-${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "runner.temp compact traversal", path: "${{runner.temp}}/../repo", runnerOS: "linux", wantUnsafe: true},
 
 		// /tmp - safe on linux/macos/unknown, unsafe on windows
 		{name: "/tmp on linux", path: "/tmp/artifacts", runnerOS: "linux", wantUnsafe: false},
