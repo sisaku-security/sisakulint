@@ -89,9 +89,15 @@ func isWindowsAbsPath(path string) bool {
 }
 
 // isRunnerTempPath reports whether path is rooted at the runner's temporary
-// directory (${{ runner.temp }} or $RUNNER_TEMP) with no path-traversal segments.
+// directory with no path-traversal segments.
+//
+// Only the `${{ runner.temp }}` expression form counts. A literal `$RUNNER_TEMP`
+// is NOT equivalent: `with:` inputs are not shell-expanded, so the action receives
+// the string as-is and resolves it relative to its working directory, producing a
+// directory literally named `$RUNNER_TEMP` inside GITHUB_WORKSPACE. Treating it as
+// safe inverted the verdict for the one case it was meant to allow.
 func isRunnerTempPath(path string) bool {
-	for _, prefix := range []string{"${{ runner.temp }}", "$RUNNER_TEMP"} {
+	for _, prefix := range []string{"${{ runner.temp }}"} {
 		if !strings.HasPrefix(path, prefix) {
 			continue
 		}
@@ -169,9 +175,13 @@ func isUnsafePath(path string, runnerOS string) bool {
 		}
 	}
 
-	// Windows absolute paths: drive-rooted paths can point into the checkout
-	// workspace (e.g. C:\actions-runner\_work\...) so we cannot safely allow
-	// them without knowing the workspace root. Use ${{ runner.temp }} instead.
+	// Windows absolute paths: no literal Windows path is on the safe list, so every
+	// drive-rooted path is reported. Only the `${{ runner.temp }}` expression form is
+	// treated as safe, and that is handled above before this OS dispatch.
+	//
+	// Note this check cannot prove a path is outside the workspace: the workspace root
+	// is not knowable from the workflow file on any OS. The Unix allow-list below
+	// (/tmp and /var) assumes the GitHub-hosted layout rather than proving anything.
 	if isWindowsAbsPath(path) {
 		return true
 	}

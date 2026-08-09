@@ -200,8 +200,10 @@ func TestIsUnsafePath(t *testing.T) {
 		// Safe paths - runner.temp (OS-independent)
 		{name: "runner.temp basic", path: "${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
 		{name: "runner.temp nested", path: "${{ runner.temp }}/build/artifacts", runnerOS: "linux", wantUnsafe: false},
-		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", runnerOS: "linux", wantUnsafe: false},
-		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", runnerOS: "linux", wantUnsafe: false},
+		// `with:` inputs are not shell-expanded, so a literal $RUNNER_TEMP resolves to a
+		// directory of that name inside the workspace. It must be reported.
+		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", runnerOS: "linux", wantUnsafe: true},
 		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", runnerOS: "linux", wantUnsafe: false},
 		{name: "runner.temp on windows", path: "${{ runner.temp }}/artifacts", runnerOS: "windows", wantUnsafe: false},
 		{name: "runner.temp on unknown", path: "${{ runner.temp }}/artifacts", runnerOS: "unknown", wantUnsafe: false},
@@ -440,7 +442,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			wantErrors: 0,
 		},
 		{
-			name: "download-artifact with RUNNER_TEMP env var - no error",
+			name: "download-artifact with RUNNER_TEMP env var - should error",
 			step: &ast.Step{
 				ID: &ast.String{Value: "download"},
 				Exec: &ast.ExecAction{
@@ -454,7 +456,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				},
 				Pos: &ast.Position{Line: 10, Col: 5},
 			},
-			wantErrors: 0,
+			wantErrors: 1,
 		},
 		{
 			name: "download-artifact with whitespace path - should error",
