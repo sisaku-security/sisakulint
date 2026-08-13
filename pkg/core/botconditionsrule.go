@@ -108,8 +108,37 @@ var defaultSafeContext = struct {
 	id:    "github.event.sender.id",
 }
 
-// botSuffixPattern matches bot account names like 'dependabot[bot]'
-var botSuffixPattern = regexp.MustCompile(`['"][\w-]+\[bot\]['"]`)
+// botEqualityPattern returns a regexp matching a direct equality comparison
+// between the given context and a bot-like literal (either operand order),
+// e.g. `github.actor == 'dependabot[bot]'` or `'dependabot[bot]' == github.actor`.
+//
+// Only '==' is matched, not '!='. A '!=' bot check (e.g.
+// `github.actor != 'github-actions[bot]'`, commonly used to skip a job on the
+// bot's own commits) excludes the bot rather than granting it access, so
+// spoofing the identity gives an attacker no benefit. This mirrors zizmor's
+// upstream implementation, which only flags dominating/non-dominating '=='
+// comparisons. See https://github.com/woodruffw/zizmor/blob/main/crates/zizmor/src/audit/bot_conditions.rs
+func botEqualityPattern(context string) *regexp.Regexp {
+	ctx := regexp.QuoteMeta(context)
+	return regexp.MustCompile(
+		ctx + `\s*==\s*['"][\w-]+\[bot\]['"]` +
+			`|` +
+			`['"][\w-]+\[bot\]['"]\s*==\s*` + ctx,
+	)
+}
+
+// botIDEqualityPattern returns a regexp matching a direct equality comparison
+// between the given context and a known bot actor ID (either operand order).
+// Like botEqualityPattern, only '==' is matched.
+func botIDEqualityPattern(context string, botID string) *regexp.Regexp {
+	ctx := regexp.QuoteMeta(context)
+	id := regexp.QuoteMeta(botID)
+	return regexp.MustCompile(
+		ctx + `\s*==\s*['"]?` + id + `['"]?` +
+			`|` +
+			`['"]?` + id + `['"]?\s*==\s*` + ctx,
+	)
+}
 
 // NewBotConditionsRule creates a new instance of the bot conditions rule
 func NewBotConditionsRule() *BotConditionsRule {
@@ -192,8 +221,8 @@ func (rule *BotConditionsRule) isBotCondition(condition string, context string) 
 		return false
 	}
 
-	// Check if comparing with a [bot] pattern
-	return botSuffixPattern.MatchString(condition)
+	// Only a direct '==' equality against the context is spoofable/dangerous.
+	return botEqualityPattern(context).MatchString(condition)
 }
 
 // isBotIDCondition checks if the condition contains a bot ID check using the given context
@@ -202,10 +231,9 @@ func (rule *BotConditionsRule) isBotIDCondition(condition string, context string
 		return false
 	}
 
-	// Check if comparing with known bot IDs
+	// Check if comparing with known bot IDs via a direct '==' equality.
 	for _, botID := range knownBotActorIDs {
-		// Match patterns like: github.actor_id == '49699333' or github.actor_id == 49699333
-		if strings.Contains(condition, botID) {
+		if botIDEqualityPattern(context, botID).MatchString(condition) {
 			return true
 		}
 	}

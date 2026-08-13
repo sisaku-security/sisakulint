@@ -125,6 +125,35 @@ jobs:
 			expectError: false,
 		},
 		{
+			name: "safe: != bot check excludes rather than grants access",
+			workflow: `
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run update
+`,
+			expectError: false,
+		},
+		{
+			name: "safe: != bot ID check excludes rather than grants access",
+			workflow: `
+on: pull_request_target
+jobs:
+  build:
+    if: github.actor_id != '49699333'
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm build
+`,
+			expectError: false,
+		},
+		{
 			name: "safe: issue_comment with safe context",
 			workflow: `
 on: issue_comment
