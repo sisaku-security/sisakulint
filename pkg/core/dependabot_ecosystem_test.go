@@ -137,6 +137,79 @@ updates:
 	}
 }
 
+func TestDependabotEcosystem_SetupPythonWithSetupUVSatisfiedByUVEcosystem(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "astral-sh/setup-uv@v7", Pos: &ast.Position{Line: 5, Col: 9}}}},
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (uv configured, setup-uv present), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupPythonWithRootUVLockSatisfiedByUVEcosystem(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "uv.lock")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (uv configured, uv.lock present), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupPythonWithSetupUVStillWarnsWithoutUVOrPipConfigured(t *testing.T) {
+	t.Parallel()
+
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "astral-sh/setup-uv@v7", Pos: &ast.Position{Line: 5, Col: 9}}}},
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (neither pip nor uv configured), got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at setup-python step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
 func TestDependabotEcosystem_LockfileAndSetupSameEcosystemDeduped(t *testing.T) {
 	t.Parallel()
 
