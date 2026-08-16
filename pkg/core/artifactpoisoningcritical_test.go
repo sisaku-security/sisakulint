@@ -200,8 +200,10 @@ func TestIsUnsafePath(t *testing.T) {
 		// Safe paths - runner.temp (OS-independent)
 		{name: "runner.temp basic", path: "${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
 		{name: "runner.temp nested", path: "${{ runner.temp }}/build/artifacts", runnerOS: "linux", wantUnsafe: false},
-		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", runnerOS: "linux", wantUnsafe: false},
-		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", runnerOS: "linux", wantUnsafe: false},
+		// `with:` inputs are not shell-expanded, so a literal $RUNNER_TEMP resolves to a
+		// directory of that name inside the workspace. It must be reported.
+		{name: "RUNNER_TEMP env var", path: "$RUNNER_TEMP/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "RUNNER_TEMP nested", path: "$RUNNER_TEMP/build/artifacts", runnerOS: "linux", wantUnsafe: true},
 		{name: "runner.temp with spaces", path: "  ${{ runner.temp }}/artifacts  ", runnerOS: "linux", wantUnsafe: false},
 		{name: "runner.temp on windows", path: "${{ runner.temp }}/artifacts", runnerOS: "windows", wantUnsafe: false},
 		{name: "runner.temp on unknown", path: "${{ runner.temp }}/artifacts", runnerOS: "unknown", wantUnsafe: false},
@@ -209,6 +211,15 @@ func TestIsUnsafePath(t *testing.T) {
 		{name: "runner.temp path traversal", path: "${{ runner.temp }}/../_work/repo", runnerOS: "linux", wantUnsafe: true},
 		{name: "runner.tempDir is not runner.temp", path: "${{ runner.tempDir }}/artifacts", runnerOS: "linux", wantUnsafe: true},
 		{name: "RUNNER_TEMP path traversal", path: "$RUNNER_TEMP/../_work/repo", runnerOS: "linux", wantUnsafe: true},
+		// Actions ignores whitespace and case inside `${{ }}`; all three spellings resolve
+		// to the same directory, so all three must be accepted.
+		{name: "runner.temp spaced", path: "${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp compact", path: "${{runner.temp}}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp uppercase", path: "${{ RUNNER.TEMP }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		{name: "runner.temp leading whitespace", path: "  ${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: false},
+		// Not rooted at the expression, so not the same directory.
+		{name: "runner.temp with prefix", path: "prefix-${{ runner.temp }}/artifacts", runnerOS: "linux", wantUnsafe: true},
+		{name: "runner.temp compact traversal", path: "${{runner.temp}}/../repo", runnerOS: "linux", wantUnsafe: true},
 
 		// /tmp - safe on linux/macos/unknown, unsafe on windows
 		{name: "/tmp on linux", path: "/tmp/artifacts", runnerOS: "linux", wantUnsafe: false},
@@ -440,7 +451,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 			wantErrors: 0,
 		},
 		{
-			name: "download-artifact with RUNNER_TEMP env var - no error",
+			name: "download-artifact with RUNNER_TEMP env var - should error",
 			step: &ast.Step{
 				ID: &ast.String{Value: "download"},
 				Exec: &ast.ExecAction{
@@ -454,7 +465,7 @@ func TestArtifactPoisoning_VisitStep(t *testing.T) {
 				},
 				Pos: &ast.Position{Line: 10, Col: 5},
 			},
-			wantErrors: 0,
+			wantErrors: 1,
 		},
 		{
 			name: "download-artifact with whitespace path - should error",

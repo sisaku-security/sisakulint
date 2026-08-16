@@ -2,6 +2,7 @@ package core
 
 import (
 	pathpkg "path"
+	"regexp"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -88,31 +89,46 @@ func isWindowsAbsPath(path string) bool {
 		path[1] == ':' && (path[2] == '\\' || path[2] == '/')
 }
 
+// runnerTempExprRe matches a leading `${{ runner.temp }}` expression. Actions ignores
+// whitespace and case inside `${{ }}`, so `${{runner.temp}}` and `${{ RUNNER.TEMP }}`
+// resolve to the same directory and must be accepted too. Matching the exact spelling
+// only meant the equivalent forms were reported.
+var runnerTempExprRe = regexp.MustCompile(`(?i)^\$\{\{\s*runner\.temp\s*\}\}`)
+
 // isRunnerTempPath reports whether path is rooted at the runner's temporary
-// directory (${{ runner.temp }} or $RUNNER_TEMP) with no path-traversal segments.
+// directory with no path-traversal segments.
+//
+// Only the `${{ runner.temp }}` expression form counts. A literal `$RUNNER_TEMP`
+// is NOT equivalent: `with:` inputs are not shell-expanded, so the action receives
+// the string as-is and resolves it relative to its working directory, producing a
+// directory literally named `$RUNNER_TEMP` inside GITHUB_WORKSPACE. Treating it as
+// safe inverted the verdict for the one case it was meant to allow.
+//
+// The input is trimmed here rather than at the call site: isUnsafePath trims before
+// calling, artifactpoisoningmedium.go does not, and the two rules disagreed on the
+// same string when it had leading whitespace.
 func isRunnerTempPath(path string) bool {
-	for _, prefix := range []string{"${{ runner.temp }}", "$RUNNER_TEMP"} {
-		if !strings.HasPrefix(path, prefix) {
-			continue
-		}
-		rest := strings.TrimPrefix(path, prefix)
-		if rest == "" {
-			return true
-		}
-		if rest[0] != '/' && rest[0] != '\\' {
-			// e.g. "${{ runner.tempDir }}" — not the same variable
-			return false
-		}
-		for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
-			return r == '/' || r == '\\'
-		}) {
-			if part == ".." {
-				return false
-			}
-		}
+	path = strings.TrimSpace(path)
+	loc := runnerTempExprRe.FindStringIndex(path)
+	if loc == nil {
+		return false
+	}
+	rest := path[loc[1]:]
+	if rest == "" {
 		return true
 	}
-	return false
+	if rest[0] != '/' && rest[0] != '\\' {
+		// e.g. "${{ runner.temp }}x" or a longer context name — not the same directory
+		return false
+	}
+	for _, part := range strings.FieldsFunc(rest, func(r rune) bool {
+		return r == '/' || r == '\\'
+	}) {
+		if part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // isSafeUnixPath reports whether an absolute Unix path (must start with "/")
@@ -169,9 +185,13 @@ func isUnsafePath(path string, runnerOS string) bool {
 		}
 	}
 
-	// Windows absolute paths: drive-rooted paths can point into the checkout
-	// workspace (e.g. C:\actions-runner\_work\...) so we cannot safely allow
-	// them without knowing the workspace root. Use ${{ runner.temp }} instead.
+	// Windows absolute paths: no literal Windows path is on the safe list, so every
+	// drive-rooted path is reported. Only the `${{ runner.temp }}` expression form is
+	// treated as safe, and that is handled above before this OS dispatch.
+	//
+	// Note this check cannot prove a path is outside the workspace: the workspace root
+	// is not knowable from the workflow file on any OS. The Unix allow-list below
+	// (/tmp and /var) assumes the GitHub-hosted layout rather than proving anything.
 	if isWindowsAbsPath(path) {
 		return true
 	}
