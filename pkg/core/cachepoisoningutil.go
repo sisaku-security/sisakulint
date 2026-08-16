@@ -36,6 +36,16 @@ var safePatternsLower = []string{
 	"github.event.repository.default_branch",
 	"github.event.pull_request.base.ref",
 	"github.event.pull_request.base.sha",
+	// inputs.* is a workflow_call/workflow_dispatch input declared by the
+	// callee itself, not context that is automatically populated from an
+	// untrusted event. Whether a given input actually carries untrusted data
+	// depends on what real callers pass it (e.g. a caller forwarding
+	// github.event.pull_request.head.sha into an input) — that inter-file
+	// analysis is reusable-workflow-taint's job, not this same-file check.
+	// Treating every unrecognized inputs.* expression as unsafe here produced
+	// false positives on the extremely common "ref: ${{ inputs.ref }}"
+	// reusable-workflow pattern.
+	"inputs.",
 }
 
 // IsUnsafeTrigger checks if the trigger event is unsafe for cache poisoning detection.
