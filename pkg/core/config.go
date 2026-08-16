@@ -112,15 +112,13 @@ func loadRepoConfig(root string) (*Config, error) {
 
 // writeDefaultConfigFileは指定されたファイルパスにデフォルトの設定ファイルを書き込む
 func writeDefaultConfigFile(path string) error {
-	b := []byte(`
-# Configuration file for sisakulint
+	b := []byte(`# Configuration file for sisakulint
 # Use this file to customize the behavior of sisakulint
+
 # self-hosted-runner section is for configuring self-hosted runners.
 self-hosted-runner:
-  # Use the labels key to specify labels for self-hosted runners used in your project as an array of strings.
-  # This allows sisakulint to verify that these labels are correctly configured.
+  # Labels of the self-hosted runners used in your project, as an array of strings.
   # 🧠 Example: labels: ["linux-large", "windows-2xlarge"]
-  # Note: Ensure that the labels match those configured in your self-hosted runner settings.
   labels: []
 
 # config-variables section is for specifying configuration variables defined in your repository or organization.
@@ -130,17 +128,16 @@ self-hosted-runner:
 # Note: List all the configuration variables that are used in your GitHub Actions workflows.
 config-variables: null
 
-# action-list section is for specifying which GitHub Actions are allowed or blocked in your workflows.
-# You can define a whitelist (only these actions are allowed) or a blacklist (these actions are blocked).
-# Using wildcards is supported: actions/checkout@* matches any version of actions/checkout.
-action-list:
-  whitelist:
-    - actions/checkout@*
-    - actions/setup-node@*
-    - actions/cache@*
-  blacklist:
-    - untrusted/*@*
-    - suspicious/*@*
+# action-list section is an allowlist of the actions that may appear in "uses:".
+# When it is empty or omitted, the action-list rule reports nothing.
+# When it has one or more patterns, every "uses:" value that matches none of them is reported.
+# The whole "uses:" value is matched, including the part after "@", and "*" stands for any
+# string. So "actions/checkout" does NOT match "actions/checkout@v4"; write "actions/checkout@*".
+# 🧠 Example:
+# action-list:
+#   - actions/checkout@*
+#   - actions/setup-node@*
+action-list: []
 
 # secret-exfiltration section configures the secret-exfiltration rule.
 # allowed-hosts suppresses findings whose destination hostname matches any
@@ -159,11 +156,7 @@ action-list:
 #     - "*.example.com"
 secret-exfiltration:
   allowed-hosts: []
-
-# Add other optional settings below.
-# 🧠 Example: some-option: value
-# Note: Refer to the sisakulint documentation for more information on available settings.
-	`)
+`)
 	if err := os.WriteFile(path, b, 0644); err != nil { //nolint:gosec // config file is committed to git and must be readable by CI
 		return fmt.Errorf("failed to write config file %q: %w", path, err)
 	}

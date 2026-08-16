@@ -316,7 +316,7 @@ func (l *Linter) GenerateDefaultConfig(dir string) error {
 		return errors.New("project not found, Make sure the current project is initialized as a Git repository and the \".github/workflows\" directory exists")
 	}
 
-	configPath := filepath.Join(project.RootDirectory(), ".github", "action.yaml")
+	configPath := filepath.Join(project.RootDirectory(), ".github", "sisakulint.yaml")
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config file already exists: %q", configPath)
 	}
