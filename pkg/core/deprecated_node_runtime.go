@@ -261,9 +261,14 @@ func (rule *DeprecatedNodeRuntimeRule) checkKnownNode20Action(step *ast.Step, ac
 	}
 
 	actionPath := strings.TrimSuffix(action.Uses.Value, "@"+ref)
+	// The offline fallback cannot resolve the exact runtime from action.yml.
+	// Older majors of these well-known actions may run node12, node16 or
+	// node20 (e.g. actions/checkout@v2 declares runs.using: node12), so we
+	// must not claim node20 specifically. All of them are end-of-life, which
+	// is what the finding is really about.
 	rule.Errorf(action.Uses.Pos,
-		"action '%s@%s' runs on the deprecated Node.js 20 runtime (%s). Update to %s@v%d or later, which runs on node24. See %s",
-		actionPath, ref, deprecatedNodeRuntimes["node20"], actionPath, first, nodeRuntimeDocURL)
+		"action '%s@%s' is an outdated major (first node24-capable major is v%d) running on an end-of-life Node.js runtime: node12/node16 were removed from the runner, node20 is EOL since 2026-04-30 (scheduled for removal from the runner on 2026-09-16). Update to %s@v%d or later, which runs on node24. See %s",
+		actionPath, ref, first, actionPath, first, nodeRuntimeDocURL)
 	if fixable {
 		rule.AddAutoFixer(NewStepFixer(step, rule))
 	}

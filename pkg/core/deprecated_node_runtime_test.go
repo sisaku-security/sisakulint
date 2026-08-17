@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -99,6 +100,90 @@ func TestDeprecatedNodeRuntimeKnownActions(t *testing.T) {
 			}
 			if got := len(rule.AutoFixers()); got != tt.wantFixers {
 				t.Errorf("expected %d autofixers, got %d", tt.wantFixers, got)
+			}
+		})
+	}
+}
+
+// TestDeprecatedNodeRuntimeOfflineMessageAccuracy guards the offline
+// fallback message: it must not claim node20 for majors that actually
+// declare older runtimes (e.g. actions/checkout@v2 declares runs.using:
+// node12). The finding should stay truthful about "end-of-life runtime"
+// without inventing a specific runtime version it cannot resolve offline.
+func TestDeprecatedNodeRuntimeOfflineMessageAccuracy(t *testing.T) {
+	tests := []struct {
+		uses string
+		// wantPrefix: the message must start with this text.
+		wantSubstrings []string
+		// forbiddenSubstrings: the message must not contain these (e.g. a
+		// wrong concrete runtime claim).
+		forbiddenSubstrings []string
+	}{
+		{
+			uses: "actions/checkout@v2", // runs.using: node12
+			wantSubstrings: []string{
+				"outdated major",
+				"end-of-life Node.js runtime",
+				"actions/checkout@v5 or later",
+			},
+			forbiddenSubstrings: []string{"Node.js 20 runtime"},
+		},
+		{
+			uses: "actions/checkout@v3", // runs.using: node16
+			wantSubstrings: []string{
+				"outdated major",
+				"end-of-life Node.js runtime",
+			},
+			forbiddenSubstrings: []string{"Node.js 20 runtime"},
+		},
+		{
+			uses: "actions/setup-node@v1", // runs.using: node12
+			wantSubstrings: []string{
+				"outdated major",
+				"end-of-life Node.js runtime",
+				"actions/setup-node@v5 or later",
+			},
+			forbiddenSubstrings: []string{"Node.js 20 runtime"},
+		},
+		{
+			uses: "actions/setup-node@v2", // runs.using: node12
+			wantSubstrings: []string{
+				"outdated major",
+				"end-of-life Node.js runtime",
+			},
+			forbiddenSubstrings: []string{"Node.js 20 runtime"},
+		},
+		{
+			// checkout@v4 genuinely runs node20; the generic phrasing must
+			// still fire (the finding is about EOL runtimes in general).
+			uses: "actions/checkout@v4",
+			wantSubstrings: []string{
+				"outdated major",
+				"end-of-life Node.js runtime",
+				"actions/checkout@v5 or later",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.uses, func(t *testing.T) {
+			rule := NewDeprecatedNodeRuntimeRule(nil)
+			step := nodeRuntimeTestStep(tt.uses, "")
+			if err := rule.VisitStep(step); err != nil {
+				t.Fatalf("VisitStep returned error: %v", err)
+			}
+			if len(rule.Errors()) != 1 {
+				t.Fatalf("expected exactly 1 error, got %d: %v", len(rule.Errors()), rule.Errors())
+			}
+			msg := rule.Errors()[0].Description
+			for _, want := range tt.wantSubstrings {
+				if !strings.Contains(msg, want) {
+					t.Errorf("message %q does not contain expected substring %q", msg, want)
+				}
+			}
+			for _, forbidden := range tt.forbiddenSubstrings {
+				if strings.Contains(msg, forbidden) {
+					t.Errorf("message %q contains forbidden substring %q", msg, forbidden)
+				}
 			}
 		})
 	}
