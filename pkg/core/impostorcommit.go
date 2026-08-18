@@ -106,6 +106,21 @@ func isFullSha(ref string) bool {
 	return fullShaPattern.MatchString(ref)
 }
 
+// tagMajorLine returns the major version line prefix of a semantic version tag,
+// e.g. "v4.3.1" -> "v4", "v4" -> "v4". Non-semantic tags are returned as-is.
+// Used to target release-branch reachability checks (releases/vN) without
+// scanning every branch of a repository.
+func tagMajorLine(tag string) string {
+	if !strings.HasPrefix(tag, "v") {
+		return tag
+	}
+	rest := strings.TrimPrefix(tag, "v")
+	if i := strings.IndexByte(rest, '.'); i >= 0 {
+		return "v" + rest[:i]
+	}
+	return tag
+}
+
 func parseImpostorActionRef(usesValue string) (owner, repo, ref string, skip bool) {
 	if isLocalAction(usesValue) || isDockerAction(usesValue) || strings.HasPrefix(usesValue, ".\\") {
 		return "", "", "", true
@@ -230,6 +245,11 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 		return &commitVerificationResult{isImpostor: false, err: tagsErr}
 	}
 	var latestTag string
+	// matchingTagMajor remembers the major line of a tag whose commit points
+	// exactly at the pinned SHA (e.g. "v4.3.1" -> "v4"). It is used later to
+	// verify the SHA against release branches (releases/vN) that commonly exist
+	// for canonical actions but are not the default branch.
+	var matchingTagMajor string
 	for _, tag := range tags {
 		tagName := tag.GetName()
 		if tag.GetCommit().GetSHA() == sha {
@@ -237,6 +257,9 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 			// the impostor SHA must not be offered as an auto-fix target — doing so
 			// would "fix" the workflow to the same malicious commit (Trivy 2026-03).
 			// Fall through to the reachability check without returning early.
+			if matchingTagMajor == "" && tagName != "" {
+				matchingTagMajor = tagMajorLine(tagName)
+			}
 			continue
 		}
 		if latestTag == "" && tagName != "" && strings.HasPrefix(tagName, "v") {
@@ -292,6 +315,31 @@ func (rule *ImpostorCommitRule) doVerifyCommit(owner, repo, sha string) *commitV
 	}
 	if reachable {
 		return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
+	}
+
+	// A pinned SHA that is exactly an official tag commit frequently lives on a
+	// long-lived release branch (e.g. actions/checkout v4.3.1 = 34e11487.. sits
+	// on releases/v4) and is NOT reachable from the default branch because it is
+	// a cherry-picked backport. When a tag points directly at the SHA, verify
+	// reachability from branches on the tag's major line. A fork-network commit
+	// can never be an ancestor of an official branch without write access to the
+	// repository, so this cannot clear a genuine impostor. Only branches whose
+	// name contains the major are compared, keeping extra API calls negligible.
+	if matchingTagMajor != "" {
+		for _, branch := range branches {
+			name := branch.GetName()
+			if name == "" || name == defaultBranch || !strings.Contains(name, matchingTagMajor) {
+				continue
+			}
+			reachable, err := rule.isReachableFromBranch(ctx, client, owner, repo, name, sha)
+			if err != nil {
+				rule.Debug("Error checking reachability for %s/%s@%s from branch %s: %v", owner, repo, sha, name, err)
+				continue
+			}
+			if reachable {
+				return &commitVerificationResult{isImpostor: false, latestTag: latestTag}
+			}
+		}
 	}
 
 	// Check reachability from recent tags (limited to avoid exhausting API rate limits).
