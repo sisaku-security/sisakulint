@@ -33,15 +33,24 @@ type DeprecatedNodeRuntimeRule struct {
 // every lower major is deprecated, including gap majors such as
 // upload-artifact v5. Hand-maintained, verified 2026-07 against each
 // action.yml.
+//
+// docker/* is included because those actions cover the majority of
+// container-build workflows and the fallback is the last line of defense
+// when the metadata resolver is unavailable (e.g. GitHub API rate limits).
 var nodeRuntimeFirstNode24Major = map[string]int{
-	"actions/checkout":          5,
-	"actions/setup-node":        5,
-	"actions/setup-python":      6,
-	"actions/setup-go":          6,
-	"actions/github-script":     8,
-	"actions/cache":             5,
-	"actions/upload-artifact":   6,
-	"actions/download-artifact": 7,
+	"actions/checkout":           5,
+	"actions/setup-node":         5,
+	"actions/setup-python":       6,
+	"actions/setup-go":           6,
+	"actions/github-script":      8,
+	"actions/cache":              5,
+	"actions/upload-artifact":    6,
+	"actions/download-artifact":  7,
+	"docker/setup-buildx-action": 4,
+	"docker/setup-qemu-action":   4,
+	"docker/login-action":        4,
+	"docker/metadata-action":     6,
+	"docker/build-push-action":   7,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
