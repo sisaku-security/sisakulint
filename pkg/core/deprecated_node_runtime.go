@@ -42,6 +42,11 @@ var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/cache":             5,
 	"actions/upload-artifact":   6,
 	"actions/download-artifact": 7,
+	// pnpm/action-setup v3/v4 run on node20 (EOL); v5+ run on node24.
+	// One of the most widely used third-party JS actions; keeping it in the
+	// table keeps the offline fallback and the auto-fix useful for repos
+	// whose scans cannot resolve action metadata over the network.
+	"pnpm/action-setup": 5,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason

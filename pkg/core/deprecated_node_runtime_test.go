@@ -82,6 +82,9 @@ func TestDeprecatedNodeRuntimeKnownActions(t *testing.T) {
 		{"download-artifact v6 is node20", "actions/download-artifact@v6", "", 1, 1},
 		{"upload-artifact v5 gap major is node20", "actions/upload-artifact@v5", "", 1, 1},
 		{"upload-artifact v6 is node24", "actions/upload-artifact@v6", "", 0, 0},
+		{"pnpm/action-setup v3 is node20", "pnpm/action-setup@v3", "", 1, 1},
+		{"pnpm/action-setup v4 is node20", "pnpm/action-setup@v4", "", 1, 1},
+		{"pnpm/action-setup v5 is node24", "pnpm/action-setup@v5", "", 0, 0},
 		{"sha pinned with tag comment detected but not fixed", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "# v4.1.1", 1, 0},
 		{"sha pinned without comment falls through silently", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "", 0, 0},
 		{"unknown action is not matched", "someorg/someaction@v1", "", 0, 0},
@@ -413,6 +416,8 @@ func TestDeprecatedNodeRuntimeFixStep(t *testing.T) {
 		{"upload-artifact v4 bumped to v6", "actions/upload-artifact@v4", "actions/upload-artifact@v6"},
 		{"upload-artifact v5 gap major bumped to v6", "actions/upload-artifact@v5", "actions/upload-artifact@v6"},
 		{"github-script v7 bumped to v8", "actions/github-script@v7", "actions/github-script@v8"},
+		{"pnpm/action-setup v3 bumped to v5", "pnpm/action-setup@v3", "pnpm/action-setup@v5"},
+		{"pnpm/action-setup v4 bumped to v5", "pnpm/action-setup@v4", "pnpm/action-setup@v5"},
 		{"already node24 untouched", "actions/checkout@v5", "actions/checkout@v5"},
 		{"unknown action untouched", "someorg/someaction@v1", "someorg/someaction@v1"},
 	}
