@@ -82,6 +82,9 @@ func TestDeprecatedNodeRuntimeKnownActions(t *testing.T) {
 		{"download-artifact v6 is node20", "actions/download-artifact@v6", "", 1, 1},
 		{"upload-artifact v5 gap major is node20", "actions/upload-artifact@v5", "", 1, 1},
 		{"upload-artifact v6 is node24", "actions/upload-artifact@v6", "", 0, 0},
+		{"softprops/action-gh-release v2 is node20", "softprops/action-gh-release@v2", "", 1, 1},
+		{"softprops/action-gh-release v3 is node24", "softprops/action-gh-release@v3", "", 0, 0},
+		{"softprops/action-gh-release sha pinned with v2 comment", "softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65", "# v2", 1, 0},
 		{"sha pinned with tag comment detected but not fixed", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "# v4.1.1", 1, 0},
 		{"sha pinned without comment falls through silently", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "", 0, 0},
 		{"unknown action is not matched", "someorg/someaction@v1", "", 0, 0},
@@ -413,6 +416,7 @@ func TestDeprecatedNodeRuntimeFixStep(t *testing.T) {
 		{"upload-artifact v4 bumped to v6", "actions/upload-artifact@v4", "actions/upload-artifact@v6"},
 		{"upload-artifact v5 gap major bumped to v6", "actions/upload-artifact@v5", "actions/upload-artifact@v6"},
 		{"github-script v7 bumped to v8", "actions/github-script@v7", "actions/github-script@v8"},
+		{"softprops/action-gh-release v2 bumped to v3", "softprops/action-gh-release@v2", "softprops/action-gh-release@v3"},
 		{"already node24 untouched", "actions/checkout@v5", "actions/checkout@v5"},
 		{"unknown action untouched", "someorg/someaction@v1", "someorg/someaction@v1"},
 	}
