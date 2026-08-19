@@ -66,13 +66,15 @@ jobs:
 
 `sisakulint -fix on` bumps known first-party actions from their node20-generation major to the first node24-capable major, for example `actions/checkout@v4` to `@v5`, `actions/github-script@v7` to `@v8`, and `actions/upload-artifact@v4` to `@v6`. Subpaths such as `actions/cache/restore@v4` are preserved. SHA-pinned references are detected but left to the `commit-sha` rule to re-pin. The three diagnose-only classes in the table above are reported without a fix. Preview changes with `sisakulint -fix dry-run`.
 
+The table also covers the most widely used third-party package-manager action, `pnpm/action-setup` (`@v3`/`@v4` → `@v5`), so offline scans still catch its node20 runtime.
+
 ### Resolver and Offline Fallback
 
 The rule resolves each action's `action.yml` at the pinned ref through the GitHub API and treats its `runs.using` value as ground truth. SHA-pinned actions are therefore detected without needing a `# vX` ref comment, and a stale version comment can never cause a false positive. Set a token via `GITHUB_TOKEN` or `-github-token` to avoid the unauthenticated rate limit. When the API is unreachable the rule falls back to an embedded table of known actions plus tag and `# vX` comment heuristics, which is best-effort and may miss third-party actions.
 
 ### Known Limitations
 
-- The embedded fallback table is a hand-maintained snapshot of first-party actions.
+- The embedded fallback table is a hand-maintained snapshot of first-party actions plus the most widely used third-party package-manager actions (`pnpm/action-setup`); other third-party actions are only detected when their action.yml can be resolved remotely.
 - Composite actions are inspected one level deep; runtimes nested deeper and reusable workflows are not tracked.
 
 ### References
