@@ -2830,6 +2830,23 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 func TestCachePoisoningRule_CacheEvictionRisk(t *testing.T) {
 	t.Parallel()
 
+	// pushCacheSteps adds n actions/cache steps with keys cache-0..cache-n-1
+	// (distinct entries), matching the pre-dedup counting semantics.
+	pushCacheSteps := func(rule *CachePoisoningRule, count int) {
+		for i := 0; i < count; i++ {
+			cacheStep := &ast.Step{
+				Pos: &ast.Position{Line: 10 + i, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/cache@v3"},
+					Inputs: map[string]*ast.Input{
+						"key": {Value: &ast.String{Value: fmt.Sprintf("cache-%d", i)}},
+					},
+				},
+			}
+			_ = rule.VisitStep(cacheStep)
+		}
+	}
+
 	tests := []struct {
 		name           string
 		cacheCount     int
@@ -2869,17 +2886,7 @@ func TestCachePoisoningRule_CacheEvictionRisk(t *testing.T) {
 			job := &ast.Job{}
 			_ = rule.VisitJobPre(job)
 
-			// Add multiple cache actions
-			for i := 0; i < tt.cacheCount; i++ {
-				cacheStep := &ast.Step{
-					Pos: &ast.Position{Line: 10 + i, Col: 1},
-					Exec: &ast.ExecAction{
-						Uses:   &ast.String{Value: "actions/cache@v3"},
-						Inputs: map[string]*ast.Input{},
-					},
-				}
-				_ = rule.VisitStep(cacheStep)
-			}
+			pushCacheSteps(rule, tt.cacheCount)
 
 			_ = rule.VisitJobPost(job)
 			_ = rule.VisitWorkflowPost(workflow)
@@ -2905,6 +2912,140 @@ func TestCachePoisoningRule_CacheEvictionRisk(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCachePoisoningRule_CacheEvictionRisk_DeduplicatesSharedEntries(t *testing.T) {
+	t.Parallel()
+
+	// Five setup-node steps with cache: npm generate the same cache key
+	// (node-cache-<os>-<arch>-npm-<lockfileHash>) and therefore represent one
+	// distinct entry; the eviction heuristic must not fire.
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	for i := 0; i < 5; i++ {
+		job := &ast.Job{}
+		_ = rule.VisitJobPre(job)
+		cacheStep := &ast.Step{
+			Pos: &ast.Position{Line: 10 + i, Col: 1},
+			Exec: &ast.ExecAction{
+				Uses: &ast.String{Value: "actions/setup-node@v4"},
+				Inputs: map[string]*ast.Input{
+					"cache": {Value: &ast.String{Value: "npm"}},
+				},
+			},
+		}
+		_ = rule.VisitStep(cacheStep)
+		_ = rule.VisitJobPost(job)
+	}
+
+	_ = rule.VisitWorkflowPost(workflow)
+
+	errors := rule.Errors()
+	if len(errors) != 0 {
+		t.Errorf("Expected 0 errors for 5 setup-node cache:npm steps sharing one entry, got %d", len(errors))
+		for _, e := range errors {
+			t.Logf("Error: %s", e.Description)
+		}
+	}
+}
+
+func TestCachePoisoningRule_CacheEvictionRisk_MixedCaches(t *testing.T) {
+	t.Parallel()
+
+	// 4 setup-node cache:npm steps (1 shared entry) + 4 actions/cache steps
+	// with distinct keys (4 entries) + 2 setup-node cache:pnpm steps (1 entry)
+	// = 6 distinct entries -> fires.
+	rule := NewCachePoisoningRule()
+
+	workflow := &ast.Workflow{
+		Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+		On: []ast.Event{
+			&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+		},
+	}
+	_ = rule.VisitWorkflowPre(workflow)
+
+	addStep := func(uses string, inputs map[string]*ast.Input) {
+		job := &ast.Job{}
+		_ = rule.VisitJobPre(job)
+		step := &ast.Step{
+			Pos:  &ast.Position{Line: 10, Col: 1},
+			Exec: &ast.ExecAction{Uses: &ast.String{Value: uses}, Inputs: inputs},
+		}
+		_ = rule.VisitStep(step)
+		_ = rule.VisitJobPost(job)
+	}
+
+	for i := 0; i < 4; i++ {
+		addStep("actions/setup-node@v4", map[string]*ast.Input{"cache": {Value: &ast.String{Value: "npm"}}})
+	}
+	for i := 0; i < 4; i++ {
+		addStep("actions/cache@v3", map[string]*ast.Input{"key": {Value: &ast.String{Value: fmt.Sprintf("distinct-%d", i)}}})
+	}
+	for i := 0; i < 2; i++ {
+		addStep("actions/setup-node@v4", map[string]*ast.Input{"cache": {Value: &ast.String{Value: "pnpm"}}})
+	}
+
+	_ = rule.VisitWorkflowPost(workflow)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error, got %d", len(errors))
+	}
+	if !strings.Contains(errors[0].Description, "cache eviction risk") {
+		t.Errorf("Expected error containing 'cache eviction risk', got: %s", errors[0].Description)
+	}
+}
+
+func TestCachePoisoningRule_CacheEvictionRisk_DistinctKeysFire(t *testing.T) {
+	t.Parallel()
+
+	// The same actions/cache step layout with identical key text across jobs
+	// counts once; with distinct keys it must count per entry.
+	run := func(keys []string) int {
+		rule := NewCachePoisoningRule()
+		workflow := &ast.Workflow{
+			Name: &ast.String{Value: "test", Pos: &ast.Position{Line: 1, Col: 1}},
+			On: []ast.Event{
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+		}
+		_ = rule.VisitWorkflowPre(workflow)
+		for i, key := range keys {
+			job := &ast.Job{}
+			_ = rule.VisitJobPre(job)
+			step := &ast.Step{
+				Pos: &ast.Position{Line: 10 + i, Col: 1},
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/cache@v3"},
+					Inputs: map[string]*ast.Input{
+						"key": {Value: &ast.String{Value: key}},
+					},
+				},
+			}
+			_ = rule.VisitStep(step)
+			_ = rule.VisitJobPost(job)
+		}
+		_ = rule.VisitWorkflowPost(workflow)
+		return len(rule.Errors())
+	}
+
+	// 5 steps with one shared key -> 1 entry -> no warning.
+	if got := run([]string{"shared", "shared", "shared", "shared", "shared"}); got != 0 {
+		t.Errorf("Expected 0 errors for 5 steps sharing one cache key, got %d", got)
+	}
+	// 5 steps with distinct keys -> 5 entries -> warning.
+	if got := run([]string{"k1", "k2", "k3", "k4", "k5"}); got != 1 {
+		t.Errorf("Expected 1 error for 5 distinct cache keys, got %d", got)
 	}
 }
 
