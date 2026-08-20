@@ -79,30 +79,44 @@ func TestArtipackedRule_getCheckoutVersion(t *testing.T) {
 	tests := []struct {
 		name     string
 		uses     string
+		comment  string
 		expected int
 	}{
-		{"v1", "actions/checkout@v1", 1},
-		{"v2", "actions/checkout@v2", 2},
-		{"v3", "actions/checkout@v3", 3},
-		{"v4", "actions/checkout@v4", 4},
-		{"v5", "actions/checkout@v5", 5},
-		{"v6", "actions/checkout@v6", 6},
-		{"v6.0.0", "actions/checkout@v6.0.0", 6},
-		{"commit SHA", "actions/checkout@abc123def456789012345678901234567890abcd", 0},
+		{"v1", "actions/checkout@v1", "", 1},
+		{"v2", "actions/checkout@v2", "", 2},
+		{"v3", "actions/checkout@v3", "", 3},
+		{"v4", "actions/checkout@v4", "", 4},
+		{"v5", "actions/checkout@v5", "", 5},
+		{"v6", "actions/checkout@v6", "", 6},
+		{"v6.0.0", "actions/checkout@v6.0.0", "", 6},
+		{"commit SHA", "actions/checkout@abc123def456789012345678901234567890abcd", "", 0},
 		// A full SHA whose first hex char is 6-9 must not be misread as a major
 		// version (regression: "8ade..." previously returned 8 -> treated as v8).
-		{"commit SHA leading 8", "actions/checkout@8ade1a2b3c4d5e6f70819a2b3c4d5e6f7081a2b3", 0},
-		{"commit SHA leading 3", "actions/checkout@3f2a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2", 0},
-		{"abbreviated SHA leading 7", "actions/checkout@7f8e9d0", 0},
-		{"invalid format", "actions/checkout", 0},
-		{"empty", "", 0},
+		{"commit SHA leading 8", "actions/checkout@8ade1a2b3c4d5e6f70819a2b3c4d5e6f7081a2b3", "", 0},
+		{"commit SHA leading 3", "actions/checkout@3f2a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2", "", 0},
+		{"abbreviated SHA leading 7", "actions/checkout@7f8e9d0", "", 0},
+		// SHA pins conventionally carry the resolved tag as a "# vX.Y.Z" line
+		// comment (Dependabot / commit-sha autofix format). The comment must be
+		// honored so a v6+ pin is not reported at a higher severity than the
+		// equivalent tag pin.
+		{"SHA with v7 comment", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", "# v7.0.0", 7},
+		{"SHA with v7 comment no hash", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", "v7.0.0", 7},
+		{"SHA with v6 comment", "actions/checkout@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", "# v6.1.0", 6},
+		{"SHA with bogus comment", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", "pin for security", 0},
+		{"SHA with empty comment", "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", "#", 0},
+		{"invalid format", "actions/checkout", "", 0},
+		{"empty", "", "", 0},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := rule.getCheckoutVersion(tt.uses)
+			uses := &ast.String{Value: tt.uses}
+			if tt.comment != "" {
+				uses.BaseNode = &yaml.Node{LineComment: tt.comment}
+			}
+			got := rule.getCheckoutVersion(uses)
 			if got != tt.expected {
-				t.Errorf("getCheckoutVersion(%q) = %v, want %v", tt.uses, got, tt.expected)
+				t.Errorf("getCheckoutVersion(%q, comment=%q) = %v, want %v", tt.uses, tt.comment, got, tt.expected)
 			}
 		})
 	}
@@ -389,6 +403,98 @@ func TestArtipackedRule_CheckoutWithoutUpload(t *testing.T) {
 	errorMsg := errors[0].Description
 	if !strings.Contains(errorMsg, "[Medium]") && !strings.Contains(errorMsg, "[Low]") {
 		t.Errorf("Expected Medium or Low severity for checkout without upload, got: %s", errorMsg)
+	}
+}
+
+func TestArtipackedRule_CheckoutSHAWithVersionComment(t *testing.T) {
+	rule := NewArtipackedRule()
+
+	// SHA-pinned checkout whose trailing line comment carries the resolved
+	// tag (the Dependabot / commit-sha autofix format). The rule must treat
+	// it as v7 (>= 6) and report the low-severity branch, not the Medium
+	// "unknown version" branch.
+	workflow := &ast.Workflow{
+		Jobs: map[string]*ast.Job{
+			"build": {
+				ID:  &ast.String{Value: "build"},
+				Pos: &ast.Position{Line: 5, Col: 3},
+				Steps: []*ast.Step{
+					{
+						ID: &ast.String{Value: "checkout"},
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{
+								Value:    "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+								BaseNode: &yaml.Node{LineComment: "# v7.0.0"},
+							},
+							Inputs: map[string]*ast.Input{},
+						},
+						Pos: &ast.Position{Line: 10, Col: 5},
+					},
+				},
+			},
+		},
+	}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(workflow.Jobs["build"])
+	for _, step := range workflow.Jobs["build"].Steps {
+		_ = rule.VisitStep(step)
+	}
+	_ = rule.VisitJobPost(workflow.Jobs["build"])
+	_ = rule.VisitWorkflowPost(workflow)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for checkout without persist-credentials: false, got %d", len(errors))
+	}
+	if !strings.Contains(errors[0].Description, "[Low]") {
+		t.Errorf("Expected [Low] severity for SHA-pinned checkout v7 with version comment, got: %s", errors[0].Description)
+	}
+	if strings.Contains(errors[0].Description, "[Medium]") {
+		t.Errorf("Expected no [Medium] severity for SHA-pinned checkout v7 with version comment, got: %s", errors[0].Description)
+	}
+}
+
+func TestArtipackedRule_CheckoutSHAWithoutVersionComment(t *testing.T) {
+	rule := NewArtipackedRule()
+
+	// Same SHA but without the trailing version comment: version stays
+	// unknown and the conservative Medium branch must still fire.
+	workflow := &ast.Workflow{
+		Jobs: map[string]*ast.Job{
+			"build": {
+				ID:  &ast.String{Value: "build"},
+				Pos: &ast.Position{Line: 5, Col: 3},
+				Steps: []*ast.Step{
+					{
+						ID: &ast.String{Value: "checkout"},
+						Exec: &ast.ExecAction{
+							Uses: &ast.String{
+								Value: "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+							},
+							Inputs: map[string]*ast.Input{},
+						},
+						Pos: &ast.Position{Line: 10, Col: 5},
+					},
+				},
+			},
+		},
+	}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(workflow.Jobs["build"])
+	for _, step := range workflow.Jobs["build"].Steps {
+		_ = rule.VisitStep(step)
+	}
+	_ = rule.VisitJobPost(workflow.Jobs["build"])
+	_ = rule.VisitWorkflowPost(workflow)
+
+	errors := rule.Errors()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for checkout without persist-credentials: false, got %d", len(errors))
+	}
+	if !strings.Contains(errors[0].Description, "[Medium]") {
+		t.Errorf("Expected [Medium] severity for SHA-pinned checkout without version comment, got: %s", errors[0].Description)
 	}
 }
 
