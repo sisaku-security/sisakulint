@@ -2728,6 +2728,7 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 		triggers       []ast.Event
 		expectedErrors int
 		errorContains  string
+		cacheKey       string
 	}{
 		{
 			name: "external trigger + push to default branch",
@@ -2777,6 +2778,32 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 			},
 			expectedErrors: 0,
 		},
+		{
+			name: "workflow_dispatch only with immutable key (safe)",
+			triggers: []ast.Event{
+				&ast.WorkflowDispatchEvent{},
+			},
+			expectedErrors: 0,
+			cacheKey:       "gguf-sources-cache-${{ github.run_id }}",
+		},
+		{
+			name: "schedule + immutable github.sha key (safe)",
+			triggers: []ast.Event{
+				&ast.ScheduledEvent{},
+				&ast.WebhookEvent{Hook: &ast.String{Value: "push"}},
+			},
+			expectedErrors: 0,
+			cacheKey:       "${{ runner.os }}-${{ github.sha }}",
+		},
+		{
+			name: "schedule + mutable key still reported (unsafe)",
+			triggers: []ast.Event{
+				&ast.ScheduledEvent{},
+			},
+			expectedErrors: 1,
+			errorContains:  "cache hierarchy exploitation risk",
+			cacheKey:       "gguf-sources-cache",
+		},
 	}
 
 	for _, tt := range tests {
@@ -2794,11 +2821,21 @@ func TestCachePoisoningRule_CacheHierarchyExploitation(t *testing.T) {
 			_ = rule.VisitJobPre(job)
 
 			// Add a cache action to trigger the check
+			inputs := map[string]*ast.Input{}
+			if tt.cacheKey != "" {
+				inputs["key"] = &ast.Input{
+					Name: &ast.String{Value: "key"},
+					Value: &ast.String{
+						Value: tt.cacheKey,
+						Pos:   &ast.Position{Line: 11, Col: 1},
+					},
+				}
+			}
 			cacheStep := &ast.Step{
 				Pos: &ast.Position{Line: 10, Col: 1},
 				Exec: &ast.ExecAction{
 					Uses:   &ast.String{Value: "actions/cache@v3"},
-					Inputs: map[string]*ast.Input{},
+					Inputs: inputs,
 				},
 			}
 			_ = rule.VisitStep(cacheStep)

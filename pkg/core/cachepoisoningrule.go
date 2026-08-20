@@ -2364,10 +2364,34 @@ func (rule *CachePoisoningRule) checkCacheInputForUntrustedExprs(node *ast.Step,
 	}
 }
 
+// cacheKeyHasUniqueIdentifier reports whether a cache key contains an immutable,
+// run-unique component (github.sha, github.run_id, github.run_number, github.run_attempt).
+// When such a component is present, external-trigger runs cannot pre-compute the key,
+// so pre-poisoning the default branch cache with a predictable key is not possible.
+func cacheKeyHasUniqueIdentifier(key string) bool {
+	return strings.Contains(key, "github.sha") ||
+		strings.Contains(key, "github.run_id") ||
+		strings.Contains(key, "github.run_number") ||
+		strings.Contains(key, "github.run_attempt")
+}
+
 // checkCacheHierarchyExploitation detects cache hierarchy exploitation vulnerabilities
 // GitHub Actions caches are scoped by branch - PRs can read caches from their base branch.
 // If an attacker can write to the default branch's cache, they can poison all downstream PRs.
 func (rule *CachePoisoningRule) checkCacheHierarchyExploitation(node *ast.Step, _ string) {
+	// If the cache key already contains an immutable unique identifier
+	// (github.sha / github.run_id / ...), external-trigger runs cannot
+	// pre-compute the key to poison it. The rule's own recommended
+	// mitigation ("use immutable cache keys with github.sha") is already
+	// applied, so a hierarchy report would be a false positive.
+	if action, ok := node.Exec.(*ast.ExecAction); ok && action.Inputs != nil {
+		if keyInput, exists := action.Inputs["key"]; exists && keyInput != nil && keyInput.Value != nil {
+			if cacheKeyHasUniqueIdentifier(keyInput.Value.Value) {
+				return
+			}
+		}
+	}
+
 	// Risk: External triggers (workflow_dispatch, schedule) combined with push to default branch
 	// Attackers can trigger workflow_dispatch to write poisoned cache, which PRs will read
 	if rule.hasExternalTrigger && rule.hasPushToDefaultBranch {
