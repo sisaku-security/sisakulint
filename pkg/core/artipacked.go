@@ -145,7 +145,7 @@ func (rule *ArtipackedRule) handleCheckout(step *ast.Step, action *ast.ExecActio
 		}
 	}
 
-	version := rule.getCheckoutVersion(action.Uses.Value)
+	version := rule.getCheckoutVersion(action.Uses)
 
 	rule.checkoutSteps = append(rule.checkoutSteps, &checkoutInfo{
 		step:    step,
@@ -153,8 +153,11 @@ func (rule *ArtipackedRule) handleCheckout(step *ast.Step, action *ast.ExecActio
 	})
 }
 
-func (rule *ArtipackedRule) getCheckoutVersion(uses string) int {
-	parts := strings.Split(uses, "@")
+func (rule *ArtipackedRule) getCheckoutVersion(uses *ast.String) int {
+	if uses == nil {
+		return 0
+	}
+	parts := strings.Split(uses.Value, "@")
 	if len(parts) != 2 {
 		return 0
 	}
@@ -164,8 +167,21 @@ func (rule *ArtipackedRule) getCheckoutVersion(uses string) int {
 	// otherwise downgrade severity for SHAs starting with 6-9. Unknown versions
 	// are treated conservatively (credentials assumed in .git/config), matching
 	// the pre-existing behavior for non-numeric refs.
+	//
+	// SHA pins conventionally carry the resolved tag as a trailing "# vN[.M[.P]]"
+	// comment (the format Dependabot and commit-sha autofix produce, e.g.
+	// "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0").
+	// When that comment is present, parse the major version from it so a v6+
+	// pin is not misreported at a higher severity than the equivalent tag pin.
 	ref := parts[1]
 	if commitSHAPattern.MatchString(ref) {
+		if uses.BaseNode != nil {
+			if comment := strings.TrimSpace(strings.TrimPrefix(uses.BaseNode.LineComment, "#")); comment != "" {
+				if major, ok := parseMajorFromRef(comment); ok {
+					return major
+				}
+			}
+		}
 		return 0
 	}
 
