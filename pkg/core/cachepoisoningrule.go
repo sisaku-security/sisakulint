@@ -34,9 +34,15 @@ type CachePoisoningRule struct {
 	hasPushToDefaultBranch bool
 	hasExternalTrigger     bool // workflow_dispatch, schedule, repository_dispatch
 	cacheActionCount       int
-	workflowTriggers       []string
-	directCacheDirWrites   []directCacheDirectoryWriteInfo
-	jobLockfileWrites      []lockfileWriteInfo
+	// seenCacheEvictionKeys tracks distinct GitHub cache entries already
+	// counted toward cacheActionCount. Multiple setup-* steps with the same
+	// cache input (e.g. actions/setup-node cache: npm) resolve to the same
+	// generated cache key, so counting each step separately inflates the
+	// eviction tally when one entry is reused across jobs.
+	seenCacheEvictionKeys map[string]bool
+	workflowTriggers      []string
+	directCacheDirWrites  []directCacheDirectoryWriteInfo
+	jobLockfileWrites     []lockfileWriteInfo
 	// jobPostJobCacheSaveDirs tracks cache roots persisted by a post-job save
 	// step (actions/cache@v* or actions/setup-* with cache: enabled). Those
 	// persist matching roots at job end, so every recorded write under a
@@ -119,6 +125,49 @@ func isCacheAction(uses string, inputs map[string]*ast.Input) bool {
 	}
 
 	return false
+}
+
+// countCacheEvictionAction reports whether this cache step represents a new
+// distinct cache entry for the workflow-level eviction count, and records it if
+// so. cacheActionCount only feeds the "cache eviction risk" heuristic, so steps
+// that will hit the same GitHub cache entry must not be counted multiple times:
+//
+//   - actions/setup-* with cache: <pkg> generate the key themselves
+//     (e.g. actions/setup-node cache: npm → node-cache-<os>-<arch>-npm-<hash>),
+//     so repeated steps with the same cache input value share one entry.
+//   - actions/cache / actions/cache/save / actions/cache/restore take an
+//     explicit key input; dedupe by that key's text.
+//
+// Composite invocations are deduplicated by the outer step's uses + inputs,
+// which is the finest granularity visible without resolving their internals.
+func (rule *CachePoisoningRule) countCacheEvictionAction(uses string, inputs map[string]*ast.Input) bool {
+	key := cacheEvictionKey(uses, inputs)
+	if rule.seenCacheEvictionKeys == nil {
+		rule.seenCacheEvictionKeys = make(map[string]bool)
+	}
+	if rule.seenCacheEvictionKeys[key] {
+		return false
+	}
+	rule.seenCacheEvictionKeys[key] = true
+	return true
+}
+
+// cacheEvictionKey identifies the cache entry a cache action will persist.
+func cacheEvictionKey(uses string, inputs map[string]*ast.Input) string {
+	actionName := cacheActionName(uses)
+	if actionName == "" {
+		return uses
+	}
+	if strings.HasPrefix(actionName, "actions/setup-") {
+		if cacheInput, ok := inputs["cache"]; ok && cacheInput != nil && cacheInput.Value != nil {
+			return actionName + "\x00cache=" + strings.ToLower(strings.TrimSpace(cacheInput.Value.Value))
+		}
+		return actionName
+	}
+	if keyInput, ok := inputs["key"]; ok && keyInput != nil && keyInput.Value != nil {
+		return actionName + "\x00key=" + keyInput.Value.Value
+	}
+	return actionName
 }
 
 // isCachePersistingAction reports whether a cache action actually persists the
@@ -328,6 +377,7 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.hasPushToDefaultBranch = false
 	rule.hasExternalTrigger = false
 	rule.cacheActionCount = 0
+	rule.seenCacheEvictionKeys = nil
 	rule.workflowTriggers = nil
 	rule.directCacheDirWrites = nil
 	rule.jobLockfileWrites = nil
@@ -587,7 +637,9 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	// Check for cache actions
 	if isCacheAction(uses, action.Inputs) {
 		rule.recordCachePersistence(uses, action.Inputs)
-		rule.cacheActionCount++
+		if rule.countCacheEvictionAction(uses, action.Inputs) {
+			rule.cacheActionCount++
+		}
 
 		// Check cache hierarchy exploitation risk
 		rule.checkCacheHierarchyExploitation(node, uses)
@@ -603,7 +655,9 @@ func (rule *CachePoisoningRule) VisitStep(node *ast.Step) error {
 	inspection := rule.inspectCompositeAction(uses)
 	if inspection.cacheFound {
 		rule.recordCachePersistence(inspection.cacheUses, inspection.cacheInputs)
-		rule.cacheActionCount++
+		if rule.countCacheEvictionAction(uses, action.Inputs) {
+			rule.cacheActionCount++
+		}
 		rule.checkCacheHierarchyExploitation(node, inspection.cacheUses)
 		if len(rule.jobUnsafeTriggers) > 0 && rule.checkoutUnsafeRef {
 			triggers := strings.Join(rule.jobUnsafeTriggers, ", ")

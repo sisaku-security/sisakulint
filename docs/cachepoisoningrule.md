@@ -51,7 +51,7 @@ The rule detects six types of cache poisoning attacks:
 - **CodeQL Compatible**: Based on CodeQL's query with enhanced detection capabilities
 - **Auto-fix Support**: Removes unsafe `ref` input from checkout steps or replaces untrusted cache keys with `github.sha`
 - **Cache Hierarchy Exploitation Detection**: Identifies workflows with external triggers that can poison default branch cache
-- **Cache Eviction Risk Detection**: Warns when workflows use excessive cache actions (5+)
+- **Cache Eviction Risk Detection**: Warns when workflows use excessive cache actions (5+). Steps that resolve to the same GitHub cache entry are counted once — e.g. multiple `actions/setup-node` steps with `cache: npm` share the generated `node-cache-<os>-<arch>-npm-<hash>` key, so five such steps count as one entry.
 
 ### Detection Conditions
 
