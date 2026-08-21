@@ -64,7 +64,7 @@ jobs:
 
 ### Auto-fix
 
-`sisakulint -fix on` bumps known first-party actions from their node20-generation major to the first node24-capable major, for example `actions/checkout@v4` to `@v5`, `actions/github-script@v7` to `@v8`, and `actions/upload-artifact@v4` to `@v6`. Subpaths such as `actions/cache/restore@v4` are preserved. SHA-pinned references are detected but left to the `commit-sha` rule to re-pin. The three diagnose-only classes in the table above are reported without a fix. Preview changes with `sisakulint -fix dry-run`.
+`sisakulint -fix on` bumps known first-party actions from their node20-generation major to the first node24-capable major, for example `actions/checkout@v4` to `@v5`, `actions/github-script@v7` to `@v8`, `actions/upload-artifact@v4` to `@v6`, and `astral-sh/setup-uv@v5` to `@v7`. Subpaths such as `actions/cache/restore@v4` are preserved. SHA-pinned references are detected but left to the `commit-sha` rule to re-pin. The three diagnose-only classes in the table above are reported without a fix. Preview changes with `sisakulint -fix dry-run`.
 
 ### Resolver and Offline Fallback
 
@@ -72,7 +72,7 @@ The rule resolves each action's `action.yml` at the pinned ref through the GitHu
 
 ### Known Limitations
 
-- The embedded fallback table is a hand-maintained snapshot of first-party actions.
+- The embedded fallback table is a hand-maintained snapshot of first-party actions plus a small set of high-traffic third-party actions (`astral-sh/setup-uv`); additions are made when the offline fallback demonstrably misses an action in production scans.
 - Composite actions are inspected one level deep; runtimes nested deeper and reusable workflows are not tracked.
 
 ### References

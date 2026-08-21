@@ -42,6 +42,12 @@ var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/cache":             5,
 	"actions/upload-artifact":   6,
 	"actions/download-artifact": 7,
+	// Third-party actions in this table are added when the offline fallback
+	// (API unreachable) demonstrably misses them in production scans. setup-uv
+	// is the ecosystem-standard Python toolchain installer: v5/v6 declare
+	// node20, v7 was the first major to declare node24 (verified against
+	// action.yml at v6.0.0 and v7.0.0).
+	"astral-sh/setup-uv": 7,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
