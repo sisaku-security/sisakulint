@@ -58,6 +58,13 @@ type SecretExfiltrationRule struct {
 	// and the originating source. Reported once per workflow in
 	// VisitWorkflowPost so users learn that an entry is silently inert.
 	invalidAllowedHostEntries []invalidAllowedHostEntry
+
+	// workflowEnvSecrets / jobEnvSecrets hold environment variables bound to
+	// ${{ secrets.* }} values declared at workflow- and job-level env blocks.
+	// They are merged with step-level env secrets in checkStep so both leak
+	// detection and destination-trust decisions see the full env context.
+	workflowEnvSecrets map[string]string
+	jobEnvSecrets      map[string]string
 }
 
 // invalidAllowedHostEntry captures a rejected allowlist entry for diagnostic
@@ -253,6 +260,7 @@ func NewSecretExfiltrationRule() *SecretExfiltrationRule {
 // allowed-hosts list (global config + per-workflow comment override).
 func (rule *SecretExfiltrationRule) VisitWorkflowPre(node *ast.Workflow) error {
 	rule.workflow = node
+	rule.workflowEnvSecrets = rule.collectEnvSecrets(node.Env)
 	rule.allowedHosts = nil
 	rule.allowedHostUsed = nil
 	rule.allowedHostSources = nil
@@ -598,6 +606,7 @@ func walkYAMLComments(node *yaml.Node, visit func(string)) {
 
 // VisitJobPre visits each job and checks steps
 func (rule *SecretExfiltrationRule) VisitJobPre(node *ast.Job) error {
+	rule.jobEnvSecrets = rule.collectEnvSecrets(node.Env)
 	for _, step := range node.Steps {
 		rule.currentStep = step
 		rule.checkStep(step)
@@ -622,11 +631,22 @@ func (rule *SecretExfiltrationRule) checkStep(step *ast.Step) {
 		return
 	}
 
-	// Collect step environment variables
-	stepEnvSecrets := rule.collectEnvSecrets(step.Env)
+	// Collect environment variables that contain secrets, merging workflow-,
+	// job- and step-level env so both leak detection and destination-trust
+	// decisions see the full env context.
+	envSecrets := make(map[string]string)
+	for k, v := range rule.workflowEnvSecrets {
+		envSecrets[k] = v
+	}
+	for k, v := range rule.jobEnvSecrets {
+		envSecrets[k] = v
+	}
+	for k, v := range rule.collectEnvSecrets(step.Env) {
+		envSecrets[k] = v
+	}
 
 	// Check for exfiltration patterns
-	patterns := rule.detectExfiltrationPatterns(script, execRun.Run, stepEnvSecrets)
+	patterns := rule.detectExfiltrationPatterns(script, execRun.Run, envSecrets)
 
 	for _, pattern := range patterns {
 		rule.reportExfiltration(pattern)
@@ -765,7 +785,7 @@ func (rule *SecretExfiltrationRule) detectExfiltrationPatterns(script string, ru
 		if !ok {
 			continue
 		}
-		if rule.networkCallMatchesAllowlist(call, script, cmd) {
+		if rule.networkCallMatchesAllowlist(call, script, cmd, envSecrets, secretPlaceholders) {
 			continue
 		}
 		patterns = append(patterns, rule.analyzeNetworkCommandCall(call, script, runStr, envSecrets, cmd, secretPlaceholders)...)
@@ -1298,9 +1318,9 @@ func positionFromCommandArg(runStr *ast.String, arg shell.CommandArg) *ast.Posit
 	return &ast.Position{Line: line, Col: col}
 }
 
-func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.NetworkCommandCall, script string, cmd networkCommand) bool {
+func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.NetworkCommandCall, script string, cmd networkCommand, envSecrets map[string]string, secretPlaceholders map[string]string) bool {
 	maxOffset := int(call.Position.Offset()) //nolint:gosec // workflow shell script offsets fit in int
-	destinationArgs := rule.destinationArgsForCall(call, cmd)
+	destinationArgs := rule.destinationArgsForCall(call, cmd, secretPlaceholders)
 	if len(destinationArgs) == 0 {
 		return false
 	}
@@ -1316,11 +1336,15 @@ func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.Netwo
 		}
 	}
 
-	// Every destination arg must match either the built-in legit patterns or
-	// the user-configured allowlist for the call to be suppressed. This keeps
-	// commands with mixed destinations (one trusted, one not) from being
-	// silently dropped just because part of the destination set is allowed.
+	// Every destination arg must match either the built-in legit patterns, the
+	// user-configured allowlist, or a secret-administered destination for the
+	// call to be suppressed. This keeps commands with mixed destinations (one
+	// trusted, one not) from being silently dropped just because part of the
+	// destination set is allowed.
 	for _, arg := range destinationArgs {
+		if rule.destinationIsSecretAdministered(arg, script, maxOffset, envSecrets, secretPlaceholders) {
+			continue
+		}
 		if rule.argMatchesLegitPattern(arg, script, cmd, maxOffset) {
 			continue
 		}
@@ -1330,6 +1354,77 @@ func (rule *SecretExfiltrationRule) networkCallMatchesAllowlist(call shell.Netwo
 		return false
 	}
 	return true
+}
+
+// secretDerivedHostRe matches a host that consists solely of a single
+// secret-sourced variable marker "secrets.<name>" (hostnames are lowercased
+// by URL parsing). A host with any additional literal label — e.g.
+// "secrets.api_url.evil.com" from "$API_URL.evil.com" — or any other
+// component does NOT match, so attacker-controllable destination shapes stay
+// flagged.
+var secretDerivedHostRe = regexp.MustCompile(`^secrets\.[a-z_][a-z0-9_]*$`)
+
+// substituteSecretEnvVars replaces references to secret-sourced environment
+// variables ($NAME / ${NAME}) in value with a literal "secrets.NAME" marker
+// so destination-trust analysis can see which host components are
+// administrator-controlled. Longer names are substituted first and the
+// unbraced form requires a non-identifier boundary so "$API_URL" never
+// corrupts "$API_URL_SUFFIX".
+func substituteSecretEnvVars(value string, envSecrets map[string]string) string {
+	names := make([]string, 0, len(envSecrets))
+	for name := range envSecrets {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
+
+	result := value
+	for _, name := range names {
+		re := regexp.MustCompile(`\$\{` + regexp.QuoteMeta(name) + `\}|\$` + regexp.QuoteMeta(name) + `\b`)
+		result = re.ReplaceAllString(result, "secrets."+name)
+	}
+	return result
+}
+
+// destinationIsSecretAdministered reports whether the destination carried by
+// arg is fully derived from secret-sourced variables: environment variables
+// bound to ${{ secrets.X }} in the workflow/job/step env block, or an inline
+// ${{ secrets.X }} expression. Only the repository administrator can set or
+// change secret values, so a destination whose ENTIRE host is made up of
+// secret-sourced variables is administrator-controlled — sending secret-
+// bearing data to it is the intended API/webhook authentication flow, not
+// exfiltration to an attacker-controlled server. The check is conservative:
+// if any part of the host stays dynamic (unresolved $variable, extra literal
+// label, @userinfo redirect) the destination is NOT trusted and existing
+// detection continues.
+func (rule *SecretExfiltrationRule) destinationIsSecretAdministered(arg shell.CommandArg, script string, maxOffset int, envSecrets map[string]string, secretPlaceholders map[string]string) bool {
+	if len(arg.VarNames) == 0 && len(secretPlaceholders) == 0 {
+		return false
+	}
+
+	candidates := destinationCandidatesForArg(arg, script, maxOffset)
+	for _, candidate := range candidates {
+		substituted := substituteSecretEnvVars(candidate, envSecrets)
+		for token, ref := range secretPlaceholders {
+			substituted = strings.ReplaceAll(substituted, token, ref)
+		}
+		if substituted == "" {
+			continue
+		}
+		// A leftover $ or ${{ }} means the host is not fully resolvable to
+		// secret-controlled components — keep flagging.
+		if strings.Contains(substituted, "$") || strings.Contains(substituted, "${{") {
+			continue
+		}
+		host, _ := destinationHostAndPath(substituted)
+		host = strings.TrimSpace(strings.ToLower(host))
+		if host == "" {
+			continue
+		}
+		if secretDerivedHostRe.MatchString(host) {
+			return true
+		}
+	}
+	return false
 }
 
 // destinationIsStaticallyResolvable reports whether the destination string
@@ -1443,18 +1538,18 @@ func (rule *SecretExfiltrationRule) argMatchesLegitPattern(arg shell.CommandArg,
 	return false
 }
 
-func (rule *SecretExfiltrationRule) destinationArgsForCall(call shell.NetworkCommandCall, cmd networkCommand) []shell.CommandArg {
+func (rule *SecretExfiltrationRule) destinationArgsForCall(call shell.NetworkCommandCall, cmd networkCommand, secretPlaceholders map[string]string) []shell.CommandArg {
 	switch cmd.name {
 	case "curl", "http", "https":
-		return destinationArgsForURLCommand(call.Args, curlFlagsConsumingNextArg(), []string{"--url"})
+		return destinationArgsForURLCommand(call.Args, curlFlagsConsumingNextArg(), []string{"--url"}, secretPlaceholders)
 	case "wget":
-		return destinationArgsForURLCommand(call.Args, wgetFlagsConsumingNextArg(), nil)
+		return destinationArgsForURLCommand(call.Args, wgetFlagsConsumingNextArg(), nil, secretPlaceholders)
 	default:
 		return destinationArgsForDNSCommand(call.Args)
 	}
 }
 
-func destinationArgsForURLCommand(args []shell.CommandArg, consumingFlags map[string]bool, destinationFlags []string) []shell.CommandArg {
+func destinationArgsForURLCommand(args []shell.CommandArg, consumingFlags map[string]bool, destinationFlags []string, secretPlaceholders map[string]string) []shell.CommandArg {
 	var destinations []shell.CommandArg
 	for idx := 0; idx < len(args); idx++ {
 		arg := args[idx]
@@ -1474,7 +1569,7 @@ func destinationArgsForURLCommand(args []shell.CommandArg, consumingFlags map[st
 			}
 			continue
 		}
-		if isURLishCommandArg(arg) {
+		if isURLishCommandArg(arg, secretPlaceholders) {
 			destinations = append(destinations, arg)
 		}
 	}
@@ -1524,7 +1619,7 @@ func wgetFlagsConsumingNextArg() map[string]bool {
 	}
 }
 
-func isURLishCommandArg(arg shell.CommandArg) bool {
+func isURLishCommandArg(arg shell.CommandArg, secretPlaceholders map[string]string) bool {
 	value := commandArgComparableValue(arg)
 	value = strings.Trim(value, `"'`)
 	if strings.HasPrefix(value, "http://") ||
@@ -1532,6 +1627,16 @@ func isURLishCommandArg(arg shell.CommandArg) bool {
 		strings.HasPrefix(value, "$") ||
 		strings.HasPrefix(value, "${") {
 		return true
+	}
+
+	// A positional arg that embeds a ${{ secrets.X }} placeholder token is a
+	// destination the analyzer cannot resolve statically; treat it as URLish
+	// so the destination-trust path (secret-administered destinations) can
+	// decide whether it is trusted.
+	for token := range secretPlaceholders {
+		if strings.Contains(value, token) {
+			return true
+		}
 	}
 
 	host, _ := destinationHostAndPath(value)
