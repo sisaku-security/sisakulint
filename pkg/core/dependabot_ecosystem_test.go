@@ -110,9 +110,11 @@ updates:
 	}
 }
 
-func TestDependabotEcosystem_SetupPythonMissingPip(t *testing.T) {
+func TestDependabotEcosystem_SetupPythonWithoutEvidenceSkipped(t *testing.T) {
 	t.Parallel()
 
+	// setup-python used only to run a stdlib-only script: no pip manifests, no lockfiles, no
+	// pip invocation in run steps. No pip ecosystem is actually managed, so no warning.
 	dependabot := `version: 2
 updates:
   - package-ecosystem: "gomod"
@@ -123,6 +125,58 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "python scripts/build.py", Pos: &ast.Position{Line: 8, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (no dependency-management evidence), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupPythonWithPipInstallWarns(t *testing.T) {
+	t.Parallel()
+
+	// setup-python accompanied by a pip invocation in a run step: the pip ecosystem is really
+	// managed, so the missing dependabot entry is reported at the setup-python step.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "python -m pip install -r requirements.txt", Pos: &ast.Position{Line: 8, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (pip managed via run step), got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at setup-python step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_SetupPythonWithRootManifestWarns(t *testing.T) {
+	t.Parallel()
+
+	// setup-python corroborated by a root pyproject.toml (not a lockfile): pip is in use.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "pyproject.toml")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
 	step := &ast.Step{
 		Exec: &ast.ExecAction{
 			Uses: &ast.String{Value: "actions/setup-python@v5", Pos: &ast.Position{Line: 7, Col: 9}},
@@ -130,10 +184,64 @@ updates:
 	}
 	errs := runEcosystemRule(t, rule, step)
 	if len(errs) != 1 {
-		t.Fatalf("expected 1 error, got %d: %v", len(errs), errs)
+		t.Fatalf("expected 1 error (pyproject.toml corroborates pip), got %d: %v", len(errs), errs)
 	}
 	if errs[0].LineNumber != 7 {
-		t.Errorf("expected warning anchored at step line 7, got line %d", errs[0].LineNumber)
+		t.Errorf("expected warning anchored at setup-python step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeWithPackageJsonWithoutCommandWarns(t *testing.T) {
+	t.Parallel()
+
+	// Root package.json (manifest-only, no lockfile) corroborates setup-node even without an
+	// npm command in a run step: the npm ecosystem is in use.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "package.json")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (package.json corroborates npm), got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at setup-node step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_SetupGoWithoutEvidenceSkipped(t *testing.T) {
+	t.Parallel()
+
+	// setup-go without go.mod/go.sum and without Go toolchain invocations: no gomod
+	// ecosystem is actually managed.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-go@v5", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "go version", Pos: &ast.Position{Line: 8, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (no gomod evidence), got %d: %v", len(errs), errs)
 	}
 }
 
@@ -177,12 +285,11 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
-	step := &ast.Step{
-		Exec: &ast.ExecAction{
-			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-		},
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "npm ci", Pos: &ast.Position{Line: 8, Col: 9}}}},
 	}
-	errs := runEcosystemRule(t, rule, step)
+	errs := runEcosystemRule(t, rule, steps...)
 	if len(errs) != 0 {
 		t.Fatalf("expected 0 errors (npm configured), got %d: %v", len(errs), errs)
 	}
@@ -201,14 +308,16 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
-	step := &ast.Step{
-		Exec: &ast.ExecAction{
-			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-		},
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "./gradlew build", Pos: &ast.Position{Line: 8, Col: 9}}}},
 	}
-	errs := runEcosystemRule(t, rule, step)
+	errs := runEcosystemRule(t, rule, steps...)
 	if len(errs) != 1 {
-		t.Fatalf("expected 1 error (neither maven nor gradle), got %d: %v", len(errs), errs)
+		t.Fatalf("expected 1 error (neither maven nor gradle configured), got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at setup-java step line 7, got line %d", errs[0].LineNumber)
 	}
 }
 
@@ -225,12 +334,11 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
-	step := &ast.Step{
-		Exec: &ast.ExecAction{
-			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-		},
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "mvn -B package", Pos: &ast.Position{Line: 8, Col: 9}}}},
 	}
-	errs := runEcosystemRule(t, rule, step)
+	errs := runEcosystemRule(t, rule, steps...)
 	if len(errs) != 0 {
 		t.Fatalf("expected 0 errors (maven satisfies setup-java), got %d: %v", len(errs), errs)
 	}
@@ -249,12 +357,11 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
-	step := &ast.Step{
-		Exec: &ast.ExecAction{
-			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-		},
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "./gradlew build", Pos: &ast.Position{Line: 8, Col: 9}}}},
 	}
-	errs := runEcosystemRule(t, rule, step)
+	errs := runEcosystemRule(t, rule, steps...)
 	if len(errs) != 0 {
 		t.Fatalf("expected 0 errors (gradle satisfies setup-java), got %d: %v", len(errs), errs)
 	}
@@ -273,12 +380,11 @@ updates:
 	wfPath := writeEcosystemFixture(t, dependabot)
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
-	step := &ast.Step{
-		Exec: &ast.ExecAction{
-			Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-		},
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-java@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "sbt compile", Pos: &ast.Position{Line: 8, Col: 9}}}},
 	}
-	errs := runEcosystemRule(t, rule, step)
+	errs := runEcosystemRule(t, rule, steps...)
 	if len(errs) != 0 {
 		t.Fatalf("expected 0 errors (sbt satisfies setup-java), got %d: %v", len(errs), errs)
 	}
@@ -455,12 +561,11 @@ func TestDependabotEcosystem_SetupActionWarningNotDedupedAcrossWorkflows(t *test
 	totalErrs := 0
 	for _, wfPath := range wfPaths {
 		rule := NewDependabotEcosystemRule(wfPath, false)
-		step := &ast.Step{
-			Exec: &ast.ExecAction{
-				Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
-			},
+		steps := []*ast.Step{
+			{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+			{Exec: &ast.ExecRun{Run: &ast.String{Value: "npm ci", Pos: &ast.Position{Line: 8, Col: 9}}}},
 		}
-		errs := runEcosystemRule(t, rule, step)
+		errs := runEcosystemRule(t, rule, steps...)
 		totalErrs += len(errs)
 	}
 

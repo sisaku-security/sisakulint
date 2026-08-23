@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -53,6 +54,11 @@ type DependabotEcosystemRule struct {
 	// setupActionReqs collects ecosystem requirements derived from setup actions in the
 	// current workflow, anchored to the step position for precise reporting.
 	setupActionReqs []ecosystemRequirement
+	// runCommands collects the raw shell text of `run:` steps in the current workflow. It
+	// corroborates setup-action ecosystem requirements: a setup-* action that only bootstraps
+	// the runtime to run stdlib-only scripts does not manage dependencies and must not imply a
+	// dependabot ecosystem.
+	runCommands []string
 }
 
 // ecosystemRequirement represents a detected need for one or more dependabot ecosystems.
@@ -107,6 +113,7 @@ var lockfileEcosystems = []struct {
 // VisitWorkflowPre resets per-workflow state.
 func (rule *DependabotEcosystemRule) VisitWorkflowPre(_ *ast.Workflow) error {
 	rule.setupActionReqs = nil
+	rule.runCommands = nil
 	return nil
 }
 
@@ -130,8 +137,15 @@ var setupActionEcosystems = []struct {
 	{"ruby/setup-ruby", []string{"bundler"}},
 }
 
-// VisitStep records ecosystem requirements implied by setup actions in the workflow.
+// VisitStep records ecosystem requirements implied by setup actions in the workflow, and
+// collects `run:` step shell text used to corroborate those requirements.
 func (rule *DependabotEcosystemRule) VisitStep(step *ast.Step) error {
+	if run, ok := step.Exec.(*ast.ExecRun); ok {
+		if run.Run != nil && run.Run.Value != "" {
+			rule.runCommands = append(rule.runCommands, run.Run.Value)
+		}
+		return nil
+	}
 	action, ok := step.Exec.(*ast.ExecAction)
 	if !ok || action.Uses == nil {
 		return nil
@@ -147,6 +161,85 @@ func (rule *DependabotEcosystemRule) VisitStep(step *ast.Step) error {
 		}
 	}
 	return nil
+}
+
+// setupActionCorroborationFiles maps a dependabot ecosystem to root-level manifest/lockfile
+// patterns that corroborate a setup-action requirement. Entries may contain '*' globs (e.g.
+// requirements*.txt). A setup-* action is frequently used merely to run stdlib-only scripts; the
+// requirement is only reported when one of these files exists at the repository root or a `run`
+// step invokes the ecosystem's package manager.
+var setupActionCorroborationFiles = map[string][]string{
+	"npm":      {"package-lock.json", "pnpm-lock.yaml", "yarn.lock", "package.json"},
+	"gomod":    {"go.sum", "go.mod"},
+	"cargo":    {"Cargo.lock", "Cargo.toml"},
+	"bundler":  {"Gemfile.lock", "Gemfile"},
+	"composer": {"composer.lock", "composer.json"},
+	"pip":      {"Pipfile.lock", "poetry.lock", "uv.lock", "requirements*.txt", "pyproject.toml", "setup.py", "setup.cfg", "Pipfile"},
+	"maven":    {"pom.xml"},
+	"gradle":   {"build.gradle", "build.gradle.kts", "gradle.lockfile"},
+	"sbt":      {"build.sbt"},
+}
+
+// packageManagerCommandPatterns maps ecosystems to shell patterns of their package manager being
+// invoked in a `run` step. A match corroborates a setup-action requirement for that ecosystem.
+var packageManagerCommandPatterns = []struct {
+	ecosystems []string
+	re         *regexp.Regexp
+}{
+	{[]string{"npm"}, regexp.MustCompile(`(?i)\b(npm|npx|yarn|pnpm|bun|corepack)\b`)},
+	{[]string{"gomod"}, regexp.MustCompile(`(?i)\bgo (mod|get|install|run|build|test|vet)\b`)},
+	{[]string{"pip"}, regexp.MustCompile(`(?i)\b(pip|pip3|pipx|pipenv|poetry|conda|uv|pdm)\b`)},
+	{[]string{"maven", "gradle", "sbt"}, regexp.MustCompile(`(?i)\b(mvn|mvnw|gradle|gradlew|sbt)\b`)},
+	{[]string{"bundler"}, regexp.MustCompile(`(?i)\bbundle (install|exec|add|update|check)\b`)},
+}
+
+// setupActionCorroborated reports whether the setup-action requirement is backed by evidence that
+// the ecosystem's package manager is actually used: a recognized root-level manifest/lockfile for
+// one of the accepted ecosystems, or a `run` step invoking that ecosystem's package manager.
+func (rule *DependabotEcosystemRule) setupActionCorroborated(req ecosystemRequirement) bool {
+	for _, eco := range req.accepts {
+		if rule.rootHasEcosystemFile(eco) || rule.runUsesEcosystemManager(eco) {
+			return true
+		}
+	}
+	return false
+}
+
+// rootHasEcosystemFile reports whether the repository root contains a manifest/lockfile pattern
+// associated with the ecosystem. Patterns may contain '*' globs (e.g. requirements*.txt).
+func (rule *DependabotEcosystemRule) rootHasEcosystemFile(ecosystem string) bool {
+	for _, pattern := range setupActionCorroborationFiles[ecosystem] {
+		full := filepath.Join(rule.projectRoot, pattern)
+		if strings.Contains(pattern, "*") {
+			if matches, err := filepath.Glob(full); err == nil && len(matches) > 0 {
+				return true
+			}
+			continue
+		}
+		if _, err := os.Stat(full); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// runUsesEcosystemManager reports whether any `run` step in the current workflow invokes a
+// package manager of the ecosystem.
+func (rule *DependabotEcosystemRule) runUsesEcosystemManager(ecosystem string) bool {
+	if len(rule.runCommands) == 0 {
+		return false
+	}
+	for _, m := range packageManagerCommandPatterns {
+		if !slices.Contains(m.ecosystems, ecosystem) {
+			continue
+		}
+		for _, cmd := range rule.runCommands {
+			if m.re.MatchString(cmd) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // matchesUsesPrefix reports whether a `uses` value refers to the given action, i.e. it is
@@ -182,6 +275,15 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		rule.Debug("renovate broad preset manages all ecosystems, skipping dependabot-ecosystem check (path: %s)", rule.workflowPath)
 		return nil
 	}
+
+	// A setup-* action alone does not prove the ecosystem's package manager is used — the
+	// runtime may serve only to run stdlib-only scripts, in which case dependabot would have no
+	// manifest to update. Report the setup-action requirement only when it is corroborated by a
+	// root manifest/lockfile for an accepted ecosystem or by a `run` step invoking that
+	// ecosystem's package manager. Lockfile signals (below) are unaffected.
+	rule.setupActionReqs = slices.DeleteFunc(rule.setupActionReqs, func(req ecosystemRequirement) bool {
+		return !rule.setupActionCorroborated(req)
+	})
 
 	// Evaluate setup-action requirements before lockfile requirements: when the same
 	// ecosystem is implied by both, dedup keeps the first occurrence, and setup-action
