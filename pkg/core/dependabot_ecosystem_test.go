@@ -32,6 +32,25 @@ func writeEcosystemFixture(t *testing.T, dependabotYAML string, lockfiles ...str
 	return filepath.Join(wfDir, "test.yaml")
 }
 
+// writeEcosystemFixtureWithContents is writeEcosystemFixture with explicit per-file contents for
+// root-level files (e.g. a real package.json that declares dependencies).
+func writeEcosystemFixtureWithContents(t *testing.T, dependabotYAML string, contents map[string]string) string {
+	t.Helper()
+	wfPath := writeEcosystemFixture(t, dependabotYAML)
+	// wfPath is <root>/.github/workflows/test.yaml: three Dir calls reach the repo root.
+	tmp := filepath.Dir(filepath.Dir(filepath.Dir(wfPath)))
+	for name, content := range contents {
+		p := filepath.Join(tmp, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil { //nolint:gosec // test fixture
+			t.Fatal(err)
+		}
+	}
+	return wfPath
+}
+
 // runEcosystemRule drives the rule over a workflow that contains the given steps.
 func runEcosystemRule(t *testing.T, rule *DependabotEcosystemRule, steps ...*ast.Step) []*LintingError {
 	t.Helper()
@@ -194,8 +213,8 @@ updates:
 func TestDependabotEcosystem_SetupNodeWithPackageJsonWithoutCommandWarns(t *testing.T) {
 	t.Parallel()
 
-	// Root package.json (manifest-only, no lockfile) corroborates setup-node even without an
-	// npm command in a run step: the npm ecosystem is in use.
+	// Root package.json declaring dependencies (manifest-only, no lockfile) corroborates
+	// setup-node even without an npm command in a run step: the npm ecosystem is in use.
 	dependabot := `version: 2
 updates:
   - package-ecosystem: "gomod"
@@ -203,7 +222,14 @@ updates:
     schedule:
       interval: "weekly"
 `
-	wfPath := writeEcosystemFixture(t, dependabot, "package.json")
+	wfPath := writeEcosystemFixtureWithContents(t, dependabot, map[string]string{
+		"package.json": `{
+  "name": "app",
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
+}`,
+	})
 	rule := NewDependabotEcosystemRule(wfPath, false)
 
 	step := &ast.Step{
@@ -213,10 +239,180 @@ updates:
 	}
 	errs := runEcosystemRule(t, rule, step)
 	if len(errs) != 1 {
-		t.Fatalf("expected 1 error (package.json corroborates npm), got %d: %v", len(errs), errs)
+		t.Fatalf("expected 1 error (package.json with dependencies corroborates npm), got %d: %v", len(errs), errs)
 	}
 	if errs[0].LineNumber != 7 {
 		t.Errorf("expected warning anchored at setup-node step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeWithEmptyPackageJsonSkipped(t *testing.T) {
+	t.Parallel()
+
+	// A bare package.json with no dependency entries (scripts-only, zero-dependency project)
+	// is not evidence that the npm ecosystem is managed: Dependabot would have no dependency
+	// to update and the missing-entry warning would only add config noise.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixtureWithContents(t, dependabot, map[string]string{
+		"package.json": `{
+  "name": "zero-dep-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-tests.mjs"
+  }
+}`,
+	})
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (empty package.json does not corroborate npm), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeWithDevDependenciesWarns(t *testing.T) {
+	t.Parallel()
+
+	// devDependencies count as dependency entries: Dependabot updates them by default, so a
+	// devDependencies-only manifest corroborates the npm ecosystem.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixtureWithContents(t, dependabot, map[string]string{
+		"package.json": `{
+  "name": "tool",
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}`,
+	})
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (devDependencies corroborate npm), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeNpmTestOnEmptyPackageJsonSkipped(t *testing.T) {
+	t.Parallel()
+
+	// Exact zero-dependency CI shape (e.g. sisakuintel-worker#1505 / Leonxlnx/unlazy):
+	// setup-node + `npm test` (script runner only) + a package.json with no dependency entries.
+	// Neither the manifest nor the command manages npm dependencies, so no warning. Notably
+	// `npm test` must NOT corroborate via the run-command path — it only executes local scripts.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixtureWithContents(t, dependabot, map[string]string{
+		"package.json": `{
+  "name": "zero-dep-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-tests.mjs && node tests/self-check.mjs"
+  }
+}`,
+	})
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "npm test", Pos: &ast.Position{Line: 8, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 0 {
+		t.Fatalf("expected 0 errors (npm test on zero-dep repo), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeWithNpmCiWarns(t *testing.T) {
+	t.Parallel()
+
+	// An npm run that actually manages dependencies (npm ci) corroborates the setup-node
+	// requirement even without a manifest.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	steps := []*ast.Step{
+		{Exec: &ast.ExecAction{Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}}}},
+		{Exec: &ast.ExecRun{Run: &ast.String{Value: "npm ci", Pos: &ast.Position{Line: 8, Col: 9}}}},
+	}
+	errs := runEcosystemRule(t, rule, steps...)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (npm ci corroborates npm), got %d: %v", len(errs), errs)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected warning anchored at setup-node step line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_SetupNodeWithEmptyDepsObjectSkipped(t *testing.T) {
+	t.Parallel()
+
+	// An explicit `"dependencies": {}` (or `null`) is still an empty manifest: nothing to update.
+	dependabot := `version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	cases := map[string]string{
+		"empty-deps-object": `{"name":"x","dependencies":{}}`,
+		"null-deps":         `{"name":"x","dependencies":null}`,
+	}
+	for name, manifest := range cases {
+		name, manifest := name, manifest
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			wfPath := writeEcosystemFixtureWithContents(t, dependabot, map[string]string{
+				"package.json": manifest,
+			})
+			rule := NewDependabotEcosystemRule(wfPath, false)
+
+			step := &ast.Step{
+				Exec: &ast.ExecAction{
+					Uses: &ast.String{Value: "actions/setup-node@v4", Pos: &ast.Position{Line: 7, Col: 9}},
+				},
+			}
+			errs := runEcosystemRule(t, rule, step)
+			if len(errs) != 0 {
+				t.Fatalf("expected 0 errors for %s, got %d: %v", name, len(errs), errs)
+			}
+		})
 	}
 }
 

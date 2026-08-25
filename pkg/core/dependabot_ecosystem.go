@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -186,7 +188,13 @@ var packageManagerCommandPatterns = []struct {
 	ecosystems []string
 	re         *regexp.Regexp
 }{
-	{[]string{"npm"}, regexp.MustCompile(`(?i)\b(npm|npx|yarn|pnpm|bun|corepack)\b`)},
+	// npm runs must actually manage dependencies. `npm test` / `npm run` / `npm exec` only
+	// execute scripts and would corroborate a zero-dependency setup-node usage (where Dependabot
+	// has nothing to update). `npx` fetches packages into its own cache, not the project, and is
+	// likewise not dependency management. Bare `yarn` (install shorthand) is intentionally not
+	// matched; repos that rely on it almost always declare dependencies in package.json, which
+	// corroborates via the manifest path instead.
+	{[]string{"npm"}, regexp.MustCompile(`(?i)\b(npm|yarn|pnpm|bun)\s+(install|ci|i|add|update|up|remove|rm|dedupe|prune|rebuild)\b`)},
 	{[]string{"gomod"}, regexp.MustCompile(`(?i)\bgo (mod|get|install|run|build|test|vet)\b`)},
 	{[]string{"pip"}, regexp.MustCompile(`(?i)\b(pip|pip3|pipx|pipenv|poetry|conda|uv|pdm)\b`)},
 	{[]string{"maven", "gradle", "sbt"}, regexp.MustCompile(`(?i)\b(mvn|mvnw|gradle|gradlew|sbt)\b`)},
@@ -207,6 +215,12 @@ func (rule *DependabotEcosystemRule) setupActionCorroborated(req ecosystemRequir
 
 // rootHasEcosystemFile reports whether the repository root contains a manifest/lockfile pattern
 // associated with the ecosystem. Patterns may contain '*' globs (e.g. requirements*.txt).
+//
+// npm manifest corroboration is content-aware: a bare package.json that declares no dependency
+// entries (e.g. a zero-dependency project with only `scripts`) is not evidence that the npm
+// ecosystem is managed. Dependabot would have nothing to update, so the missing-entry warning
+// would only add config noise. Lockfile corroboration (package-lock.json / pnpm-lock.yaml /
+// yarn.lock) remains presence-based.
 func (rule *DependabotEcosystemRule) rootHasEcosystemFile(ecosystem string) bool {
 	for _, pattern := range setupActionCorroborationFiles[ecosystem] {
 		full := filepath.Join(rule.projectRoot, pattern)
@@ -216,8 +230,67 @@ func (rule *DependabotEcosystemRule) rootHasEcosystemFile(ecosystem string) bool
 			}
 			continue
 		}
-		if _, err := os.Stat(full); err == nil {
-			return true
+		if _, err := os.Stat(full); err != nil {
+			continue
+		}
+		if ecosystem == "npm" && pattern == "package.json" && !npmManifestDeclaresDependency(rule.projectRoot) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// npmDependencyDeclaringKeys are the package.json fields that declare dependency entries that
+// Dependabot can update. `overrides` and `engines` are intentionally excluded: they do not
+// introduce updateable dependencies on their own.
+var npmDependencyDeclaringKeys = []string{
+	"dependencies",
+	"devDependencies",
+	"peerDependencies",
+	"optionalDependencies",
+	"bundledDependencies",
+	"bundleDependencies",
+}
+
+// npmManifestDeclaresDependency reports whether the root package.json declares at least one
+// dependency entry: any of the npmDependencyDeclaringKeys present with a non-empty value
+// (objects / arrays with at least one element). An unreadable or unparseable manifest is treated
+// conservatively as declaring dependencies so legitimate warnings are not dropped for malformed
+// manifests.
+func npmManifestDeclaresDependency(projectRoot string) bool {
+	data, err := os.ReadFile(filepath.Join(projectRoot, "package.json"))
+	if err != nil {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return true // conservative: unparseable manifests still corroborate
+	}
+	for _, key := range npmDependencyDeclaringKeys {
+		raw, ok := fields[key]
+		if !ok || len(raw) == 0 {
+			continue
+		}
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 {
+			continue
+		}
+		switch trimmed[0] {
+		case '{': // object field (dependencies, devDependencies, ...) with >= 1 entry
+			var m map[string]json.RawMessage
+			if json.Unmarshal(trimmed, &m) == nil && len(m) > 0 {
+				return true
+			}
+		case '[': // array field (bundledDependencies / bundleDependencies) with >= 1 entry
+			var a []json.RawMessage
+			if json.Unmarshal(trimmed, &a) == nil && len(a) > 0 {
+				return true
+			}
+		default: // `null` or an unexpected scalar: not a dependency declaration; be conservative
+			if !bytes.Equal(trimmed, []byte("null")) {
+				return true
+			}
 		}
 	}
 	return false

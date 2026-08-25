@@ -78,6 +78,20 @@ or a `run` step invoking that ecosystem's package manager (for example `npm ci`,
 `go mod tidy`, `bundle install`, `mvn package`). This avoids warning about workflows that use a
 setup action purely to run stdlib-only scripts, which have no dependencies for Dependabot to update.
 
+npm manifest corroboration is content-aware: a root `package.json` corroborates the npm ecosystem
+only when it declares at least one dependency entry (`dependencies`, `devDependencies`,
+`peerDependencies`, `optionalDependencies`, or `bundledDependencies` / `bundleDependencies`). A bare
+`package.json` with only `scripts` (a zero-dependency project) is not treated as evidence that npm
+dependencies are managed — Dependabot would have nothing to update, so the missing-entry warning
+would only add configuration noise. Lockfile corroboration (`package-lock.json` / `pnpm-lock.yaml` /
+`yarn.lock`) remains presence-based. An unparseable `package.json` is treated conservatively as
+corroborating, so malformed manifests never drop a legitimate warning.
+
+npm command corroboration is likewise restricted to dependency-managing invocations (`npm install` /
+`npm ci` / `npm add` / `npm update` / `yarn install` / `pnpm install` / `bun install`, ...). Script
+runners (`npm test`, `npm run`, `npm exec`) and `npx` do not manage project dependencies, so they do
+not corroborate a setup-node requirement on their own.
+
 ### Example Finding
 
 ```yaml
