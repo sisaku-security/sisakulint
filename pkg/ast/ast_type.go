@@ -297,6 +297,10 @@ type Environment struct {
 	Name *String
 	// URL はデプロイメントAPIの 'environment_url' にマップされるURLです。空の値は何も指定されていないことを意味します。
 	URL *String
+	// Deployment はこのジョブがデプロイメントレコードを作成するかどうかを制御します。
+	// false の場合、ジョブはデプロイメントレコードを作成せずに環境シークレットと変数を使用できます。
+	// * https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments#using-environments-without-deployments
+	Deployment *Bool
 	// Pos はソース内の位置です。
 	Pos *Position
 }
