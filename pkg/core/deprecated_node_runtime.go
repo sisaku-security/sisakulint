@@ -34,14 +34,15 @@ type DeprecatedNodeRuntimeRule struct {
 // upload-artifact v5. Hand-maintained, verified 2026-07 against each
 // action.yml.
 var nodeRuntimeFirstNode24Major = map[string]int{
-	"actions/checkout":          5,
-	"actions/setup-node":        5,
-	"actions/setup-python":      6,
-	"actions/setup-go":          6,
-	"actions/github-script":     8,
-	"actions/cache":             5,
-	"actions/upload-artifact":   6,
-	"actions/download-artifact": 7,
+	"actions/checkout":                5,
+	"actions/setup-node":              5,
+	"actions/setup-python":            6,
+	"actions/setup-go":                6,
+	"actions/github-script":           8,
+	"actions/cache":                   5,
+	"actions/upload-artifact":         6,
+	"actions/download-artifact":       7,
+	"softprops/action-gh-release":     3,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
