@@ -101,6 +101,7 @@ var networkCommands = []networkCommand{
 		legitPatterns: []string{
 			"api.github.com",
 			"uploads.github.com",
+			"gitee.com/api",
 			"registry.npmjs.org",
 			"pypi.org",
 			"upload.pypi.org",
