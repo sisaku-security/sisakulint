@@ -362,6 +362,126 @@ jobs:
 			wantErr: true,
 			errMsg:  "checking out untrusted code from pull request",
 		},
+		{
+			name: "Vulnerable: run script uses gh pr checkout",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr checkout "$PR_NUMBER"
+`,
+			wantErr: true,
+			errMsg:  "via git/gh commands",
+		},
+		{
+			name: "Vulnerable: run script fetches pull/head ref",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          git fetch origin pull/${{ github.event.pull_request.number }}/head
+          git checkout FETCH_HEAD -- tasks/
+`,
+			wantErr: true,
+			errMsg:  "via git/gh commands",
+		},
+		{
+			name: "Vulnerable: run script git checkout of tainted env PR_SHA",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          rm -rf tasks/
+          git checkout "$PR_SHA" -- tasks/
+`,
+			wantErr: true,
+			errMsg:  "via git/gh commands",
+		},
+		{
+			name: "Vulnerable: run script git reset --hard to PR head sha",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_SHA: ${{ needs.check.outputs.head_sha }}
+        run: |
+          git reset --hard "$HEAD_SHA"
+`,
+			wantErr: true,
+			errMsg:  "via git/gh commands",
+		},
+		{
+			name: "Vulnerable: run script git switch to PR head ref",
+			yaml: `
+name: Test
+on: issue_comment
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PR_SHA: ${{ needs.check-trigger.outputs.pr_sha }}
+        run: git switch "$PR_SHA"
+`,
+			wantErr: true,
+			errMsg:  "via git/gh commands",
+		},
+		{
+			name: "Safe: run script git checkout main branch",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout main
+`,
+			wantErr: false,
+		},
+		{
+			name: "Safe: run script git checkout -- path only",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout -- .
+`,
+			wantErr: false,
+		},
+		{
+			name: "Safe: run script git checkout of github.sha",
+			yaml: `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git checkout ${{ github.sha }}
+`,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
