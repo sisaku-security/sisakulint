@@ -26,6 +26,8 @@ var unsafePatternsLower = []string{
 	"head-sha",    // Detects kebab-case variants
 	"head-ref",    // Detects kebab-case variants
 	"head-label",  // Detects kebab-case head.label variants
+	".pr_sha",     // Detects steps.*.outputs.pr_sha / needs.*.outputs.pr_sha
+	"pr-sha",      // Detects kebab-case variants
 }
 
 // Patterns that are explicitly safe to use with any trigger
