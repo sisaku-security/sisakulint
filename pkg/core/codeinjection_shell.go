@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -29,31 +30,42 @@ func (rule *CodeInjectionRule) checkShellMetacharacterInjection(step *ast.Step, 
 	for _, envVar := range envVarsWithUntrusted {
 		usages := parser.FindEnvVarUsages(envVar.envVarName)
 
-		for _, usage := range usages {
-			if usage.IsUnsafeUsage() {
-				reason := rule.getUnsafeUsageReason(usage)
-				paths := strings.Join(envVar.untrustedPaths, "\", \"")
+		// Multiple unsafe usages of the same variable in one run block all
+		// report at the run block position, so dedupe identical messages to
+		// avoid duplicate findings.
+		reported := make(map[string]struct{})
 
-				if rule.checkPrivileged {
-					rule.Errorf(
-						run.Run.Pos,
-						"code injection via shell metacharacters (critical): environment variable $%s contains untrusted input (\"%s\") and is %s. This can lead to command injection even when using environment variables. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
-						envVar.envVarName,
-						paths,
-						reason,
-						envVar.envVarName,
-					)
-				} else {
-					rule.Errorf(
-						run.Run.Pos,
-						"code injection via shell metacharacters (medium): environment variable $%s contains untrusted input (\"%s\") and is %s. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
-						envVar.envVarName,
-						paths,
-						reason,
-						envVar.envVarName,
-					)
-				}
+		for _, usage := range usages {
+			if !usage.IsUnsafeUsage() {
+				continue
 			}
+			reason := rule.getUnsafeUsageReason(usage)
+			paths := strings.Join(envVar.untrustedPaths, "\", \"")
+
+			var msg string
+			if rule.checkPrivileged {
+				msg = fmt.Sprintf(
+					"code injection via shell metacharacters (critical): environment variable $%s contains untrusted input (\"%s\") and is %s. This can lead to command injection even when using environment variables. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/",
+					envVar.envVarName,
+					paths,
+					reason,
+					envVar.envVarName,
+				)
+			} else {
+				msg = fmt.Sprintf(
+					"code injection via shell metacharacters (medium): environment variable $%s contains untrusted input (\"%s\") and is %s. Use proper quoting: \"$%s\" or validate input before use. See https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/",
+					envVar.envVarName,
+					paths,
+					reason,
+					envVar.envVarName,
+				)
+			}
+
+			if _, dup := reported[msg]; dup {
+				continue
+			}
+			reported[msg] = struct{}{}
+			rule.Error(run.Run.Pos, msg)
 		}
 	}
 }
