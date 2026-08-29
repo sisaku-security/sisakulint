@@ -33,6 +33,11 @@ type DeprecatedNodeRuntimeRule struct {
 // every lower major is deprecated, including gap majors such as
 // upload-artifact v5. Hand-maintained, verified 2026-07 against each
 // action.yml.
+//
+// The table also covers popular third-party actions so offline fallback
+// (remote metadata resolution unavailable) keeps detecting deprecated
+// runtimes for them. It is a best-effort stopgap: the resolved action.yml
+// always wins when the resolver is available.
 var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/checkout":          5,
 	"actions/setup-node":        5,
@@ -42,6 +47,8 @@ var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/cache":             5,
 	"actions/upload-artifact":   6,
 	"actions/download-artifact": 7,
+	// jdx/mise-action v3 declares `runs.using: node20`; v4 moved to node24.
+	"jdx/mise-action": 4,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
