@@ -702,7 +702,7 @@ func makeRules(filePath string, isRemote bool, gitHubToken string, localActions 
 		ArtifactPoisoningRule(),
 		NewArtifactPoisoningMediumRule(),
 		NewActionListRule(),
-		NewUntrustedCheckoutRule(),
+		NewUntrustedCheckoutRule(localReusableWorkflow),
 		NewCachePoisoningRule(actionMetadata),
 		NewCachePoisoningPoisonableStepRule(),
 		NewSecretExposureRule(),                                       // Detects toJSON(secrets) and secrets[dynamic-access]

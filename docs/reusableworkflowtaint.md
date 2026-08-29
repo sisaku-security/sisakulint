@@ -14,6 +14,10 @@ This rule detects security vulnerabilities that arise when **untrusted inputs ar
 - **Severity-Based Reporting**: Critical severity for privileged triggers, medium for normal triggers
 - **Auto-fix Support**: Automatically converts unsafe patterns to use environment variables
 
+#### Tracked Sinks
+
+Tainted `inputs.*` are tracked into four sinks: `run:` scripts, `actions/github-script` `script:`, `env:` values, and `actions/checkout`'s `ref:`. The checkout-ref sink additionally recognizes caller values like `github.event.pull_request.head.sha` — commit SHAs can't carry shell metacharacters, so they're not flagged for the other three (injection) sinks, but checking out an attacker-chosen commit is dangerous regardless of its format. This sink is also what the [untrusted-checkout](./untrustedcheckout.md) rule defers to for `workflow_call` reusable workflows when chain resolution is available, instead of assuming every unrecognized `${{ inputs.X }}` ref is critical.
+
 ### Security Impact
 
 **Severity: Critical (privileged triggers) / Medium (normal triggers)**
