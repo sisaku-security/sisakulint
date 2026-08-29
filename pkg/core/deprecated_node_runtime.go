@@ -31,15 +31,21 @@ type DeprecatedNodeRuntimeRule struct {
 
 // First major of each well-known action that declares `runs.using: node24`;
 // every lower major is deprecated, including gap majors such as
-// upload-artifact v5. Hand-maintained, verified 2026-07 against each
-// action.yml.
+// upload-artifact v5. Hand-maintained, verified 2026-08 against each
+// action.yml (added actions/setup-dotnet, actions/setup-java, actions/stale,
+// actions/configure-pages, actions/deploy-pages).
 var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/checkout":          5,
 	"actions/setup-node":        5,
 	"actions/setup-python":      6,
 	"actions/setup-go":          6,
+	"actions/setup-dotnet":      5,
+	"actions/setup-java":        5,
 	"actions/github-script":     8,
 	"actions/cache":             5,
+	"actions/stale":             10,
+	"actions/configure-pages":   6,
+	"actions/deploy-pages":      5,
 	"actions/upload-artifact":   6,
 	"actions/download-artifact": 7,
 }
