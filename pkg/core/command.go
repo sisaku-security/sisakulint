@@ -245,7 +245,7 @@ func (cmd *Command) Main(args []string) int {
 
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(cmd.Stderr)
-	flags.Var(&ignorePats, "ignore", "Regular expression matching to error messages you want to ignore. This flag is repeatable")
+	flags.Var(&ignorePats, "ignore", "Regular expression matching rule names you want to ignore. This flag is repeatable")
 	flags.Var(&enabledRules, "enable-rule",
 		"Enable an opt-in rule by name. Repeatable. "+
 			"Currently available opt-in rules: missing-timeout-minutes")
