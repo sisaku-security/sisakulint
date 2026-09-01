@@ -72,7 +72,7 @@ The rule resolves each action's `action.yml` at the pinned ref through the GitHu
 
 ### Known Limitations
 
-- The embedded fallback table is a hand-maintained snapshot of first-party actions.
+- The embedded fallback table is a hand-maintained snapshot of first-party actions plus popular third-party actions (e.g. `softprops/action-gh-release`, `goreleaser/goreleaser-action`). PRs adding verified node24-major entries for other widely-used actions are welcome.
 - Composite actions are inspected one level deep; runtimes nested deeper and reusable workflows are not tracked.
 
 ### References
