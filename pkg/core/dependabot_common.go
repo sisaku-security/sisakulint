@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -63,6 +64,46 @@ func dependabotConfiguredEcosystems(path string) (map[string]bool, error) {
 	for _, update := range config.Updates {
 		if update.PackageEcosystem != "" {
 			result[update.PackageEcosystem] = true
+		}
+	}
+	return result, nil
+}
+
+// dependabotCommentedEcosystems scans the raw dependabot config for commented-out
+// package-ecosystem entries and returns the set of ecosystem names found. A commented-out
+// entry is the standard declarative way to temporarily disable Dependabot updates for a
+// single ecosystem while keeping the configuration in place (the YAML parser drops
+// comments, so dependabotConfiguredEcosystems cannot see these). Reporting them as plain
+// "missing ecosystem" errors would contradict an explicit, comment-documented maintainer
+// decision (e.g. Tailscale-style release-gated dependency pulls), so the caller can
+// distinguish "deliberately disabled" from "never configured".
+func dependabotCommentedEcosystems(path string) (map[string]bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]bool)
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// Strip the comment marker and an optional list dash, then look for a
+		// `package-ecosystem:` key. Both `# - package-ecosystem: "gomod"` and
+		// `# package-ecosystem: gomod` (block-comment style) are recognized.
+		body := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+		body = strings.TrimSpace(strings.TrimPrefix(body, "-"))
+		key, val, ok := strings.Cut(body, ":")
+		if !ok || strings.TrimSpace(key) != "package-ecosystem" {
+			continue
+		}
+		eco := strings.Trim(strings.TrimSpace(val), `"'`)
+		// Drop any trailing inline comment on the same line.
+		if idx := strings.Index(eco, "#"); idx >= 0 {
+			eco = strings.TrimSpace(eco[:idx])
+		}
+		if eco != "" {
+			result[eco] = true
 		}
 	}
 	return result, nil

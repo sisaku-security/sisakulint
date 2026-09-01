@@ -201,7 +201,12 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 	for eco := range renovateManaged {
 		covered[eco] = true
 	}
+	// commented tracks ecosystems whose dependabot entry exists but is commented out
+	// (deliberately disabled). These are reported at info level instead of as errors.
+	commented := map[string]bool{}
+	var configName string
 	if configPath := dependabotFindConfigFile(rule.projectRoot); configPath != "" {
+		configName = filepath.Base(configPath)
 		eco, err := dependabotConfiguredEcosystems(configPath)
 		if err != nil {
 			rule.Debug("failed to parse dependabot config: %v", err)
@@ -209,6 +214,11 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		}
 		for e := range eco {
 			covered[e] = true
+		}
+		commented, err = dependabotCommentedEcosystems(configPath)
+		if err != nil {
+			rule.Debug("failed to scan commented-out entries in dependabot config: %v", err)
+			commented = map[string]bool{}
 		}
 	}
 
@@ -242,6 +252,22 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		if pos == nil {
 			pos = &ast.Position{Line: 1, Col: 1}
 		}
+		// A commented-out package-ecosystem entry is a deliberate, document-level decision
+		// to disable automated updates for that ecosystem. Surface it at info level (the
+		// worker maps the [info] prefix to Info severity) so re-enabling stays discoverable
+		// without treating an explicit choice as a Medium misconfiguration.
+		if requirementCommented(req, commented) {
+			rule.Errorf(
+				pos,
+				"[info] package ecosystem %q is used (detected from %s) but its package-ecosystem entry is commented out (disabled) in .github/%s. "+
+					"If the disable is intentional, no action is needed; otherwise uncomment the entry to re-enable dependency updates. "+
+					"See https://sisaku-security.github.io/lint/docs/rules/dependabotecosystemrule/",
+				strings.Join(req.accepts, " or "),
+				req.label,
+				configName,
+			)
+			continue
+		}
 		rule.Errorf(
 			pos,
 			"package ecosystem %q is used (detected from %s) but not configured in dependabot. "+
@@ -252,6 +278,17 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 		)
 	}
 	return nil
+}
+
+// requirementCommented reports whether any of the requirement's accepted ecosystems has a
+// commented-out (disabled) package-ecosystem entry in the dependabot config.
+func requirementCommented(req ecosystemRequirement, commented map[string]bool) bool {
+	for _, eco := range req.accepts {
+		if commented[eco] {
+			return true
+		}
+	}
+	return false
 }
 
 // requirementSatisfied reports whether the dependabot config covers the requirement, i.e.
