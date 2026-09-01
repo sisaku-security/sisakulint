@@ -92,6 +92,8 @@ func TestDeprecatedNodeRuntimeKnownActions(t *testing.T) {
 		{"download-artifact v6 is node20", "actions/download-artifact@v6", "", 1, 1},
 		{"upload-artifact v5 gap major is node20", "actions/upload-artifact@v5", "", 1, 1},
 		{"upload-artifact v6 is node24", "actions/upload-artifact@v6", "", 0, 0},
+		{"dependency-review-action v4 is node20", "actions/dependency-review-action@v4", "", 1, 1},
+		{"dependency-review-action v5 is node24", "actions/dependency-review-action@v5", "", 0, 0},
 		{"sha pinned with tag comment detected but not fixed", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "# v4.1.1", 1, 0},
 		{"sha pinned without comment falls through silently", "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675", "", 0, 0},
 		{"unknown action is not matched", "someorg/someaction@v1", "", 0, 0},

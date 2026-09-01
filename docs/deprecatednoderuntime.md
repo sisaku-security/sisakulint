@@ -64,7 +64,7 @@ jobs:
 
 ### Auto-fix
 
-`sisakulint -fix on` bumps known first-party actions from their node20-generation major to the first node24-capable major, for example `actions/checkout@v4` to `@v5`, `actions/github-script@v7` to `@v8`, and `actions/upload-artifact@v4` to `@v6`. Subpaths such as `actions/cache/restore@v4` are preserved. SHA-pinned references are detected but left to the `commit-sha` rule to re-pin. The three diagnose-only classes in the table above are reported without a fix. Preview changes with `sisakulint -fix dry-run`.
+`sisakulint -fix on` bumps known first-party actions from their node20-generation major to the first node24-capable major, for example `actions/checkout@v4` to `@v5`, `actions/github-script@v7` to `@v8`, `actions/upload-artifact@v4` to `@v6`, and `actions/dependency-review-action@v4` to `@v5`. Subpaths such as `actions/cache/restore@v4` are preserved. SHA-pinned references are detected but left to the `commit-sha` rule to re-pin. The three diagnose-only classes in the table above are reported without a fix. Preview changes with `sisakulint -fix dry-run`.
 
 ### Resolver and Offline Fallback
 
