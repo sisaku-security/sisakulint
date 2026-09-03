@@ -1,6 +1,6 @@
 module github.com/sisaku-security/sisakulint
 
-go 1.25.13
+go 1.26.0
 
 require (
 	github.com/fatih/color v1.19.0
@@ -11,7 +11,7 @@ require (
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
-	mvdan.cc/sh/v3 v3.13.1
+	mvdan.cc/sh/v3 v3.14.0
 )
 
 require (
