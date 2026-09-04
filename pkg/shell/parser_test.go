@@ -6,13 +6,15 @@ import (
 
 func TestShellParser_FindEnvVarUsages(t *testing.T) {
 	tests := []struct {
-		name       string
-		script     string
-		varName    string
-		wantCount  int
-		wantQuoted []bool
-		wantInEval []bool
-		wantInCmd  []bool
+		name         string
+		script       string
+		varName      string
+		wantCount    int
+		wantQuoted   []bool
+		wantInEval   []bool
+		wantInCmd    []bool
+		wantInAssign []bool
+		wantInHdoc   []bool
 	}{
 		{
 			name:       "simple unquoted variable",
@@ -116,6 +118,47 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 			wantCount:  2,
 			wantQuoted: []bool{false, false},
 		},
+		{
+			name:         "assignment RHS is not an injection context",
+			script:       "version=${MY_VAR#v}",
+			varName:      "MY_VAR",
+			wantCount:    1,
+			wantInAssign: []bool{true},
+		},
+		{
+			name:         "prefix assignment keeps command context",
+			script:       "FOO=$MY_VAR somecmd",
+			varName:      "MY_VAR",
+			wantCount:    1,
+			wantInAssign: []bool{true},
+		},
+		{
+			name:       "heredoc body is not an injection context",
+			script:     "cat <<EOF\nvalue=$MY_VAR\nEOF",
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantInHdoc: []bool{true},
+		},
+		{
+			name:         "command substitution inside assignment resets context",
+			script:       "result=$(echo $MY_VAR)",
+			varName:      "MY_VAR",
+			wantCount:    1,
+			wantInAssign: []bool{false},
+		},
+		{
+			name:         "array compound assignment keeps splitting context",
+			script:       "arr=($MY_VAR)",
+			varName:      "MY_VAR",
+			wantCount:    1,
+			wantInAssign: []bool{false},
+		},
+		{
+			name:      "quoted heredoc body suppresses usage",
+			script:    "cat <<'EOF'\nvalue=$MY_VAR\nEOF",
+			varName:   "MY_VAR",
+			wantCount: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -139,6 +182,14 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 
 				if tt.wantInCmd != nil && i < len(tt.wantInCmd) && usage.InShellCmd != tt.wantInCmd[i] {
 					t.Errorf("usage[%d].InShellCmd = %v, want %v", i, usage.InShellCmd, tt.wantInCmd[i])
+				}
+
+				if tt.wantInAssign != nil && i < len(tt.wantInAssign) && usage.InAssignment != tt.wantInAssign[i] {
+					t.Errorf("usage[%d].InAssignment = %v, want %v", i, usage.InAssignment, tt.wantInAssign[i])
+				}
+
+				if tt.wantInHdoc != nil && i < len(tt.wantInHdoc) && usage.InHeredocBody != tt.wantInHdoc[i] {
+					t.Errorf("usage[%d].InHeredocBody = %v, want %v", i, usage.InHeredocBody, tt.wantInHdoc[i])
 				}
 			}
 		})
@@ -208,6 +259,39 @@ func TestShellVarUsage_IsUnsafeUsage(t *testing.T) {
 				InEval:     false,
 				InShellCmd: false,
 				InCmdSubst: true,
+			},
+			unsafe: true,
+		},
+		{
+			name: "unquoted in assignment RHS - safe",
+			usage: ShellVarUsage{
+				IsQuoted:     false,
+				InAssignment: true,
+				InEval:       false,
+				InShellCmd:   false,
+				InCmdSubst:   false,
+			},
+			unsafe: false,
+		},
+		{
+			name: "unquoted in heredoc body - safe",
+			usage: ShellVarUsage{
+				IsQuoted:      false,
+				InHeredocBody: true,
+				InEval:        false,
+				InShellCmd:    false,
+				InCmdSubst:    false,
+			},
+			unsafe: false,
+		},
+		{
+			name: "assignment RHS still unsafe inside eval",
+			usage: ShellVarUsage{
+				IsQuoted:     false,
+				InAssignment: true,
+				InEval:       true,
+				InShellCmd:   false,
+				InCmdSubst:   false,
 			},
 			unsafe: true,
 		},

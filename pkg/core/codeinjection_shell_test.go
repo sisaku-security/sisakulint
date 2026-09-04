@@ -441,3 +441,131 @@ func TestCodeInjection_ErrorMessages(t *testing.T) {
 		t.Error("Error message should explain the issue")
 	}
 }
+
+// Regression tests for the vorssaint-utils false positive (#1532): unquoted
+// environment variables in an assignment RHS or a here-document body are not
+// subject to word splitting or glob expansion, so they must not be reported
+// as code injection.
+func TestCodeInjection_ShellMetacharacterInjection_NoSplitContexts(t *testing.T) {
+	tests := []struct {
+		name        string
+		runScript   string
+		wantErrors  int
+		description string
+	}{
+		{
+			name:        "unquoted in assignment RHS is safe",
+			runScript:   "version=${TAG#v}",
+			wantErrors:  0,
+			description: "Assignment RHS values are not word-split or globbed",
+		},
+		{
+			name: "unquoted in heredoc body is safe",
+			runScript: `cat > comment.md <<COMMENT
+<!-- vorssaint-fix-status confirm=$TAG -->
+COMMENT`,
+			wantErrors:  0,
+			description: "Here-document bodies are expanded without splitting or globbing",
+		},
+		{
+			name:        "assignments in a real workflow shape stay safe",
+			runScript:   "version=${TAG#v}\ngh release view \"$TAG\" --json isDraft,isPrerelease\n",
+			wantErrors:  0,
+			description: "Mixed assignment + quoted usage is safe",
+		},
+		{
+			name:        "array compound assignment still splits",
+			runScript:   "arr=($PR_TITLE)",
+			wantErrors:  1,
+			description: "Array element words are split like normal arguments",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := newCodeInjectionRule("critical", true, nil)
+
+			workflow := &ast.Workflow{
+				On: []ast.Event{
+					&ast.WebhookEvent{
+						Hook: &ast.String{Value: "pull_request_target"},
+					},
+				},
+			}
+
+			step := &ast.Step{
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: tt.runScript,
+						Pos:   &ast.Position{Line: 10, Col: 5},
+					},
+				},
+				Env: &ast.Env{
+					Vars: map[string]*ast.EnvVar{
+						"tag": {
+							Name:  &ast.String{Value: "TAG", Pos: &ast.Position{Line: 1, Col: 1}},
+							Value: &ast.String{Value: "${{ github.event.workflow_run.head_branch }}", Pos: &ast.Position{Line: 1, Col: 1}},
+						},
+						"pr_title": {
+							Name:  &ast.String{Value: "PR_TITLE", Pos: &ast.Position{Line: 1, Col: 1}},
+							Value: &ast.String{Value: "${{ github.event.pull_request.title }}", Pos: &ast.Position{Line: 1, Col: 1}},
+						},
+					},
+				},
+			}
+
+			job := &ast.Job{Steps: []*ast.Step{step}}
+
+			_ = rule.VisitWorkflowPre(workflow)
+			_ = rule.VisitJobPre(job)
+
+			gotErrors := len(rule.Errors())
+			if gotErrors != tt.wantErrors {
+				t.Errorf("%s: got %d errors, want %d errors. Errors: %v",
+					tt.description, gotErrors, tt.wantErrors, rule.Errors())
+			}
+		})
+	}
+}
+
+// Multiple unsafe usages of the same variable in one run block must produce a
+// single report (all usages share the run block position), not one duplicate
+// per usage.
+func TestCodeInjection_ShellMetacharacterInjection_Dedupe(t *testing.T) {
+	rule := newCodeInjectionRule("critical", true, nil)
+
+	workflow := &ast.Workflow{
+		On: []ast.Event{
+			&ast.WebhookEvent{
+				Hook: &ast.String{Value: "pull_request_target"},
+			},
+		},
+	}
+
+	step := &ast.Step{
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: "echo $PR_TITLE; echo $PR_TITLE; echo \"$PR_TITLE\"",
+				Pos:   &ast.Position{Line: 10, Col: 5},
+			},
+		},
+		Env: &ast.Env{
+			Vars: map[string]*ast.EnvVar{
+				"pr_title": {
+					Name:  &ast.String{Value: "PR_TITLE", Pos: &ast.Position{Line: 1, Col: 1}},
+					Value: &ast.String{Value: "${{ github.event.pull_request.title }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+		},
+	}
+
+	job := &ast.Job{Steps: []*ast.Step{step}}
+
+	_ = rule.VisitWorkflowPre(workflow)
+	_ = rule.VisitJobPre(job)
+
+	gotErrors := len(rule.Errors())
+	if gotErrors != 1 {
+		t.Errorf("got %d errors, want 1 (deduped). Errors: %v", gotErrors, rule.Errors())
+	}
+}
