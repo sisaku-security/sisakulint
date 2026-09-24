@@ -125,6 +125,51 @@ jobs:
 			expectError: false,
 		},
 		{
+			name: "safe: != anti-recursion guard against bot self-trigger",
+			workflow: `
+on: issue_comment
+jobs:
+  respond:
+    if: |
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+      github.actor != 'claude[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "respond"
+`,
+			expectError: false,
+		},
+		{
+			name: "safe: != anti-recursion guard inside OR of AND-branches",
+			workflow: `
+on: issue_comment
+jobs:
+  respond:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+       github.actor != 'claude[bot]')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "respond"
+`,
+			expectError: false,
+		},
+		{
+			name: "vulnerable: == check still detected when a != guard is also present",
+			workflow: `
+on: pull_request_target
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge --auto
+`,
+			expectError: true,
+			errContains: "spoofable bot condition",
+		},
+		{
 			name: "safe: issue_comment with safe context",
 			workflow: `
 on: issue_comment
