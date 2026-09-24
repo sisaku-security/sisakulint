@@ -216,8 +216,78 @@ func recordPipelineOutputVisibility(stmt *syntax.Stmt, downstreamReachesLog bool
 
 	visibility[stmt] = true // Keep walking; only leaf stages may be pruned.
 	terminalReachesLog := recordPipelineOutputVisibility(binary.Y, stageReachesLog, visibility)
-	recordPipelineOutputVisibility(binary.X, terminalReachesLog, visibility)
+	// パイプ右側が stdin を「データ入力」として消費する既知コマンド
+	// （例: Sparkle の generate_appcast --ed-key-file -）の場合、左側の stdout は
+	// このパイプを経由してログへ到達できないため、左側の downstream 到達可否を
+	// false に落としてから再帰する。
+	leftDownstream := terminalReachesLog
+	if stmtConsumesStdinAsData(binary.Y) {
+		leftDownstream = false
+	}
+	recordPipelineOutputVisibility(binary.X, leftDownstream, visibility)
 	return terminalReachesLog
+}
+
+// stmtConsumesStdinAsData は Stmt が「stdin を処理対象データとして読み込み、その内容を
+// stdout へ一切出力しない」既知コマンドの呼び出しであるかを判定する。
+// ネストしたパイプラインそのものは対象としない（leaf の CallExpr のみ）。
+func stmtConsumesStdinAsData(stmt *syntax.Stmt) bool {
+	if stmt == nil {
+		return false
+	}
+	if binary, isPipeline := stmt.Cmd.(*syntax.BinaryCmd); isPipeline && isPipelineBinaryCmd(binary) {
+		return false
+	}
+	call, ok := stmt.Cmd.(*syntax.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return false
+	}
+	return stdinDataConsumer(call)
+}
+
+// stdinDataConsumer は、パイプ経由で渡された stdin を「処理対象データ」として読み取り、
+// その内容を stdout へ一切出力しない既知コマンドかどうかを判定する。
+//
+// 代表例: Sparkle (macOS アプリ自動更新) の generate_appcast は --ed-key-file - で
+// EdDSA 秘密鍵を stdin から読み取る（公式ドキュメント推奨の署名イディオム）。
+// 鍵は署名にのみ使われ、stdout には出力されない（2.9.5 ソースで確認）。
+//
+// 注意: base64 / tr / sed / jq のような「stdin を変換して stdout へ出す」フィルタ系
+// コマンドや、gpg --decrypt / openssl enc -d のように復号結果を stdout へ出すコマンドは
+// ここに追加してはならない（派生値・復号値の漏洩を見落とすことになる）。
+func stdinDataConsumer(call *syntax.CallExpr) bool {
+	switch commandLiteralName(call.Args[0]) {
+	case "generate_appcast": // Sparkle の appcast 署名ツール
+		return hasOptionFlag(call.Args[1:], "--ed-key-file")
+	}
+	return false
+}
+
+// commandLiteralName はコマンド Word から静的に決定できる basename を返す。
+// 動的な部分（$VAR 等）は無視し、最後のパスセグメントがリテラルである場合のみ
+// basename として採用する。
+// 例: "$RUNNER_TEMP/sparkle/bin/generate_appcast" -> "generate_appcast"。
+func commandLiteralName(word *syntax.Word) string {
+	name := wordLiteralValue(word) // Lit/SglQuoted のみ連結、ParamExp は無視
+	if name == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	return name
+}
+
+// hasOptionFlag は args 内に指定された long option が現れるかを判定する。
+// "--opt" と "--opt=value" の両形式を認識する。
+func hasOptionFlag(args []*syntax.Word, flag string) bool {
+	for _, arg := range args {
+		v := wordLiteralValue(arg)
+		if v == flag || strings.HasPrefix(v, flag+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 func stmtOutputReachesLogFrom(stmt *syntax.Stmt, downstreamReachesLog bool) bool {

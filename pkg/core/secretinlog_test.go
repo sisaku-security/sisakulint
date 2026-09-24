@@ -927,6 +927,125 @@ func TestSecretInLog_PipelineWithoutFileRedirect_StillFlagged(t *testing.T) {
 	}
 }
 
+// パイプ右側が「stdin をデータ入力として消費し、stdout へ一切出力しない」既知
+// コマンド（Sparkle の generate_appcast --ed-key-file -）の場合、左側の echo/printf の
+// stdout はログに到達できないため leak として報告しない。
+// 実例: missuo/kumone release.yml の Sparkle 公式推奨署名イディオム（#1517 検証）。
+func TestSecretInLog_StdinDataConsumerPipeline_NotFlagged(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{
+			name:      "printf key piped to generate_appcast via --ed-key-file -",
+			runScript: `printf '%s' "$SPARKLE_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/generate_appcast" --ed-key-file - --embed-release-notes -o dist/appcast.xml dist`,
+		},
+		{
+			name:      "echo key piped to generate_appcast with --ed-key-file=- form",
+			runScript: `echo "$SPARKLE_PRIVATE_KEY" | generate_appcast --ed-key-file=- -o appcast.xml dist`,
+		},
+		{
+			name:      "three-stage pipeline, terminal stage is generate_appcast",
+			runScript: `printf '%s' "$SPARKLE_PRIVATE_KEY" | tr -d '\n' | generate_appcast --ed-key-file - -o appcast.xml dist`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"key": {
+						Name:  &ast.String{Value: "SPARKLE_PRIVATE_KEY"},
+						Value: &ast.String{Value: "${{ secrets.SPARKLE_PRIVATE_KEY }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 0 {
+				t.Errorf("script %q: stdin-data-consumer pipeline must not leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
+// 対照: generate_appcast でも --ed-key-file が無ければ stdin を消費する保証がないため、
+// 従来通り保守的に leak として報告する。
+func TestSecretInLog_GenerateAppCastWithoutEdKeyFile_StillFlagged(t *testing.T) {
+	t.Parallel()
+
+	step := &ast.Step{
+		Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+			"key": {
+				Name:  &ast.String{Value: "SPARKLE_PRIVATE_KEY"},
+				Value: &ast.String{Value: "${{ secrets.SPARKLE_PRIVATE_KEY }}"},
+			},
+		}},
+		Exec: &ast.ExecRun{
+			Run: &ast.String{
+				Value: `printf '%s' "$SPARKLE_PRIVATE_KEY" | generate_appcast -o appcast.xml dist`,
+				Pos:   &ast.Position{Line: 1, Col: 1},
+			},
+		},
+	}
+	rule := NewSecretInLogRule()
+	if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+		t.Fatalf("VisitJobPre: %v", err)
+	}
+	if got := len(rule.Errors()); got != 1 {
+		t.Errorf("generate_appcast without --ed-key-file must still leak; got %d errors: %v", got, rule.Errors())
+	}
+}
+
+// 既存のフィルタ系パイプライン（tr / base64）は変換結果（派生値）がログに現れるため、
+// stdin-data-consumer 判定の追加後も引き続き leak として検出されることを保証する。
+func TestSecretInLog_FilterPipelineStillFlaggedAfterConsumerRegistry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		runScript string
+	}{
+		{name: "echo piped through tr, no redirect", runScript: `echo "$TOKEN" | tr a-z A-Z`},
+		{name: "echo piped into base64 decode, no redirect", runScript: `echo "$TOKEN" | base64 --decode`},
+		{name: "printf piped into tee, no redirect", runScript: `printf '%s' "$TOKEN" | tee /dev/stderr`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			step := &ast.Step{
+				Env: &ast.Env{Vars: map[string]*ast.EnvVar{
+					"token": {
+						Name:  &ast.String{Value: "TOKEN"},
+						Value: &ast.String{Value: "${{ secrets.API }}"},
+					},
+				}},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{Value: tc.runScript, Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			}
+			rule := NewSecretInLogRule()
+			if err := rule.VisitJobPre(&ast.Job{Steps: []*ast.Step{step}}); err != nil {
+				t.Fatalf("VisitJobPre: %v", err)
+			}
+			if got := len(rule.Errors()); got != 1 {
+				t.Errorf("script %q: filter pipeline must still leak; got %d errors: %v",
+					tc.runScript, got, rule.Errors())
+			}
+		})
+	}
+}
+
 func TestSecretInLog_PipeAllRedirectToFile_NotFlagged(t *testing.T) {
 	t.Parallel()
 	step := &ast.Step{
