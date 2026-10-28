@@ -45,16 +45,25 @@ jobs:
           safety-strategy: unsafe   # DANGEROUS: disables all sandbox protections
 ```
 
-#### 2. Full access mode (Codex)
+#### 2. Legacy unrestricted sandbox (Codex)
 
 ```yaml
 steps:
   - uses: openai/codex-action@v1
     with:
-      safety-strategy: danger-full-access   # DANGEROUS: maximum privileges
+      sandbox: danger-full-access   # DANGEROUS: unrestricted access to the runner
 ```
 
-#### 3. Skip permissions (Claude Code Action)
+#### 3. Unrestricted permission profile (Codex)
+
+```yaml
+steps:
+  - uses: openai/codex-action@v1
+    with:
+      permission-profile: ":danger-full-access"   # DANGEROUS: removes the local sandbox
+```
+
+#### 4. Skip permissions (Claude Code Action)
 
 ```yaml
 steps:
@@ -68,8 +77,10 @@ steps:
 
 The rule checks each AI agent action step for:
 
-1. `safety-strategy` or `safety_strategy` input with values `unsafe` or `danger-full-access`
-2. `claude_args` input containing the `--dangerouslySkipPermissions` flag
+1. `safety-strategy` input with the value `unsafe` on a known AI action
+2. `sandbox` input with the value `danger-full-access` on `openai/codex-action`
+3. `permission-profile` input with the built-in value `:danger-full-access` on `openai/codex-action`. A named profile defined in `codex-home/config.toml` cannot be resolved from the workflow file, so only the built-in spelling is checked
+4. `claude_args` input containing the `--dangerouslySkipPermissions` flag
 
 ### Remediation Steps
 
@@ -106,7 +117,10 @@ The rule checks each AI agent action step for:
 | `unprivileged-user` | Runs as unprivileged user | Low |
 | `read-only` | Read-only filesystem access | Minimal |
 | `unsafe` | No sandbox restrictions | **Critical** |
-| `danger-full-access` | Full unrestricted access | **Critical** |
+
+`danger-full-access` is a value of the `sandbox` input, not of `safety-strategy`, and the
+`permission-profile` successor spells the same capability `:danger-full-access`. The rule
+reports both.
 
 ### Best Practices
 
