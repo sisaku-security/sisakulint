@@ -7,22 +7,34 @@ import (
 )
 
 var allPermissionScopes = map[string]struct{}{
-	"actions":             {},
-	"artifact-metadata":   {},
-	"attestations":        {},
-	"checks":              {},
-	"contents":            {},
-	"deployments":         {},
-	"discussions":         {},
-	"id-token":            {},
-	"issues":              {},
-	"models":              {},
-	"packages":            {},
-	"pages":               {},
-	"pull-requests":       {},
-	"repository-projects": {},
-	"security-events":     {},
-	"statuses":            {},
+	"actions":              {},
+	"artifact-metadata":    {},
+	"attestations":         {},
+	"checks":               {},
+	"contents":             {},
+	"deployments":          {},
+	"discussions":          {},
+	"id-token":             {},
+	"issues":               {},
+	"models":               {},
+	"packages":             {},
+	"pages":                {},
+	"pull-requests":        {},
+	"repository-projects":  {},
+	"security-events":      {},
+	"statuses":             {},
+	"vulnerability-alerts": {},
+}
+
+// Most scopes accept read, write and none. A scope whose documented values are a subset is
+// listed here, because the generic read/write/none check below would accept a value GitHub
+// rejects - and a linter that accepts it is worse than silent, it is affirmatively wrong.
+//
+// vulnerability-alerts grants read-only access to Dependabot alerts; GitHub documents read
+// and none for it, and a workflow asking for write is asking for something that does not
+// exist. See https://github.blog/changelog/2026-09-03-github-actions-early-september-2026-updates/
+var restrictedPermissionValues = map[string][]string{
+	"vulnerability-alerts": {"read", "none"},
 }
 
 // RulePermissions is a rule checker to check permission configurations in a workflow.
@@ -132,7 +144,27 @@ func (rule *PermissionRule) checkPermissions(p *ast.Permissions) {
 		}
 		switch p.Value.Value {
 		case "read", "write", "none":
-			// OK
+			// The scope is known and the value is one of the three generic ones, but a few
+			// scopes document a subset. Checking it here rather than in the scope list keeps
+			// the two questions separate: "is this a scope" and "can this scope take this value".
+			if allowed, restricted := restrictedPermissionValues[n]; restricted {
+				valid := false
+				for _, a := range allowed {
+					if a == p.Value.Value {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					rule.Errorf(
+						p.Value.Pos,
+						"The value %q is not valid for the scope %q: GitHub documents only %s for it, so 'write' is not supported. See https://github.blog/changelog/2026-09-03-github-actions-early-september-2026-updates/",
+						p.Value.Value,
+						n,
+						expressions.SortedQuotes(allowed),
+					)
+				}
+			}
 		default:
 			rule.Errorf(
 				p.Value.Pos,
