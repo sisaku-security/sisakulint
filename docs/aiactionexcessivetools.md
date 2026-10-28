@@ -92,7 +92,9 @@ The following tools are considered dangerous because they allow the agent to aff
 The rule performs two-phase detection:
 
 1. **Workflow-level**: Identifies whether any `on:` trigger is in the untrusted trigger list
-2. **Step-level**: Parses `claude_args` input to extract tool names and checks for dangerous tool names using word-boundary matching
+2. **Step-level**: Parses the values of the `--allowedTools` flag in `claude_args` and checks the granted tool names for dangerous tools using word-boundary matching
+
+Only the values granted through `--allowedTools` are read. A tool listed under `--disallowedTools` is denied rather than granted and is not reported. The rule reads the flag's values as shell-like tokens, so the quoted form (`--allowedTools "Bash,Read"`), the equals form (`--allowedTools=Read,Bash`), and repeated flags are all handled, and the value list ends at the next `-`-prefixed flag.
 
 The tool name extraction avoids false positives by requiring delimiter characters (`,`, `"`, `'`, space, tab, newline) around each tool name, preventing `BashScript` from matching `Bash`.
 
