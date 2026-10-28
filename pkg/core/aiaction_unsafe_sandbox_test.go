@@ -312,3 +312,64 @@ jobs:
 		t.Fatalf("expected no errors when safety-strategy is not set, got %d: %v", len(ruleErrors), ruleErrors)
 	}
 }
+
+// The action parses claude_args before the CLI sees them, so a flag split by quoting is
+// still the flag. A substring search finds none of these; the rule splits the value into
+// the words an argument parser would produce and compares each word as a whole.
+func TestAIActionUnsafeSandbox_DetectsFlagSplitByQuoting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		claudeArgs string // the raw YAML value, quotes included
+		wantFlag   bool
+	}{
+		{"plain", `--dangerously-skip-permissions`, true},
+		{"split by empty quotes", `"--dangerously-skip-permis''sions"`, true},
+		// Unquoted, so the backslash is an escape the parser removes - inside single
+		// quotes it would be a literal character and the word would keep the backslash.
+		{"split by an escaped character", `--dangerously-skip-permis\sions`, true},
+		{"whole flag quoted", `'--dangerously-skip-permissions'`, true},
+		{"split by double quotes", `'"--dangerously-skip-permis"sions'`, true},
+		{"flag with an argument", `--dangerously-skip-permissions=true`, true},
+		{"unrelated arguments", `--model opus --allowedTools "Read,Glob,Grep"`, false},
+		{"camel-case spelling reported as intent", `--dangerouslySkipPermissions`, true},
+		// An unreadable value falls back to the literal search, so this plain form is
+		// still reported; a form this function cannot parse is never treated as safe.
+		{"unparseable value keeps the literal fallback", `--dangerously-skip-permissions "unterminated`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rule := NewAIActionUnsafeSandboxRule()
+			workflow := `
+on:
+  issues:
+    types: [opened]
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_args: ` + tt.claudeArgs + `
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+`
+			parsed, errs := Parse([]byte(workflow))
+			if len(errs) > 0 {
+				t.Fatalf("failed to parse workflow: %v", errs)
+			}
+			v := NewSyntaxTreeVisitor()
+			v.AddVisitor(rule)
+			if err := v.VisitTree(parsed); err != nil {
+				t.Fatalf("failed to visit tree: %v", err)
+			}
+			got := len(rule.Errors()) > 0
+			if got != tt.wantFlag {
+				t.Errorf("claude_args %s: reported=%v, want %v (errors: %v)",
+					tt.claudeArgs, got, tt.wantFlag, rule.Errors())
+			}
+		})
+	}
+}
