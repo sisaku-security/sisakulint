@@ -60,7 +60,7 @@ steps:
 steps:
   - uses: anthropics/claude-code-action@v1
     with:
-      claude_args: --dangerouslySkipPermissions   # DANGEROUS: bypasses all permission checks
+      claude_args: --dangerously-skip-permissions   # DANGEROUS: bypasses all permission checks
       anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
@@ -69,7 +69,13 @@ steps:
 The rule checks each AI agent action step for:
 
 1. `safety-strategy` or `safety_strategy` input with values `unsafe` or `danger-full-access`
-2. `claude_args` input containing the `--dangerouslySkipPermissions` flag
+2. `claude_args` input containing the `--dangerously-skip-permissions` flag
+
+`--dangerously-skip-permissions` is the flag Claude Code documents and accepts, so it is the one
+that disables the permission checks. An earlier version of this rule matched only the camel-case
+spelling `--dangerouslySkipPermissions`, which Claude Code rejects as `unknown option`; a real
+bypass was therefore reported by nothing. That spelling is still reported, because it is written
+as a bypass, but its message says that the CLI does not accept it and names the flag that does.
 
 ### Remediation Steps
 
@@ -89,12 +95,13 @@ The rule checks each AI agent action step for:
        safety-strategy: read-only   # Most restrictive: read-only filesystem
    ```
 
-3. **Remove --dangerouslySkipPermissions from Claude Code Action**
+3. **Remove --dangerously-skip-permissions from Claude Code Action**
 
    ```yaml
    - uses: anthropics/claude-code-action@v1
      with:
-       claude_args: --allowedTools "Read,Glob,Grep"   # Explicit tool list instead
+       claude_args: --allowedTools "Read,Glob,Grep"   # Auto-approves these tools;
+                                                      # tag mode is still not read-only
        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
    ```
 
