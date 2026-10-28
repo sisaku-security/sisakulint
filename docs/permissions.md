@@ -58,6 +58,7 @@ Available permission scopes include:
 | `repository-projects` | Classic repository projects |
 | `security-events` | Code scanning alerts |
 | `statuses` | Commit statuses |
+| `vulnerability-alerts` | Dependabot alerts (read-only; `read` or `none` only) |
 
 #### Permission Values
 

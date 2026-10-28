@@ -122,6 +122,7 @@ func TestPermissionRule_ValidScopes(t *testing.T) {
 		"repository-projects",
 		"security-events",
 		"statuses",
+		"vulnerability-alerts",
 	}
 
 	for _, scope := range validScopes {
@@ -477,5 +478,98 @@ jobs:
 				}
 			}
 		})
+	}
+}
+
+// vulnerability-alerts grants read-only access to Dependabot alerts: GitHub documents `read`
+// and `none` for it (issue #654). Two halves have to be right - the scope must be known, and
+// the generic read/write/none validator must not accept `write` for it. Accepting a request
+// GitHub cannot satisfy is worse than the false finding that was reported: one is noise, the
+// other tells a workflow author their configuration is valid when it is not.
+func TestPermissionRule_VulnerabilityAlertsScope(t *testing.T) {
+	t.Parallel()
+
+	permissions := func(value string) *ast.Permissions {
+		return &ast.Permissions{
+			Scopes: map[string]*ast.PermissionScope{
+				"vulnerability-alerts": {
+					Name:  &ast.String{Value: "vulnerability-alerts", Pos: &ast.Position{Line: 1, Col: 1}},
+					Value: &ast.String{Value: value, Pos: &ast.Position{Line: 1, Col: 25}},
+				},
+			},
+		}
+	}
+
+	visits := []struct {
+		level string
+		visit func(rule *PermissionRule, p *ast.Permissions) error
+	}{
+		{"workflow", func(rule *PermissionRule, p *ast.Permissions) error {
+			return rule.VisitWorkflowPre(&ast.Workflow{Permissions: p})
+		}},
+		{"job", func(rule *PermissionRule, p *ast.Permissions) error {
+			return rule.VisitJobPre(&ast.Job{Permissions: p})
+		}},
+	}
+
+	for _, v := range visits {
+		for _, value := range []string{"read", "none"} {
+			t.Run(v.level+"/"+value, func(t *testing.T) {
+				t.Parallel()
+				rule := PermissionsRule()
+				if err := v.visit(rule, permissions(value)); err != nil {
+					t.Fatalf("%s-level visit returned error: %v", v.level, err)
+				}
+				if got := rule.Errors(); len(got) != 0 {
+					t.Errorf("%s-level vulnerability-alerts: %s should be accepted, got: %v", v.level, value, got[0])
+				}
+			})
+		}
+		t.Run(v.level+"/write", func(t *testing.T) {
+			t.Parallel()
+			rule := PermissionsRule()
+			if err := v.visit(rule, permissions("write")); err != nil {
+				t.Fatalf("%s-level visit returned error: %v", v.level, err)
+			}
+			got := rule.Errors()
+			if len(got) == 0 {
+				t.Fatalf("%s-level vulnerability-alerts: write must be rejected, got no findings", v.level)
+			}
+			if !strings.Contains(got[0].Description, "vulnerability-alerts") {
+				t.Errorf("%s-level write finding should name the scope, got: %s", v.level, got[0].Description)
+			}
+		})
+	}
+}
+
+// TestPermissionRule_RestrictedValuesAreNotReorderedInPlace guards the call that renders
+// the allowed values for a restricted scope. `expressions.SortedQuotes` sorts its argument
+// in place, so passing the map's own slice let one rule execution reorder a value another
+// execution is reading - the linter validates files concurrently, and a race here can both
+// corrupt the message and trip the detector under -race. The slice below is deliberately
+// unsorted so an in-place sort is observable; with the copy it stays as written.
+func TestPermissionRule_RestrictedValuesAreNotReorderedInPlace(t *testing.T) {
+	original := restrictedPermissionValues["vulnerability-alerts"]
+	before := append([]string(nil), original...)
+	if before[0] == "none" {
+		t.Fatalf("fixture assumption broken: the stored values are not unsorted (%v)", before)
+	}
+
+	rule := PermissionsRule()
+	rule.checkPermissions(&ast.Permissions{
+		Scopes: map[string]*ast.PermissionScope{
+			"vulnerability-alerts": {
+				Name:  &ast.String{Value: "vulnerability-alerts", Pos: &ast.Position{Line: 1, Col: 1}},
+				Value: &ast.String{Value: "write", Pos: &ast.Position{Line: 1, Col: 25}},
+			},
+		},
+	})
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected write to be rejected for vulnerability-alerts")
+	}
+
+	after := restrictedPermissionValues["vulnerability-alerts"]
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("checking a value reordered the shared restriction: before %v, after %v", before, after)
 	}
 }
