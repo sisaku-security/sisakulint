@@ -161,7 +161,9 @@ func (rule *PermissionRule) checkPermissions(p *ast.Permissions) {
 						"The value %q is not valid for the scope %q: GitHub documents only %s for it, so 'write' is not supported. See https://github.blog/changelog/2026-09-03-github-actions-early-september-2026-updates/",
 						p.Value.Value,
 						n,
-						expressions.SortedQuotes(allowed),
+						// SortedQuotes sorts in place and `allowed` is the map's own slice: passing
+						// it directly would reorder shared state behind a concurrent linter run.
+						expressions.SortedQuotes(append([]string(nil), allowed...)),
 					)
 				}
 			}

@@ -515,6 +515,7 @@ func TestPermissionRule_VulnerabilityAlertsScope(t *testing.T) {
 	for _, v := range visits {
 		for _, value := range []string{"read", "none"} {
 			t.Run(v.level+"/"+value, func(t *testing.T) {
+				t.Parallel()
 				rule := PermissionsRule()
 				if err := v.visit(rule, permissions(value)); err != nil {
 					t.Fatalf("%s-level visit returned error: %v", v.level, err)
@@ -525,6 +526,7 @@ func TestPermissionRule_VulnerabilityAlertsScope(t *testing.T) {
 			})
 		}
 		t.Run(v.level+"/write", func(t *testing.T) {
+			t.Parallel()
 			rule := PermissionsRule()
 			if err := v.visit(rule, permissions("write")); err != nil {
 				t.Fatalf("%s-level visit returned error: %v", v.level, err)
@@ -537,5 +539,37 @@ func TestPermissionRule_VulnerabilityAlertsScope(t *testing.T) {
 				t.Errorf("%s-level write finding should name the scope, got: %s", v.level, got[0].Description)
 			}
 		})
+	}
+}
+
+// TestPermissionRule_RestrictedValuesAreNotReorderedInPlace guards the call that renders
+// the allowed values for a restricted scope. `expressions.SortedQuotes` sorts its argument
+// in place, so passing the map's own slice let one rule execution reorder a value another
+// execution is reading - the linter validates files concurrently, and a race here can both
+// corrupt the message and trip the detector under -race. The slice below is deliberately
+// unsorted so an in-place sort is observable; with the copy it stays as written.
+func TestPermissionRule_RestrictedValuesAreNotReorderedInPlace(t *testing.T) {
+	original := restrictedPermissionValues["vulnerability-alerts"]
+	before := append([]string(nil), original...)
+	if before[0] == "none" {
+		t.Fatalf("fixture assumption broken: the stored values are not unsorted (%v)", before)
+	}
+
+	rule := PermissionsRule()
+	rule.checkPermissions(&ast.Permissions{
+		Scopes: map[string]*ast.PermissionScope{
+			"vulnerability-alerts": {
+				Name:  &ast.String{Value: "vulnerability-alerts", Pos: &ast.Position{Line: 1, Col: 1}},
+				Value: &ast.String{Value: "write", Pos: &ast.Position{Line: 1, Col: 25}},
+			},
+		},
+	})
+	if len(rule.Errors()) == 0 {
+		t.Fatal("expected write to be rejected for vulnerability-alerts")
+	}
+
+	after := restrictedPermissionValues["vulnerability-alerts"]
+	if !reflect.DeepEqual(before, after) {
+		t.Errorf("checking a value reordered the shared restriction: before %v, after %v", before, after)
 	}
 }
