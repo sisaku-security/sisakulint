@@ -19,6 +19,15 @@ var sandboxStrategyInputKeys = []string{
 	"safety_strategy",
 }
 
+// dangerouslySkipPermissionsFlag は Claude Code のパーミッションチェックを無効化するフラグ。
+// CLI リファレンスに記載されているのはこのハイフン区切りの綴りだけである。
+const dangerouslySkipPermissionsFlag = "--dangerously-skip-permissions"
+
+// camelCaseDangerouslySkipPermissions は #647 以前にこのルールが照合していた綴り。
+// Claude Code はこの綴りを "unknown option" として拒否するため、
+// パーミッションチェックはバイパスされない。
+const camelCaseDangerouslySkipPermissions = "--dangerouslySkipPermissions"
+
 // AIActionUnsafeSandboxRule は AI エージェントアクションの安全でないサンドボックス設定を検出するルール。
 //
 // 脆弱なパターン:
@@ -31,11 +40,13 @@ var sandboxStrategyInputKeys = []string{
 //	steps:
 //	  - uses: anthropics/claude-code-action@v1
 //	    with:
-//	      claude_args: --dangerouslySkipPermissions
+//	      claude_args: --dangerously-skip-permissions
 //
 // OpenAI Codex セキュリティチェックリストでは safety-strategy に "drop-sudo"（デフォルト）、
 // "unprivileged-user"、"read-only" を推奨し、"unsafe" や "danger-full-access" の使用を警告している。
-// claude-code-action では --dangerouslySkipPermissions フラグが同等のサンドボックスバイパスに該当する。
+// claude-code-action では --dangerously-skip-permissions フラグが同等のサンドボックスバイパスに該当する。
+// キャメルケースの --dangerouslySkipPermissions は Claude Code がオプションとして認識しないため、
+// バイパスの意図がある設定として報告するが、メッセージではバイパスが成立したとは主張しない。
 //
 // 安全なパターン:
 //
@@ -102,18 +113,37 @@ func (r *AIActionUnsafeSandboxRule) checkSafetyStrategy(node *ast.Step, action *
 	}
 }
 
-// checkDangerouslySkipPermissions は claude_args に --dangerouslySkipPermissions が含まれているかを検査する。
+// checkDangerouslySkipPermissions は claude_args にパーミッションチェックを無効化する
+// フラグが含まれているかを検査する。
 func (r *AIActionUnsafeSandboxRule) checkDangerouslySkipPermissions(node *ast.Step, action *ast.ExecAction) {
 	claudeArgsInput, exists := action.Inputs["claude_args"]
 	if !exists || claudeArgsInput == nil || claudeArgsInput.Value == nil {
 		return
 	}
 
-	if strings.Contains(claudeArgsInput.Value.Value, "--dangerouslySkipPermissions") {
+	claudeArgs := claudeArgsInput.Value.Value
+
+	// 実際にパーミッションチェックを無効化するのはハイフン区切りの綴りだけである。
+	if strings.Contains(claudeArgs, dangerouslySkipPermissionsFlag) {
 		r.Errorf(
 			node.Pos,
-			`action %q uses --dangerouslySkipPermissions in claude_args which bypasses all permission checks. Remove this flag and configure specific tool permissions instead.`,
+			`action %q passes %s in claude_args which disables Claude Code's permission checks. Remove this flag and grant only the tools the workflow needs instead (for example --allowedTools "Read,Glob,Grep").`,
 			action.Uses.Value,
+			dangerouslySkipPermissionsFlag,
+		)
+		return
+	}
+
+	// キャメルケースの綴りは Claude Code が "unknown option" として拒否するため、
+	// バイパスは成立しない。バイパスの意図がある設定として報告するが、
+	// メッセージはバイパスが起きたことを主張しない。
+	if strings.Contains(claudeArgs, camelCaseDangerouslySkipPermissions) {
+		r.Errorf(
+			node.Pos,
+			`action %q passes %s in claude_args. Claude Code rejects that spelling as an unknown option, so it does not bypass the permission checks; the flag that does is %s. Remove it and grant only the tools the workflow needs instead (for example --allowedTools "Read,Glob,Grep").`,
+			action.Uses.Value,
+			camelCaseDangerouslySkipPermissions,
+			dangerouslySkipPermissionsFlag,
 		)
 	}
 }
