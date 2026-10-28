@@ -100,7 +100,8 @@ as a bypass, but its message says that the CLI does not accept it and names the 
    ```yaml
    - uses: anthropics/claude-code-action@v1
      with:
-       claude_args: --allowedTools "Read,Glob,Grep"   # Explicit tool list instead
+       claude_args: --allowedTools "Read,Glob,Grep"   # Auto-approves these tools;
+                                                      # tag mode is still not read-only
        anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
    ```
 

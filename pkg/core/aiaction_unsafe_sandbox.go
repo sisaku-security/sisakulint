@@ -128,7 +128,7 @@ func (r *AIActionUnsafeSandboxRule) checkDangerouslySkipPermissions(node *ast.St
 	if claudeArgsPassFlag(claudeArgs, dangerouslySkipPermissionsFlag) {
 		r.Errorf(
 			node.Pos,
-			`action %q passes %s in claude_args which disables Claude Code's permission checks. Remove this flag and grant only the tools the workflow needs instead (for example --allowedTools "Read,Glob,Grep").`,
+			`action %q passes %s in claude_args which disables Claude Code's permission checks. Remove this flag and configure the permissions the workflow needs without bypassing Claude Code's permission checks. "--allowedTools" only auto-approves the tools it lists; it does not make the action read-only.`,
 			action.Uses.Value,
 			dangerouslySkipPermissionsFlag,
 		)
@@ -141,7 +141,7 @@ func (r *AIActionUnsafeSandboxRule) checkDangerouslySkipPermissions(node *ast.St
 	if claudeArgsPassFlag(claudeArgs, camelCaseDangerouslySkipPermissions) {
 		r.Errorf(
 			node.Pos,
-			`action %q passes %s in claude_args. Claude Code rejects that spelling as an unknown option, so it does not bypass the permission checks; the flag that does is %s. Remove it and grant only the tools the workflow needs instead (for example --allowedTools "Read,Glob,Grep").`,
+			`action %q passes %s in claude_args. Claude Code rejects that spelling as an unknown option, so it does not bypass the permission checks; the flag that does is %s. Remove it and configure the permissions the workflow needs without bypassing Claude Code's permission checks. "--allowedTools" only auto-approves the tools it lists; it does not make the action read-only.`,
 			action.Uses.Value,
 			camelCaseDangerouslySkipPermissions,
 			dangerouslySkipPermissionsFlag,
