@@ -887,3 +887,145 @@ jobs:
 		})
 	}
 }
+
+// runUntrustedCheckoutOn parses one workflow and returns the rule's findings, so the
+// newer cases below read as "this workflow, this outcome" instead of repeating the
+// visitor setup.
+func runUntrustedCheckoutOn(t *testing.T, yamlContent string) []*LintingError {
+	t.Helper()
+	workflow, errs := Parse([]byte(yamlContent))
+	if len(errs) > 0 {
+		t.Fatalf("Failed to parse workflow: %v", errs)
+	}
+	rule := NewUntrustedCheckoutRule()
+	visitor := NewSyntaxTreeVisitor()
+	visitor.AddVisitor(rule)
+	if err := visitor.VisitTree(workflow); err != nil {
+		t.Fatalf("Failed to visit tree: %v", err)
+	}
+	return rule.Errors()
+}
+
+// The three shapes below are the ones issue #650 reported: the rule could not tell
+// checkout's own fork-PR protection from an explicit opt-out, and it returned early
+// on a `repository`-only checkout, so the opt-out written without a `ref` was silent.
+func TestUntrustedCheckoutRepositoryOnlyOptOut(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          allow-unsafe-pr-checkout: true
+`)
+	if len(findings) == 0 {
+		t.Fatal("repository-only checkout of the PR head repository with allow-unsafe-pr-checkout was not reported")
+	}
+	if !containsString(findings[0].Description, "allow-unsafe-pr-checkout: true disables the fork-PR protection") {
+		t.Errorf("expected the opt-out to be named as the disabling input, got: %s", findings[0].Description)
+	}
+}
+
+func TestUntrustedCheckoutRefWithOptOut(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+`)
+	if len(findings) == 0 {
+		t.Fatal("checkout of PR head SHA with allow-unsafe-pr-checkout was not reported")
+	}
+	if !containsString(findings[0].Description, "proceeds with untrusted code") {
+		t.Errorf("expected the checkout to be described as proceeding, got: %s", findings[0].Description)
+	}
+}
+
+func TestUntrustedCheckoutDistinguishesProtectionFromOldPin(t *testing.T) {
+	protected := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`)
+	if len(protected) == 0 {
+		t.Fatal("expected a finding for the protected floating tag")
+	}
+	if !containsString(protected[0].Description, "refused at runtime") {
+		t.Errorf("a protected version should say the checkout is refused, got: %s", protected[0].Description)
+	}
+
+	oldPin := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`)
+	if len(oldPin) == 0 {
+		t.Fatal("expected a finding for the old pinned version")
+	}
+	if !containsString(oldPin[0].Description, "predates the fork-PR protection") {
+		t.Errorf("an old pin should say it predates the protection, got: %s", oldPin[0].Description)
+	}
+}
+
+func TestUntrustedCheckoutRepositoryPointingAtBaseIsClean(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          allow-unsafe-pr-checkout: true
+`)
+	if len(findings) != 0 {
+		t.Errorf("a checkout of the base repository should not be reported, got: %s", findings[0].Description)
+	}
+}
+
+func TestCheckoutHasForkPRProtection(t *testing.T) {
+	tests := []struct {
+		uses string
+		want bool
+	}{
+		{"actions/checkout@v4", true},                                        // floating major tracks the backport
+		{"actions/checkout@v4.4.0", true},                                    // first protected v4
+		{"actions/checkout@v4.3.9", false},                                   // just before it
+		{"actions/checkout@v3.7.0", true},                                    // first protected v3
+		{"actions/checkout@v3.6.0", false},                                   //
+		{"actions/checkout@v7.0.0", true},                                    // v7.0.0 already carries the input
+		{"actions/checkout@v6.0.3", false},                                   // last v6 release without it
+		{"actions/checkout@v8", true},                                        // a future major contains it
+		{"actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a", false}, // a SHA cannot be dated
+		{"actions/checkout@main", false},                                     // nor a branch
+	}
+	for _, tt := range tests {
+		if got := checkoutHasForkPRProtection(tt.uses); got != tt.want {
+			t.Errorf("checkoutHasForkPRProtection(%q) = %v, want %v", tt.uses, got, tt.want)
+		}
+	}
+}

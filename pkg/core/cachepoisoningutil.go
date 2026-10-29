@@ -38,6 +38,32 @@ var safePatternsLower = []string{
 	"github.event.pull_request.base.sha",
 }
 
+// unsafeRepositoryPatternsLower are expressions that select a pull request's head
+// repository: code that does not belong to the base repository, checked out through
+// actions/checkout's `repository` input.
+var unsafeRepositoryPatternsLower = []string{
+	"github.event.pull_request.head.repo",
+	"github.head_repository",
+	"github.event.pull_request.head.repository",
+	".head.repo.",
+}
+
+// IsUnsafeCheckoutRepository checks if a checkout `repository` input selects the
+// pull request head repository. `repository` defaults to the base repository, so a
+// checkout is only dangerous through this input when it names foreign code.
+func IsUnsafeCheckoutRepository(value string) bool {
+	lower := strings.ToLower(value)
+	if lower == "" {
+		return false
+	}
+	for _, pattern := range unsafeRepositoryPatternsLower {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsUnsafeTrigger checks if the trigger event is unsafe for cache poisoning detection.
 func IsUnsafeTrigger(eventName string) bool {
 	return unsafeTriggerNames[eventName]
