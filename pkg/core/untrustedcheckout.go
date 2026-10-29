@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -96,6 +97,90 @@ func (rule *UntrustedCheckoutRule) VisitWorkflowPre(n *ast.Workflow) error {
 	return nil
 }
 
+// checkoutForkPRProtectionMinVersions maps an actions/checkout major version to the
+// first release that refuses to check out fork pull request code unless
+// `allow-unsafe-pr-checkout` is set. The protection was backported to every
+// maintained major on 2026-07-20; each boundary below was checked against the tag's
+// own action.yml: v2.8.0, v3.7.0, v4.4.0, v5.1.0, v6.1.0 and v7.0.0 carry the input,
+// while v2.7.x, v3.6.0, v4.3.9, v5.0.0 and v6.0.3 do not.
+var checkoutForkPRProtectionMinVersions = map[int][3]int{
+	2: {2, 8, 0},
+	3: {3, 7, 0},
+	4: {4, 4, 0},
+	5: {5, 1, 0},
+	6: {6, 1, 0},
+	7: {7, 0, 0},
+}
+
+// checkoutProtection describes what can be said about the protection in the
+// referenced actions/checkout build.
+type checkoutProtection int
+
+const (
+	// protectionAbsent: a dated release that predates the backport.
+	protectionAbsent checkoutProtection = iota
+	// protectionPresent: the build refuses fork PR checkouts unless opted out.
+	protectionPresent
+	// protectionUnknown: a commit SHA or branch, which cannot be dated.
+	protectionUnknown
+)
+
+// checkoutForkPRProtection dates the referenced actions/checkout build.
+//
+// A floating major tag (v4) tracks the newest release and therefore has the
+// protection. A pinned semver is compared against the backport table. A commit SHA
+// or a branch cannot be dated: the caller must not claim it either has the
+// protection or lacks it, because a SHA pinned to v4.4.0 or later has it and is
+// refused at runtime exactly like the tag.
+func checkoutForkPRProtection(uses string) checkoutProtection {
+	_, ref, found := strings.Cut(uses, "@")
+	if !found || ref == "" {
+		return protectionUnknown
+	}
+	version := strings.TrimPrefix(strings.TrimSpace(ref), "v")
+	parts := strings.SplitN(version, "-", 2) // ignore a pre-release suffix
+	fields := strings.Split(parts[0], ".")
+	major, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return protectionUnknown // SHA or branch
+	}
+	min, known := checkoutForkPRProtectionMinVersions[major]
+	if !known {
+		if major > 7 {
+			return protectionPresent // a future major contains it
+		}
+		return protectionUnknown
+	}
+	if len(fields) == 1 {
+		return protectionPresent // floating major tag
+	}
+	var got [3]int
+	for i := 0; i < 3 && i < len(fields); i++ {
+		n, err := strconv.Atoi(fields[i])
+		if err != nil {
+			return protectionUnknown
+		}
+		got[i] = n
+	}
+	for i := 0; i < 3; i++ {
+		if got[i] != min[i] {
+			if got[i] > min[i] {
+				return protectionPresent
+			}
+			return protectionAbsent
+		}
+	}
+	return protectionPresent
+}
+
+// checkoutInputTrue reports whether a boolean checkout input is set to true.
+func checkoutInputTrue(input *ast.Input) bool {
+	if input == nil || input.Value == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(input.Value.Value), "true")
+}
+
 // VisitStep checks if a step performs an untrusted checkout
 func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 	// Skip if this job cannot execute on dangerous triggers
@@ -117,36 +202,79 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 
 	rule.Debug("Found checkout action at %s", step.Pos)
 
-	// Check if the checkout has a 'ref' parameter
-	// If no ref is specified, the default is safe (checks out the trigger SHA)
 	if action.Inputs == nil {
 		return nil
 	}
 
-	refInput, exists := action.Inputs["ref"]
-	if !exists {
+	// Two inputs can select pull request code: `ref` names a commit or branch, and
+	// `repository` names the repository the code comes from. The rule used to return
+	// early when `ref` was absent, so `repository: ...head.repo.full_name` on its own
+	// was invisible even with the escape hatch enabled.
+	var refValue, repoValue *ast.String
+	if refInput, ok := action.Inputs["ref"]; ok && refInput != nil {
+		refValue = refInput.Value
+	}
+	if repoInput, ok := action.Inputs["repository"]; ok && repoInput != nil {
+		repoValue = repoInput.Value
+	}
+
+	refUnsafe := rule.isUntrustedPRRef(refValue)
+	repoUnsafe := repoValue != nil && IsUnsafeCheckoutRepository(repoValue.Value)
+	if !refUnsafe && !repoUnsafe {
 		return nil
 	}
 
-	refValue := refInput.Value
-	if refValue == nil {
-		return nil
+	position := step.Pos
+	switch {
+	case refUnsafe:
+		position = refValue.Pos
+		rule.Debug("Checkout has unsafe ref parameter: %s", refValue.Value)
+	case repoUnsafe:
+		position = repoValue.Pos
+		rule.Debug("Checkout has unsafe repository parameter: %s", repoValue.Value)
 	}
 
-	rule.Debug("Checkout has ref parameter: %s", refValue.Value)
+	// `allow-unsafe-pr-checkout: true` is the documented opt-out from checkout's own
+	// fork-PR protection: an explicitly enabled unsafe checkout, not an accident.
+	optOut := checkoutInputTrue(action.Inputs["allow-unsafe-pr-checkout"])
 
-	// Check if the ref uses untrusted input from PR
-	if rule.isUntrustedPRRef(refValue) {
-		rule.Errorf(
-			refValue.Pos,
-			"checking out untrusted code from pull request in workflow with privileged trigger '%s' (line %d). This allows potentially malicious code from external contributors to execute with access to repository secrets. "+
-				"Use 'pull_request' trigger instead, or avoid checking out PR code when using '%s'. "+
-				"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details",
-			rule.dangerousTriggerName,
-			rule.dangerousTriggerPos.Line,
-			rule.dangerousTriggerName,
-		)
-		// Add auto-fixer to replace dangerous ref with safe default
+	// Whether the referenced build has the protection changes what the reader can
+	// conclude - but so does the trigger: checkout only refuses fork pull request code
+	// on pull_request_target and workflow_run. Under issue_comment or workflow_call the
+	// protection never applies, so the checkout proceeds regardless of the pin.
+	protection := checkoutForkPRProtection(action.Uses.Value)
+	guardedTrigger := rule.dangerousTriggerName == "pull_request_target"
+
+	var consequence string
+	switch {
+	case optOut:
+		consequence = "allow-unsafe-pr-checkout: true turns off checkout's fork-PR protection, so the checkout proceeds with untrusted code"
+	case !guardedTrigger && rule.dangerousTriggerName == "workflow_run":
+		consequence = "checkout's fork-PR protection only applies when the upstream workflow_run came from a fork, which this file cannot show, so the checkout may proceed"
+	case !guardedTrigger:
+		consequence = "checkout's fork-PR protection does not apply to '" + rule.dangerousTriggerName + "' workflows, so the checkout proceeds with untrusted code"
+	case protection == protectionPresent:
+		consequence = "this actions/checkout version contains the fork-PR protection, so the checkout is refused at runtime unless allow-unsafe-pr-checkout is enabled - the workflow becomes exploitable the moment that input is added"
+	case protection == protectionAbsent:
+		consequence = "the pinned actions/checkout version predates the fork-PR protection and no allow-unsafe-pr-checkout opt-out is needed for the checkout to proceed"
+	default:
+		consequence = "the referenced actions/checkout build cannot be dated (a commit SHA or branch), so whether it refuses the checkout is unknown; treat it as unprotected unless the ref is pinned to a protected release"
+	}
+
+	rule.Errorf(
+		position,
+		"checking out untrusted code from pull request in workflow with privileged trigger '%s' (line %d). This allows potentially malicious code from external contributors to execute with access to repository secrets. "+
+			"%s. Use 'pull_request' trigger instead, or avoid checking out PR code when using '%s'. "+
+			"See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ for more details",
+		rule.dangerousTriggerName,
+		rule.dangerousTriggerPos.Line,
+		consequence,
+		rule.dangerousTriggerName,
+	)
+
+	// A ref can be replaced with the safe default; a `repository`-only checkout has no
+	// ref for the fixer to rewrite, so no auto-fix is offered for that case.
+	if refUnsafe {
 		rule.AddAutoFixer(NewStepFixer(step, rule))
 	}
 
