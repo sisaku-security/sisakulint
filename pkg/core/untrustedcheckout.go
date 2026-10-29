@@ -112,46 +112,65 @@ var checkoutForkPRProtectionMinVersions = map[int][3]int{
 	7: {7, 0, 0},
 }
 
-// checkoutHasForkPRProtection reports whether the referenced actions/checkout build
-// refuses fork pull request checkouts unless `allow-unsafe-pr-checkout` is enabled.
+// checkoutProtection describes what can be said about the protection in the
+// referenced actions/checkout build.
+type checkoutProtection int
+
+const (
+	// protectionAbsent: a dated release that predates the backport.
+	protectionAbsent checkoutProtection = iota
+	// protectionPresent: the build refuses fork PR checkouts unless opted out.
+	protectionPresent
+	// protectionUnknown: a commit SHA or branch, which cannot be dated.
+	protectionUnknown
+)
+
+// checkoutForkPRProtection dates the referenced actions/checkout build.
 //
 // A floating major tag (v4) tracks the newest release and therefore has the
 // protection. A pinned semver is compared against the backport table. A commit SHA
-// or a branch cannot be dated, so it is treated as unprotected - that keeps the rule
-// conservative, because an old pin genuinely has no protection.
-func checkoutHasForkPRProtection(uses string) bool {
+// or a branch cannot be dated: the caller must not claim it either has the
+// protection or lacks it, because a SHA pinned to v4.4.0 or later has it and is
+// refused at runtime exactly like the tag.
+func checkoutForkPRProtection(uses string) checkoutProtection {
 	_, ref, found := strings.Cut(uses, "@")
 	if !found || ref == "" {
-		return false
+		return protectionUnknown
 	}
 	version := strings.TrimPrefix(strings.TrimSpace(ref), "v")
 	parts := strings.SplitN(version, "-", 2) // ignore a pre-release suffix
 	fields := strings.Split(parts[0], ".")
 	major, err := strconv.Atoi(fields[0])
 	if err != nil {
-		return false // SHA, branch, or something else that cannot be dated
+		return protectionUnknown // SHA or branch
 	}
 	min, known := checkoutForkPRProtectionMinVersions[major]
 	if !known {
-		return major > 7 // a future major contains it
+		if major > 7 {
+			return protectionPresent // a future major contains it
+		}
+		return protectionUnknown
 	}
 	if len(fields) == 1 {
-		return true // floating major tag
+		return protectionPresent // floating major tag
 	}
 	var got [3]int
 	for i := 0; i < 3 && i < len(fields); i++ {
 		n, err := strconv.Atoi(fields[i])
 		if err != nil {
-			return false
+			return protectionUnknown
 		}
 		got[i] = n
 	}
 	for i := 0; i < 3; i++ {
 		if got[i] != min[i] {
-			return got[i] > min[i]
+			if got[i] > min[i] {
+				return protectionPresent
+			}
+			return protectionAbsent
 		}
 	}
-	return true
+	return protectionPresent
 }
 
 // checkoutInputTrue reports whether a boolean checkout input is set to true.
@@ -219,20 +238,27 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 	// fork-PR protection: an explicitly enabled unsafe checkout, not an accident.
 	optOut := checkoutInputTrue(action.Inputs["allow-unsafe-pr-checkout"])
 
-	// Whether the referenced build even has the protection changes what the reader
-	// can conclude: an old pin is exposed, a current one is refused unless opted out.
-	protected := checkoutHasForkPRProtection(action.Uses.Value)
+	// Whether the referenced build has the protection changes what the reader can
+	// conclude - but so does the trigger: checkout only refuses fork pull request code
+	// on pull_request_target and workflow_run. Under issue_comment or workflow_call the
+	// protection never applies, so the checkout proceeds regardless of the pin.
+	protection := checkoutForkPRProtection(action.Uses.Value)
+	guardedTrigger := rule.dangerousTriggerName == "pull_request_target"
 
 	var consequence string
 	switch {
-	case optOut && protected:
-		consequence = "allow-unsafe-pr-checkout: true disables the fork-PR protection this actions/checkout version ships, so the checkout proceeds with untrusted code"
 	case optOut:
-		consequence = "allow-unsafe-pr-checkout: true is set, and the pinned actions/checkout version predates the fork-PR protection, so the checkout proceeds with untrusted code"
-	case protected:
+		consequence = "allow-unsafe-pr-checkout: true turns off checkout's fork-PR protection, so the checkout proceeds with untrusted code"
+	case !guardedTrigger && rule.dangerousTriggerName == "workflow_run":
+		consequence = "checkout's fork-PR protection only applies when the upstream workflow_run came from a fork, which this file cannot show, so the checkout may proceed"
+	case !guardedTrigger:
+		consequence = "checkout's fork-PR protection does not apply to '" + rule.dangerousTriggerName + "' workflows, so the checkout proceeds with untrusted code"
+	case protection == protectionPresent:
 		consequence = "this actions/checkout version contains the fork-PR protection, so the checkout is refused at runtime unless allow-unsafe-pr-checkout is enabled - the workflow becomes exploitable the moment that input is added"
-	default:
+	case protection == protectionAbsent:
 		consequence = "the pinned actions/checkout version predates the fork-PR protection and no allow-unsafe-pr-checkout opt-out is needed for the checkout to proceed"
+	default:
+		consequence = "the referenced actions/checkout build cannot be dated (a commit SHA or branch), so whether it refuses the checkout is unknown; treat it as unprotected unless the ref is pinned to a protected release"
 	}
 
 	rule.Errorf(

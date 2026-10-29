@@ -925,7 +925,7 @@ jobs:
 	if len(findings) == 0 {
 		t.Fatal("repository-only checkout of the PR head repository with allow-unsafe-pr-checkout was not reported")
 	}
-	if !containsString(findings[0].Description, "allow-unsafe-pr-checkout: true disables the fork-PR protection") {
+	if !containsString(findings[0].Description, "allow-unsafe-pr-checkout: true turns off checkout's fork-PR protection") {
 		t.Errorf("expected the opt-out to be named as the disabling input, got: %s", findings[0].Description)
 	}
 }
@@ -1007,25 +1007,103 @@ jobs:
 	}
 }
 
-func TestCheckoutHasForkPRProtection(t *testing.T) {
+func TestCheckoutForkPRProtectionDating(t *testing.T) {
 	tests := []struct {
 		uses string
-		want bool
+		want checkoutProtection
 	}{
-		{"actions/checkout@v4", true},                                        // floating major tracks the backport
-		{"actions/checkout@v4.4.0", true},                                    // first protected v4
-		{"actions/checkout@v4.3.9", false},                                   // just before it
-		{"actions/checkout@v3.7.0", true},                                    // first protected v3
-		{"actions/checkout@v3.6.0", false},                                   //
-		{"actions/checkout@v7.0.0", true},                                    // v7.0.0 already carries the input
-		{"actions/checkout@v6.0.3", false},                                   // last v6 release without it
-		{"actions/checkout@v8", true},                                        // a future major contains it
-		{"actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a", false}, // a SHA cannot be dated
-		{"actions/checkout@main", false},                                     // nor a branch
+		{"actions/checkout@v4", protectionPresent},     // floating major tracks the backport
+		{"actions/checkout@v4.4.0", protectionPresent}, // first protected v4
+		{"actions/checkout@v4.3.9", protectionAbsent},  // just before it
+		{"actions/checkout@v3.7.0", protectionPresent}, // first protected v3
+		{"actions/checkout@v3.6.0", protectionAbsent},  //
+		{"actions/checkout@v6.1.0", protectionPresent}, // first protected v6
+		{"actions/checkout@v6.0.3", protectionAbsent},  // last v6 release without it
+		{"actions/checkout@v7.0.0", protectionPresent}, // v7.0.0 already carries the input
+		{"actions/checkout@v8", protectionPresent},     // a future major contains it
+		{"actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a", protectionUnknown},
+		{"actions/checkout@main", protectionUnknown},
 	}
 	for _, tt := range tests {
-		if got := checkoutHasForkPRProtection(tt.uses); got != tt.want {
-			t.Errorf("checkoutHasForkPRProtection(%q) = %v, want %v", tt.uses, got, tt.want)
+		if got := checkoutForkPRProtection(tt.uses); got != tt.want {
+			t.Errorf("checkoutForkPRProtection(%q) = %v, want %v", tt.uses, got, tt.want)
 		}
+	}
+}
+
+// workflow_run accepts a `repository` input naming the head repository. The rule
+// treats workflow_run as a privileged trigger, so a repository-only checkout must be
+// reported for it, not just the pull_request_target spelling.
+func TestUntrustedCheckoutWorkflowRunHeadRepository(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+`)
+	if len(findings) == 0 {
+		t.Fatal("repository-only checkout of the workflow_run head repository was not reported")
+	}
+	if !containsString(findings[0].Description, "workflow_run") {
+		t.Errorf("expected the workflow_run trigger in the message, got: %s", findings[0].Description)
+	}
+}
+
+// checkout only refuses fork pull request code on pull_request_target and
+// workflow_run. Under issue_comment the protection never applies, so calling the
+// checkout "refused at runtime" would be wrong.
+func TestUntrustedCheckoutIssueCommentIsNotGuarded(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on: issue_comment
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`)
+	if len(findings) == 0 {
+		t.Fatal("expected a finding for the issue_comment checkout")
+	}
+	if containsString(findings[0].Description, "refused at runtime") {
+		t.Errorf("the protection does not apply to issue_comment; message must not claim refusal: %s", findings[0].Description)
+	}
+	if !containsString(findings[0].Description, "does not apply to 'issue_comment'") {
+		t.Errorf("expected the message to say the protection does not apply, got: %s", findings[0].Description)
+	}
+}
+
+// A SHA cannot be dated. Claiming it predates the protection is wrong: a SHA pinned
+// to v4.4.0 or later is refused at runtime exactly like the tag.
+func TestUntrustedCheckoutUndatablePinSaysUnknown(t *testing.T) {
+	findings := runUntrustedCheckoutOn(t, `
+name: Test
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+`)
+	if len(findings) == 0 {
+		t.Fatal("expected a finding for the SHA-pinned checkout")
+	}
+	if containsString(findings[0].Description, "predates the fork-PR protection") {
+		t.Errorf("a SHA must not be described as predating the protection: %s", findings[0].Description)
+	}
+	if !containsString(findings[0].Description, "cannot be dated") {
+		t.Errorf("expected the message to say the build cannot be dated, got: %s", findings[0].Description)
 	}
 }

@@ -44,6 +44,13 @@ and "this workflow can actually run that code" are different findings:
 | `ref` on a pin older than the backport | absent | exposed: the checkout proceeds without any opt-out |
 | `repository: ${{ github.event.pull_request.head.repo.full_name }}` with no `ref` | either | reported; the `repository` input selects foreign code on its own |
 
+**The protection is trigger-scoped.** `actions/checkout` only refuses fork pull request code
+on `pull_request_target` and `workflow_run`. A `pull_request_target` checkout of PR code on a
+protected build is refused; the same checkout under `issue_comment` or `workflow_call`
+proceeds, because the protection never applies to those events. For `workflow_run` the
+outcome depends on whether the upstream run came from a fork, which a workflow file cannot
+show, so the diagnostic says the checkout *may* proceed rather than asserting either way.
+
 The backport boundaries were taken from each release's own `action.yml`: the input is
 present from **v2.8.0, v3.7.0, v4.4.0, v5.1.0, v6.1.0 and v7.0.0**, and absent in
 v2.7.x, v3.6.0, v4.3.9, v5.0.0 and v6.0.3. A floating major tag tracks the protected

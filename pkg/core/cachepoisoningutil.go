@@ -45,6 +45,11 @@ var unsafeRepositoryPatternsLower = []string{
 	"github.event.pull_request.head.repo",
 	"github.head_repository",
 	"github.event.pull_request.head.repository",
+	// `.head_repository` covers both github.head_repository and the workflow_run
+	// form, github.event.workflow_run.head_repository.full_name. The rule also treats
+	// workflow_run as a privileged trigger, and checkout's fork protection applies to
+	// it, so a repository-only checkout must be detected for it too.
+	".head_repository",
 	".head.repo.",
 }
 
