@@ -787,3 +787,32 @@ func TestDangerousTriggersMediumRule(t *testing.T) {
 		})
 	}
 }
+
+// A restricted job must not excuse an unrelated unrestricted one. Reported in #649:
+// adding a second job that touches nothing left the privileged job unscored.
+func TestCheckMitigations_restrictedJobDoesNotExcuseAnother(t *testing.T) {
+	t.Parallel()
+
+	workflow := &ast.Workflow{
+		Jobs: map[string]*ast.Job{
+			"publish": {},
+			"unrelated": {
+				Permissions: &ast.Permissions{
+					All: &ast.String{Value: "read-all"},
+				},
+			},
+		},
+	}
+
+	status := CheckMitigations(workflow)
+
+	// Only "unrelated" is restricted. "publish" is unrestricted, so the severity has
+	// to come from the worst job and the finding must still fire.
+	if status.Score() != 0 {
+		t.Errorf("Score() = %d, want 0: an unrelated restricted job must not excuse "+
+			"the unrestricted one", status.Score())
+	}
+	if status.Severity() != SeverityCritical {
+		t.Errorf("Severity() = %q, want %q", status.Severity(), SeverityCritical)
+	}
+}

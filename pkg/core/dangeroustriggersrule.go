@@ -160,48 +160,69 @@ func CheckMitigations(workflow *ast.Workflow) MitigationStatus {
 		return MitigationStatus{}
 	}
 
-	status := MitigationStatus{}
-	status.HasCacheWriteAction = workflowHasCacheWriteAction(workflow)
+	// Workflow-level permissions apply to every job that does not override them, so
+	// they seed each job's status rather than being a separate workflow-wide credit.
+	workflowRestrictsPermissions := hasPermissionsRestriction(workflow.Permissions)
+	hasCacheWrite := workflowHasCacheWriteAction(workflow)
 
-	// Check workflow-level permissions
-	if hasPermissionsRestriction(workflow.Permissions) {
-		status.HasPermissionsRestriction = true
-	}
+	// The finding fires once per workflow, but a mitigation belongs to a JOB. Unioning
+	// the jobs let one restricted job excuse an unrelated unrestricted one, so the job
+	// that decides severity is the worst-mitigated one, not the sum of all of them.
+	var worst MitigationStatus
+	worstScore := 0
+	found := false
 
-	// Check job-level mitigations
 	for _, job := range workflow.Jobs {
 		if job == nil {
 			continue
 		}
 
-		// Check job-level permissions
-		if !status.HasPermissionsRestriction && hasPermissionsRestriction(job.Permissions) {
-			status.HasPermissionsRestriction = true
+		jobStatus := MitigationStatus{
+			HasCacheWriteAction:       hasCacheWrite,
+			HasPermissionsRestriction: workflowRestrictsPermissions,
 		}
 
-		// Check for environment protection
-		if !status.HasEnvironmentProtection && job.Environment != nil && job.Environment.Name != nil {
-			status.HasEnvironmentProtection = true
+		if !jobStatus.HasPermissionsRestriction && hasPermissionsRestriction(job.Permissions) {
+			jobStatus.HasPermissionsRestriction = true
 		}
 
-		// Check job condition for mitigations
+		if job.Environment != nil && job.Environment.Name != nil {
+			jobStatus.HasEnvironmentProtection = true
+		}
+
 		if job.If != nil && job.If.Value != "" {
-			checkConditionForMitigations(job.If.Value, &status)
+			checkConditionForMitigations(job.If.Value, &jobStatus)
 		}
 
-		// Check step conditions for mitigations
 		for _, step := range job.Steps {
 			if step == nil || step.If == nil || step.If.Value == "" {
 				continue
 			}
-			checkConditionForMitigations(step.If.Value, &status)
+			checkConditionForMitigations(step.If.Value, &jobStatus)
+		}
+
+		// Settle the cache interaction per job, because it changes the score.
+		if jobStatus.HasCacheWriteAction && jobStatus.HasPermissionsRestriction {
+			jobStatus.PermissionsIgnoredForCache = true
+		}
+
+		if score := jobStatus.Score(); !found || score < worstScore {
+			worst = jobStatus
+			worstScore = score
+			found = true
 		}
 	}
-	if status.HasCacheWriteAction && status.HasPermissionsRestriction {
-		status.PermissionsIgnoredForCache = true
+
+	// A workflow with no jobs keeps the workflow-level picture.
+	if !found {
+		worst.HasCacheWriteAction = hasCacheWrite
+		worst.HasPermissionsRestriction = workflowRestrictsPermissions
+		if worst.HasCacheWriteAction && worst.HasPermissionsRestriction {
+			worst.PermissionsIgnoredForCache = true
+		}
 	}
 
-	return status
+	return worst
 }
 
 func workflowHasCacheWriteAction(workflow *ast.Workflow) bool {
