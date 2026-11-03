@@ -250,7 +250,15 @@ func (u *UntiChecker) OnVisitNodeLeave(n ExprNode) {
 	case *IndexAccessNode:
 		if lit, ok := n.Index.(*StringNode); ok {
 			// 特別なケース、例えばgithub['event']['issue']['title']
-			u.onPropAccess(lit.Value)
+			//
+			// StringNode.Value holds the raw token, quotes included, despite the
+			// comment on the type saying they are removed. Passing it through
+			// unchanged asked onPropAccess for a property literally named
+			// "'title'", so every bracket form -- even github.event.pull_request['title'],
+			// where only the last step is bracketed -- failed to match and the rule
+			// reported nothing. Strip the delimiters here, where the value is a
+			// property name rather than a string literal.
+			u.onPropAccess(unquote(lit.Value))
 			break
 		}
 		u.onIndexAccess()
@@ -286,4 +294,15 @@ func (u *UntiChecker) Init() {
 	u.errs = u.errs[:0]
 	u.funcArgDepth = 0
 	u.reset()
+}
+
+// unquote removes the delimiters from a string-literal token value. The tokenizer
+// keeps them; a value used as a property name must not have them.
+func unquote(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '\'' && s[len(s)-1] == '\'') || (s[0] == '"' && s[len(s)-1] == '"') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }

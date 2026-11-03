@@ -1,6 +1,9 @@
 package expressions
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestCaseFunctionSignature tests that the case function is recognized
 func TestCaseFunctionSignature(t *testing.T) {
@@ -164,5 +167,51 @@ func TestCaseFunctionInBuiltinSignatures(t *testing.T) {
 	// case needs at least 3 arguments: condition, valueIfTrue, defaultValue
 	if len(caseSig.Params) < 3 {
 		t.Errorf("case function should have at least 3 base params, got %d", len(caseSig.Params))
+	}
+}
+
+// Every spelling of the same untrusted path must reach the same verdict. Reported in
+// #658: the string index of an IndexAccessNode was handed to onPropAccess with its
+// delimiters still attached, so it looked for a property named `'title'` and never
+// matched. Any bracket at any position defeated every rule sharing this checker.
+//
+// Expressions end with "}}" because the tokenizer requires the closing of the
+// "${{" the value came from; without it Parse fails with unexpected EOF.
+func TestUntrustedBracketNotationMatchesDotNotation(t *testing.T) {
+	t.Parallel()
+
+	expressions := []string{
+		"github.event.pull_request.title",
+		"github['event'].pull_request.title",
+		"github.event['pull_request'].title",
+		"github.event.pull_request['title']",
+		"github['event']['pull_request']['title']",
+	}
+
+	for _, expr := range expressions {
+		expr := expr
+		t.Run(expr, func(t *testing.T) {
+			t.Parallel()
+
+			tokenizer := NewTokenizer(expr + "}}")
+			parser := NewMiniParser()
+			tree, parseErr := parser.Parse(tokenizer)
+			if parseErr != nil {
+				t.Fatalf("Parse error: %v", parseErr)
+			}
+			if tree == nil {
+				t.Fatal("Parsed tree is nil")
+			}
+
+			checker := NewExprSemanticsChecker(true, nil)
+			_, errs := checker.Check(tree)
+
+			for _, e := range errs {
+				if strings.Contains(e.Message, "potentially untrusted") {
+					return
+				}
+			}
+			t.Errorf("%s reaches an untrusted input and must be reported", expr)
+		})
 	}
 }
