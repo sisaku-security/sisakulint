@@ -113,7 +113,9 @@ func (r *AIActionExcessiveToolsRule) VisitStep(node *ast.Step) error {
 	}
 
 	claudeArgs := claudeArgsInput.Value.Value
-	foundTools := r.findDangerousTools(claudeArgs)
+	// 許可リスト (--allowedTools) の値だけを見る。--disallowedTools に挙げられた
+	// ツールは拒否されているので、付与されたものとして報告してはならない (#646)。
+	foundTools := r.findDangerousTools(allowedToolsValue(claudeArgs))
 	if len(foundTools) == 0 {
 		return nil
 	}
@@ -128,17 +130,93 @@ func (r *AIActionExcessiveToolsRule) VisitStep(node *ast.Step) error {
 	return nil
 }
 
-// findDangerousTools は claude_args の値から危険なツール名を抽出して返す。
-func (r *AIActionExcessiveToolsRule) findDangerousTools(claudeArgs string) []string {
+// allowedToolsFlags は claude_args でツールの許可リストを渡すフラグの綴り。
+// Claude Code の CLI リファレンスは --allowedTools を使う。
+var allowedToolsFlags = map[string]bool{
+	"--allowedTools":  true,
+	"--allowed-tools": true,
+}
+
+// findDangerousTools は許可されたツール名の文字列から危険なツール名を抽出して返す。
+func (r *AIActionExcessiveToolsRule) findDangerousTools(allowedTools string) []string {
 	var found []string
 	for _, tool := range dangerousAITools {
 		// --allowedTools "Bash,Read,Write" のような形式でツール名が含まれているかを検索する。
 		// 単語境界を模倣するため、カンマ・スペース・クォート・文字列末尾を区切り文字として扱う。
-		if containsToolName(claudeArgs, tool) {
+		if containsToolName(allowedTools, tool) {
 			found = append(found, tool)
 		}
 	}
 	return found
+}
+
+// allowedToolsValue は claude_args から --allowedTools に渡された値だけを返す。
+// 値が複数回・複数トークンで指定された場合は空白で連結する。
+//
+// --disallowedTools に挙げられたツールは拒否されたツールであり、付与されてはいない。
+// それを「付与された危険なツール」として報告しないよう、許可リストの値だけを読む (#646)。
+// 値の走査は次のフラグ (先頭が "-" のトークン) で終わる。
+func allowedToolsValue(claudeArgs string) string {
+	tokens := splitClaudeArgs(claudeArgs)
+
+	var values []string
+	i := 0
+	for i < len(tokens) {
+		name, inlineValue, hasInlineValue := strings.Cut(tokens[i], "=")
+		if !allowedToolsFlags[name] {
+			i++
+			continue
+		}
+
+		if hasInlineValue {
+			values = append(values, inlineValue)
+			i++
+			continue
+		}
+
+		i++
+		for i < len(tokens) && !strings.HasPrefix(tokens[i], "-") {
+			values = append(values, tokens[i])
+			i++
+		}
+	}
+
+	return strings.Join(values, " ")
+}
+
+// splitClaudeArgs は claude_args をシェルと同様のトークンに分割する。
+// シングルクォートとダブルクォートはトークンの区切りとしてのみ扱い、トークンには含めない。
+// クォート内の空白はトークンを分割しない。
+func splitClaudeArgs(claudeArgs string) []string {
+	var tokens []string
+	var current strings.Builder
+	var quote byte
+
+	for i := 0; i < len(claudeArgs); i++ {
+		switch c := claudeArgs[i]; {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			} else {
+				current.WriteByte(c)
+			}
+		case c == '"' || c == '\'':
+			quote = c
+		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteByte(c)
+		}
+	}
+
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+
+	return tokens
 }
 
 // containsToolName はツール名が引数文字列に含まれているかを確認する。
