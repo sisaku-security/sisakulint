@@ -16,7 +16,10 @@ The `github-actions` ecosystem is intentionally out of scope here; it is handled
 ### Key Features
 
 - **Lockfile Signals**: Infers ecosystems from lockfiles in the repository root.
-- **Setup-action Signals**: Infers ecosystems from `setup-*` actions in workflow steps.
+- **Setup-action Signals**: Infers ecosystems from `setup-*` actions in workflow steps, but only
+  when the workflow actually manages dependencies for the ecosystem (see below). A `setup-*`
+  action that merely bootstraps the runtime to run stdlib-only scripts does not imply a managed
+  ecosystem.
 - **Local-scan Only**: Reads the local filesystem to locate lockfiles and the Dependabot config. The
   check is skipped in legacy API-only remote-scan mode. Pull-request snapshot
   scans materialize repository context locally and therefore run this check.
@@ -67,6 +70,27 @@ Only the repository root is scanned; lockfiles in subdirectories are not inferre
 
 `actions/setup-java` is ambiguous: it is considered satisfied when the Dependabot config contains any
 one of `maven`, `gradle`, or `sbt`.
+
+A `setup-*` action alone is not treated as an ecosystem signal. The requirement is reported only when
+it is corroborated by either a root-level manifest or lockfile for one of the accepted ecosystems
+(for example `package.json`, `pyproject.toml`, `go.mod`, `requirements*.txt`, `Gemfile`, `pom.xml`)
+or a `run` step invoking that ecosystem's package manager (for example `npm ci`, `pip install`,
+`go mod tidy`, `bundle install`, `mvn package`). This avoids warning about workflows that use a
+setup action purely to run stdlib-only scripts, which have no dependencies for Dependabot to update.
+
+npm manifest corroboration is content-aware: a root `package.json` corroborates the npm ecosystem
+only when it declares at least one dependency entry (`dependencies`, `devDependencies`,
+`peerDependencies`, `optionalDependencies`, or `bundledDependencies` / `bundleDependencies`). A bare
+`package.json` with only `scripts` (a zero-dependency project) is not treated as evidence that npm
+dependencies are managed — Dependabot would have nothing to update, so the missing-entry warning
+would only add configuration noise. Lockfile corroboration (`package-lock.json` / `pnpm-lock.yaml` /
+`yarn.lock`) remains presence-based. An unparseable `package.json` is treated conservatively as
+corroborating, so malformed manifests never drop a legitimate warning.
+
+npm command corroboration is likewise restricted to dependency-managing invocations (`npm install` /
+`npm ci` / `npm add` / `npm update` / `yarn install` / `pnpm install` / `bun install`, ...). Script
+runners (`npm test`, `npm run`, `npm exec`) and `npx` do not manage project dependencies, so they do
+not corroborate a setup-node requirement on their own.
 
 ### Example Finding
 
