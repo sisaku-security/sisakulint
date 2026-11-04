@@ -186,30 +186,61 @@ func (rule *BotConditionsRule) checkCondition(condition *ast.String, level strin
 	}
 }
 
-// isBotCondition checks if the condition contains a bot check using the given context
+// isBotCondition checks if the condition contains a bot check using the given context.
+// Only equality (==) comparisons are flagged: `github.actor == 'dependabot[bot]'` grants
+// access to whoever's actor matches the literal, which is spoofable. An inequality guard
+// like `github.actor != 'claude[bot]'` only excludes that actor and can never be spoofed
+// into granting access, so it is intentionally not treated as vulnerable — it's the
+// standard anti-recursion idiom for bot-driven workflows (e.g. Claude Code Action).
 func (rule *BotConditionsRule) isBotCondition(condition string, context string) bool {
 	if !strings.Contains(condition, context) {
 		return false
 	}
 
-	// Check if comparing with a [bot] pattern
-	return botSuffixPattern.MatchString(condition)
+	if !botSuffixPattern.MatchString(condition) {
+		return false
+	}
+
+	return hasEqualityComparison(condition, context, botSuffixPattern.String())
 }
 
-// isBotIDCondition checks if the condition contains a bot ID check using the given context
+// isBotIDCondition checks if the condition contains a bot ID check using the given context.
+// As with isBotCondition, only == comparisons against a known bot ID are flagged.
 func (rule *BotConditionsRule) isBotIDCondition(condition string, context string) bool {
 	if !strings.Contains(condition, context) {
 		return false
 	}
 
-	// Check if comparing with known bot IDs
 	for _, botID := range knownBotActorIDs {
-		// Match patterns like: github.actor_id == '49699333' or github.actor_id == 49699333
-		if strings.Contains(condition, botID) {
+		if !strings.Contains(condition, botID) {
+			continue
+		}
+		if hasEqualityComparison(condition, context, `['"]?`+regexp.QuoteMeta(botID)+`['"]?`) {
 			return true
 		}
 	}
 
+	return false
+}
+
+// hasEqualityComparison reports whether context and valuePattern appear on either side
+// of an == operator (in either order) somewhere in condition. A matching != is ignored.
+func hasEqualityComparison(condition, context, valuePattern string) bool {
+	q := regexp.QuoteMeta(context)
+	pattern := regexp.MustCompile(
+		q + `\s*(==|!=)\s*(?:` + valuePattern + `)` +
+			`|` +
+			`(?:` + valuePattern + `)\s*(==|!=)\s*` + q,
+	)
+	for _, m := range pattern.FindAllStringSubmatch(condition, -1) {
+		op := m[1]
+		if op == "" {
+			op = m[2]
+		}
+		if op == "==" {
+			return true
+		}
+	}
 	return false
 }
 
