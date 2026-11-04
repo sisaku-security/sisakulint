@@ -53,6 +53,11 @@ type DependabotEcosystemRule struct {
 	// setupActionReqs collects ecosystem requirements derived from setup actions in the
 	// current workflow, anchored to the step position for precise reporting.
 	setupActionReqs []ecosystemRequirement
+	// hasSetupUV records whether astral-sh/setup-uv appears in the current workflow. uv is
+	// a drop-in Python package manager: a workflow pairing actions/setup-python with
+	// astral-sh/setup-uv installs dependencies via uv, not pip, so the "pip" requirement
+	// implied by setup-python must also accept a "uv" dependabot entry.
+	hasSetupUV bool
 }
 
 // ecosystemRequirement represents a detected need for one or more dependabot ecosystems.
@@ -98,6 +103,7 @@ var lockfileEcosystems = []struct {
 	{"Pipfile.lock", "pip"},
 	{"poetry.lock", "pip"},
 	{"requirements.txt", "pip"},
+	{"uv.lock", "uv"},
 	{"pom.xml", "maven"},
 	{"build.gradle", "gradle"},
 	{"build.gradle.kts", "gradle"},
@@ -137,6 +143,9 @@ func (rule *DependabotEcosystemRule) VisitStep(step *ast.Step) error {
 		return nil
 	}
 	uses := action.Uses.Value
+	if matchesUsesPrefix(uses, "astral-sh/setup-uv") {
+		rule.hasSetupUV = true
+	}
 	for _, m := range setupActionEcosystems {
 		if matchesUsesPrefix(uses, m.prefix) {
 			rule.setupActionReqs = append(rule.setupActionReqs, ecosystemRequirement{
@@ -187,6 +196,25 @@ func (rule *DependabotEcosystemRule) VisitWorkflowPost(_ *ast.Workflow) error {
 	// ecosystem is implied by both, dedup keeps the first occurrence, and setup-action
 	// requirements carry a precise step anchor while lockfile requirements anchor at line 1.
 	reqs := slices.Clone(rule.setupActionReqs)
+
+	// A workflow that pairs actions/setup-python with astral-sh/setup-uv (or a project with
+	// a root uv.lock) installs Python dependencies via uv, not pip directly. Extend the
+	// setup-python requirement so a configured "uv" dependabot entry satisfies it too,
+	// instead of demanding a "pip" entry the project has no lockfile for.
+	usesUV := rule.hasSetupUV
+	if !usesUV {
+		if _, err := os.Stat(filepath.Join(rule.projectRoot, "uv.lock")); err == nil {
+			usesUV = true
+		}
+	}
+	if usesUV {
+		for i, req := range reqs {
+			if req.label == "actions/setup-python" && !slices.Contains(req.accepts, "uv") {
+				reqs[i].accepts = append(slices.Clone(req.accepts), "uv")
+			}
+		}
+	}
+
 	for _, lf := range lockfileEcosystems {
 		if _, err := os.Stat(filepath.Join(rule.projectRoot, lf.file)); err == nil {
 			reqs = append(reqs, ecosystemRequirement{accepts: []string{lf.ecosystem}, label: lf.file})
