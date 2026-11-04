@@ -1383,3 +1383,99 @@ func TestImpostorCommitRule_OldMajorReleasePushedPastCompareWindow(t *testing.T)
 		t.Errorf("unexpected error: %v", result.err)
 	}
 }
+
+// TestImpostorCommitRule_TagOnReleaseBranchAncestorIsLegit reproduces the
+// false positive reported via sisakuintel-worker#1438 (Nagi-ovo/voyager) and
+// sisakulint#370: actions/checkout v4.3.1 (34e114876b0b11c390a56381ad16ebd13914f8d5)
+// is an official tag commit cherry-picked onto the releases/v4 branch. It is
+// NOT reachable from the default branch (main) and is not the HEAD of any
+// branch, but it IS an ancestor of the releases/v4 branch head. Such a pinned
+// SHA is a legitimate, officially tagged commit and must not be flagged as an
+// impostor.
+func TestImpostorCommitRule_TagOnReleaseBranchAncestorIsLegit(t *testing.T) {
+	t.Parallel()
+
+	// actions/checkout v4.3.1 — the same SHA referenced 21 times in voyager.
+	const pinnedSha = "34e114876b0b11c390a56381ad16ebd13914f8d5"
+	const mainHead = "4444444444444444444444444444444444444444"
+	const releaseV4Head = "5555555555555555555555555555555555555555"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		unescaped, _ := url.PathUnescape(path)
+
+		switch {
+		case strings.Contains(path, "/tags"):
+			// Newer majors sort first; v4.3.1 points exactly at the pinned SHA.
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[
+				{"name":"v7.0.1","commit":{"sha":"1111111111111111111111111111111111111111"}},
+				{"name":"v6.0.1","commit":{"sha":"2222222222222222222222222222222222222222"}},
+				{"name":"v5.0.1","commit":{"sha":"3333333333333333333333333333333333333333"}},
+				{"name":"v4.3.1","commit":{"sha":"` + pinnedSha + `"}}
+			]`))
+		case strings.Contains(path, "/branches-where-head"):
+			// Pinned SHA is not the HEAD of any branch.
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(path, "/branches") && !strings.Contains(path, "/commits/"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprintf(w,
+				`[{"name":"main","commit":{"sha":"%s"}},{"name":"releases/v4","commit":{"sha":"%s"}}]`,
+				mainHead, releaseV4Head)
+		case strings.HasSuffix(path, "/repos/actions/checkout"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case strings.Contains(path, "/compare/"):
+			// not an ancestor of main (cherry-pick backport) ... but an ancestor of releases/v4.
+			if strings.Contains(unescaped, "releases/v4") {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"behind","ahead_by":0,"behind_by":3,"commits":[],"files":[]}`))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"diverged","ahead_by":1,"behind_by":37,"commits":[],"files":[]}`))
+		default:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	rule := ImpostorCommitRuleFactory()
+	setTestClient(rule, server.URL)
+
+	result := rule.doVerifyCommit("actions", "checkout", pinnedSha)
+	if result.isImpostor {
+		t.Error("expected isImpostor to be false: SHA is the official v4.3.1 tag commit reachable from the releases/v4 branch, but got flagged as impostor")
+	}
+	if result.err != nil {
+		t.Errorf("unexpected error: %v", result.err)
+	}
+}
+
+// TestTagMajorLine tests the tagMajorLine helper.
+func TestTagMajorLine(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"v4.3.1", "v4"},
+		{"v4", "v4"},
+		{"v4.0.0", "v4"},
+		{"v10.2.0", "v10"},
+		{"v0.69.4", "v0"},
+		{"2025.1", "2025.1"},
+		{"nightly", "nightly"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := tagMajorLine(tt.in); got != tt.want {
+				t.Errorf("tagMajorLine(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
