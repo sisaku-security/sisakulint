@@ -116,6 +116,20 @@ func TestShellParser_FindEnvVarUsages(t *testing.T) {
 			wantCount:  2,
 			wantQuoted: []bool{false, false},
 		},
+		{
+			name:       "variable nested inside another param expansion default, all inside double quotes",
+			script:     `x="${OTHER:-${MY_VAR:-}}"`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{true},
+		},
+		{
+			name:       "variable nested inside another param expansion default, unquoted",
+			script:     `x=${OTHER:-${MY_VAR:-}}`,
+			varName:    "MY_VAR",
+			wantCount:  1,
+			wantQuoted: []bool{false},
+		},
 	}
 
 	for _, tt := range tests {

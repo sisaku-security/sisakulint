@@ -284,6 +284,9 @@ type Concurrency struct {
 	Group *String
 	// CancelInProgress はこのワークフローをキャンセルすると進行中の他のジョブもキャンセルされるかどうかを示すフラグです。
 	CancelInProgress *Bool
+	// Queue は同じグループ内でペンディングになったジョブ/ワークフローの扱い方 ("single" または "max") です。
+	// * https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#example-queueing-multiple-pending-runs
+	Queue *String
 	// Pos はソース内の位置です。
 	Pos *Position
 }

@@ -341,19 +341,39 @@ func (p *ShellParser) walkLoop(node syntax.Loop, varName string, ctx *walkContex
 	}
 }
 
+// isParamExpQuoted reports whether pe is nested anywhere inside a double-quoted
+// string, at any depth. This matters for patterns like "${INPUT:-${OTHER:-}}":
+// the whole expression is one double-quoted word, so OTHER cannot undergo word
+// splitting or glob expansion even though it is not a direct part of the
+// DblQuoted node. Checking only direct membership in dq.Parts (as opposed to
+// tracking quote depth through the full descent) misses this and misreports
+// safely-nested expansions as unquoted.
 func (p *ShellParser) isParamExpQuoted(pe *syntax.ParamExp) bool {
 	var quoted bool
+	var dblQuotedStack []bool
+	quoteDepth := 0
 
 	syntax.Walk(p.file, func(node syntax.Node) bool {
-		if dq, ok := node.(*syntax.DblQuoted); ok {
-			for _, part := range dq.Parts {
-				if paramExp, ok := part.(*syntax.ParamExp); ok {
-					if paramExp == pe {
-						quoted = true
-						return false
-					}
+		if node == nil {
+			if n := len(dblQuotedStack); n > 0 {
+				if dblQuotedStack[n-1] {
+					quoteDepth--
 				}
+				dblQuotedStack = dblQuotedStack[:n-1]
 			}
+			return true
+		}
+
+		if quoteDepth > 0 {
+			if paramExp, ok := node.(*syntax.ParamExp); ok && paramExp == pe {
+				quoted = true
+			}
+		}
+
+		_, isDblQuoted := node.(*syntax.DblQuoted)
+		dblQuotedStack = append(dblQuotedStack, isDblQuoted)
+		if isDblQuoted {
+			quoteDepth++
 		}
 		return true
 	})
