@@ -171,6 +171,9 @@ func inputNamesMatch(caller *CallerTaint, sink *CalleeSink) bool {
 	if caller == nil || sink == nil {
 		return false
 	}
+	if caller.CheckoutRefOnly && sink.SinkType != SinkCheckoutRef {
+		return false
+	}
 	return caller.InputName == sink.InputName || sink.IsWildcardInput()
 }
 
@@ -327,6 +330,23 @@ func (c *LocalReusableWorkflowCache) emitChainWarning(ws []workspaceLike, caller
 			sink.Pos.Line,
 			caller.UntrustedSources,
 			sink.SinkType,
+		)
+	} else if sink.SinkType == SinkCheckoutRef {
+		// SinkCheckoutRef feeds actions/checkout's `ref:`, not a shell/script
+		// context — "move to env: and use $VAR" doesn't apply here.
+		msg = fmt.Sprintf(
+			"reusable-workflow-taint-chain (%s): untrusted source %v flows from caller %s `with: %s` to callee %s checkout ref sink at line:%d. "+
+				"An attacker controlling %v can make the callee check out and run attacker-chosen code with this workflow's privileges. "+
+				"Fix: validate ${{ inputs.%s }} against an allowlist (e.g. only accept values derived from github.sha) before using it as a checkout ref, or don't honor caller-supplied refs. "+
+				"See https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/",
+			severity,
+			caller.UntrustedSources,
+			caller.CallerWorkflowPath,
+			caller.InputName,
+			sink.CalleeWorkflowPath,
+			sink.Pos.Line,
+			caller.UntrustedSources,
+			sink.InputName,
 		)
 	} else if sink.SinkType == SinkEnv {
 		// SinkEnv is the env: block itself — telling the user to "move to env:"

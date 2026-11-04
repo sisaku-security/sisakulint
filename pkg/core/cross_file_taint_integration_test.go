@@ -321,3 +321,49 @@ func assertNoReusableWorkflowTaintResults(t *testing.T, results []*ValidateResul
 		}
 	}
 }
+
+// The following tests cover the untrusted-checkout / reusable-workflow-taint
+// overlap for `actions/checkout` refs sourced from workflow_call inputs (see
+// https://github.com/sisaku-security/sisakulint/issues/550). Before this fix,
+// untrusted-checkout treated any `ref: ${{ inputs.X }}` under workflow_call as
+// an unconditional CRITICAL, even when no caller in the project ever passes
+// untrusted data into X — the common "reusable release workflow accepts a
+// caller-supplied commit/ref" pattern. Now that reusable-workflow-taint tracks
+// checkout refs as a sink through cross-file chain resolution, untrusted-checkout
+// defers to it whenever chain resolution is available.
+
+func TestCrossFileTaint_Critical_CheckoutRefSink(t *testing.T) {
+	t.Parallel()
+	res := runCrossFileLinter(t,
+		"cross-file-taint-caller-checkout-critical.yaml",
+		"cross-file-taint-callee-checkout.yaml",
+	)
+	if got := collectChainErrors(res, "critical"); len(got) != 1 {
+		t.Errorf("expected 1 critical checkout-ref chain warning, got %d", len(got))
+		dumpErrors(t, res)
+	}
+	// untrusted-checkout must not also fire: it defers to the chain result above.
+	if got := collectErrors(res, "untrusted-checkout", ""); len(got) != 0 {
+		t.Errorf("expected untrusted-checkout to defer to reusable-workflow-taint, got %d finding(s)", len(got))
+		dumpErrors(t, res)
+	}
+}
+
+func TestCrossFileTaint_CalleeSolo_CheckoutRefSink_NoUntrustedCaller(t *testing.T) {
+	t.Parallel()
+	res := runCrossFileLinter(t,
+		"cross-file-taint-caller-checkout-safe.yaml",
+		"cross-file-taint-callee-checkout.yaml",
+	)
+	got := collectErrors(res, "reusable-workflow-taint", "medium")
+	if len(got) != 1 {
+		t.Errorf("expected 1 callee-solo medium warning for checkout-ref sink, got %d", len(got))
+		dumpErrors(t, res)
+	}
+	// The only caller in-repo passes a trusted github.sha value, so
+	// untrusted-checkout must not report a false-positive CRITICAL here.
+	if got := collectErrors(res, "untrusted-checkout", ""); len(got) != 0 {
+		t.Errorf("expected no untrusted-checkout finding when no untrusted caller reaches the ref, got %d finding(s)", len(got))
+		dumpErrors(t, res)
+	}
+}

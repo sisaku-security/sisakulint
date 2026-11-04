@@ -162,6 +162,7 @@ const (
 	SinkRun SinkType = iota
 	SinkGitHubScript
 	SinkEnv
+	SinkCheckoutRef
 )
 
 func (s SinkType) String() string {
@@ -172,6 +173,8 @@ func (s SinkType) String() string {
 		return "github-script"
 	case SinkEnv:
 		return "env"
+	case SinkCheckoutRef:
+		return "checkout ref"
 	}
 	return "unknown"
 }
@@ -185,6 +188,11 @@ type CallerTaint struct {
 	Pos                  *ast.Position
 	JobID                string
 	HasPrivilegedTrigger bool
+	// CheckoutRefOnly marks sources (e.g. github.event.pull_request.head.sha)
+	// that are dangerous as a checkout ref but not as code/script injection
+	// (fixed-format values can't carry shell metacharacters). Such entries
+	// must only join against SinkCheckoutRef — see inputNamesMatch.
+	CheckoutRefOnly bool
 }
 
 // CalleeSink records that a reusable workflow uses ${{ inputs.X }} in a

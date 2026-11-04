@@ -1,0 +1,6 @@
+on: pull_request_target
+jobs:
+  build:
+    uses: ./script/actions/cross-file-taint-callee-checkout.yaml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}

@@ -6,6 +6,35 @@ import (
 	"github.com/sisaku-security/sisakulint/pkg/ast"
 )
 
+func TestIsPureWorkflowCallInputRef(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  string
+		want bool
+	}{
+		{"bare input reference", "${{ inputs.commit }}", true},
+		{"bare input reference, no spaces", "${{inputs.commit}}", true},
+		{"dotted input name", "${{ inputs.build.commit }}", true},
+		{"kebab-case input name", "${{ inputs.build-commit }}", true},
+		{"case-insensitive inputs keyword", "${{ INPUTS.commit }}", true},
+		{"suspiciously named input is still pure syntax", "${{ inputs.head_sha }}", true},
+		{"literal branch name is not a pure input ref", "main", false},
+		{"empty is not a pure input ref", "", false},
+		{"github.sha is not an input ref", "${{ github.sha }}", false},
+		{"mixed literal and input ref", "release-${{ inputs.commit }}", false},
+		{"mixed with another expression", "${{ inputs.commit }}-${{ github.sha }}", false},
+		{"event field is not an input ref", "${{ github.event.pull_request.head.sha }}", false},
+		{"steps output is not an input ref", "${{ steps.foo.outputs.commit }}", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isPureWorkflowCallInputRef(tt.ref); got != tt.want {
+				t.Errorf("isPureWorkflowCallInputRef(%q) = %v, want %v", tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUntrustedCheckoutRule(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -160,6 +189,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+`,
+			wantErr: true,
+			errMsg:  "checking out untrusted code from pull request",
+		},
+		{
+			// Without a project-wide cache (single-file lint), chain
+			// resolution can't tell whether an untrusted caller reaches this
+			// input, so we keep the conservative behavior. With chain
+			// resolution available, this is instead deferred to
+			// reusable-workflow-taint — see the cross-file taint integration tests.
+			name: "Vulnerable (no chain resolution): workflow_call with bare inputs.* checkout ref",
+			yaml: `
+name: Test
+on:
+  workflow_call:
+    inputs:
+      commit:
+        type: string
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 `,
 			wantErr: true,
 			errMsg:  "checking out untrusted code from pull request",
@@ -373,7 +427,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()
@@ -439,7 +493,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()
@@ -494,7 +548,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()
@@ -610,7 +664,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()
@@ -689,7 +743,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()
@@ -854,7 +908,7 @@ jobs:
 			}
 
 			// Create rule instance
-			rule := NewUntrustedCheckoutRule()
+			rule := NewUntrustedCheckoutRule(nil)
 
 			// Create visitor and add rule
 			visitor := NewSyntaxTreeVisitor()

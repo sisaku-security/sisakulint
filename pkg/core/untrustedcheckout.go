@@ -36,6 +36,12 @@ import (
 // - https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
 type UntrustedCheckoutRule struct {
 	BaseRule
+	// cache is the project-wide reusable workflow cache. When chain
+	// resolution is enabled, it can tell (across files) whether an
+	// untrusted caller actually reaches a given workflow_call input, so we
+	// can defer to the reusable-workflow-taint rule instead of assuming the
+	// worst for every unrecognized `inputs.*` ref.
+	cache *LocalReusableWorkflowCache
 	// workflowTriggerInfos stores all trigger info (name + position) from the workflow
 	workflowTriggerInfos []TriggerInfo
 	// dangerousTriggerPos stores the position of the dangerous trigger for error reporting
@@ -49,13 +55,16 @@ type UntrustedCheckoutRule struct {
 	jobHasDangerousTrigger bool
 }
 
-// NewUntrustedCheckoutRule creates a new instance of the untrusted checkout rule
-func NewUntrustedCheckoutRule() *UntrustedCheckoutRule {
+// NewUntrustedCheckoutRule creates a new instance of the untrusted checkout rule.
+// cache enables deferring workflow_call + inputs.* refs to the
+// reusable-workflow-taint rule's cross-file chain resolution (see below).
+func NewUntrustedCheckoutRule(cache *LocalReusableWorkflowCache) *UntrustedCheckoutRule {
 	return &UntrustedCheckoutRule{
 		BaseRule: BaseRule{
 			RuleName: "untrusted-checkout",
 			RuleDesc: "Detects checkout of untrusted code in workflows with privileged triggers that have access to secrets",
 		},
+		cache: cache,
 	}
 }
 
@@ -137,6 +146,23 @@ func (rule *UntrustedCheckoutRule) VisitStep(step *ast.Step) error {
 
 	// Check if the ref uses untrusted input from PR
 	if rule.isUntrustedPRRef(refValue) {
+		// workflow_call's `inputs.*` are populated by the calling workflow's
+		// `with:` block, not by the triggering event payload — unlike
+		// pull_request_target/issue_comment/workflow_run, workflow_call
+		// itself grants no attacker-controlled context. A bare
+		// `${{ inputs.X }}` ref is only actually dangerous if some caller in
+		// the project passes untrusted data into X, which is exactly what
+		// the reusable-workflow-taint rule's cross-file chain resolution
+		// checks (see its SinkCheckoutRef handling). Defer to it here so we
+		// don't cry CRITICAL on every reusable release/build workflow that
+		// takes a caller-supplied ref/commit input — see
+		// https://github.com/sisaku-security/sisakulint/issues/550.
+		if rule.dangerousTriggerName == "workflow_call" &&
+			rule.cache.IsChainResolutionEnabled() &&
+			isPureWorkflowCallInputRef(refValue.Value) {
+			return nil
+		}
+
 		rule.Errorf(
 			refValue.Pos,
 			"checking out untrusted code from pull request in workflow with privileged trigger '%s' (line %d). This allows potentially malicious code from external contributors to execute with access to repository secrets. "+
@@ -159,6 +185,40 @@ func (rule *UntrustedCheckoutRule) isUntrustedPRRef(refValue *ast.String) bool {
 		return false
 	}
 	return IsUnsafeCheckoutRef(refValue.Value)
+}
+
+// isPureWorkflowCallInputRef reports whether refValue is a single expression
+// referencing a workflow_call input (e.g. "${{ inputs.commit }}"), with no
+// literal text or additional expressions mixed in. Such refs are populated
+// entirely by the calling workflow's `with:` block rather than by ambient
+// event data, so their safety depends on what that caller actually passes —
+// a question the reusable-workflow-taint rule's cross-file analysis answers
+// directly instead of guessing from the ref's syntax alone.
+func isPureWorkflowCallInputRef(refValue string) bool {
+	trimmed := strings.TrimSpace(refValue)
+	if !strings.HasPrefix(trimmed, "${{") || !strings.HasSuffix(trimmed, "}}") {
+		return false
+	}
+	inner := strings.TrimSpace(trimmed[3 : len(trimmed)-2])
+	if inner == "" || strings.Contains(inner, "${{") {
+		return false
+	}
+	lower := strings.ToLower(inner)
+	if !strings.HasPrefix(lower, "inputs.") {
+		return false
+	}
+	name := inner[len("inputs."):]
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if r == '_' || r == '-' || r == '.' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // VisitWorkflowPost resets state after workflow processing
