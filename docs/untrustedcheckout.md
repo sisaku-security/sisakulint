@@ -302,6 +302,42 @@ When this rule triggers:
    - Audit all workflows using `pull_request_target`, `issue_comment`, `workflow_run`, or `workflow_call`
    - Ensure no PR code is executed in privileged contexts
 
+### Detection of git/gh-based PR checkouts
+
+In addition to `actions/checkout` with an unsafe `ref`, the rule detects untrusted
+PR code being pulled into the workspace with git/gh commands in `run:` steps:
+
+- `gh pr checkout <pr>` — always checks out the PR head.
+- `git fetch origin pull/<n>/head` — fetches the PR head ref.
+- `git checkout <ref> -- <paths>` / `git switch <ref>` / `git restore <ref>` where
+  the ref resolves to a PR head SHA/ref, either inline
+  (`${{ github.event.pull_request.head.sha }}`, `refs/pull/...`) or via a step
+  env var whose value is tainted (`PR_SHA: ${{ needs.*.outputs.pr_sha }}`).
+- `git reset --hard <ref>` where `<ref>` is a PR head SHA.
+
+**Vulnerable Example:**
+
+```yaml
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch origin pull/${{ github.event.pull_request.number }}/head
+          rm -rf tasks/
+          git checkout "$PR_SHA" -- tasks/
+      - run: harbor run -p tasks/...   # executes attacker-controlled task code
+```
+
+This is the same Poisoned Pipeline Execution pattern as `actions/checkout` with a
+PR ref: the attacker's PR code is executed in a privileged context with access to
+repository secrets. Prefer the same mitigations: use `pull_request`, avoid
+checking out PR code entirely, or isolate untrusted execution in an unprivileged
+job or openid-connect-token-free runner.
+
 ### Additional Resources
 
 For more information on securing GitHub Actions workflows, see:
