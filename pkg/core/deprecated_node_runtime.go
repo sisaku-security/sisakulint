@@ -31,8 +31,11 @@ type DeprecatedNodeRuntimeRule struct {
 
 // First major of each well-known action that declares `runs.using: node24`;
 // every lower major is deprecated, including gap majors such as
-// upload-artifact v5. Hand-maintained, verified 2026-07 against each
-// action.yml.
+// upload-artifact v5. Hand-maintained, verified 2026-09 against each
+// action.yml. Covers first-party actions plus popular third-party actions
+// that run on deprecated runtimes in the offline resolver path (the path
+// used by the sisakuintel-worker's lint API, which cannot resolve remote
+// action.yml files).
 var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/checkout":                 5,
 	"actions/setup-node":               5,
@@ -43,6 +46,12 @@ var nodeRuntimeFirstNode24Major = map[string]int{
 	"actions/upload-artifact":          6,
 	"actions/download-artifact":        7,
 	"actions/dependency-review-action": 5,
+	// softprops/action-gh-release: v2.6.2 (tag v2) declares node20;
+	// v3.0.0 (2026-04-12) was cut for the node24 upgrade.
+	"softprops/action-gh-release": 3,
+	// goreleaser/goreleaser-action: v6 declares node20; v7 declares
+	// node24.
+	"goreleaser/goreleaser-action": 7,
 }
 
 // deprecatedNodeRuntimes maps deprecated `runs.using` values to the reason
