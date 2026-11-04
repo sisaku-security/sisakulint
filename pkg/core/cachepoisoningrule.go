@@ -2364,18 +2364,31 @@ func (rule *CachePoisoningRule) checkCacheInputForUntrustedExprs(node *ast.Step,
 	}
 }
 
-// checkCacheHierarchyExploitation detects cache hierarchy exploitation vulnerabilities
+// checkCacheHierarchyExploitation detects cache hierarchy exploitation vulnerabilities.
 // GitHub Actions caches are scoped by branch - PRs can read caches from their base branch.
-// If an attacker can write to the default branch's cache, they can poison all downstream PRs.
+// If the default branch's cache is poisoned, all downstream PRs inherit the poisoned entry.
+//
+// Unlike the untrusted-trigger checks above (issue_comment / pull_request_target / workflow_run,
+// see unsafeTriggerNames), workflow_dispatch, schedule, and repository_dispatch are not reachable
+// by unprivileged/external actors: workflow_dispatch can only be invoked by someone who already
+// has write access to the repository (GitHub requires permission to edit the workflow file),
+// repository_dispatch requires a pre-authorized token, and schedule fires automatically with no
+// attacker action at all. So this pattern is a defense-in-depth / insider-threat concern (a
+// malicious or compromised collaborator poisoning the cache stealthily instead of pushing an
+// obviously malicious commit), not an externally-exploitable vulnerability. Tag it "medium" via
+// the "(severity):" message convention (see checkLockfileHashFilesCacheSave) so it isn't conflated
+// with the "high" severity used for genuinely externally-triggerable cache poisoning.
 func (rule *CachePoisoningRule) checkCacheHierarchyExploitation(node *ast.Step, _ string) {
-	// Risk: External triggers (workflow_dispatch, schedule) combined with push to default branch
-	// Attackers can trigger workflow_dispatch to write poisoned cache, which PRs will read
+	// Risk: External triggers (workflow_dispatch, schedule) combined with push to default branch.
+	// A collaborator with existing write access can trigger workflow_dispatch/schedule runs to
+	// write a poisoned cache that all PRs will read.
 	if rule.hasExternalTrigger && rule.hasPushToDefaultBranch {
 		rule.Errorf(
 			node.Pos,
-			"cache hierarchy exploitation risk: workflow with external triggers (%s) and push to default branch "+
-				"can be exploited to poison caches. Attacker can trigger workflow_dispatch/schedule to write "+
-				"malicious cache that all PRs will read. Consider using PR-scoped cache keys or separate workflows",
+			"cache hierarchy exploitation risk (medium): workflow with external triggers (%s) and push to default branch "+
+				"can be exploited to poison caches. A collaborator with write access (able to trigger "+
+				"workflow_dispatch/schedule) can write malicious cache that all PRs will read. "+
+				"Consider using PR-scoped cache keys or separate workflows",
 			strings.Join(rule.workflowTriggers, ", "),
 		)
 		return
@@ -2394,8 +2407,8 @@ func (rule *CachePoisoningRule) checkCacheHierarchyExploitation(node *ast.Step, 
 		if !hasPushTrigger {
 			rule.Errorf(
 				node.Pos,
-				"cache hierarchy exploitation risk: workflow with external trigger (%s) writes to default branch cache. "+
-					"Attackers can exploit this to poison caches read by all PRs. "+
+				"cache hierarchy exploitation risk (medium): workflow with external trigger (%s) writes to default branch cache. "+
+					"A collaborator with write access can exploit this to poison caches read by all PRs. "+
 					"Consider using immutable cache keys with github.sha",
 				strings.Join(rule.workflowTriggers, ", "),
 			)
