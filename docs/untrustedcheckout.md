@@ -232,6 +232,10 @@ The rule has very few false positives because:
    - `ref: ${{ github.sha }}` (base branch - safe)
    - `ref: main` (literal branch names - safe)
    - `pull_request` trigger (no privileges - safe)
+   - `ref: ${{ inputs.* }}` on a `workflow_call` trigger (a reusable-workflow
+     input declared by the callee, not context auto-populated from an
+     untrusted event — see [reusable-workflow-taint](./reusableworkflowtaint.md)
+     for caller-aware analysis of these inputs)
 
 ### References
 

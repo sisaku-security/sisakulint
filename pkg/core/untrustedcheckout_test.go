@@ -165,6 +165,34 @@ jobs:
 			errMsg:  "checking out untrusted code from pull request",
 		},
 		{
+			// Regression test: a reusable workflow that checks out a caller-supplied
+			// `ref` input (e.g. `ref: ${{ inputs.ref }}`) must not be flagged just
+			// because its only trigger is workflow_call. Unlike
+			// github.event.pull_request.head.sha, inputs.* is not automatically
+			// populated from an untrusted event — whether it carries untrusted data
+			// depends entirely on what real callers pass, which is
+			// reusable-workflow-taint's responsibility to analyze with caller
+			// context, not this same-file heuristic.
+			name: "Safe: workflow_call checkout of caller-supplied inputs.ref",
+			yaml: `
+name: Test
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+`,
+			wantErr: false,
+		},
+		{
 			name: "Safe: Multiple triggers with only safe ones",
 			yaml: `
 name: Test
