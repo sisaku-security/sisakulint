@@ -652,6 +652,8 @@ Consider using PR-scoped cache keys or separate workflows [cache-poisoning]
    key: build-${{ runner.os }}-${{ github.sha }}
    ```
 
+> **Suppression note**: When the cache step's `key` already contains an immutable unique identifier (`github.sha`, `github.run_id`, `github.run_number`, or `github.run_attempt`), the hierarchy exploitation report is suppressed. With a run-unique key component, an external-trigger execution cannot pre-compute the key, so pre-poisoning the default branch cache is not possible — the finding would be a false positive.
+
 2. **Separate workflows**: Use different workflows for external triggers and PR builds
 
 3. **Restrict workflow_dispatch**: Limit who can trigger workflows manually
