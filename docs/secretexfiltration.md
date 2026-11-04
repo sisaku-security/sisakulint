@@ -179,6 +179,7 @@ mentioned in a header, request body, or attacker-controlled suffix such as
 `api.github.com.evil.com` is not allowlisted.
 
 - GitHub: `api.github.com`, `github.com`, `githubusercontent.com`
+- Gitee (GitLab-style mirror/API host): `gitee.com/api` (official Gitee API v5 endpoint; common for release-mirror-sync workflows)
 - Package Registries: `registry.npmjs.org`, `pypi.org`, `rubygems.org`, `crates.io`, `nuget.org`
 - Container Registries: `ghcr.io`, `docker.io`, `gcr.io`, `ecr.aws`, `azurecr.io`
 - CI/CD Services: `codecov.io`, `coveralls.io`, `circleci.com`, `travis-ci.com`

