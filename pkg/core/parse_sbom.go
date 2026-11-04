@@ -690,8 +690,13 @@ func (project *parser) parseEnvironment(pos *ast.Position, node *yaml.Node) *ast
 				nameisfound = true
 			case "url":
 				ret.URL = project.parseString(keyvalue.val, false)
+			case "deployment":
+				// ジョブが環境シークレットと変数を使用できるようにしながら
+				// デプロイメントレコードを作成しないようにするには、false を設定します。
+				// * https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/control-deployments#using-environments-without-deployments
+				ret.Deployment = project.parseBool(keyvalue.val)
 			default:
-				project.unexpectedKey(keyvalue.key, "environment", []string{"name", "url"})
+				project.unexpectedKey(keyvalue.key, "environment", []string{"name", "url", "deployment"})
 			}
 		}
 		if !nameisfound {
