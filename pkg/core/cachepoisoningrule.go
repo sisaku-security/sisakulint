@@ -32,7 +32,7 @@ type CachePoisoningRule struct {
 	isReleaseWorkflow      bool
 	isPullRequestEvent     bool
 	hasPushToDefaultBranch bool
-	hasExternalTrigger     bool // workflow_dispatch, schedule, repository_dispatch
+	hasExternalTrigger     bool // schedule, repository_dispatch (see checkCacheHierarchyExploitation for why workflow_dispatch is excluded)
 	cacheActionCount       int
 	workflowTriggers       []string
 	directCacheDirWrites   []directCacheDirectoryWriteInfo
@@ -359,9 +359,14 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 					rule.hasPushToDefaultBranch = rule.isPushToDefaultBranch(e)
 				}
 
-				// Check for external triggers (can be exploited for cache hierarchy attacks)
-				if triggerName == SubWorkflowDispatch || triggerName == SubSchedule ||
-					triggerName == SubRepositoryDispatch {
+				// Check for external triggers (can be exploited for cache hierarchy attacks).
+				// workflow_dispatch is intentionally excluded: unlike schedule (time-based,
+				// no triggering actor at all) and repository_dispatch (meant for external
+				// system integration via a PAT), workflow_dispatch can only be invoked by an
+				// authenticated actor who already has write/Actions-run access to the repo.
+				// An anonymous fork PR author cannot trigger it, so treating it as an
+				// attacker-controllable path overstates the risk (see sisakulint#571).
+				if triggerName == SubSchedule || triggerName == SubRepositoryDispatch {
 					rule.hasExternalTrigger = true
 				}
 			}
@@ -370,7 +375,6 @@ func (rule *CachePoisoningRule) VisitWorkflowPre(node *ast.Workflow) error {
 			rule.hasExternalTrigger = true
 		case *ast.WorkflowDispatchEvent:
 			rule.workflowTriggers = append(rule.workflowTriggers, SubWorkflowDispatch)
-			rule.hasExternalTrigger = true
 		case *ast.RepositoryDispatchEvent:
 			rule.workflowTriggers = append(rule.workflowTriggers, SubRepositoryDispatch)
 			rule.hasExternalTrigger = true
@@ -2367,14 +2371,19 @@ func (rule *CachePoisoningRule) checkCacheInputForUntrustedExprs(node *ast.Step,
 // checkCacheHierarchyExploitation detects cache hierarchy exploitation vulnerabilities
 // GitHub Actions caches are scoped by branch - PRs can read caches from their base branch.
 // If an attacker can write to the default branch's cache, they can poison all downstream PRs.
+//
+// Note: workflow_dispatch is deliberately not treated as an "external"/attacker-controllable
+// trigger here (see rule.hasExternalTrigger). It requires an actor who already has write access
+// to the repository, so it does not represent a path an unprivileged fork PR author can exploit.
 func (rule *CachePoisoningRule) checkCacheHierarchyExploitation(node *ast.Step, _ string) {
-	// Risk: External triggers (workflow_dispatch, schedule) combined with push to default branch
-	// Attackers can trigger workflow_dispatch to write poisoned cache, which PRs will read
+	// Risk: External triggers (schedule, repository_dispatch) combined with push to default branch
+	// Attackers can trigger repository_dispatch (e.g. via a leaked PAT) to write poisoned cache,
+	// or a scheduled run can pick up cache poisoned via a separate push, which PRs will then read.
 	if rule.hasExternalTrigger && rule.hasPushToDefaultBranch {
 		rule.Errorf(
 			node.Pos,
 			"cache hierarchy exploitation risk: workflow with external triggers (%s) and push to default branch "+
-				"can be exploited to poison caches. Attacker can trigger workflow_dispatch/schedule to write "+
+				"can be exploited to poison caches. Attacker can trigger repository_dispatch/schedule to write "+
 				"malicious cache that all PRs will read. Consider using PR-scoped cache keys or separate workflows",
 			strings.Join(rule.workflowTriggers, ", "),
 		)
