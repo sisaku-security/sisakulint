@@ -17,7 +17,17 @@ type ShellVarUsage struct {
 	InEval     bool
 	InShellCmd bool
 	InCmdSubst bool
-	Context    string
+	// InAssignment marks a usage inside the right-hand side of an assignment
+	// (name=$var or name=$var cmd). The shell performs no word splitting or
+	// glob expansion there, so an unquoted use is not an injection vector on
+	// its own. Array compound assignments (name=($var)) are intentionally NOT
+	// marked: element words are expanded and split like normal arguments.
+	InAssignment bool
+	// InHeredocBody marks a usage inside the body of a here-document
+	// (<<DELIM ... DELIM). Bodies are expanded without word splitting or glob
+	// expansion, so an unquoted use is not an injection vector on its own.
+	InHeredocBody bool
+	Context       string
 }
 
 type VarArgUsage struct {
@@ -60,9 +70,11 @@ func (p *ShellParser) ParseError() error {
 
 // walkContext tracks the current context during AST traversal.
 type walkContext struct {
-	inEval     bool
-	inShellCmd bool
-	inCmdSubst bool
+	inEval        bool
+	inShellCmd    bool
+	inCmdSubst    bool
+	inAssignment  bool
+	inHeredocBody bool
 }
 
 func (p *ShellParser) FindEnvVarUsages(varName string) []ShellVarUsage {
@@ -110,9 +122,13 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 		}
 
 	case *syntax.Assign:
+		assignCtx := *ctx
+		assignCtx.inAssignment = true
 		if x.Value != nil {
-			p.walkNode(x.Value, varName, ctx, usages)
+			p.walkNode(x.Value, varName, &assignCtx, usages)
 		}
+		// Array compound assignments (name=($var)) DO perform word splitting
+		// and glob expansion on elements, so they keep the parent context.
 		if x.Array != nil {
 			p.walkNode(x.Array, varName, ctx, usages)
 		}
@@ -133,14 +149,16 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 	case *syntax.ParamExp:
 		if x.Param != nil && x.Param.Value == varName {
 			usage := ShellVarUsage{
-				VarName:    varName,
-				StartPos:   int(x.Pos().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
-				EndPos:     int(x.End().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
-				IsQuoted:   p.isParamExpQuoted(x),
-				InEval:     ctx.inEval,
-				InShellCmd: ctx.inShellCmd,
-				InCmdSubst: ctx.inCmdSubst,
-				Context:    p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+				VarName:       varName,
+				StartPos:      int(x.Pos().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+				EndPos:        int(x.End().Offset()), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
+				IsQuoted:      p.isParamExpQuoted(x),
+				InEval:        ctx.inEval,
+				InShellCmd:    ctx.inShellCmd,
+				InCmdSubst:    ctx.inCmdSubst,
+				InAssignment:  ctx.inAssignment,
+				InHeredocBody: ctx.inHeredocBody,
+				Context:       p.getContextFromPos(int(x.Pos().Offset()), int(x.End().Offset())), //nolint:gosec // byte offset of workflow shell scripts cannot realistically overflow int
 			}
 			*usages = append(*usages, usage)
 		}
@@ -152,18 +170,23 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 	case *syntax.CmdSubst:
 		newCtx := *ctx
 		newCtx.inCmdSubst = true
+		newCtx.inAssignment = false // inner commands are a normal parsing context
 		for _, stmt := range x.Stmts {
 			p.walkNode(stmt, varName, &newCtx, usages)
 		}
 
 	case *syntax.ArithmExp:
+		newCtx := *ctx
+		newCtx.inAssignment = false // arithmetic evaluation re-parses its content
 		if x.X != nil {
-			p.walkArithm(x.X, varName, ctx, usages)
+			p.walkArithm(x.X, varName, &newCtx, usages)
 		}
 
 	case *syntax.ProcSubst:
+		newCtx := *ctx
+		newCtx.inAssignment = false // inner commands are a normal parsing context
 		for _, stmt := range x.Stmts {
-			p.walkNode(stmt, varName, ctx, usages)
+			p.walkNode(stmt, varName, &newCtx, usages)
 		}
 
 	case *syntax.BinaryCmd:
@@ -243,11 +266,16 @@ func (p *ShellParser) walkNode(node syntax.Node, varName string, ctx *walkContex
 
 	case *syntax.Redirect:
 		if x.Word != nil {
+			// The redirection word (e.g. a here-doc delimiter or file name)
+			// keeps the parent context: unquoted words here can still glob.
 			p.walkNode(x.Word, varName, ctx, usages)
 		}
-		// Handle heredoc content
+		// Handle heredoc content. Bodies are expanded without word splitting
+		// or glob expansion, so mark the context to avoid false positives.
 		if x.Hdoc != nil {
-			p.walkNode(x.Hdoc, varName, ctx, usages)
+			hdocCtx := *ctx
+			hdocCtx.inHeredocBody = true
+			p.walkNode(x.Hdoc, varName, &hdocCtx, usages)
 		}
 
 	case *syntax.ArrayExpr:
@@ -431,8 +459,10 @@ func (p *ShellParser) getContextFromPos(start, end int) string {
 }
 
 func (u *ShellVarUsage) IsUnsafeUsage() bool {
-	// Unquoted variables are always unsafe (word splitting and glob expansion)
-	if !u.IsQuoted {
+	// Unquoted variables are unsafe (word splitting and glob expansion) --
+	// except in contexts where the shell performs neither: assignment RHS
+	// values and here-document bodies.
+	if !u.IsQuoted && !u.InAssignment && !u.InHeredocBody {
 		return true
 	}
 	// Variables inside eval are unsafe even when quoted (eval parses the value again)
