@@ -3,6 +3,7 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sisaku-security/sisakulint/pkg/ast"
@@ -396,6 +397,96 @@ func TestDependabotEcosystem_RenovateEnabledManagersDoesNotSkipUnlistedEcosystem
 	errs := runEcosystemRule(t, rule)
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 npm warning (enabledManagers narrowed renovate to github-actions only), got %d: %v", len(errs), errs)
+	}
+}
+
+func TestDependabotEcosystem_CommentedOutEntryReportedAsInfo(t *testing.T) {
+	t.Parallel()
+
+	// gomod is used but its package-ecosystem entry is commented out in the dependabot
+	// config. The maintainer has deliberately disabled automated updates (e.g. Tailscale-
+	// style release-gated dependency pulls), so the rule must surface this at info level
+	// rather than as a Medium misconfiguration.
+	dependabot := `version: 2
+updates:
+  ## Disabled between releases.
+  # - package-ecosystem: "gomod"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "daily"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "go.sum")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 info finding, got %d: %v", len(errs), errs)
+	}
+	if errs[0].Type != "dependabot-ecosystem" {
+		t.Errorf("expected type dependabot-ecosystem, got %s", errs[0].Type)
+	}
+	if !strings.Contains(errs[0].Description, "[info]") {
+		t.Errorf("expected [info] prefix for commented-out entry, got: %s", errs[0].Description)
+	}
+	if !strings.Contains(errs[0].Description, "commented out (disabled)") {
+		t.Errorf("expected commented-out wording, got: %s", errs[0].Description)
+	}
+}
+
+func TestDependabotEcosystem_CommentedOutSetupActionReportedAsInfo(t *testing.T) {
+	t.Parallel()
+
+	// A setup action implies gomod while the gomod entry is commented out: the finding
+	// should be info-level and anchored at the setup step, not deduped into the lockfile
+	// requirement or dropped.
+	dependabot := `version: 2
+updates:
+  # - package-ecosystem: "gomod"
+  - package-ecosystem: "github-actions"
+`
+	wfPath := writeEcosystemFixture(t, dependabot)
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	step := &ast.Step{
+		Exec: &ast.ExecAction{
+			Uses: &ast.String{Value: "actions/setup-go@v5", Pos: &ast.Position{Line: 7, Col: 9}},
+		},
+	}
+	errs := runEcosystemRule(t, rule, step)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 info finding, got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Description, "[info]") {
+		t.Errorf("expected [info] prefix, got: %s", errs[0].Description)
+	}
+	if errs[0].LineNumber != 7 {
+		t.Errorf("expected setup-action anchor at line 7, got line %d", errs[0].LineNumber)
+	}
+}
+
+func TestDependabotEcosystem_CommentedOtherEcosystemStillErrors(t *testing.T) {
+	t.Parallel()
+
+	// npm is commented out while go.sum is present: gomod has no entry at all and must
+	// remain a regular error; the commented-out npm entry must not suppress it.
+	dependabot := `version: 2
+updates:
+  # - package-ecosystem: "npm"
+  - package-ecosystem: "github-actions"
+`
+	wfPath := writeEcosystemFixture(t, dependabot, "go.sum")
+	rule := NewDependabotEcosystemRule(wfPath, false)
+
+	errs := runEcosystemRule(t, rule)
+	if len(errs) != 1 {
+		t.Fatalf("expected 1 error (gomod missing), got %d: %v", len(errs), errs)
+	}
+	if strings.Contains(errs[0].Description, "[info]") {
+		t.Errorf("expected a regular error for a genuinely missing ecosystem, got: %s", errs[0].Description)
 	}
 }
 

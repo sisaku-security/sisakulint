@@ -25,6 +25,11 @@ The `github-actions` ecosystem is intentionally out of scope here; it is handled
   `config:recommended`), the check is skipped entirely. Otherwise only the ecosystems Renovate
   actually manages (via `packageRules.matchManagers` or `enabledManagers`) are treated as covered;
   warnings for other ecosystems still surface.
+- **Commented-out Entries**: A `package-ecosystem` entry that exists only as a commented-out line in
+  the Dependabot config (e.g. `# - package-ecosystem: "gomod"`) is treated as a deliberate,
+  document-level decision to disable automated updates for that ecosystem. The finding is then
+  reported at **info** level (with an `[info]` message prefix) instead of as a warning, so an
+  intentional disable does not surface as noise while re-enabling stays discoverable.
 - **Precise Anchoring**: Setup-action findings are anchored at the offending step; lockfile findings
   are reported at the top of the workflow file. When the same ecosystem is implied by both signals,
   the finding is deduplicated and keeps the precise step anchor.
@@ -113,4 +118,8 @@ updates:
 - The Renovate skip is best-effort: a recognized broad preset skips the check globally; otherwise
   only ecosystems Renovate actually manages (matched via `packageRules.matchManagers` or
   `enabledManagers`) are treated as covered, and warnings for the rest still surface.
+- Commented-out-entry detection is textual: it recognizes `package-ecosystem` keys on commented
+  lines (with or without a leading list dash, quoted or unquoted values). A commented entry that is
+  stale (the maintainer forgot to re-enable it after a temporary disable) is only surfaced at info
+  level, so such cases remain visible but do not raise the alert severity.
 - The rule is diagnose-only and does not provide an auto-fix.
