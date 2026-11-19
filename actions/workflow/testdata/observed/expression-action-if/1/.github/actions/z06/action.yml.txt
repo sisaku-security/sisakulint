@@ -1,0 +1,9 @@
+name: z06
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "failure('x')"
+      run: echo ran
+    - shell: bash
+      run: echo after

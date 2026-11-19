@@ -1,0 +1,25 @@
+# situation: on issue_comment, a job runs only when the comment's body is
+#   read, and the input claude_args of claude-code-action allows the tool
+#   that the body names.
+# reason: the job's if lets the body be only the string read, ignoring the
+#   case of its letters; the attacker still chooses the case. The name of
+#   the tool of the agent is written with a capital letter (Read), and
+#   the author of this example has not checked whether the agent takes read as Read.
+# cause: the rule does not treat a value that the if of the job compares
+#   with such a string as written by the attacker.
+# attack-value: github.event.comment.body = "Read"
+# attack-run-behavior: the if passes, and claude_args becomes
+#   --allowedTools Read.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    if: github.event.comment.body == 'read'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "Triage the issue"
+          claude_args: --allowedTools ${{ github.event.comment.body }}

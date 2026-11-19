@@ -1,0 +1,20 @@
+# situation: on issues, a step ends with an error unless the issue's title
+#   is api.example.com or status.example.com, and then sends a request with
+#   curl and the secret DEPLOY_TOKEN to that host.
+# reason: no harm: the request goes only to a host the workflow lists.
+# cause: the rule does not read the flow of the script.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: the step ends with an error before curl, and no
+#   request is sent.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      HOST: ${{ github.event.issue.title }}
+    steps:
+      - run: |
+          case "$HOST" in api.example.com|status.example.com) ;; *) exit 1 ;; esac
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"

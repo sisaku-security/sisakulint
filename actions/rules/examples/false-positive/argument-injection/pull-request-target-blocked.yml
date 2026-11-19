@@ -1,0 +1,29 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   the name of the head branch of the pull request to tar after the file
+#   names, through env and inside quotes.
+# reason: the Actions policies of the repository block the runs of the
+#   workflow on pull_request_target: the default policy that GitHub adds to a
+#   public repository without an applicable event policy, from the time when
+#   GitHub enforces the default policy on the repository, or an event policy
+#   whose list of allowed events does not have pull_request_target. GitHub's
+#   documents say that GitHub evaluates the policies before a run, and that a
+#   run that a policy does not allow fails with an error; the documents do not
+#   say whether a job of such a run starts before the run fails, and the rule
+#   assumes that no job starts.
+# cause: the rule assumes that a run on pull_request_target starts, unless a
+#   file of facts or --fact says that the Actions policies block the runs
+#   (repo.pull-request-target-allowed is assumed true, the worst case).
+# attack-value: github.head_ref = "--to-command=sh${IFS}-c${IFS}id"
+# attack-run-behavior: the pull request of the attacker triggers
+#   pull_request_target, and the run fails with an error, and no job of the
+#   run starts (the assumption of the reason), so tar never runs.
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: tar -xf archive.tar notes.txt "$HEAD_REF"

@@ -1,0 +1,24 @@
+# situation: on status, the job runs only if the login of the account of the
+#   author of the commit of the status is in the string 'alice bob', and
+#   deploys with a secret.
+# reason: a todo (the same file): when an outside CI writes a status for a
+#   commit of a pull request from a fork, the run of status starts on the
+#   default branch with the commit in the payload (seen on GitHub), and the
+#   actor of the run is the app of the CI.
+# cause: the rule reads the login of an account from the attacker run table,
+#   which has no rows of status, check_suite and check_run.
+# attack-value: github.event.commit.author.login = "ali"
+# attack-run-behavior: the attacker, with an account whose login is ali,
+#   writes a commit of a pull request from a fork; an outside CI writes a
+#   status for the commit, the run of status starts on the default branch,
+#   ali is a part of 'alice bob', so contains is true, and deploy.sh runs
+#   with the secret.
+on: status
+jobs:
+  deploy:
+    if: contains('alice bob', github.event.commit.author.login)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

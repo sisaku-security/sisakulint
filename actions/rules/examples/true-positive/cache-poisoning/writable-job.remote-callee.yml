@@ -1,0 +1,30 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/cache-poisoning-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   writable-job (writable-job.tanstack.yml) of the rule, with on:
+#   workflow_call in place of the on of writable-job.tanstack.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, the
+#   bundle-size workflow of the TanStack incident (2026-05-11) with
+#   cache-mode: write: pull_request_target checks out the merge of the pull
+#   request, a composite action of another repository sets up pnpm with
+#   actions/cache, and a build runs the pull request's code.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   cache-mode: write lets the job save to the cache of the default branch's
+#   scope on pull_request_target; the build runs the author's code, which
+#   changes the pnpm store that the post step of actions/cache saves under
+#   the key the release workflow looks up.
+# attack-value: the file packages/history/vite_setup.mjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches refs/pull/<n>/merge, the build
+#   runs the pull request's code, which writes into the pnpm store; at the
+#   end of the job actions/cache saves the store to the default branch's
+#   scope, and the release workflow restores it and runs it.
+on:
+  pull_request_target:
+    paths: ['packages/**']
+permissions:
+  contents: read
+jobs:
+  c:
+    uses: example-org/cache-poisoning-remote/.github/workflows/w.yml@v1
+    secrets: inherit

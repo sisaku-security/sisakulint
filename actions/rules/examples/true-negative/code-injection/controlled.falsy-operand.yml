@@ -1,0 +1,15 @@
+# situation: on a push, a step writes a word into a run by
+#   ${{ github.event.head_commit.message && 'changed' }}.
+# reason: the runner gives the first operand of && only when it is false,
+#   null, 0, NaN or the empty string, and the last operand otherwise; so the
+#   script gets the empty string or the word changed, and never the text
+#   of the message.
+# attack-value: github.event.head_commit.message = "\"; echo PWNED; echo \""
+# attack-run-behavior: the message is not empty, so the runner writes
+#   changed, the script becomes echo "changed", and echo prints changed.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.head_commit.message && 'changed' }}"

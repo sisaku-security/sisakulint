@@ -1,0 +1,34 @@
+# situation: a run writes to $GITHUB_OUTPUT a version read out of a release
+#   API's body through a variable the script sets
+#   (oorabona/docker-containers#1549,
+#   https://github.com/oorabona/docker-containers/issues/1549); another
+#   writes the issue's title through a positional parameter of a function
+#   and an indirection the script sets.
+# reason: a todo (the same file): following the variables of the script
+#   would find it.
+# cause: the value goes through a variable the script sets, which the rule
+#   does not follow.
+# attack-value: github.event.issue.title = "1.2.3\ncurrent_tag=latest\nPWNED=1"
+# attack-run-behavior: the value is the version of
+#   oorabona/docker-containers#1549 with the line PWNED=1 added. f and ${!X}
+#   each echo the lines a=1.2.3, current_tag=latest and PWNED=1 to
+#   $GITHUB_OUTPUT, and the runner sets the outputs a, current_tag and PWNED;
+#   the same lines as the tag_name of the release make the first step write
+#   version=1.2.3 and the same two outputs.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          version=$(curl -s https://api.example/releases/latest | jq -r .tag_name)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # a positional parameter of a function the script calls with the value
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          f() { echo "a=$1" >> "$GITHUB_OUTPUT"; }
+          f "$T"
+          # the indirection names T through X, which the script sets
+          X=T
+          echo "a=${!X}" >> "$GITHUB_OUTPUT"

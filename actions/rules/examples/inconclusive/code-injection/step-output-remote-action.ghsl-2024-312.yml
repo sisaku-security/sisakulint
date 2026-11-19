@@ -1,0 +1,38 @@
+# situation: on workflow_dispatch, a step uses octokit/request-action to get
+#   the open issues of the repository from the API, and the next step writes
+#   the output data into its run by ${{ }} inside single quotes. This is
+#   cleanUpOpenedIssues.yml of Azure/api-management-developer-portal (commit
+#   078b6040cfd5cf254e7f83f91212a85300afbfc0, lines 1-20); the steps after it
+#   are left out.
+# reason: the output is what octokit/request-action sets, the response of the
+#   API, which holds the titles and the bodies of the open issues, which anyone
+#   who may open an issue writes; the action.yml of the action is not among the
+#   files that the linter reads, so whether an attacker controls the output is
+#   not known. A maintainer starts the run, and the attacker's issue is already
+#   open then.
+# cause: the rule does not yet ask for the action.yml of another repository as
+#   a fact, and does not read what the API returns.
+# attack-value: steps.issues.outputs.data = "x'$(echo${IFS}PWNED>/proc/$$/fd/1)'x"
+# attack-run-behavior: the attacker opens an issue whose title holds the
+#   value; when a maintainer starts the workflow, the script becomes echo
+#   'x'$(echo PWNED>/proc/$$/fd/1)'x' > issues.json, and bash runs the
+#   command substitution outside the quotes, which prints PWNED, with the
+#   token of the job and secrets.GITHUBACTIONS_TOKEN in the environment of the
+#   step before.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-312_Azure_API_Management_Developer_Portal/
+on:
+  workflow_dispatch:
+jobs:
+  fetch-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch open issues
+        id: issues
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/Azure/api-management-developer-portal/issues?state=open
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUBACTIONS_TOKEN }}
+      - name: Write issues to file
+        run: |
+          echo '${{ steps.issues.outputs.data }}' > issues.json

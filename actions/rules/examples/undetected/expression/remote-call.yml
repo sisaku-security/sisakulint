@@ -1,0 +1,16 @@
+# situation: a job calls a reusable workflow of another repository and
+#   gives an input a configuration variable.
+# reason: when the input is of the type boolean, GitHub does not start the
+#   job, since the value is a string.
+# cause: the run has no answer of workflow.definition for the workflow, and
+#   no one was asked (no --online, no answer in --facts); the rule reads the
+#   types of the inputs of a called workflow only when the file of the
+#   called workflow is among the files given to the linter, or is that
+#   answer.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    uses: octo-org/shared/.github/workflows/deploy.yml@0123456789abcdef0123456789abcdef01234567
+    with:
+      dry-run: ${{ vars.DRY_RUN }}

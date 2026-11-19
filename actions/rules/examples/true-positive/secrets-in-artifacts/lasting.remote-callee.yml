@@ -1,0 +1,24 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secrets-in-artifacts-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   lasting (lasting.yml) of the rule, with on: workflow_call in place of
+#   the on of lasting.yml. The job passes its secrets with secrets: inherit.
+#   In the true positive, google-github-actions/auth writes the service
+#   account key of secrets.GCP_KEY to gha-creds-*.json in the workspace, and
+#   actions/upload-artifact uploads the workspace.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: path:
+#   . puts gha-creds-*.json in the artifact, and a service account key works
+#   until someone deletes it in Google Cloud, not only while the job runs.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the
+#   service account key from gha-creds-*.json.
+# attack-run-behavior: google-github-actions/auth writes the service account
+#   key of secrets.GCP_KEY to gha-creds-<hex>.json at the top of the
+#   workspace, and the upload of path . puts it in the artifact; the key
+#   keeps working after the run until someone deletes it in Google Cloud.
+on: push
+jobs:
+  c:
+    uses: example-org/secrets-in-artifacts-remote/.github/workflows/w.yml@v1
+    secrets: inherit

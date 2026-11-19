@@ -1,0 +1,22 @@
+# situation: on issue_comment, a job runs only when the comment's body is
+#   notes.txt, and a step passes env.NAME, which holds the body, to tar as
+#   the name of a file to extract.
+# reason: == of a GitHub Actions expression ignores the case of letters, so the if of
+#   the job lets the body be only notes.txt, with the case of each letter
+#   chosen by the attacker; the word that
+#   tar gets never starts with -, and tar reads the word as a name of a
+#   file, not as an option.
+# attack-value: github.event.comment.body = "--to-command=echo PWNED"
+# attack-run-behavior: the if of the job is false for this body, so the
+#   job does not run, and nothing is printed.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    if: github.event.comment.body == 'notes.txt'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NAME: ${{ github.event.comment.body }}
+        run: tar -xf archive.tar "$NAME"

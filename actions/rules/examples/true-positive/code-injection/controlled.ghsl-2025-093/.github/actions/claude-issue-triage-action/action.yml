@@ -1,0 +1,12 @@
+name: Claude Issue Triage
+description: triage an issue with Claude Code
+inputs:
+  anthropic_api_key:
+    description: the key of the Anthropic API
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./called
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}

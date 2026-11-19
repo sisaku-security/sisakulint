@@ -1,0 +1,45 @@
+name: argument-options-probe
+on:
+  push:
+jobs:
+  options:
+    runs-on: ubuntu-latest
+    steps:
+      - name: versions
+        run: |
+          tar --version | head -1; sed --version | head -1; make --version | head -1; awk --version 2>&1 | head -1; git --version
+      - name: tar --use-compress-program in one quoted word
+        env:
+          V: --use-compress-program=sh -c "echo MARK-TAR-COMPRESS >&2; cat"
+        run: |
+          echo a > f && tar -cf a.tar f
+          tar -xf a.tar "$V" || true
+      - name: tar --to-command in one quoted word
+        env:
+          V: --to-command=echo MARK-TAR-TOCOMMAND >&2
+        run: |
+          echo a > f && tar -cf a.tar f
+          tar -xf a.tar "$V" || true
+      - name: sed --expression in one quoted word, after the script
+        env:
+          V: --expression=1e echo MARK-SED >&2
+        run: |
+          printf 'x\n' > s.txt
+          sed -n p "$V" s.txt || true
+      - name: make --eval in one quoted word
+        env:
+          V: --eval=$(shell echo MARK-MAKE >&2)
+        run: |
+          printf 'all:\n\t@true\n' > Makefile
+          make "$V" || true
+      - name: awk reads no option after the program
+        env:
+          V: --source=BEGIN{system("echo MARK-AWK >&2")}
+        run: |
+          printf 'x\n' > s.txt
+          awk '{print}' "$V" s.txt || true
+      - name: git ls-remote over https does not run upload-pack
+        env:
+          V: --upload-pack=echo MARK-GIT-HTTPS >&2;false
+        run: |
+          git ls-remote "$V" https://github.com/actions/checkout 2>&1 | head -3 || true

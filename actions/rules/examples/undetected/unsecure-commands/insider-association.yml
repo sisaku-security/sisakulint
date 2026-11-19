@@ -1,0 +1,32 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER prints the issue's body, with
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS true in the env of the job.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack: a member whose role is read opens an issue whose body is
+#   ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: on an issue a member opens, the job runs, the runner
+#   sets BASH_ENV, and the bash of the next step runs id. On an issue whose
+#   author_association is NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or
+#   CONTRIBUTOR, the if skips the job.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY"
+      - run: echo next

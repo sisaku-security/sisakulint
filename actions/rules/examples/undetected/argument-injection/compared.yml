@@ -1,0 +1,19 @@
+# situation: on issues, a step passes to tar after the file names the
+#   issue's title and body compared, negated, or given to contains,
+#   startsWith, endsWith or hashFiles, by ${{ }} inside quotes.
+# reason: no added gain: what is written out is a bool or a hash.
+# cause: the rule reads the value of such an expression as not the
+#   attacker's text.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: each expression gives true or false, and hashFiles
+#   gives a hash or an empty string, so no word begins with -, and tar takes
+#   them as names of files to extract.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >-
+          tar -xf archive.tar notes.txt "${{ github.event.issue.title == 'x' }}" "${{ !github.event.issue.body }}"
+          "${{ contains(github.event.issue.title, 'x') }}" "${{ startsWith(github.event.issue.title, 'x') }}"
+          "${{ endsWith(github.event.issue.title, 'x') }}" "${{ hashFiles(github.event.issue.title) }}"

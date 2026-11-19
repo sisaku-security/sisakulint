@@ -1,0 +1,17 @@
+# situation: a step prints a workflow command whose name is in a variable,
+#   set-output.
+# reason: a todo (the same file): the runner reads ::set-output and adds a
+#   warning.
+# cause: the rule reads a name written in the text of the run, not the
+#   value of a variable.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: version
+        run: |
+          cmd=set-output
+          echo "::$cmd name=version::1.0.0"

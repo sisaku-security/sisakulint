@@ -1,0 +1,16 @@
+# situation: repo.action-list is * and !actions/checkout@V4, and a step uses
+#   actions/checkout@v4.
+# reason: git and the runner read v4 as another ref than V4, so the pattern
+#   !actions/checkout@V4 does not name the ref that the step runs, and the
+#   pattern * allows actions/checkout@v4.
+# cause: the rule compares a pattern with ! without case.
+# attack: the maintainer of an action that the repository did not list
+#   writes code that reads the secrets of the job.
+# attack-run-behavior: the step runs actions/checkout at v4, which the
+#   repository listed, so no code of that maintainer runs.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4

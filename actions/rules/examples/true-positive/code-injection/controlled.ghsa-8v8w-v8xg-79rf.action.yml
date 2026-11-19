@@ -1,0 +1,31 @@
+# situation: a composite action with no caller among the files that the linter
+#   reads, whose step writes the name of the head branch into run by ${{ }}.
+#   The step is the step branch of action.yml of tj-actions/branch-names
+#   v7.0.6 (commit ab304d8562e2f137165e1d930e6d22d431189074, lines 39-44 and
+#   58); the lines for the base ref and the ref, the lines that strip refs/heads/
+#   and the branch for ::set-output are left out.
+# reason: with no caller among the files that the linter reads, the rule reads
+#   the action on every event an attacker triggers, pull_request_target among
+#   the events. On pull_request_target, the author of a pull request names its
+#   head branch, which github.event.pull_request.head.ref and github.head_ref
+#   give, and the runner puts the name into the script before bash reads the
+#   script, so a $( ) in the name runs as a command.
+# attack-value: github.head_ref = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: the author of a pull request from a fork names its head
+#   branch a$(echo${IFS}PWNED) (a name of a branch has no space, and ${IFS}
+#   stands for one). The step runs printf "%q" "a$(echo${IFS}PWNED)", and bash
+#   runs the command substitution in the double quotes before printf starts,
+#   which prints PWNED.
+# advisory: https://github.com/advisories/GHSA-8v8w-v8xg-79rf
+name: Branch Names
+description: a step that writes the name of the head branch into run
+runs:
+  using: composite
+  steps:
+    - id: branch
+      run: |
+        if [[ "${{ github.ref }}" != "refs/tags/"* ]]; then
+          HEAD_REF=$(printf "%q" "${{ github.event.pull_request.head.ref || github.head_ref }}")
+          echo "head_ref_branch=$(eval printf "%s" "$HEAD_REF")" >> "$GITHUB_OUTPUT"
+        fi
+      shell: bash

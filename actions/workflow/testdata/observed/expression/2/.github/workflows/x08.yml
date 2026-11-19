@@ -1,0 +1,7 @@
+name: x08
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ contains('a', 'b', 'c') }}"

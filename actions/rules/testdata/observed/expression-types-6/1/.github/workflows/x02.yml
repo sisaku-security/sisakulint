@@ -1,0 +1,8 @@
+name: x02
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ format('{0}', 'a') }}
+    steps:
+      - run: echo ok

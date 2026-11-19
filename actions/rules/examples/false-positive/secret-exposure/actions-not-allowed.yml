@@ -1,0 +1,33 @@
+# situation: the workflow of the true positive all-secrets (all-secrets.yml)
+#   of the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on
+#   pull_request_target, a job passes toJSON(secrets) to the env of a step
+#   that runs a third-party action; the action needs NPM_TOKEN only. The
+#   repository has other secrets too, such as a deploy key, that no job
+#   running the action needs.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: the maintainer of some/deploy-action, or one who took over the
+#   account of the maintainer, moves the tag v1 to code that reads the env
+#   of the step and the memory of the runner and sends the secrets out.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: pull_request_target
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/deploy-action@v1
+        env:
+          ALL: ${{ toJSON(secrets) }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

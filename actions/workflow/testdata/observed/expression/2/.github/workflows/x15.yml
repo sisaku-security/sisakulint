@@ -1,0 +1,11 @@
+name: x15
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    snapshot:
+      image-name: probe-image
+      if: ${{ steps.a.outcome == 'success' }}
+    steps:
+      - id: a
+        run: echo ok

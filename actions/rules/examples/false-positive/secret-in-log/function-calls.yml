@@ -1,0 +1,25 @@
+# situation: on push, a function prints its argument; a step calls the
+#   function with four characters of the secret DEPLOY_TOKEN and sends the
+#   output of that call to a file, and calls the function again with a
+#   literal.
+# reason: the call that carries the four characters writes to out.txt, not
+#   to the log; the log has the literal alone.
+# cause: the rule reads the body of the function with the arguments of
+#   every call, and takes the body as printing because one call prints. The
+#   rule also compares a ::add-mask:: with the body by the place in the
+#   text, not by the order of the calls.
+# attack: one who may read the run's log opens the log to read the four
+#   characters.
+# attack-run-behavior: the step prints "safe" alone.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          h() { echo "$1"; }
+          h "${DEPLOY_TOKEN:0:4}" > out.txt
+          h safe

@@ -1,0 +1,10 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}
+          configuration-path: ${{ vars.LABELER_CONFIG }}

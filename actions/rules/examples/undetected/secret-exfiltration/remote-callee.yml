@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secret-exfiltration-unanswered, whose content
+#   is the workflow of the true positive untrusted-destination
+#   (untrusted-destination.arithmetic.yml) of the rule, with on:
+#   workflow_call in place of the on of
+#   untrusted-destination.arithmetic.yml. The linter has no answer of the
+#   fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/secret-exfiltration-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

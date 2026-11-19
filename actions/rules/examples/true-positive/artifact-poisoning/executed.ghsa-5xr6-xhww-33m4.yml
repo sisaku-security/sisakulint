@@ -1,0 +1,24 @@
+# situation: on push, a job downloads the artifact build.exe of the latest
+#   run of build.yml with dawidd6/action-download-artifact v3 and runs
+#   ./build.exe. This is the form that the advisory describes ("Repository
+#   alice/foo runs publish.yml, which uses action-download-artifact@v5 to
+#   retrieve the latest build.exe from build.yml"); the tag v5 now points to
+#   a commit that leaves out the runs of forks by default, so this example
+#   uses v3, which looks for the artifact in the runs of forks.
+# reason: the latest run of build.yml can be a run of a pull request from a
+#   fork, whose author writes build.exe.
+# attack-value: the file build.exe of the artifact build.exe = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the action takes build.exe from the run of the pull
+#   request, and the job runs it, which prints PWNED.
+# advisory: https://github.com/advisories/GHSA-5xr6-xhww-33m4
+on: push
+permissions: {actions: read}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: build.yml
+          name: build.exe
+      - run: ./build.exe

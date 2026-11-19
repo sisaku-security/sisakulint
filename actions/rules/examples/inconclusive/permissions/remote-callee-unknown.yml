@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/permissions-unknown, whose content is the
+#   workflow of the true positive write-all (write-all.yml) of the rule,
+#   with on: workflow_call in place of the on of write-all.yml. The linter
+#   asked the fact workflow.definition for the reusable workflow and got no
+#   answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: actions/checkout writes the token into .git/config as
+#   an extraheader; npm ci runs the package's install script, which reads it
+#   there, and the token it sends writes every scope until the job ends.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/permissions-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

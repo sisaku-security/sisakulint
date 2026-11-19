@@ -1,0 +1,25 @@
+# situation: on issues opened, the env of the step p has the name T=X
+#   with the title of the issue, the step p prints $T, and the release
+#   step writes the output tag of the step p into its script.
+# reason: a todo (the same file): the runner makes the variable T, whose
+#   value is X= and the title, so the printed value holds the title.
+# cause: the rule reads the name T=X as written, and no variable of that
+#   name is printed.
+# attack: the attacker writes x ##[set-output name=tag;]$(id) in the
+#   value.
+# attack-run-behavior: the step prints the value, the runner sets the
+#   output tag of the step to $(id), and the release step writes the
+#   output into its script and runs id.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          T=X: ${{ github.event.issue.title }}
+        run: echo "$T"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

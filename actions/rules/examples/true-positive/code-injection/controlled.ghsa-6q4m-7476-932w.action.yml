@@ -1,0 +1,38 @@
+# situation: a composite action with no caller among the files that the linter
+#   reads, whose step writes the name of a branch into run by ${{ }}. The step
+#   is the step get-github-ref-name of action.yml of
+#   rlespinasse/github-slug-action (commit
+#   a362e5fb42057a3a23a62218b050838f1bacca5d, the parent of the fix
+#   102b1a064a9b145e56556e22b18b19c624538d94, lines 60-68); the steps before
+#   and after it are left out.
+#   helpers/version/action.yml of home-assistant/actions (commit
+#   3516188c0268acb4d0b0a7a984f9668c348deca0, GHSL-2023-179) writes
+#   github.head_ref into [[ ! -z "…" ]] of its step publish the same way
+#   (line 104).
+# reason: with no caller among the files that the linter reads, the rule reads
+#   the action on every event an attacker triggers, pull_request_target among
+#   the events. On pull_request_target, the author of a pull request names its
+#   head branch, which github.head_ref gives, and the runner puts the name into
+#   the script before bash reads the script, so a $( ) in the name runs as a
+#   command.
+# attack-value: github.head_ref = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: the author of a pull request from a fork names its head
+#   branch a$(echo${IFS}PWNED) (a name of a branch has no space, and ${IFS}
+#   stands for one). The step runs refname="a$(echo${IFS}PWNED)", and bash runs
+#   the command substitution, which prints PWNED.
+# advisory: https://github.com/advisories/GHSA-6q4m-7476-932w
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-179_Home_Assistant/
+name: GitHub Slug Action
+description: a step that writes the name of a branch into run
+runs:
+  using: composite
+  steps:
+    - id: get-github-ref-name
+      run: |
+        refname="${{ github.head_ref || github.ref_name }}"
+        if [ -f "$GITHUB_OUTPUT" ]; then
+          echo "github-ref-name=${refname}" >> "$GITHUB_OUTPUT"
+        else
+          echo "::set-output name=github-ref-name::${refname}"
+        fi
+      shell: bash

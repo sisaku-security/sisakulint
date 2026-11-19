@@ -1,0 +1,13 @@
+# situation: the repository is a fork, whose .github/dependabot.yml (from
+#   the original repository) has an entry of package-ecosystem
+#   github-actions, and the fork has not turned version updates on.
+# reason: Dependabot version updates do not run on the fork, so no pull
+#   request updates the uses.
+# cause: whether the repository is a fork, and its setting, are not in the
+#   files the rule reads.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4

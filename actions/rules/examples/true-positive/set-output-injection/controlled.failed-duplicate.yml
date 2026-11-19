@@ -1,0 +1,24 @@
+# situation: on issues, the step p passes the title of the issue in the
+#   environment variable TITLE, runs exec >&4, where descriptor 4 is not
+#   open, goes on when the exec fails (|| true), and prints TITLE; the
+#   release step writes the output tag of the step p into its script.
+# reason: the exec fails, bash does not copy the
+#   descriptor 4 to the standard output, and the standard output still goes
+#   to the log; the step prints the title to the log.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the step prints the title, the runner sets the
+#   output tag to $(id), and the release step runs id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          exec >&4 || true
+          echo "issue: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

@@ -1,0 +1,42 @@
+# situation: on pull_request_target, actions/checkout v4.1.6 checks out the ref
+#   ${{ github.event_name == 'pull_request_target' &&
+#   format('refs/pull/{0}/merge', github.event.number) || '' }}, the merge
+#   commit of the pull request on that event, and later steps run the local
+#   action ./.github/workflows/actions/get-core-dependencies and npm run build
+#   of the checkout. This is pack-and-comment.yml of ionic-team/stencil (commit
+#   8a7d89a4d9b506673e7a73fea9f0ba04964727a2, lines 1-28); the comments and the
+#   steps after line 28 are left out. tech-debt-burndown.yml of the same commit
+#   checks out the same ref in three jobs.
+# reason: the rule does not evaluate the expression of the ref with the event
+#   of the run, so it does not know that the ref is refs/pull/<number>/merge
+#   on pull_request_target, the code that the author of the pull request
+#   writes.
+# cause: the rule reads a ref with an expression other than a value of the
+#   context as not known.
+# attack: the author of a pull request from a fork changes the action.yml of
+#   ./.github/workflows/actions/get-core-dependencies or package.json and opens
+#   the pull request.
+# attack-run-behavior: the checkout takes the merge commit with the author's
+#   files (v4.1.6 does not refuse the code of a fork), and the step Get Core
+#   Dependencies runs the author's action with the token of the job of the base
+#   repository.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-168_Stencil/
+on:
+  pull_request_target:
+    branches:
+      - '**'
+jobs:
+  pack:
+    name: Pack and Comment
+    runs-on: 'ubuntu-22.04'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.number) || '' }}
+          persist-credentials: false
+      - name: Get Core Dependencies
+        uses: ./.github/workflows/actions/get-core-dependencies
+      - name: Core Build
+        run: npm run build -- --ci
+        shell: bash

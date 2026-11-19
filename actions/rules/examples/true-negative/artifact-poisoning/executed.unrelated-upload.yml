@@ -1,0 +1,31 @@
+# situation: on pull_request_target, the job build checks out the pull
+#   request's head into pr and runs nothing of pr, writes the number of the
+#   pull request into number.txt and uploads number.txt; the job deploy,
+#   which lists build in its needs, downloads the artifact and runs ./run.sh.
+# reason: the artifact holds number.txt only, which a run step of build
+#   writes from the number that GitHub gives the pull request, and holds no
+#   file of pr nor a file that the code of pr made, so ./run.sh does not run
+#   what the author of the pull request wrote.
+# attack-value: the file run.sh in the pull request's head = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the checkout puts the head of the pull request in pr,
+#   and no step runs a file of pr; the upload takes number.txt only, so the
+#   download in deploy puts no run.sh of the pull request in the workspace.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+      - run: echo ${{ github.event.pull_request.number }} > number.txt
+      - uses: actions/upload-artifact@v4
+        with: {name: out, path: number.txt}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: out}
+      - run: ./run.sh

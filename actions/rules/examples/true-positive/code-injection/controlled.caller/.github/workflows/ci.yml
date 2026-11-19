@@ -1,0 +1,6 @@
+on: issues
+jobs:
+  c:
+    uses: ./.github/workflows/called.yml
+    with:
+      t: ${{ github.event.issue.title }}

@@ -1,0 +1,8 @@
+name: x08
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    environment: ${{ fromJSON('{"name":"e"}') }}
+    steps:
+      - run: echo ok

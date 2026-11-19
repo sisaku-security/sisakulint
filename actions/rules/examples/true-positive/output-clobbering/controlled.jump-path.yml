@@ -1,0 +1,22 @@
+# situation: on issues opened, a step sets out to /dev/null; in a for loop,
+#   the step sets out to $GITHUB_OUTPUT, leaves the loop with break when
+#   STOP is empty, and sets out to /dev/null after the break; after the
+#   loop, the step writes v= and the issue's body to "$out".
+# reason: STOP is not set in the step, so the
+#   loop ends at the break with out holding $GITHUB_OUTPUT, and the body
+#   goes to $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_OUTPUT.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          out=/dev/null
+          for i in 1 2; do out=$GITHUB_OUTPUT; [ -z "$STOP" ] && break; out=/dev/null; done
+          echo "v=$V" >> "$out"

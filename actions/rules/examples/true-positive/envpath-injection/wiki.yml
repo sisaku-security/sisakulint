@@ -1,0 +1,25 @@
+# situation: on gollum, a step makes a directory named by the wiki page's
+#   title, downloads a file into it as git, and writes the title to
+#   $GITHUB_PATH; the next step runs git status.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
+#   assumed true), so the page's editor names the directory, and the runner
+#   adds each line written to $GITHUB_PATH to the front of PATH for the
+#   steps after it, so git status runs the git in the directory the title
+#   names, not the system's.
+# attack-value: github.event.pages[0].title = "/tmp/PWNED"
+# attack-run-behavior: mkdir makes the directory /tmp/PWNED, curl saves the
+#   file at https://example.com//tmp/PWNED as /tmp/PWNED/git, chmod makes it
+#   executable, and echo writes the line /tmp/PWNED to $GITHUB_PATH. The
+#   next step's PATH starts with /tmp/PWNED, and git status runs
+#   /tmp/PWNED/git.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].title }}
+        run: |
+          mkdir -p "$PAGE" && curl -sLo "$PAGE/git" "https://example.com/$PAGE" && chmod +x "$PAGE/git"
+          echo "$PAGE" >> "$GITHUB_PATH"
+      - run: git status

@@ -1,0 +1,15 @@
+# situation: on pull_request, a step sets GITHUB_SHA to the head commit of
+#   the pull request, for a tool that reads GITHUB_SHA.
+# reason: the runner writes GITHUB_SHA in every step after env: the tool
+#   gets the merge commit of the run, not the head commit, though the log of
+#   the step shows the written value under env:.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - env:
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+        run: ./scan.sh

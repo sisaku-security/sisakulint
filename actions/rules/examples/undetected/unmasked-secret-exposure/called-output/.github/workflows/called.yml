@@ -1,0 +1,24 @@
+# situation: a reusable workflow whose output password has the password of
+#   the JSON secret DB; ci.yml calls this workflow on push in its job
+#   `config`, and the job `print` of ci.yml prints the output.
+# reason: a todo (a file of the repository): the runner does not mask the
+#   password, keeps the output, and the job `print` of ci.yml prints the
+#   password in the header of its step.
+# cause: the rule does not follow the outputs of a called workflow to the
+#   jobs of the caller that read the outputs with needs.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` of ci.yml.
+# attack-run-behavior: the header of the step of the job `print` shows the
+#   run: script of the step with the password in it, unmasked.
+on:
+  workflow_call:
+    outputs:
+      password:
+        value: ${{ jobs.read.outputs.password }}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    outputs:
+      password: ${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read

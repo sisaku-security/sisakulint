@@ -1,0 +1,23 @@
+# situation: on push, a step sends what it prints through a process
+#   substitution to tee, and then prints four characters of the secret
+#   DEPLOY_TOKEN.
+# reason: a todo (the same file): tee writes what the step prints both to
+#   build.log and to the log, and the runner does not mask the four
+#   characters.
+# cause: the rule does not take a process substitution (>(tee ...)), to
+#   which exec or a redirect sends the output, as the log.
+# attack: one who may read the run's log opens the log and reads the four
+#   characters.
+# attack-run-behavior: tee prints "token: " and four characters of the token
+#   to the log.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          exec > >(tee -a build.log) 2>&1
+          echo "token: ${DEPLOY_TOKEN:0:4}"

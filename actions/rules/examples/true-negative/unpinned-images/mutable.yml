@@ -1,0 +1,20 @@
+# situation: the job's container image is ghcr.io/o/build:1 with a sha256
+#   digest.
+# reason: with a digest the image is pulled by its content, not by the tag
+#   1, so a push that moves the tag to another image does not change what
+#   the job runs.
+# attack: whoever can push to ghcr.io/o/build pushes an image of theirs
+#   under the tag 1, as in 2026 images that steal the secrets of CI were
+#   pushed to aquasec/trivy on Docker Hub as 0.69.4 to 0.69.6 and latest was
+#   re-pointed to them.
+# attack-run-behavior: the runner pulls by the sha256 digest, so it gets the
+#   image of that content whatever the tag 1 names, and make runs in it; the
+#   pushed image is not pulled.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/o/build:1@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    steps:
+      - run: make

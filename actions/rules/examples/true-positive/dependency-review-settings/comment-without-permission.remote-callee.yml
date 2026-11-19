@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/dependency-review-settings-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   comment-without-permission
+#   (comment-without-permission.default-token.yml) of the rule, with on:
+#   workflow_call in place of the on of
+#   comment-without-permission.default-token.yml. The job passes its secrets
+#   with secrets: inherit. In the true positive, a pull request runs
+#   actions/dependency-review-action with comment-summary-in-pr: on-failure,
+#   and neither the workflow nor the job writes permissions; the
+#   repository's default token is read-only (repo.default-token-write is
+#   false).
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   GITHUB_TOKEN may not write pull-requests, so the comment is refused when
+#   the review fails.
+on: pull_request
+jobs:
+  c:
+    uses: example-org/dependency-review-settings-remote/.github/workflows/w.yml@v1
+    secrets: inherit

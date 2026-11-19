@@ -1,0 +1,34 @@
+# situation: the composite action has gh pr merge --auto merge the pull
+#   request with the token of the job only if inputs.who is dependabot[bot];
+#   ci.yml calls the action on pull_request_target and gives github.actor as
+#   who.
+# reason: a todo (a file of the repository): github.actor names whoever
+#   caused the event, not who wrote the pull request, so the if also lets in a
+#   pull request whose last push Dependabot made, and gh pr merge then merges
+#   the code of the pull request with the token of the job.
+# cause: the rule does not follow the value under with: of the caller into
+#   inputs.who of the action, so the rule does not see that inputs.who holds
+#   github.actor.
+# attack: the attacker enables Dependabot in the attacker's fork, opens a
+#   pull request to this repository from the branch of a pull request
+#   Dependabot opened in the fork, then comments @dependabot recreate on the
+#   pull request of Dependabot in the fork, so that Dependabot pushes to the
+#   branch of the pull request.
+# attack-run-behavior: the push of Dependabot runs ci.yml on
+#   pull_request_target on synchronize with github.actor dependabot[bot], so
+#   the if is true and gh pr merge --auto --rebase turns on auto-merge for the
+#   attacker's pull request with the token of the job.
+name: merge dependabot
+description: merge the pull requests of Dependabot
+inputs:
+  who:
+    description: the actor to compare
+runs:
+  using: composite
+  steps:
+    - if: inputs.who == 'dependabot[bot]'
+      run: gh pr merge --auto --rebase "$PR"
+      shell: bash
+      env:
+        PR: ${{ github.event.pull_request.html_url }}
+        GH_TOKEN: ${{ github.token }}

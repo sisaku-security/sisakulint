@@ -1,0 +1,67 @@
+name: argument-operands-probe
+on:
+  push:
+jobs:
+  operands:
+    runs-on: ubuntu-latest
+    steps:
+      - name: tar reads an option after its operand
+        env:
+          V: --to-command=echo MARK-TAR-AFTER >&2
+        run: |
+          echo a > f && tar -cf a.tar f
+          tar -xf a.tar f "$V" || true
+      - name: tar with old options takes the word as the archive
+        env:
+          V: --to-command=echo MARK-TAR-OLD >&2
+        run: |
+          echo a > f && tar -cf a.tar f
+          tar xf "$V" 2>&1 || true
+      - name: make reads an option after its operand
+        env:
+          V: --eval=$(shell echo MARK-MAKE-AFTER >&2)
+        run: |
+          printf 'all:\n\t@true\n' > Makefile
+          make all "$V" || true
+      - name: sed -i takes no separate value
+        env:
+          V: --expression=1e echo MARK-SED-I >&2
+        run: |
+          printf 'x\n' > s.txt
+          sed -i "$V" s.txt || true
+      - name: sed under POSIXLY_CORRECT
+        env:
+          V: --expression=1e echo MARK-SED-POSIX >&2
+          POSIXLY_CORRECT: "1"
+        run: |
+          printf 'x\n' > s.txt
+          sed -n p "$V" s.txt 2>&1 || true
+      - name: tar and make under POSIXLY_CORRECT
+        env:
+          T: --to-command=echo MARK-TAR-POSIX >&2
+          M: --eval=$(shell echo MARK-MAKE-POSIX >&2)
+          POSIXLY_CORRECT: "1"
+        run: |
+          echo a > f && tar -cf a.tar f
+          tar -xf a.tar f "$T" || true
+          printf 'all:\n\t@true\n' > Makefile
+          make all "$M" || true
+      - name: git subcommands, the option after a local repository
+        env:
+          U: --upload-pack=echo MARK-GIT-UP >&2;false
+          R: --receive-pack=echo MARK-GIT-RECV >&2;false
+        run: |
+          git init -q /tmp/r && git -C /tmp/r -c user.name=a -c user.email=a@b commit -q --allow-empty -m x
+          git init -q /tmp/w && cd /tmp/w
+          echo "-- fetch"; git fetch /tmp/r "$U" 2>&1 | head -2 || true
+          echo "-- clone"; git clone /tmp/r /tmp/c "$U" 2>&1 | head -2 || true
+          echo "-- ls-remote after"; git ls-remote /tmp/r "$U" 2>&1 | head -2 || true
+          echo "-- ls-remote before"; git ls-remote "$U" /tmp/r 2>&1 | head -2 || true
+          echo "-- push"; git -c user.name=a -c user.email=a@b commit -q --allow-empty -m y; git push /tmp/r "$R" 2>&1 | head -2 || true
+          echo "-- pull"; git pull /tmp/r "$U" 2>&1 | head -2 || true
+      - name: bash -c joined to its value
+        env:
+          V: -cecho MARK-BASH
+        run: |
+          printf 'true\n' > x.sh
+          bash "$V" x.sh 2>&1 || true

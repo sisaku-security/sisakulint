@@ -1,0 +1,22 @@
+# situation: on push, a job writes contents write and packages write, and
+#   only checks out and builds.
+# reason: a limitation (run time): the job needs to read contents only, but
+#   what it needs is what the code it runs calls with the token.
+# cause: the rule reports write-all and permissions not written, not the
+#   scopes written.
+# attack: the maintainer of actions/setup-node, or whoever takes over their
+#   account or moves its tag v4, makes the action push with the token.
+# attack-run-behavior: the job's GITHUB_TOKEN may write contents and
+#   packages; the action reads it from the github context and pushes a
+#   commit or publishes a package with it, though the build needed neither.
+on: push
+permissions:
+  contents: write
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci && npm run build

@@ -1,0 +1,10 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo lower
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo upper

@@ -1,0 +1,17 @@
+# situation: on gollum, a step takes the newlines out of the wiki page's
+#   title (tr -d '\n') and then writes it to $GITHUB_ENV as page=.
+# reason: in the written line, a newline of the wiki page's title is what
+#   would start another variable, such as LD_PRELOAD; with every newline
+#   taken out, all of it stays the value of the one line page=.
+# attack-value: github.event.pages[0].title = "x\nPWNED=1"
+# attack-run-behavior: printf '%s' "${PAGE}" | tr -d '\n' prints xPWNED=1,
+#   so echo appends the one line page=xPWNED=1 to $GITHUB_ENV; the runner
+#   sets page to xPWNED=1, and no variable PWNED.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].title }}
+        run: echo "page=$(printf '%s' "${PAGE}" | tr -d '\n')" >> "$GITHUB_ENV"

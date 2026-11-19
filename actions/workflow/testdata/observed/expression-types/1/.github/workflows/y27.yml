@@ -1,0 +1,8 @@
+name: y27
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ github.sha.foo }}"
+      - run: echo after

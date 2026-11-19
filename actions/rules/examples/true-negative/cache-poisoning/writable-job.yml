@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a job with no cache-mode checks out the
+#   base and saves node_modules to the cache.
+# reason: with no cache-mode GitHub gives a run of pull_request_target read
+#   access to the cache of the default branch's scope only: the save is
+#   denied, and code run in the job saves nothing there.
+# attack: a flaw of the job runs the attacker's code, which tries to save an
+#   entry under the key of the release workflow.
+# attack-run-behavior: the job runs with Cache mode: read; actions/cache
+#   restores, and its post step logs that saving is denied (token has no
+#   writable scopes), without failing the step.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ hashFiles('package-lock.json') }}
+      - run: npm ci

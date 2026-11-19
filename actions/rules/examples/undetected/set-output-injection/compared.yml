@@ -1,0 +1,17 @@
+# situation: on issues, the step p prints whether the title of the issue
+#   is x, and the release step writes the output tag of the step p into
+#   its script.
+# reason: no added gain: the printed value is true or false.
+# cause: the rule does not count a comparison as a value of an attacker.
+# attack: the attacker titles the issue as wished; the step prints true
+#   or false.
+# attack-run-behavior: the step prints false, and no output is set.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ github.event.issue.title == 'x' }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

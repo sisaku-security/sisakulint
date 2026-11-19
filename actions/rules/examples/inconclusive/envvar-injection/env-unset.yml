@@ -1,0 +1,15 @@
+# situation: a step writes env.NOWHERE to $GITHUB_ENV by ${{ }}, an env the
+#   workflow does not set.
+# reason: a step before may set it at run time through $GITHUB_ENV, so what
+#   it holds, and whether an attacker controls it, is not known.
+# attack-value: env.NOWHERE = "x\nPWNED=1"
+# attack-run-behavior: when a step before sets NOWHERE to an attacker's text
+#   such as this value (through NOWHERE<<DELIM in $GITHUB_ENV), the script
+#   becomes echo "v=x<line break>PWNED=1" >> "$GITHUB_ENV", which appends
+#   v=x and PWNED=1; the runner sets v to x and PWNED to 1.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ env.NOWHERE }}" >> "$GITHUB_ENV"

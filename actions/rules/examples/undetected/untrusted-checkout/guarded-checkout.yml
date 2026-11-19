@@ -1,0 +1,20 @@
+# situation: on pull_request_target, actions/checkout@v4 checks out the pull
+#   request's head SHA, and npm ci runs.
+# reason: no added gain: actions/checkout@v4 (the major tag moved to v4.4.0
+#   on 2026-07-20) refuses the fork's head on pull_request_target; the step
+#   fails before npm runs.
+# cause: the rule takes a major tag of actions/checkout from v2 as refusing
+#   a fork's code.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: actions/checkout@v4 sees that the head repository is
+#   a fork and the event is pull_request_target, and without
+#   allow-unsafe-pr-checkout fails the step; npm ci does not run.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

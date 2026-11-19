@@ -1,0 +1,26 @@
+# situation: on issues, a job whose if lets in an issue whose
+#   author_association is MEMBER has contents write and writes the issue's
+#   title in a run.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: an issue whose author is a member of the
+#   organization has author_association MEMBER, so the if is true and the
+#   job a starts with contents: write; the script becomes echo ""; echo
+#   PWNED; echo "", and echo PWNED runs as a command. An outsider's issue
+#   makes the if false.
+on: issues
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

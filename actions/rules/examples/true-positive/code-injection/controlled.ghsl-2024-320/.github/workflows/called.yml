@@ -1,0 +1,28 @@
+# situation: on workflow_run, caller.yml calls the reusable workflow
+#   called.yml, whose step git-commit puts the name of the head branch of the
+#   run that triggered the workflow into the argument of git push in its
+#   script. This is publishVersionCheckResults.yml of
+#   eclipse-platform/eclipse.platform.releng.aggregator (commit
+#   6c8faac36906dc284fa73d0c2616ab843cc5efa2, lines 88-110), which
+#   version-increments.yml of eclipse-jdt/eclipse.jdt.core calls; the step of
+#   actions/github-script of GHSL-2024-321 is in the example
+#   step-output-run.ghsl-2024-321 of the inconclusive kinds.
+# reason: the runner puts the name of the branch into the script before bash
+#   reads the script, so the author of the pull request from a fork writes
+#   code that the step runs with the secret githubBotPAT.
+# attack-value: github.event.workflow_run.head_branch = "x';echo${IFS}PWNED;'"
+# attack-run-behavior: the line becomes git push x
+#   'HEAD:refs/heads/x';echo${IFS}PWNED;'', and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-320_GHSL-2024-321_Eclipse/
+on:
+  workflow_call:
+    secrets:
+      githubBotPAT: {required: true}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: git-commit
+        run: |
+          echo "file-list<<EOF" >> $GITHUB_OUTPUT
+          git push x 'HEAD:refs/heads/${{ github.event.workflow_run.head_branch }}'

@@ -1,0 +1,24 @@
+# situation: on push, a step takes the private key of more than one line out
+#   of the JSON secret GCP_SA_KEY with jq, registers the private key with
+#   ::add-mask:: and prints the private key.
+# reason: a todo (the same file): the runner reads the line of ::add-mask::
+#   and registers its first line only; the echo of ::add-mask:: prints the
+#   lines after the first, and the last echo prints those lines again.
+# cause: the rule takes a value registered with ::add-mask:: as masked, as
+#   the rule does not know how many lines the value has.
+# attack: one who may read the run's log opens the log and reads the lines
+#   of the private key after the first.
+# attack-run-behavior: the step prints the lines of the private key after
+#   the first, twice.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          PRIVATE_KEY=$(jq -r .private_key <<< "$GCP_SA_KEY")
+          echo "::add-mask::$PRIVATE_KEY"
+          echo "$PRIVATE_KEY"

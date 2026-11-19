@@ -1,0 +1,29 @@
+# situation: the workflow of the upstream sisakulint's test of action-list:
+#   the steps use actions/checkout, actions/setup-go, untrusted/action@v1 and
+#   suspicious/repo@main, and repo.action-list is actions/checkout@* and
+#   actions/setup-go@*, the form of a list of the upstream sisakulint.
+# reason: repo.action-list does not allow untrusted/action@v1 and
+#   suspicious/repo@main, so the code of maintainers whom the repository did
+#   not list runs in the job with the job's secrets and GITHUB_TOKEN.
+# attack: the maintainer of untrusted/action, or whoever has taken over an
+#   account that pushes to it, writes code that reads the job's secrets into
+#   the commit that v1 names.
+# attack-run-behavior: when the job runs, the runner downloads the commit of
+#   untrusted/action that v1 names and runs its action as the step, with the
+#   job's secrets and GITHUB_TOKEN in reach.
+on: [push]
+jobs:
+  test-job:
+    name: Test Job with Different Actions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24.0"
+      - name: Untrusted Action Example
+        uses: untrusted/action@v1
+      - name: Suspicious Action Example
+        uses: suspicious/repo@main

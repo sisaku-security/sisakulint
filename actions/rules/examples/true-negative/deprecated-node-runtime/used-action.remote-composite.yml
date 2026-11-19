@@ -1,0 +1,12 @@
+# situation: a workflow runs example-org/current-composite@v1, a composite
+#   action of another repository, whose step uses actions/checkout@v4,
+#   which declares runs.using: node24.
+# reason: every action the composite action runs declares node24, which
+#   the runner runs as it is.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/current-composite@v1

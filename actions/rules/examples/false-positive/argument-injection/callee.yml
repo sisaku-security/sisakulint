@@ -1,0 +1,19 @@
+# situation: a reusable workflow that passes the title of an issue to tar
+#   after the file names, through env and inside quotes, and that only the
+#   repository's own workflows call, all of them on push.
+# reason: the issue that the reusable workflow reads is never an
+#   outsider's issue.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: the callers in the repository run on push, whose
+#   payload has no issue, so TITLE is empty and tar gets an empty word; if
+#   the title were the value, tar would read the title as --to-command and
+#   run echo PWNED for notes.txt as tar extracts the file.
+on: workflow_call
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: tar -xf archive.tar notes.txt "$TITLE"

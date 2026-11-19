@@ -1,0 +1,85 @@
+# situation: on issue_comment, a job writes the body of the comment into its
+#   run by ${{ }}, with no quotes. This is the job echos of
+#   update-snapshots.yml of dream-num/univer (commit
+#   6e6b0b22294feac948a7b49ac199840c96f44d09, lines 15-30); the comments and
+#   the job update_snapshots (GHSL-2024-210) are left out.
+#   auto-tag.yml of openimsdk/open-im-server (commit
+#   f6ab243d2f0eea5927ebbe77bd5fb0405fa50569, GHSL-2024-054) writes the body
+#   the same way, inside double quotes (COMMENT="${{ … }}", line 34).
+#   check-author-issues.yml of eddiehubcommunity/biodrop (commit
+#   cb6e1776dd2bc8aa95f35409feef2e782d8d9a7b, GHSL-2024-037) writes the body of
+#   the issue on issues the same way, inside double quotes in $( ) (lines 15
+#   and 39).
+#   autoclose-issues.yml of simple-icons/simple-icons (commit
+#   c94e1fc0ac3ed60b7215e7e8893425890b85ca21, GHSL-2024-044) writes the title
+#   of the issue on issues into [[ "…" =~ … ]] (line 19), and
+#   notify_team_new_comment.yml of learningequality/kolibri (commit
+#   7cf0fba7a5c1f6712589f1f5a43f7f329e143761, GHSL-2024-038) writes it on
+#   issue_comment inside single quotes (title='…', line 23).
+#   e2e.yml of stashed/stash (commit a80cbf905f80762b0fb9e9fc1090091388c14db0,
+#   GHSL-2023-108) writes the body of the comment into read -ra COMMENT <<<
+#   "…" (line 66), and commands-for-testing-tool.yml of airbytehq/airbyte
+#   (commit 733b3e75420fa511edd7fdaff0919502e0ce68d4, GHSL-2023-086_GHSL-2023-087)
+#   writes it unquoted as arguments of docker run (lines 55 and 111).
+#   auto-release.yml of Tencent/tdesign-vue-next (commit
+#   98a0c5127416a145774ddacfd7575ce9078360ea, GHSL-2023-109) writes it inside
+#   single quotes (body='…', line 59), and auto_trigger_teamcity.yml of
+#   apache/doris (commit 4ddd303cfca47364b57787175e637fdce6ae90d2,
+#   GHSL-2023-050) in ten jobs (line 49 and others).
+#   Twenty-one of the advisories from 2020 to 2023 listed below after
+#   GHSL-2023-050 (all of them but GHSL-2020-229) write the body of a comment on issue_comment, or the body
+#   or the title of an issue or of a pull request on issues or on
+#   issue_comment, into a run, or into the script of actions/github-script,
+#   the same way; the page of GHSL-2021-011 (itpp-labs) shows only an excerpt
+#   of its workflow. release.yml of allenevans/set-env (commit
+#   f69c6b5dd25d0170bed3f414d9a779e744ce4928, GHSL-2020-229) writes the
+#   message of the first commit of a push, which the author of a merged pull
+#   request writes, into a run on push (line 17).
+# reason: anyone who may comment on an issue writes its body, and the runner
+#   puts the body into the script before bash reads the script.
+# attack-value: github.event.comment.body = "x; echo PWNED"
+# attack-run-behavior: the attacker comments x; echo PWNED on any issue; the
+#   script becomes echo x; echo PWNED, and bash runs the second echo as a
+#   command, which prints PWNED, with the token of the job, which the advisory
+#   says writes.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-209_GHSL-2024-212_dream-num_univer/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-054_OpenIM/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-037_BioDrop/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-044_Simple_Icons/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-038_Kolibri/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-108_Stash/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-086_GHSL-2023-087_airbyte/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-109_TDesign_Vue_Next/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-050_Apache_Doris/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-233-ONSdigital-ras-frontstage-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-234-DataBiosphere-terra-workspace-manager-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-370-rhinstaller-anaconda-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-012-alan-turing-institute-binderhub-deploy-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-013-pythonpune-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-014-benjamin-maynard-kubernetes-cloud-mysql-backup-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-010-getsentry-onpremise-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-051_React_Native_OneSignal_SDK/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-106_Rich/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-171-ArduinoCli-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-182-JonathanGin52-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-184-awesome-black-developers-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-186-thomaseizinger-gitflow-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-189-chocolatey-package-requests-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-190-fortran-lang-fortran-lang-org-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-193-Ignitus-client-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-194-drewmullen-actions-playground-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-183-checkstyle-checkstyle-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-001-saagie-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-206-saagie-technologies-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-011-itpp-labs-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-229-allenevans-set-env-workflow/
+name: 🎭 Update Snapshots
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  echos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug echo is conditions
+        run: echo ${{ github.event.comment.body }}

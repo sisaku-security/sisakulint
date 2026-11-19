@@ -1,0 +1,16 @@
+# situation: a pull request runs actions/dependency-review-action with
+#   warn-only: true.
+# reason: with warn-only, the action logs vulnerabilities and license
+#   violations as warnings and completes with success, so the check never
+#   fails, and a branch protection that requires the check stops no pull
+#   request.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          warn-only: true

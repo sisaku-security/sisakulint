@@ -1,0 +1,6 @@
+on: pull_request_target
+jobs:
+  c:
+    uses: ./.github/workflows/called.yml
+    with:
+      t: ${{ github.event.pull_request.title }}

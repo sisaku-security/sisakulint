@@ -1,0 +1,60 @@
+# situation: two jobs use actions whose own code puts a file that holds
+#   secrets of the job in a place where others read the file, in the forms of
+#   two advisories, which name no workflow. The job codeql is the form of
+#   GHSA-vqf5-2xx6-9wfm: github/codeql-action v3.28.2 with debug artifacts
+#   turned on analyzes Java and Kotlin, and the CodeQL CLI writes the
+#   environment variables of the job, the GITHUB_TOKEN among them, into an
+#   intermediate file, which the action uploads in the debug artifact when the
+#   analysis fails ("debug artifacts uploaded by the CodeQL Action after a
+#   failed code scanning workflow run may contain the environment variables from
+#   the workflow run, including any secrets that were exposed as environment
+#   variables"). The job gradle is the form of GHSA-h3qr-39j9-4r5v:
+#   gradle/gradle-build-action v2.4.1 runs a build with the configuration cache
+#   of Gradle, which records the environment variables, the secret of the job
+#   among them, and the action saves the configuration cache to the cache of
+#   GitHub Actions ("This data stored in the GitHub Actions cache can be read by
+#   a GitHub Actions workflow running in an untrusted context, such as that
+#   running for a Pull Request submitted by a developer via a repository fork").
+# reason: one who can read the repository downloads the debug artifact while
+#   the job runs, and a run of a pull request from a fork restores the cache of
+#   the default branch; both read the secrets of the job. The rule reports
+#   neither form, but known-vulnerable-actions reports each step that uses a
+#   version in the range of the advisory (codeql-action from 3.26.11 to 3.28.2,
+#   gradle-build-action before 2.4.2), so the user learns that the version is
+#   vulnerable.
+# cause: the rule checks only the steps that use actions/upload-artifact, and
+#   does not read what the code of an action writes and where the code puts the
+#   file.
+# attack: one who can read the repository downloads the debug artifact of a
+#   failed analysis (the job codeql); the author of a pull request from a fork
+#   changes the build of the pull request to print the files of the
+#   configuration cache that the run restores (the job gradle).
+# attack-run-behavior: the debug artifact holds the GITHUB_TOKEN of the job
+#   codeql, which is valid until the job ends; the restored configuration cache
+#   holds the value of the secret GRADLE_PUBLISH_KEY.
+# advisory: https://github.com/advisories/GHSA-vqf5-2xx6-9wfm
+# advisory: https://github.com/advisories/GHSA-h3qr-39j9-4r5v
+on: push
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        with:
+          languages: java-kotlin
+          debug: true
+      - run: ./gradlew build
+      - uses: github/codeql-action/analyze@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+  gradle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/gradle-build-action@5056fa9d50478a14af3c9925c12ca02318659d3e # v2.4.1
+        with:
+          arguments: build --configuration-cache
+        env:
+          GRADLE_PUBLISH_KEY: ${{ secrets.GRADLE_PUBLISH_KEY }}

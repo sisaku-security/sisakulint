@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step runs make all and passes the
+#   pull request's title to make after --, through env and inside quotes.
+#   The makefile runs $(CC) --version in the rule all.
+# reason: a todo (the same file): -- stops make from reading the title as
+#   an option, but make reads a word of the form NAME=value as the
+#   assignment of a variable even after --. The title CC=<a command> makes
+#   the recipe of the rule all run that command.
+# cause: the rule reads a value only where the command can read the value
+#   as an option, and after -- no word is an option.
+# attack-value: github.event.pull_request.title = "CC=sh -c \"echo PWNED\" #"
+# attack-run-behavior: make assigns sh -c "echo PWNED" # to CC, and the
+#   recipe of the rule all runs sh -c "echo PWNED", which prints PWNED; the
+#   # makes the rest of the line a comment of the shell.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: make all -- "$TITLE"

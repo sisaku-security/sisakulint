@@ -1,0 +1,18 @@
+# situation: run-name shows the configuration variable RELEASE_CHANNEL,
+#   which only the environment level of the environment release defines;
+#   the job names the environment release, and its step prints the same
+#   configuration variable.
+# reason: in run-name, GitHub gave the empty string for a name that only
+#   the environment level defines (in a run that the authors of the rule
+#   made on GitHub), so the run is named Release with nothing after it. The
+#   step reads the name after the job starts, and gets the value.
+run-name: Release ${{ vars.RELEASE_CHANNEL }}
+on: push
+permissions: {contents: read}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    steps:
+      - run: echo "channel ${{ vars.RELEASE_CHANNEL }}"

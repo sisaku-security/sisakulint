@@ -1,0 +1,22 @@
+# situation: the job restores ~/.npm by restore-keys with
+#   actions/cache/restore, and later writes actions/cache for ~/.npm with a
+#   key of the run and no restore-keys.
+# reason: actions/cache finds no cache of the key of the run, and at the
+#   end of the job saves ~/.npm, which holds the content of the older cache
+#   that the restore took, under the new key.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ github.run_id }}
+      - run: npm ci

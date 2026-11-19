@@ -1,0 +1,23 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints the title of the issue between ::stop-commands:: and
+#   its token.
+# reason: the runner reads no command between ::stop-commands:: and its
+#   token, so the title sets nothing.
+# cause: the rule does not read stop-commands.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the title as it is; nothing is set.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "::stop-commands::stop-6a1f2c"
+          echo "$TITLE"
+          echo "::stop-6a1f2c::"
+      - run: echo next

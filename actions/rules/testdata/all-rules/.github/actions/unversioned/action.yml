@@ -1,0 +1,6 @@
+name: unversioned
+description: a composite action whose uses is pinned to a commit SHA with no comment that names the version
+runs:
+  using: composite
+  steps:
+    - uses: example-org/example-action@2222222222222222222222222222222222222222

@@ -1,0 +1,37 @@
+# situation: on pull_request_target, actions/checkout v6.0.1, pinned by its
+#   commit, checks out refs/pull/<number>/merge, and the next step uses the
+#   local action ./.github/actions/setup-go of the checked-out tree. This is
+#   apidiff.yaml of DataDog/trivy (commit
+#   7acb5f6f095a11cb9911af5a0bc03aecc7c88f8f, lines 7-22 and 59-65); the
+#   step before the checkout, which checks that the pull request can be
+#   merged, is left out.
+# reason: the merge commit holds the files of the pull request, so the
+#   action.yaml of ./.github/actions/setup-go is the one that the author of
+#   the pull request writes, and the runner runs the steps of that action in
+#   the job, with the token of pull-requests: write and issues: write and
+#   the secrets that the job reads later.
+# attack: the author of the pull request adds a run step to
+#   .github/actions/setup-go/action.yaml in the head commit.
+# attack-run-behavior: the step Set up Go runs the composite action of the
+#   author, whose run step runs in the job of the base repository.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-199_DataDog_trivy_repository/
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+    paths:
+      - 'pkg/**/*.go'
+      - 'rpc/**/*.go'
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  apidiff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - name: Set up Go
+        uses: ./.github/actions/setup-go

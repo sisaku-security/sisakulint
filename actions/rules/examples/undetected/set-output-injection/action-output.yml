@@ -1,0 +1,25 @@
+# situation: on issues, the step p uses actions/github-script to log the
+#   title of the issue, and the release step writes the output tag of
+#   the step p into its script.
+# reason: a todo: the runner reads the log of the script of the action
+#   as it reads the log of a run, and the title is the attacker's.
+# cause: the rule reads the run scripts of bash and sh, not the code of
+#   an action.
+# attack: the attacker writes x ##[set-output name=tag;]$(id) in the
+#   value.
+# attack-run-behavior: the step prints the value, the runner sets the
+#   output tag of the step to $(id), and the release step writes the
+#   output into its script and runs id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        uses: actions/github-script@v7
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        with:
+          script: console.log(process.env.TITLE)
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

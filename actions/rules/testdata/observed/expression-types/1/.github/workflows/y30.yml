@@ -1,0 +1,8 @@
+name: y30
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event_name
+        run: echo ran

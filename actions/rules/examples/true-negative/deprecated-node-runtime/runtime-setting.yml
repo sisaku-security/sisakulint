@@ -1,0 +1,12 @@
+# situation: a workflow sets NODE_OPTIONS in the env of a job.
+# reason: NODE_OPTIONS sets the options of the Node.js process of the steps;
+#   NODE_OPTIONS is not a setting of the Node.js version that runs actions.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - run: make

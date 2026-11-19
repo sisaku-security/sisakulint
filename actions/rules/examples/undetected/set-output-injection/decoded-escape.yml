@@ -1,0 +1,23 @@
+# situation: on gollum, the step p prints the title of a wiki page with
+#   printf, which reads the title as its format, and the release step writes
+#   the output tag of the step p into its script.
+# reason: a todo (the same file): printf turns \055 in the title into -, so
+#   the printed line holds ##[set-output name=tag;], which the title as
+#   written cannot hold.
+# cause: the rule reads the title of a wiki page as holding no -, and does
+#   not read which commands decode escapes.
+# attack: an attacker who may edit the wiki titles a page x
+#   ##[set\055output name=tag;]$(id).
+# attack-run-behavior: printf prints x ##[set-output name=tag;]$(id), the
+#   runner sets the output tag of the step p, and the release step runs id.
+on: gollum
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          T: ${{ github.event.pages[0].title }}
+        run: printf "$T\n"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

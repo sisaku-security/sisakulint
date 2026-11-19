@@ -1,0 +1,25 @@
+# situation: on pull_request, a run writes the pull request's body to
+#   $GITHUB_OUTPUT.
+# reason: when only the pull requests of the repository run the workflow, the
+#   author of the pull request can change the workflow itself and gets what the
+#   run has without the flaw, so the flaw adds nothing to what the author gets;
+#   when a ruleset of the organization or the enterprise runs the workflow on
+#   the pull requests of its other repositories, the author cannot change the
+#   workflow, and what the run of the ruleset has beyond the author's own
+#   pull_request workflow is not known. The workflow does not say which case
+#   holds.
+# cause: pull_request is none of the attacker's events the rule reads. The
+#   rule does not read whether a ruleset runs the workflow.
+# attack-value: github.event.pull_request.body = "x\nPWNED=1"
+# attack-run-behavior: ${{ }} puts the two lines inside the double quotes of
+#   the echo, which writes the lines t=x and PWNED=1 to $GITHUB_OUTPUT, and the
+#   runner sets the outputs t and PWNED. When a ruleset of the organization runs
+#   the workflow on a pull request of another repository, the same steps run in
+#   the run of the ruleset; what the run of the ruleset has was not observed, so
+#   whether the steps do harm in the run of the ruleset is not known.
+on: pull_request
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ github.event.pull_request.body }}" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,16 @@
+# situation: the matrix gives node an object of a version, and a step gives
+#   the input node-version the version, matrix.node.version.
+# reason: the version is a number, which with takes as a string.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [{version: 20}, {version: 22}]
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node.version }}

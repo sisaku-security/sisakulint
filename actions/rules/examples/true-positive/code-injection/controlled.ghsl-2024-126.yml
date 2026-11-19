@@ -1,0 +1,43 @@
+# situation: on workflow_run of runs on master, release/* and next/*, a step
+#   of actions/github-script writes the head branch of the triggering run
+#   into a JavaScript string of its script by ${{ }}. This is the step Generate
+#   Slack Payload of release-and-tests-fail-bot.yml of Kong/kong (commit
+#   99cb0608050cbd14611e7795960aade9fc6360cc, lines 1-17, 47-59 and 66); the
+#   condition of the job, the steps before it, the env of the step, the other
+#   constants and the step that posts the payload are left out.
+#   notify-tsc-members-mention.yml of asyncapi/.github (commit
+#   703ea72bb92c214b226ecb1484df21a23f835c8d, GHSL-2024-052) writes the titles
+#   of issues, pull requests and discussions into JavaScript strings of
+#   actions/github-script the same way (lines 72, 117, 162, 207, 252 and 297).
+# reason: on workflow_run, the author of a pull request from a fork names the
+#   head branch of the triggering run, which
+#   github.event.workflow_run.head_branch gives (a branch named release/… of
+#   the fork passes the filter of branches), and the runner puts the name into
+#   the script before node.js reads the script, so a " in the name ends the
+#   string and the rest runs as JavaScript.
+# attack-value: github.event.workflow_run.head_branch = "release/x\";console.log('PWNED');\""
+# attack-run-behavior: the script becomes const branch_name = "release/x";
+#   console.log('PWNED');""; and node.js runs console.log, which prints PWNED,
+#   with secrets.PAT and the Slack webhook of the job within reach.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-126_Kong/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-052_AsyncAPI/
+on:
+  workflow_run:
+    workflows: ["Package & Release", "Build & Test"]
+    types:
+      - completed
+    branches:
+      - master
+      - release/*
+      - next/*
+jobs:
+  notify_failure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Slack Payload
+        id: generate-payload
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch_name = "${{ github.event.workflow_run.head_branch }}";
+            return { text: `branch: "${branch_name}"` };

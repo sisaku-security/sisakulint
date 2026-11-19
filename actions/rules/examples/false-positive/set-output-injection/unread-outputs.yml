@@ -1,0 +1,21 @@
+# situation: on issues, the step p, which has an id, prints the title of
+#   the issue, and nothing reads the outputs of the step p.
+# reason: what reads the outputs decides the harm, and no step, output
+#   of the job or output of an action reads the outputs of the step p.
+# cause: the rule does not read what reads the outputs of the step.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the runner sets the output tag of the step p, and
+#   no step reads the output.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: echo done

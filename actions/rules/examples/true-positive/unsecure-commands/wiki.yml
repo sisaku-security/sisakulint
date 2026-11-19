@@ -1,0 +1,28 @@
+# situation: on gollum, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env, and a step prints the name of the wiki page (page_name); a
+#   step comes after.
+# reason: anyone may edit the wiki when the wiki is open to all
+#   (repo.wiki-open, assumed true). For a page made on the web interface,
+#   GitHub makes the name of the page from the title, turns each blank of
+#   the title into a - after trimming the blanks at the head and the end of
+#   the title, and turns each - that the editor writes in the title
+#   into the character U+2010, so the title ::add path::/tmp/x makes the
+#   name ::add-path::/tmp/x, and the runner reads a printed line that starts
+#   with ::add-path:: as a command where the flag is true.
+# attack-value: github.event.pages[0].page_name = "::add-path::/tmp/x"
+# attack-run-behavior: the step prints the name, the runner puts /tmp/x
+#   before the PATH of the next step, and an executable named git in /tmp/x
+#   runs in place of the git of the runner when the next step calls git
+#   status.
+on: gollum
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          NAME: ${{ github.event.pages[0].page_name }}
+        run: echo "$NAME"
+      - run: git status

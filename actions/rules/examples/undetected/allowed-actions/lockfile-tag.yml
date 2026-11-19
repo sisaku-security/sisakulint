@@ -1,0 +1,19 @@
+# situation: a dependency lockfile of the repository covers the workflow,
+#   and the setting of allowed actions of GitHub allows actions/cache@v4; a
+#   step uses actions/cache@v4.
+# reason: GitHub compares a locked uses by the commit SHA of the lockfile,
+#   not by the tag, so the pattern actions/cache@v4 does not allow the uses,
+#   and GitHub does not start the run.
+# cause: the rule does not read the lockfile, and compares the uses as
+#   written.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: cache-${{ github.sha }}

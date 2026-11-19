@@ -1,0 +1,20 @@
+# situation: on issues, a run writes the issue's title to $GITHUB_OUTPUT by
+#   sudo tee, command tee and /usr/bin/tee.
+# reason: a todo (the same file): reading tee through another command or by
+#   its path would find it.
+# cause: the rule reads tee by its name alone.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: echo prints the lines a=x and PWNED=1, and each tee
+#   (run by sudo, by command, and by its path) appends them to $GITHUB_OUTPUT,
+#   so the runner sets the outputs a and PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          echo "a=$T" | sudo tee -a "$GITHUB_OUTPUT"
+          echo "a=$T" | command tee -a "$GITHUB_OUTPUT"
+          echo "a=$T" | /usr/bin/tee -a "$GITHUB_OUTPUT"

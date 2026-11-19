@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job with contents write runs when
+#   endsWith(github.actor, '[bot]').
+# reason: a todo (the same file): the run of Dependabot's push passes it.
+# cause: the actor is the first argument, compared with a suffix, which the
+#   rule does not read as a comparison.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], which ends with [bot], so
+#   the if is true and the job merge runs echo merge with contents:
+#   write.
+on: pull_request_target
+jobs:
+  merge:
+    if: endsWith(github.actor, '[bot]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo merge

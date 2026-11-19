@@ -1,0 +1,15 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/env-var-unanswered, whose content is the
+#   workflow of the true positive equals-sign (equals-sign.yml) of the rule,
+#   with on: workflow_call in place of the on of equals-sign.yml. The linter
+#   has no answer of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/env-var-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

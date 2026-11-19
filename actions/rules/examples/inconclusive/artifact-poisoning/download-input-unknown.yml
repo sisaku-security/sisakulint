@@ -1,0 +1,27 @@
+# situation: on workflow_run, a step computes a run id and writes it to
+#   $GITHUB_OUTPUT; actions/download-artifact takes its run-id from that
+#   output, and ./run.sh runs after it.
+# reason: the run-id is what a step computes, so which run the download
+#   takes is not analyzed.
+# attack-value: the file run.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: when steps.find.outputs.id names the ci run of the
+#   fork's pull request (the example writes 1; a step that looks up
+#   workflow_run.id would give that run), the download takes its artifact
+#   into the workspace, and ./run.sh runs it, which prints PWNED, with the
+#   base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: find
+        run: echo "id=1" >> $GITHUB_OUTPUT
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.find.outputs.id }}
+          github-token: ${{ github.token }}
+      - run: ./run.sh

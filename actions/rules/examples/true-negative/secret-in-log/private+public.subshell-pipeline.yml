@@ -1,0 +1,19 @@
+# situation: on push, in a public repository, a step sets t to the secret
+#   TOKEN without its first character in the first command of a pipeline,
+#   and after the pipeline prints t.
+# reason: bash runs each command of a pipeline of more than one command in
+#   a subshell, so after the pipeline t is empty, and echo prints nothing of
+#   the secret.
+# attack: anyone opens the run's log.
+# attack-run-behavior: the log has the line t= alone.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          S: ${{ secrets.TOKEN }}
+        run: |
+          { t=${S:1}; } | cat
+          echo "t=$t"

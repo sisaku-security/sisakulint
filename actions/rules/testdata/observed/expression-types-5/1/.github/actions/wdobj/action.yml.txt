@@ -1,0 +1,7 @@
+name: wdobj
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ github.event }}
+      run: echo ok

@@ -1,0 +1,19 @@
+# situation: on push, a step reads a URL from the response of GitHub's API
+#   and sends the secret API_KEY there with curl.
+# reason: the host of the destination is what the response says at run time,
+#   which no file of facts can name.
+# attack: the attacker makes the response name a host of the attacker's own,
+#   where the attacker can write what the API returns.
+# attack-run-behavior: curl sends the request with API_KEY to the host the
+#   response names.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          URL=$(curl -fsS https://api.github.com/repos/o/r/releases/latest | jq -r .assets[0].url)
+          curl -fsS -H "Authorization: Bearer $API_KEY" "$URL"

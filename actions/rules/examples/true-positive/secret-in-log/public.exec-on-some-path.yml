@@ -1,0 +1,23 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step points the standard output to /dev/null with exec, points it back
+#   to the standard error with exec when VERBOSE is empty, and prints the
+#   private key out of the secret GCP_SA_KEY.
+# reason: VERBOSE is not set in the step, so the second exec runs, the print
+#   goes to the standard error, which is the log, and the runner does not
+#   mask the private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key on the
+#   standard error.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          exec >/dev/null
+          if [ -z "$VERBOSE" ]; then exec >&2; fi
+          echo "key: $(echo "$GCP_SA_KEY" | jq -r '.private_key')"

@@ -1,0 +1,18 @@
+# situation: on issues opened, a step sets out to $GITHUB_OUTPUT with the operator
+#   := of a parameter expansion, and writes v=$V to "$out".
+# reason: bash assigns $GITHUB_OUTPUT to out, which is
+#   unset, so the value goes to $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_OUTPUT.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          : "${out:=$GITHUB_OUTPUT}"
+          echo "v=$V" >> "$out"

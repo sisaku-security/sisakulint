@@ -1,0 +1,13 @@
+# situation: a workflow builds and tests a project on Node.js 24 with
+#   actions/setup-node.
+# reason: Node.js 24 is supported until 2028-04-30.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm test

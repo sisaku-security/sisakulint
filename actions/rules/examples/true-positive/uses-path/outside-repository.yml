@@ -1,0 +1,19 @@
+# situation: the first step uses a composite action of example-org/ci-tools
+#   pinned to a full SHA, whose action.yml uses actions/github-script@v7;
+#   the second step names example-org/ci-tools by a full SHA, but its path
+#   goes with .. above the root of the repository, to
+#   actions/github-script/v7.
+# reason: the runner puts each action of the job, a composite action's own
+#   uses among them, in _actions/<owner>/<repo>/<ref>, and reads the path of
+#   the second step from the directory of example-org/ci-tools there; the
+#   second step runs actions/github-script at the tag v7, not an action of
+#   example-org/ci-tools.
+on: push
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/ci-tools/setup@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: example-org/ci-tools/../../../actions/github-script/v7@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          script: console.log("done")

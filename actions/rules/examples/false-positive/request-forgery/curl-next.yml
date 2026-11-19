@@ -1,0 +1,20 @@
+# situation: on issues, a step sends two requests with one curl: the first
+#   to the host the issue's title names, without a header, and, after
+#   --next, the second to api.example.com with the secret DEPLOY_TOKEN.
+# reason: no harm: --next starts a new set of options, so the header goes to
+#   api.example.com only.
+# cause: the rule reads every credential of the command as going to every
+#   URL of the command.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the first request without a header to
+#   attacker.example, and the second with the secret to api.example.com.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS "https://${{ github.event.issue.title }}/status" --next -H "Authorization: Bearer $DEPLOY_TOKEN" https://api.example.com/deploy

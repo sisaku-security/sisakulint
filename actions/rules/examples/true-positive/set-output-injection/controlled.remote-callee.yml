@@ -1,0 +1,28 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/set-output-injection-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   controlled (controlled.custom-shell-xtrace.yml) of the rule, with on:
+#   workflow_call in place of the on of controlled.custom-shell-xtrace.yml.
+#   The job passes its secrets with secrets: inherit. In the true positive,
+#   on issues, the step p, which has an id and whose shell: is bash -x {0},
+#   passes the title of the issue to git log, and the release step writes
+#   the output tag of the step p into its script.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: bash
+#   -x starts the script with the trace on, as set -x does, so the trace
+#   prints the command with the title on the standard error, where the
+#   runner reads ##[set-output name=NAME;] anywhere in a line as a command
+#   that sets the output NAME of a step with an id; the title is the
+#   attacker's.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the trace prints the git log command with the title,
+#   the runner sets the output tag of the step to $(id), and the release
+#   step writes the output into its script and runs id, with the token and
+#   the secrets of the job.
+on: issues
+permissions: {}
+jobs:
+  c:
+    uses: example-org/set-output-injection-remote/.github/workflows/w.yml@v1
+    secrets: inherit

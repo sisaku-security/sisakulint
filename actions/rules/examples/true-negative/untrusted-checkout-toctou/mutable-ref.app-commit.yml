@@ -1,0 +1,23 @@
+# situation: on check_suite, the job waits for the approval of the
+#   environment release, then checks out the commit of the check suite
+#   (github.event.check_suite.head_sha) and runs npm ci.
+# reason: the payload of check_suite names the commit by its SHA, which a
+#   push after the approval cannot move, so the checkout brings the commit
+#   that the reviewer of the environment saw.
+# attack: after a reviewer of the environment approves the run, the author
+#   of the pull request from a fork pushes to the branch of the pull request
+#   a commit whose package.json has a preinstall that prints PWNED.
+# attack-run-behavior: the checkout fetches the SHA of the payload, the
+#   commit before the push, so the pushed preinstall does not run.
+on:
+  check_suite:
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.check_suite.head_sha }}
+      - run: npm ci

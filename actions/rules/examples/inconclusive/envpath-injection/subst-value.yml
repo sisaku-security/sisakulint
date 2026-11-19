@@ -1,0 +1,19 @@
+# situation: a step puts the body of the issue in the env B and writes
+#   "b=$(echo "$B" | head -1)" to $GITHUB_PATH.
+# reason: the value written is the output of a $( ) with what an attacker
+#   may control in it, and whether its line breaks are taken out is not
+#   known to the rule.
+# attack-value: github.event.issue.body = "x\r/tmp/PWNED"
+# attack-run-behavior: when the body's line break is a carriage return, head
+#   -1, which ends a line at a line feed only, keeps it, and echo writes
+#   b=x, a carriage return and /tmp/PWNED as one line to $GITHUB_PATH; the
+#   runner ends a line at a carriage return too, and puts b=x and /tmp/PWNED
+#   before the PATH, /tmp/PWNED first.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$(echo "$B" | head -1)" >> "$GITHUB_PATH"

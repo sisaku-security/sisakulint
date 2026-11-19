@@ -1,0 +1,12 @@
+# situation: on pull_request_target, the step uses tj-actions/branch-names
+#   pinned to the commit of v9.0.0.
+# reason: the advisories say 9.0.0 fixes both; GitHub gives no advisory for
+#   9.0.0.
+# attack-value: the name of the pull request's branch = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: v9.0.0 does not run the branch name.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tj-actions/branch-names@e497ceb8ccd43fd9573cf2e375216625bc411d1f # v9.0.0

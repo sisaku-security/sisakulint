@@ -1,0 +1,23 @@
+# situation: actions/checkout leaves the token of the job in .git/config,
+#   and actions/upload-artifact uploads the path ${{ inputs.p }} with hidden
+#   files.
+# reason: the path is a ${{ }}, so what the upload takes is not analyzed.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: when inputs.p names the workspace or .git/config, the
+#   upload, with include-hidden-files: true, puts .git/config with the job's
+#   token, which write-all lets write, in the artifact, and while echo next
+#   and the post steps run, the token pushes to the repository.
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with: {path: '${{ inputs.p }}', include-hidden-files: true}
+      - run: echo next

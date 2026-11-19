@@ -1,0 +1,28 @@
+# situation: ci.yml of the repository o/r calls this reusable workflow on
+#   push only, by the name o/r/.github/workflows/called.yml@main, not by the
+#   path ./.github/workflows/called.yml.
+# reason: when the run of the linter names the repository (--repo o/r), the
+#   call by the name is a call of this file, and the only caller runs on
+#   push, which no attacker of the finding kind triggers. A run without
+#   --repo reads o/r as another repository and this workflow as one that no
+#   workflow of the repository calls, and reports the same finding on every
+#   event.
+# cause: the rule does not resolve a call by the name of the repository to
+#   the file, so the rule reads this workflow on every event.
+# attack: the attacker opens an issue, a pull request or a comment with a
+#   value that would reach this workflow on an event of the attacker.
+# attack-run-behavior: only a push to the repository runs ci.yml, which
+#   calls this workflow on push; the run of the push reads no value of the
+#   attacker's issue, pull request or comment.
+on: workflow_call
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "Triage the open issues. ${{ vars.TRIAGE_NOTE }}"
+          claude_args: --dangerously-skip-permissions

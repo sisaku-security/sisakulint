@@ -1,0 +1,8 @@
+name: z16
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ github.ref_protected }}
+    steps:
+      - run: echo ok

@@ -1,0 +1,50 @@
+# situation: on pull_request_target, the step prev puts the output prefix of
+#   the step version, through env and inside quotes, into the pattern of grep
+#   and into the program of sed (s#^${PREFIX}#v#). The step version writes the
+#   output from the version in the file version.json of the head commit of the
+#   pull request. These are the steps of the reusable workflow
+#   release-check.yml of ipdxco/unified-github-workflows (commit
+#   e08e90c46d931f457e5d8e292ffa988c0c0b5b70, lines 68-103 and 154-184),
+#   written in the calling workflow.
+# reason: a todo (the same file): the e flag of the s command of GNU sed runs
+#   a command; reading the value inside the program of sed would find it.
+# cause: the rule reads a value only where the command can read the value as
+#   an option: at the head of a word, or outside quotes, where a blank in the
+#   value starts a new word. In this example, the value is inside quotes,
+#   after s#^ in the word of the program of sed.
+# attack-value: the output prefix of the step version = "v\\|.*#id>/dev/stderr#e;#"
+# attack-run-behavior: grep keeps each tag that starts with v, and sed runs
+#   the program s#^v\|.*#id>/dev/stderr#e;##v#, whose e flag runs id for each
+#   of those tags.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-229_ipdxco_unified-github-workflows/
+on:
+  pull_request_target:
+    paths: [ "version.json" ]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  release-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - id: version
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          prefix="v"
+          echo "prefix=$prefix" | tee -a $GITHUB_OUTPUT
+          git fetch origin "$HEAD_SHA"
+          git checkout "$HEAD_SHA" -- version.json
+          version="$(yq -r '.version | select(type == "!!str")' version.json)"
+          git checkout HEAD -- version.json
+          version="${version#v}"
+          echo "version=$version" | tee -a $GITHUB_OUTPUT
+          echo "tag=${prefix}${version}" | tee -a $GITHUB_OUTPUT
+      - id: prev
+        env:
+          PREFIX: ${{ steps.version.outputs.prefix }}
+        run: |
+          git fetch origin --tags
+          vs=$(git tag | grep "^${PREFIX}" | sed "s#^${PREFIX}#v#" | paste -sd , -)
+          echo "vs=$vs"

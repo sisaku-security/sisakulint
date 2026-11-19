@@ -1,0 +1,14 @@
+# Called by expression.yml: the default of a boolean input is a string.
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        type: boolean
+        default: ${{ vars.DRY_RUN }}
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh

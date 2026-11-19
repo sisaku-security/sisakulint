@@ -1,0 +1,20 @@
+# situation: on pull_request, a job runs make on a runner labelled
+#   self-hosted and linux, in a private or internal repository whose own
+#   settings let its readers fork it and run the workflows of pull requests
+#   from forks, while its organization or enterprise forbids forking it.
+# reason: no one forks the repository, so no pull request comes from a
+#   fork, and the step of a reader never reaches the runner.
+# cause: the facts read the settings of the repository; whether they show
+#   the policy of its organization or enterprise was not checked.
+# attack: one who may read the repository tries to fork it to open a pull
+#   request whose copy of this workflow runs a step of their own in place
+#   of make.
+# attack-run-behavior: the policy keeps them from forking the repository,
+#   so there is no pull request of theirs, and the job a runs no step of
+#   theirs.
+on: pull_request
+jobs:
+  a:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make

@@ -1,0 +1,26 @@
+# situation: the workflow runs on pull_request_target; the if of the job
+#   build is false; the job test needs the job build, has no if, checks out
+#   the head of the pull request, and runs npm ci.
+# reason: GitHub skips the job build, whose if is false, and skips the job
+#   test, which needs the job build and has no if that calls a status
+#   function; so the job test does not run
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-jobs-in-a-workflow-needs.md).
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork; GitHub
+#   skips the job build and the job test, so the job test does not run.
+on: pull_request_target
+permissions: {}
+jobs:
+  build:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo built
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

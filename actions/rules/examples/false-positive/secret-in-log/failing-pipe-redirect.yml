@@ -1,0 +1,23 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step pipes "key:" and the secret GCP_SA_KEY without the first character
+#   of the secret to cat, whose redirects copy file descriptor 3, which is
+#   not open, and append to $GITHUB_STEP_SUMMARY, and goes on when cat fails
+#   (|| true).
+# reason: the copy of file descriptor 3 fails, so bash does not run cat, and
+#   the job summary gets no part of the secret.
+# cause: the rule reads the last command of the pipeline as writing to the
+#   job summary, and does not read whether a redirect of the last command
+#   fails.
+# attack: anyone who can read the run opens the job summary of the run and
+#   reads the secret.
+# attack-run-behavior: the job summary of the run is empty.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "key: ${GCP_SA_KEY:1}" | cat >&3 >>"$GITHUB_STEP_SUMMARY" || true

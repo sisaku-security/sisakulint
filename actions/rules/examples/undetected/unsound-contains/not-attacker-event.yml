@@ -1,0 +1,17 @@
+# situation: on push, a step runs when github.actor is a part of a string of
+#   names.
+# reason: only those who can write to the repository push, and the
+#   credential premise assumes that no attacker has a credential that pushes,
+#   so no attacker is the actor of the run.
+# cause: push is none of the privileged events the rule reads the if on.
+# attack-value: github.actor = "longuser"
+# attack-run-behavior: the account longuser cannot push to the repository,
+#   so no run of push has github.actor longuser, and the step runs only for
+#   the accounts that push.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains('longusername anotherlongusername', github.actor)
+        run: echo hello

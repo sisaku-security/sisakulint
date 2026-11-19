@@ -1,0 +1,25 @@
+# situation: on push, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints the name and the email of the pusher.
+# reason: the pusher is the account that pushed, or, for a push that the
+#   merge of a pull request makes, the account that merged the pull request. A
+#   push and a merge need a credential that can push or merge, such as an
+#   account with the role write or above, and the credential premise assumes
+#   that no attacker holds such a credential when the attack starts, so no
+#   attacker writes the name or the email of the pusher.
+# attack: the author of a pull request writes ##[set-env
+#   name=BASH_ENV;]$(id) in the name or the email of the account of the
+#   author, and an account that can merge merges the pull request.
+# attack-run-behavior: for a merge commit and for a squash, the pusher of
+#   the push that the merge makes is the account that merged the pull request,
+#   so the step prints the name and the email of the account that merged the
+#   pull request, and the runner sets no env from the account of the author.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "pushed by ${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>"
+      - run: echo next

@@ -1,0 +1,9 @@
+on:
+  workflow_call:
+    inputs:
+      i: {type: string}
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo inputs-only

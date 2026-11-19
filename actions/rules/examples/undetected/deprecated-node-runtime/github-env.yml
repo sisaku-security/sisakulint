@@ -1,0 +1,16 @@
+# situation: a step writes ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true to
+#   $GITHUB_ENV, so the later steps of the job have the setting.
+# reason: GitHub-hosted runners do not obey the setting, so the setting does
+#   nothing there; on a runner that obeys the setting, the actions that
+#   declare node12, node16 or node20 run on Node.js 20, which no longer gets
+#   security fixes.
+# cause: the rule reads the keys of env of the workflow, the jobs and the
+#   steps, and does not read what a script writes to $GITHUB_ENV.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true" >> "$GITHUB_ENV"
+      - run: make

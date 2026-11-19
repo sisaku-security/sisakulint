@@ -1,0 +1,12 @@
+# situation: the env of the job is fromJSON() of a configuration variable,
+#   vars.BUILD_ENV, which holds the variables as JSON.
+# reason: fromJSON() turns the JSON into an object, which env takes.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env: ${{ fromJSON(vars.BUILD_ENV) }}
+    steps:
+      - run: make

@@ -1,0 +1,23 @@
+# situation: on issues opened, a step has the env key T=X with the issue's
+#   title, and writes $T to $GITHUB_OUTPUT.
+# reason: a todo (the same file): the runner sets the variable T to X= and
+#   the title, and a title with a line break writes a line of its own to
+#   $GITHUB_OUTPUT.
+# cause: the rule reads a variable of env by a key equal to its name, and
+#   no key is T.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: T is X=x, a line break and the rest of the title, and
+#   echo writes the lines title=X=x and PWNED=1 to $GITHUB_OUTPUT; the step
+#   has the output PWNED.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T=X: ${{ github.event.issue.title }}
+        run: echo "title=$T" >> "$GITHUB_OUTPUT"
+      - run: make

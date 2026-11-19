@@ -1,0 +1,25 @@
+# situation: on repository_dispatch, the step p prints the value title of
+#   the client_payload, and the release step writes the output tag of the step
+#   p into its script.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.title = "x ##[set-output name=tag;]$(id)"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, the step p prints the value, the runner
+#   sets the output tag of the step p to $(id), and the release step writes
+#   the output into its script and runs id.
+on: repository_dispatch
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ github.event.client_payload.title }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

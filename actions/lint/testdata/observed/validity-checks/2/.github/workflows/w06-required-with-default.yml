@@ -1,0 +1,6 @@
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/callee2.yml
+    with:
+      s: x

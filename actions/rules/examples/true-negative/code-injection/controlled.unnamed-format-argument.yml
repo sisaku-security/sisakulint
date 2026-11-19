@@ -1,0 +1,15 @@
+# situation: on a push, a step writes format('{0}', github.sha,
+#   github.event.head_commit.message) into a run: the format string names
+#   only its first argument after it.
+# reason: the runner evaluates and writes only the arguments that the
+#   placeholders of the format string name; the message is not named, so
+#   the script gets the SHA alone.
+# attack-value: github.event.head_commit.message = "\"; echo PWNED; echo \""
+# attack-run-behavior: the runner writes the SHA, the script becomes echo
+#   "<the SHA>", and echo prints the SHA.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ format('{0}', github.sha, github.event.head_commit.message) }}"

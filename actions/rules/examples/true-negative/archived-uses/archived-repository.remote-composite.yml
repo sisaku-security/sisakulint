@@ -1,0 +1,12 @@
+# situation: a workflow runs example-org/current-composite@v1, a composite
+#   action of another repository, whose step uses actions/checkout@v4, a
+#   repository that is not archived.
+# reason: neither the composite action nor the action its step uses is of
+#   an archived repository.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/current-composite@v1

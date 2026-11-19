@@ -1,0 +1,17 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_OUTPUT
+#   through $( ) whose pipeline ends with tr -d '\n'.
+# reason: no added gain: the line breaks are taken out, so the value is one
+#   line.
+# cause: the rule reads such a pipeline as taking the line breaks out.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: tr -d '\n' takes the line break out, so echo writes the
+#   one line b=xPWNED=1 to $GITHUB_OUTPUT, and the runner sets the output b to
+#   xPWNED=1 and no PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$(echo "$B" | tr -d '\n')" >> "$GITHUB_OUTPUT"

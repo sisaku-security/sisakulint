@@ -1,0 +1,22 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/dangerous-triggers-unanswered, whose content
+#   is the workflow of the true positive token-write (token-write.yml) of
+#   the rule, with on: workflow_call in place of the on of token-write.yml.
+#   The linter has no answer of the fact workflow.definition for the
+#   reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the job a, which has no if
+#   and waits for no approval, with a token that has contents: write; the
+#   script becomes echo ""; echo PWNED; echo "", and the shell runs echo
+#   PWNED as a command, so any command the attacker writes in its place runs
+#   in the job that holds that token.
+on: issues
+permissions: {}
+jobs:
+  c:
+    uses: example-org/dangerous-triggers-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

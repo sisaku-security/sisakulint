@@ -1,0 +1,21 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   function prints its argument to the standard error, and a step calls the
+#   function in a $( ) with four characters of the secret DEPLOY_TOKEN.
+# reason: the $( ) takes the standard output of the function alone; the
+#   standard error of the function goes to the log, and the runner does not
+#   mask the four characters.
+# attack: anyone signed in to GitHub opens the run's log and reads the four
+#   characters.
+# attack-run-behavior: the step prints "token: " and four characters of the
+#   token on the standard error.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          g() { echo "token: $1" >&2; }
+          X=$(g "${DEPLOY_TOKEN:0:4}")

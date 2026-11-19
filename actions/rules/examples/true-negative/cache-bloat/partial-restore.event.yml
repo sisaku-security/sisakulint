@@ -1,0 +1,22 @@
+# situation: the restore runs on pull_request only and the save on push
+#   only, as upstream sisakulint advises.
+# reason: no run both restores by restore-keys and saves: a push builds
+#   from nothing and saves, and a pull request restores and saves nothing.
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        if: github.event_name != 'push'
+        with:
+          path: ~/.cache/build
+          key: build-${{ github.sha }}
+          restore-keys: build-
+      - run: make
+      - uses: actions/cache/save@v4
+        if: github.event_name == 'push'
+        with:
+          path: ~/.cache/build
+          key: build-${{ github.sha }}

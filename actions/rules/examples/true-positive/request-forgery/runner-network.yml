@@ -1,0 +1,18 @@
+# situation: on issue_comment, a job on a runner labelled self-hosted and
+#   linux sends a request with curl to the host the comment's body names,
+#   without a credential.
+# reason: anyone who can comment writes the body, so the attacker names a
+#   host of the runner's network, and the request reaches that host from the
+#   runner.
+# attack: the attacker comments 10.0.0.5:8500/v1/agent/self#, the address of
+#   a service of the internal network.
+# attack-run-behavior: curl on the self-hosted runner sends GET to
+#   10.0.0.5:8500, a host the attacker does not reach from outside.
+on: issue_comment
+jobs:
+  probe:
+    runs-on: [self-hosted, linux]
+    steps:
+      - shell: bash
+        run: |
+          curl -fsS "http://${{ github.event.comment.body }}/healthz"

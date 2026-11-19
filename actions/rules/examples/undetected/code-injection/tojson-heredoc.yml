@@ -1,0 +1,25 @@
+# situation: on push and issues, toJson(...) is the whole of a ${{ }} in the
+#   body of a heredoc whose delimiter is quoted.
+# reason: no added gain: every line but the first and the last starts with
+#   spaces, and a string's line breaks are \n, so no line is the delimiter.
+# cause: the rule reads toJson(...) as the whole of a ${{ }} in such a body
+#   as data no shell reads.
+# attack-value: github.event.issue.body = "a\nEND\necho PWNED"
+# attack-run-behavior: toJSON(github.event.issue) and
+#   toJson(github.event.issue.body) write the body as JSON strings, with
+#   each line break as the two characters \n, so the line of the heredoc
+#   stays one line that starts with a tab, and no line is END; cat writes
+#   the JSON into issue.json, and nothing in it runs.
+on: [push, issues]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          cat > "$RUNNER_TEMP/github.json" << '__GITHUB_CONTEXT_END__'
+          ${{ toJson(github) }}
+          __GITHUB_CONTEXT_END__
+      - run: |
+          cat > "$RUNNER_TEMP/issue.json" <<-"END"
+          	${{ toJSON(github.event.issue) }} ${{ toJson(github.event.issue.body) }}
+          	END

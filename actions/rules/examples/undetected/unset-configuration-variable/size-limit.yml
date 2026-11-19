@@ -1,0 +1,15 @@
+# situation: the step reads the configuration variable LARGE_CONFIG, which
+#   the repository level defines.
+# reason: a todo (a fact): when the configuration variables of the
+#   repository level and the organization level together are larger than
+#   the limit of a run, GitHub gives the run the empty string for the names
+#   that do not fit, LARGE_CONFIG among them maybe.
+# cause: the rule does not read the sizes of the configuration variables.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo '${{ vars.LARGE_CONFIG }}' > config.json

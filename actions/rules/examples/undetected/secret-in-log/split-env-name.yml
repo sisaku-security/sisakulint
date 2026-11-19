@@ -1,0 +1,20 @@
+# situation: on push, a step has the env key T=X with the secret DEPLOY_TOKEN,
+#   and prints the first 8 characters of $T.
+# reason: a todo (the same file): the runner sets the variable T to X= and
+#   the secret, and the 6 characters of the secret in what the step prints
+#   are a part of the secret, which the runner does not mask.
+# cause: the rule reads a variable of env by a key equal to its name, and
+#   no key is T.
+# attack: one who may read the run's log reads the first characters of the
+#   secret.
+# attack-run-behavior: the step prints X= and the first 6 characters of
+#   DEPLOY_TOKEN.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T=X: ${{ secrets.DEPLOY_TOKEN }}
+        run: echo "${T:0:8}"

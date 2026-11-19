@@ -1,0 +1,17 @@
+# situation: a reusable workflow that reads the title of an issue, and that
+#   only the repository's own workflows call, all of them on push.
+# reason: the issue it reads is never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: a run with this title writes the line /tmp/PWNED to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. In a
+#   run of its callers on push, github.event has no issue, so V is empty and
+#   echo writes an empty line, which the runner skips.
+on: workflow_call
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: echo "$V" >> "$GITHUB_PATH"

@@ -1,0 +1,34 @@
+# situation: on pull_request_target opened, a step reads the title of the
+#   pull request through a here-document with the delimiter EOF inside $( ),
+#   with the title written into the here-document by ${{ }}. This is
+#   issue-management-link-backport-pr.yaml of harvester/harvester (commit
+#   5651047446c1bce2ee8444d14125e366a9429200, lines 3-8 and 20-27).
+#   The checkout before the step and the lines of the script after the line
+#   that prints the title are left out.
+# reason: anyone who opens a pull request writes its title, and the runner
+#   puts the title into the script before bash reads the script; the
+#   delimiter EOF has no quotes, so bash runs a command substitution written
+#   in the title, with the token and the secrets of the base repository.
+# attack-value: github.event.pull_request.title = "$(echo PWNED >/proc/$$/fd/1)"
+# attack-run-behavior: bash runs echo PWNED while it reads the here-document;
+#   $$ is the ID of the process of the script, so the line goes to the standard
+#   output of the step, and the step prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-090_harvester_harvester/
+on:
+  pull_request_target:
+    types: [ opened ]
+    branches:
+    - master
+    - "v*"
+jobs:
+  check-backport:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check if PR is a backport
+      run: |
+        title=$(cat <<EOF
+        "${{ github.event.pull_request.title }}"
+        EOF
+        )
+
+        echo "PR Title: $title"

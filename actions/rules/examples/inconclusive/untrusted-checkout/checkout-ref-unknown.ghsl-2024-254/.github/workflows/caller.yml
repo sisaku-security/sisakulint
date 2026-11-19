@@ -1,0 +1,8 @@
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  nx:
+    uses: ./.github/workflows/called.yml
+    with:
+      nx-head: refs/pull/${{ github.event.number }}/merge

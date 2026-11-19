@@ -1,0 +1,34 @@
+# situation: on pull_request_target opened, claude-code-action reviews the
+#   pull request with Bash among its tools and lets anyone without write
+#   access trigger it.
+# reason: the Actions policies of the repository block the runs of the
+#   workflow on pull_request_target: the default policy that GitHub adds to a
+#   public repository without an applicable event policy, from the time when
+#   GitHub enforces the default policy on the repository, or an event policy
+#   whose list of allowed events does not have pull_request_target. GitHub's
+#   documents say that GitHub evaluates the policies before a run, and that a
+#   run that a policy does not allow fails with an error; the documents do not
+#   say whether a job of such a run starts before the run fails, and the rule
+#   assumes that no job starts.
+# cause: the rule assumes that a run on pull_request_target starts, unless a
+#   file of facts or --fact says that the Actions policies block the runs
+#   (repo.pull-request-target-allowed is assumed true, the worst case).
+# attack: the author of a pull request from a fork writes in its description
+#   an instruction that tells the agent to run a command with Bash.
+# attack-run-behavior: the pull request of the attacker triggers
+#   pull_request_target, and the run fails with an error, and no job of the
+#   run starts (the assumption of the reason), so the agent never runs the
+#   command.
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: "Review pull request #${{ github.event.pull_request.number }}"
+          claude_args: --allowedTools "Bash,Read"

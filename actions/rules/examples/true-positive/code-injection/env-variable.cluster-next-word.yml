@@ -1,0 +1,16 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs bash -c -x "$ISSUE_TITLE".
+# reason: bash reads -c and -x as two options, and runs the word after -x,
+#   the value of ISSUE_TITLE, as the code of -c.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: bash -c -x runs echo PWNED, which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: bash -c -x "$ISSUE_TITLE"

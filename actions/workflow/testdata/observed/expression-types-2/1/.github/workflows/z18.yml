@@ -1,0 +1,15 @@
+name: z18
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs }}
+    steps:
+      - id: s
+        run: echo a=b >> "$GITHUB_OUTPUT"
+  k:
+    needs: j
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "o=[${{ needs.j.outputs.o }}]"

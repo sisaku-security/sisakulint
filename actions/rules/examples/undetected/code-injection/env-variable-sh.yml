@@ -1,0 +1,20 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs eval with the variable in a
+#   run of sh.
+# reason: the sh of the runner may be dash, with which the readings were not
+#   observed.
+# cause: the rule reads the variables of runs of bash only.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: with bash as sh, eval reads echo $(echo PWNED) as a
+#   command and prints PWNED; the form was not run with dash.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        shell: sh
+        run: eval "echo $ISSUE_TITLE"

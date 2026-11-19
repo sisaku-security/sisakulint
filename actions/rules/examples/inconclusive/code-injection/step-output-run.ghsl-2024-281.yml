@@ -1,0 +1,46 @@
+# situation: on workflow_run, dawidd6/action-download-artifact takes the
+#   artifact pr of the run whose completion starts the workflow, a step writes
+#   the content of its file pr-id.txt to the output id, and a later step writes
+#   the output into its run script by ${{ }}. This is preview-deploy.yml of
+#   ant-design/ant-design-web3 (commit cbbf0cefce42cabb9ef0348db507ddd3ce00dcf4,
+#   lines 3-6 and 14-52), and of ant-design/ant-design-blazor (GHSL-2024-276,
+#   commit d3668d9cecc65f2ee0dac920aa55e8f393c6773d, the same steps). The steps
+#   that build the site, the secret SURGE_TOKEN in the script, and the job for a
+#   failed build are left out, and npx surge is replaced by echo.
+# reason: the output id is what the step writes from the file of the artifact;
+#   the rule does not read the value that the step writes, so whether an
+#   attacker controls the output is not known. The pull request that runs the
+#   workflow Preview Build writes pr-id.txt of the artifact.
+# cause: the rule does not follow a value of a file through the shell into an
+#   output.
+# attack-value: steps.pr.outputs.id = "1;echo PWNED;#"
+# attack-run-behavior: the author of a pull request changes the workflow
+#   Preview Build in the pull request so that pr-id.txt holds the value; the
+#   step save PR id writes id=1;echo PWNED;# to GITHUB_OUTPUT, and the script of
+#   the step upload surge service becomes export
+#   DEPLOY_DOMAIN=https://preview-1;echo PWNED;#-ant-design-web3.surge.sh, where
+#   bash runs echo PWNED as a command, which prints PWNED, with the token of the
+#   job.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-281_Ant-design-web3/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-276_Ant-design-blazor/
+on:
+  workflow_run:
+    workflows: ["Preview Build"]
+    types: [completed]
+jobs:
+  upstream-workflow-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: download pr artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          run_id: ${{ github.event.workflow_run.id }}
+          name: pr
+      - name: save PR id
+        id: pr
+        run: echo "id=$(<pr-id.txt)" >> $GITHUB_OUTPUT
+      - name: upload surge service
+        run: |
+          export DEPLOY_DOMAIN=https://preview-${{ steps.pr.outputs.id }}-ant-design-web3.surge.sh
+          echo "$DEPLOY_DOMAIN"

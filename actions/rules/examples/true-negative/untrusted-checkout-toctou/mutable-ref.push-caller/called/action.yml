@@ -1,0 +1,29 @@
+# situation: the composite action of the true positive mutable-ref.no-caller
+#   of this rule; the only caller, ci.yml, runs on push and calls the action
+#   after actions/checkout.
+# reason: the files that the linter reads are the whole repository and hold
+#   every caller of the action, so the rule reads the action on the events of
+#   the callers, here push alone, and a push comes from one who can write to
+#   the repository, not from the attacker. The if of the step of the action is
+#   false on push as well; the rule reports nothing because of the event of
+#   the caller, not because of the steps.
+# attack: after a maintainer reads the pull request and adds the label safe,
+#   the author of the pull request pushes to the branch of the fork a commit
+#   whose package.json has a preinstall that prints PWNED, before the checkout
+#   fetches.
+# attack-run-behavior: the attacker cannot push to the repository, so the
+#   attacker starts no run of ci.yml, and the steps of the action never run on
+#   an event of the attacker.
+name: test
+description: test the labelled pull request
+runs:
+  using: composite
+  steps:
+    - if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'safe'
+      uses: actions/checkout@v4
+      with:
+        ref: refs/pull/${{ github.event.pull_request.number }}/head
+        allow-unsafe-pr-checkout: true
+    - if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'safe'
+      run: npm ci
+      shell: bash

@@ -1,0 +1,7 @@
+on:
+  schedule:
+    - cron: "0 0 * * *"
+jobs:
+  c:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

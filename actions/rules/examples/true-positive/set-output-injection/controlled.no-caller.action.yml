@@ -1,0 +1,29 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; the step p, which has an id, prints the title of an issue,
+#   and the next step, which runs ./release.sh, writes the output tag of the
+#   step p into the script of the next step.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, issues among the
+#   events. The runner reads ##[set-output name=NAME;] anywhere in a printed
+#   line as a command that sets the output NAME of a step with an id, even
+#   when ACTIONS_ALLOW_UNSECURE_COMMANDS is not set, and the title is the
+#   attacker's.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the step p prints the value, the runner sets the
+#   output tag of the step p to $(id), and the next step writes the output
+#   into the script of the next step and runs id, with the token and the
+#   secrets of the job.
+name: release
+description: release the tag
+runs:
+  using: composite
+  steps:
+    - id: p
+      env:
+        TITLE: ${{ github.event.issue.title }}
+      run: |
+        echo "issue: $TITLE"
+      shell: bash
+    - run: ./release.sh "${{ steps.p.outputs.tag }}"
+      shell: bash

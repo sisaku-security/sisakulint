@@ -1,0 +1,24 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a step passes the title of the issue in the environment
+#   variable T, runs exec >&4, where descriptor 4 is not open, goes on when
+#   the exec fails (|| true), and prints T; a step comes after.
+# reason: the exec fails, bash does not copy the
+#   descriptor 4 to the standard output, and the standard output still goes
+#   to the log; the step prints the title to the log.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the title, and the runner sets
+#   BASH_ENV for the steps after.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          exec >&4 || true
+          echo "issue: $T"
+      - run: echo next

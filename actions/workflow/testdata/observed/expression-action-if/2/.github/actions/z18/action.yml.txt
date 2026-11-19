@@ -1,0 +1,12 @@
+name: z18
+inputs:
+  i:
+    description: i
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "cancelled() || success() || failure() || hashFiles('x', 'y') == ''"
+      run: echo ran
+    - shell: bash
+      run: echo after

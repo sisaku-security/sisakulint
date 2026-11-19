@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step writes $HOME/.local/bin to
+#   $GITHUB_PATH.
+# reason: the directory written to $GITHUB_PATH is named in the script, not
+#   taken from the issue, so the issue's author cannot put a directory of
+#   theirs first in the PATH of the steps after it.
+# attack-value: github.event.issue.body = "https://attacker.example/git\n/tmp/t\n/tmp/PWNED"
+# attack-run-behavior: the body is in no ${{ }} and no env of the step, so
+#   it reaches no script; the step writes only the line $HOME/.local/bin,
+#   with HOME expanded, to $GITHUB_PATH, and that is the only directory the
+#   runner puts before the PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"

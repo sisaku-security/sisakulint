@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a job checks out the head commit of the
+#   pull request with actions/checkout v4.2.2, a release older than the first
+#   release of actions/checkout that refuses to check out the code of a pull
+#   request without the input allow-unsafe-pr-checkout, and runs npx
+#   markdownlint-cli. This is ci.yml of eigent-ai/eigent (commit
+#   2a406536e78b3cf50d9add8c3ef81a5b6d75db48, lines 4, 78 and 81).
+# reason: npx runs node_modules/.bin/markdownlint of the checkout when the
+#   checkout has the file, and the author of the pull request writes the file.
+# attack: the author of the pull request writes node_modules/.bin/markdownlint
+#   in the head commit.
+# attack-run-behavior: npx runs the file of the author.
+# advisory: https://github.com/eigent-ai/eigent/security/advisories/GHSA-gvh4-93cq-5xxp
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npx markdownlint-cli '**/*.md'

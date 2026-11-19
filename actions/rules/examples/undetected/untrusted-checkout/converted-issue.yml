@@ -1,0 +1,23 @@
+# situation: on issue_comment unpinned, the checkout fetches
+#   refs/pull/<the issue's number>/head, and npm ci runs in it with a
+#   secret.
+# reason: a todo (a fact): if the author of an issue may make it a pull
+#   request from their fork after a comment on it was pinned, the unpin
+#   comes on a pull request whose head is theirs.
+# cause: the rule reads the issue's number on pinned and unpinned as naming
+#   no pull request, as GitHub pins no comment of one.
+# attack: an outsider opens an issue a maintainer pins a comment on, makes
+#   the issue a pull request from their fork, and waits for the unpin.
+# attack-run-behavior: refs/pull/<number>/head is the fork's head, and npm
+#   ci runs its package.json with TOKEN in the environment.
+on: {issue_comment: {types: [unpinned]}}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - run: npm ci
+        env:
+          TOKEN: ${{ secrets.TOKEN }}

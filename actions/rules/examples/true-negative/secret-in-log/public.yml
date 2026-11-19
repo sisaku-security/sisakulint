@@ -1,0 +1,20 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step prints the secret API_KEY whole, and a value it got from a request
+#   with the key.
+# reason: the runner masks API_KEY where the whole key is in the log, and
+#   the response of the request is not made from the key.
+# attack: anyone signed in to GitHub opens the run's log to read the key.
+# attack-run-behavior: the step prints "key: ***" and the response; the key
+#   is not in the log.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          echo "key: $API_KEY"
+          STATUS=$(curl -fsS -H "x-api-key: $API_KEY" https://api.example.com/status)
+          echo "status: $STATUS"

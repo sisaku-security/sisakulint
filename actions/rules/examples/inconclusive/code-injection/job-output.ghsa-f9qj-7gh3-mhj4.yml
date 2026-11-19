@@ -1,0 +1,57 @@
+# situation: a reusable workflow with no caller among the files that the
+#   linter reads. The job terraform_plan runs terraform plan on the code of the
+#   repository and sets its output plan_stdout from the step output stdout,
+#   which the step writes from the output of terraform plan; the job
+#   update_pr writes needs.terraform_plan.outputs.plan_stdout into the script
+#   of actions/github-script, inside a JavaScript template string, by ${{ }}.
+#   The jobs are .github/workflows/run-terraform.yml of
+#   kartverket/github-workflows (commit
+#   f1d9eac96bc37a19b81a465ef221f14195a8b974, the base of the fix
+#   kartverket/github-workflows#19, lines 125-141, 188-211, 228-240 and
+#   276-282); the inputs, the other steps, the escapes of the plan, the
+#   comment that the script builds around the plan, the job terraform_check
+#   (the job named update_pr here has needs: [terraform_check, terraform_plan])
+#   and the if of the job (github.event_name == 'pull_request', line 221) are
+#   left out, and the job update_github is named update_pr.
+# reason: the value is what another job computes at run time, so whether an
+#   attacker controls it is not known. The advisory says that "a malicious
+#   actor could potentially send a PR with a malicious payload leading to
+#   execution of arbitrary JavaScript code": the output of terraform plan
+#   holds what the code of the pull request makes it print.
+# cause: the rule does not yet follow the output of a job back to what sets
+#   it, and does not read what terraform plan prints.
+# attack-value: needs.terraform_plan.outputs.plan_stdout = "${require('child_process').execSync('echo PWNED')}"
+# attack-run-behavior: when the plan prints the value, the script of the job
+#   update_pr holds it inside a template string, and node.js runs the
+#   JavaScript in ${ }, which starts echo PWNED, with the token of the job.
+# advisory: https://github.com/advisories/GHSA-f9qj-7gh3-mhj4
+on: workflow_call
+jobs:
+  terraform_plan:
+    runs-on: ubuntu-latest
+    outputs:
+      plan_stdout: ${{ steps.plan.outputs.stdout }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -input=false -no-color -detailed-exitcode | tee output.txt
+          STDOUT="$(sed '/^::/d' output.txt | grep -v 'Refreshing state...')"
+          STDOUT="${STDOUT//'%'/'%25'}"
+          STDOUT="${STDOUT//$'\n'/'%0A'}"
+          STDOUT="${STDOUT//$'\r'/'%0D'}"
+          echo "::set-output name=stdout::$STDOUT"
+  update_pr:
+    needs: terraform_plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Plan
+            ${{ needs.terraform_plan.outputs.plan_stdout }}
+            `;
+            console.log(output);

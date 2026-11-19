@@ -1,0 +1,38 @@
+# situation: on pull_request_target opened, a step prints the title and the
+#   body of the pull request with cat and a here-document whose delimiter
+#   END_OF_BLOCK is quoted, with the title and the body written into the
+#   here-document by ${{ }}. This is print-info.yml of acl-org/acl-anthology
+#   (commit 8bfc321342667957210f0fc78986136a4d802e94, lines 3-19). Only the
+#   name of the workflow (line 1) is left out.
+#   CheckIssueForCodeFormatting.yml of duckdb/duckdb (commit
+#   4a89d97db8a5a23a15f3025c8d2d2885337c2637, GHSL-2024-055) writes the body of
+#   an issue on issues the same way, into a here-document whose delimiter EOF
+#   is quoted (line 24).
+# reason: anyone who opens a pull request writes its body, and the runner
+#   puts the body into the script before bash reads the script; the quotes
+#   of the delimiter keep bash from expanding the here-document, but a line
+#   END_OF_BLOCK in the body ends the here-document, and bash runs the lines
+#   of the body after that line as commands.
+# attack-value: github.event.pull_request.body = "x\nEND_OF_BLOCK\necho PWNED\ncat << \"END_OF_BLOCK\""
+# attack-run-behavior: the line END_OF_BLOCK of the body ends the
+#   here-document, bash runs echo PWNED, which prints PWNED, and the last
+#   line of the body starts a new here-document, which the line END_OF_BLOCK
+#   of the script ends.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-102_GHSL-2025-103_acl-anthology/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-055_DuckDB/
+on:
+  workflow_dispatch:
+  pull_request_target:
+    types: [opened]
+jobs:
+  add-review-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print event details
+        run: |
+          cat << "END_OF_BLOCK"
+          Event Name: ${{ github.event_name }}
+          Action: ${{ github.event.action }}
+          PR Title: ${{ github.event.pull_request.title }}
+          Original PR Body: ${{ github.event.pull_request.body }}
+          END_OF_BLOCK

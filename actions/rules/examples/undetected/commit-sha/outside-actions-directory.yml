@@ -1,0 +1,24 @@
+# situation: a step names actions/checkout by a full SHA, but its path goes
+#   with .. four levels above the root of the repository, out of the
+#   directory where the runner puts the actions of the job, to the
+#   checked-out repository of an earlier job.
+# reason: what is in that directory is decided when the job runs: on a
+#   GitHub-hosted runner the workspace is empty before the steps run, so
+#   the job fails, and on a self-hosted runner the path may name files that
+#   an earlier job left, which no ref of the workflow pins.
+# cause: the rule reads the refs of the uses of the job, and the directories
+#   that the path goes into are not the directory of any ref that the job
+#   downloads.
+# attack: the author of a pull request from a fork runs a job of the
+#   repository on the same self-hosted runner, whose checkout leaves an
+#   action.yml of theirs in that directory.
+# attack-run-behavior: on a GitHub-hosted runner the directory does not
+#   exist and the job fails before its steps run; on a self-hosted runner
+#   the step may run the action.yml that the earlier job left (not
+#   observed).
+on: push
+jobs:
+  a:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout/../../../../example/example/action@11bd71901bbe5b1630ceea73d27597364c9af683

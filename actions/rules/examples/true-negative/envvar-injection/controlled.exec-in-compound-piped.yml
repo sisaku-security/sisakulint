@@ -1,0 +1,20 @@
+# situation: on issues opened, a step pipes the standard output of a group
+#   with |& to tee, which appends the standard output of the group to
+#   $GITHUB_ENV, and in the group points the standard output to /dev/null
+#   with exec before an echo in the group writes V= and the issue's body.
+# reason: the exec sends the write to /dev/null, so the body does not reach
+#   the pipe and does not go to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: bash writes V= and the body to /dev/null, and the
+#   runner sets no environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          { exec >/dev/null; echo "V=$V"; } |& tee -a "$GITHUB_ENV" >/dev/null

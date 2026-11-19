@@ -1,0 +1,31 @@
+# situation: on workflow_run, caller.yml calls the reusable workflow
+#   called.yml, whose step git-commit writes the output file-list, and a step
+#   of actions/github-script puts steps.git-commit.outputs.file-list into a
+#   template literal of its script. This is publishVersionCheckResults.yml of
+#   eclipse-platform/eclipse.platform.releng.aggregator (commit
+#   6c8faac36906dc284fa73d0c2616ab843cc5efa2, lines 88-110), where the step
+#   git-commit writes the names of the files of the pull request; the git push of
+#   GHSL-2024-320 in the step git-commit is in the example
+#   controlled.ghsl-2024-320 of the true positives.
+# reason: whether the output file-list holds a value of the attacker is
+#   decided by what the script of the step git-commit writes, which the rule
+#   does not read.
+# attack-value: the name of a file that the pull request adds = "${console.log('PWNED')}"
+# attack-run-behavior: the step git-commit writes the name to the output
+#   file-list, the template literal of the script evaluates
+#   ${console.log('PWNED')}, and actions/github-script prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-320_GHSL-2024-321_Eclipse/
+on:
+  workflow_call:
+    secrets:
+      githubBotPAT: {required: true}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: git-commit
+        run: |
+          echo "file-list<<EOF" >> $GITHUB_OUTPUT
+      - uses: actions/github-script@v7
+        with:
+          script: "const fileList = `${{ steps.git-commit.outputs.file-list }}`"

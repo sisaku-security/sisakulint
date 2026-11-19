@@ -1,0 +1,24 @@
+# situation: on push, the with: of a step gives docker/setup-buildx-action
+#   the image of BuildKit by image= in the input driver-opts, by a tag,
+#   without a digest.
+# reason: a todo (the same file): reading the with: of the step would find
+#   the image.
+# cause: the rule reads only the images of the container and the services of
+#   a job, of docker:// in uses, and of runs.image in an action metadata
+#   file, and not an image that the with: of a step names.
+# attack: whoever can push to moby/buildkit on Docker Hub pushes an image of
+#   theirs under the tag latest.
+# attack-run-behavior: the action starts BuildKit in a container of
+#   moby/buildkit:latest, which is now the image of the attacker, and the
+#   builds of the later steps run in that container.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .

@@ -1,0 +1,18 @@
+# situation: on push, a step checks with jq that the secret DOMAINS is a
+#   JSON array, and jq prints the answer.
+# reason: the filter type == "array" gives true or false, which holds
+#   nothing of the secret; the log has true.
+# cause: the rule reads jq as a command that writes a value made from the
+#   input, and does not read what the filter of jq gives.
+# attack: one who may read the run's log opens the log to read the secret.
+# attack-run-behavior: the step prints "true".
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DOMAINS: ${{ secrets.DOMAINS }}
+        run: |
+          jq -e 'type == "array"' <<< "$DOMAINS"

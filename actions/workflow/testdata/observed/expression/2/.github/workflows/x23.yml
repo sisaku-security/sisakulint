@@ -1,0 +1,7 @@
+name: x23
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ TOJSON(github.event_name) }}"

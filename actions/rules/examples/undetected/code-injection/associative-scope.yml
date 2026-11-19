@@ -1,0 +1,27 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE, defines a function that declares m
+#   associative with declare -A, does not call the function, assigns an
+#   indexed array to m, and prints the element of m whose subscript is
+#   ISSUE_TITLE.
+# reason: the function does not run, so m is an indexed array, and bash
+#   reads the subscript of an indexed array as arithmetic, which runs a
+#   command substitution in the value.
+# cause: the rule reads the declare -A in the function as holding in the
+#   whole script, so the rule reads m as an associative array and does not
+#   read the subscript as arithmetic.
+# attack-value: github.event.issue.title = "a[$(echo PWNED >/proc/$$/fd/1)]"
+# attack-run-behavior: bash runs echo PWNED while bash reads the
+#   subscript, and PWNED shows on the standard output.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          f() { declare -A m; }
+          m=(1)
+          echo "${m[$ISSUE_TITLE]}"

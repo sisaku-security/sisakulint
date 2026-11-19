@@ -1,0 +1,21 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and compares the variable as a number
+#   in [[ -eq ]].
+# reason: [[ -eq ]] evaluates the value of the variable as an arithmetic
+#   expression. The attacker's value brings an array subscript, a[$(...)],
+#   and bash runs the command substitution in that subscript.
+# attack-value: github.event.issue.title = "a[$(echo PWNED >/proc/$$/fd/1)]"
+# attack-run-behavior: bash evaluates the value as arithmetic and runs the
+#   command substitution in the subscript, which writes PWNED to the
+#   standard output of the bash of the step ($$); the expression is 0, and
+#   echo prints zero.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: if [[ $ISSUE_TITLE -eq 0 ]]; then echo zero; fi

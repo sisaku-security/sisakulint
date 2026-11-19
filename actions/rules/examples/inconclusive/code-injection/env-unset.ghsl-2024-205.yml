@@ -1,0 +1,61 @@
+# situation: on pull_request_target, a step lists the files that the pull
+#   request changes with gh pr view and writes them to $GITHUB_ENV as
+#   CHANGED_FILES, and a later step writes env.CHANGED_FILES into its run by
+#   ${{ }}. This is check_properties.yml of Stirling-Tools/Stirling-PDF (commit
+#   93e51e47ffa55fa3f62339258fbaef96d2d14c3f, lines 1-19 and the steps Fetch PR
+#   changed files and Determine reference file); the checkout of the pull
+#   request, the trigger push (lines 8-10), the lines cd pr-branch, gh repo
+#   set-default and cd .., the echo lines, BRANCH_PATH, the else branch and
+#   the steps after
+#   them (where line 79, GHSL-2024-206, writes env.CHANGED_FILES again) are
+#   left out. tests_results.yml of espressif/arduino-esp32 (commit
+#   690bdb511d9f001e2066da2dda2c631a3eee270f, GHSL-2024-169) has the same
+#   kind of value: a step reads files of an artifact of the triggering
+#   workflow_run into variables of the script and writes them to $GITHUB_ENV,
+#   and steps of actions/github-script write env.original_ref and others into
+#   their scripts (lines 39-48, 74, 77, 107 and 112).
+#   test_build_deploy.yml of wireapp/wire-webapp (commit
+#   5bdd49291b278d6d3d5fe89f1e656a556bd6db8e, GHSL-2020-232) writes the
+#   first line of the message of the commit github.event.after to $GITHUB_ENV
+#   as PR_LAST_COMMIT_MESSAGE, and a later step writes
+#   env.PR_LAST_COMMIT_MESSAGE into its run (line 43).
+# reason: env.CHANGED_FILES is what an earlier step writes to $GITHUB_ENV, the
+#   names of the files of the pull request, which its author names; the rule
+#   does not follow a variable of $GITHUB_ENV back to the step that writes it.
+# cause: the rule does not read what a run step writes to $GITHUB_ENV.
+# attack-value: env.CHANGED_FILES = "a\"$(echo${IFS}PWNED>/proc/$$/fd/1)\"b"
+# attack-run-behavior: the author of a pull request from a fork adds a file
+#   whose name holds the value; the script of Determine reference file becomes
+#   if echo "a"$(echo PWNED>/proc/$$/fd/1)"b" | grep …, and bash runs the
+#   command substitution, which prints PWNED, with the token of contents:
+#   write.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-205_GHSL-2024-206_Stirling_PDF/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-169_Arduino-ESP32/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-232-wireapp-wire-webapp-workflow/
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "src/main/resources/messages_*.properties"
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  check-files:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch PR changed files
+        id: fetch-pr-changes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} --json files -q ".files[].path" > changed_files.txt
+          CHANGED_FILES=$(cat changed_files.txt | tr '\n' ' ')
+          echo "CHANGED_FILES=${CHANGED_FILES}" >> $GITHUB_ENV
+      - name: Determine reference file
+        id: determine-file
+        run: |
+          if echo "${{ env.CHANGED_FILES }}" | grep -q 'src/main/resources/messages_en_GB.properties'; then
+              echo "REFERENCE_FILE=pr-branch/src/main/resources/messages_en_GB.properties" >> $GITHUB_ENV
+          fi

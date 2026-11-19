@@ -1,0 +1,9 @@
+name: y05
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          X: ${{ github.event.commits.*.id }}
+        run: printf 'X=[%s]\n' "$X"

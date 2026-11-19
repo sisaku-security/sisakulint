@@ -1,0 +1,20 @@
+# situation: a reusable workflow prints the title of an issue in the step p,
+#   whose output tag the release step writes into its script, and only the
+#   repository's own workflows call the reusable workflow, all of them on
+#   push.
+# reason: the issue the workflow reads is never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack: an outsider cannot start a caller on issues.
+# attack-run-behavior: called on push, the event has no issue, so the step
+#   prints an empty line and sets no output.
+on: workflow_call
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          V: ${{ github.event.issue.title }}
+        run: echo "$V"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

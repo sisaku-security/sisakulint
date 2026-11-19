@@ -1,0 +1,18 @@
+# situation: on issues, the ifs of a job and of a step compare the issue's
+#   title and body.
+# reason: no added gain: the runner evaluates an if, and no shell or
+#   JavaScript reads it.
+# cause: the rule reads a step's run and the script of
+#   actions/github-script, not an if.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the runner evaluates the job's if, which compares the
+#   value with x as a string, and the step's if; the value goes into no
+#   script, and the step's script is echo hi.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    if: github.event.issue.title != 'x'
+    steps:
+      - if: github.event.issue.body != 'y'
+        run: echo hi

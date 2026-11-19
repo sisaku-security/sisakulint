@@ -1,0 +1,16 @@
+# situation: the step runs when the configuration variable DEPOLY is true,
+#   and the repository level defines DEPLOY, not DEPOLY.
+# reason: a todo: DEPOLY is likely a misspelling of DEPLOY, and the step
+#   never runs; but a workflow can also leave a name undefined on purpose,
+#   so that the step does not run.
+# cause: the rule reports no reference that the expression reads only as a
+#   truth or in a comparison.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - if: vars.DEPOLY == 'true'
+        run: ./deploy.sh

@@ -1,0 +1,19 @@
+# situation: on push, steps use actions/checkout by a tag, a branch and a
+#   shortened SHA.
+# reason: another rule's: commit-sha reports a ref that is not a full SHA.
+# cause: the two rules share the steps' remote uses by whether the ref is a
+#   full SHA, and this rule reads full SHAs.
+# attack: the owner of actions/checkout moves the tag v4 and the branch main
+#   to commits of theirs.
+# attack-run-behavior: the runner resolves @v4 and @main when the job runs
+#   and runs the commits they now name as the first two steps; it refuses
+#   @11bd719 as a shortened SHA, and whether it would read a tag named
+#   11bd719 instead was not tried.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@main
+      - uses: actions/checkout@11bd719

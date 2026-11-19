@@ -1,0 +1,20 @@
+# situation: a job of a matrix of OSes sets the env key github_sha.
+# reason: a todo (the same file): on Windows, whose variables have no case,
+#   the runner writes over the key; on Linux and macOS the key is another
+#   variable.
+# cause: the runs-on is a ${{ }} of the matrix, and the rule does not read
+#   the OSes of the matrix.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      github_sha: fixed
+    steps:
+      - run: ./test.sh
+        shell: bash

@@ -1,0 +1,11 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"tj-actions/changed-files","ref":"1254cca6ac8b9c3047ba83a11b20c9dd8d9b0572"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tj-actions/changed-files","ref":"main"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"tj-actions/changed-files","ref":"main"},"state":"found","value":"node24"},
+{"query":{"kind":"git.commit-tags","repo":"tj-actions/changed-files","sha":"1254cca6ac8b9c3047ba83a11b20c9dd8d9b0572"},"state":"found","value":[]},
+{"query":{"kind":"git.ref-commit","repo":"tj-actions/changed-files","ref":"main"},"state":"found","value":{"ref":"refs/heads/main","sha":"1254cca6ac8b9c3047ba83a11b20c9dd8d9b0572"}},
+{"query":{"kind":"package.advisories","package":"tj-actions/changed-files"},"state":"found","value":[{"first_patched_version":"46.0.1","ghsa_id":"GHSA-mrrh-fwg8-r2c3","severity":"high","vulnerable_version_range":"<= 45.0.7"},{"first_patched_version":"41","ghsa_id":"GHSA-mcph-m25j-8j63","severity":"high","vulnerable_version_range":"< 41"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"tj-actions/changed-files"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

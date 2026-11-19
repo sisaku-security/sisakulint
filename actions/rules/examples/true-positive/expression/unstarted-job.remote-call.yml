@@ -1,0 +1,13 @@
+# situation: a job calls example-org/shared-workflow/.github/workflows/deploy.yml@v1,
+#   a reusable workflow of another repository whose input dry-run is of the
+#   type boolean, and gives the input a configuration variable.
+# reason: a configuration variable is a string, which is not the type of
+#   the input: GitHub does not start the job; workflow.definition answers
+#   the file of the called workflow.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    uses: example-org/shared-workflow/.github/workflows/deploy.yml@v1
+    with:
+      dry-run: ${{ vars.DRY_RUN }}

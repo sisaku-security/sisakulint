@@ -1,0 +1,26 @@
+# situation: the job a gives the output o, and in the job j a step sends a
+#   request with curl and the secret DEPLOY_TOKEN to the host
+#   needs.a.outputs.o names.
+# reason: the output is what a script of the job a writes at run time.
+# cause: the rule does not yet follow the outputs of another job.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs.o }}
+    steps:
+      - id: s
+        run: echo "o=api.example.com" >> "$GITHUB_OUTPUT"
+  j:
+    needs: a
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ needs.a.outputs.o }}/status"

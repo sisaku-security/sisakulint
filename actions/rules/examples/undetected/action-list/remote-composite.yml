@@ -1,0 +1,18 @@
+# situation: a step uses example-org/unasked-composite@v1, a composite
+#   action of another repository that the pattern * of repo.action-list allows
+#   (repo.action-list is * and patterns that start with !), and the run has no
+#   answer of action.definition for the composite action.
+# reason: a step of the composite action may use an action that
+#   repo.action-list does not allow, whose code runs in the job.
+# cause: the rule reads the steps of a composite action of another
+#   repository only from the answer of action.definition.
+# attack: the maintainer of an action that a step of the composite action
+#   uses writes code that reads the job's secrets.
+# attack-run-behavior: the runner downloads the composite action and runs
+#   its steps in the job, the action of that maintainer among them.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/unasked-composite@v1

@@ -1,0 +1,22 @@
+# situation: on issues of an activity type added_later, a step passes the
+#   issue's title to tar after the file names, through env and inside
+#   quotes.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: when GitHub sends issues with the activity type
+#   added_later, tar reads "$TITLE" as --to-command and runs echo PWNED for
+#   notes.txt as it extracts it, which prints PWNED.
+on:
+  issues:
+    types: [added_later]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: tar -xf archive.tar notes.txt "$TITLE"

@@ -1,0 +1,19 @@
+# situation: actions/cache restores build/ by restore-keys, and the next
+#   step removes build/ and makes build/ again from nothing.
+# reason: the next step removes what the restore brought before the build,
+#   so the cache that actions/cache saves holds only what this run made: the
+#   content of the older cache does not stay in the new cache.
+# cause: whether a step prunes the path is in the script of the step, which
+#   the rule does not read.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: build
+          key: build-${{ github.sha }}
+          restore-keys: build-
+      - run: rm -rf build && make

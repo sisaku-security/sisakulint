@@ -1,0 +1,18 @@
+# situation: on issues, actions/github-script calls core.exportVariable with
+#   the issue's body.
+# reason: no added gain: @actions/core writes a random delimiter, and
+#   refuses a value that has it.
+# cause: the rule does not read JavaScript.
+# attack-value: the issue's body, which the script reads as context.payload.issue.body = "x\nPWNED=1"
+# attack-run-behavior: core.exportVariable appends B<<ghadelimiter_<a random
+#   UUID>, x, PWNED=1 and the delimiter to $GITHUB_ENV, and the runner sets
+#   B to x, a line break and PWNED=1, and no variable PWNED; a body with the
+#   delimiter's line in it makes exportVariable throw instead.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: core.exportVariable('B', context.payload.issue.body)

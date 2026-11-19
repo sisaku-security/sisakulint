@@ -1,0 +1,21 @@
+# situation: on schedule only, a job calls a reusable workflow of the
+#   repository with secrets: inherit; the reusable workflow writes all the
+#   secrets, toJSON(secrets), to the environment of a step.
+# reason: a run on schedule has no value that an attacker writes: the
+#   workflow of the default branch runs at the time that the cron says, and
+#   the run reads nothing of an issue, a comment or a pull request, so no
+#   flaw of the reusable workflow lets an attacker reach the secrets.
+# cause: the rule reports secrets: inherit whatever the events of the
+#   calling workflow are.
+# attack: an attacker opens an issue or a pull request with a value that
+#   would steer a step of the reusable workflow.
+# attack-run-behavior: the run on schedule does not read the issue or the
+#   pull request, so the value of the attacker reaches no step.
+on: workflow_call
+jobs:
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$S" | wc -c
+        env:
+          S: ${{ toJSON(secrets) }}

@@ -1,0 +1,22 @@
+# situation: on issues, the env of the job is a variable of the repository
+#   read as JSON, and a step whose env sets ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   to true prints env.X.
+# reason: the env of the job is known at run time only, so whether an
+#   attacker controls env.X is not known.
+# cause: the rule does not read the value of vars.
+# attack: an attacker who controls env.X writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.E) }}
+    steps:
+      - env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+        run: echo "${{ env.X }}"
+      - run: echo next

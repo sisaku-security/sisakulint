@@ -1,0 +1,9 @@
+name: z11
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "${{ 'needs.x.result' }}"
+      run: echo ran
+    - shell: bash
+      run: echo after

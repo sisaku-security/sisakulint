@@ -1,0 +1,22 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/self-hosted-runner-unknown, whose content is
+#   the workflow of the true positive private (private.yml) of the rule,
+#   with on: workflow_call in place of the on of private.yml. The linter
+#   asked the fact workflow.definition for the reusable workflow and got no
+#   answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack: one who may read the repository forks it and opens a pull request
+#   whose copy of this workflow runs a step of their own in place of make.
+# attack-run-behavior: the setting Run workflows from fork pull requests is
+#   on, so the pull request's run starts; the job a runs the attacker's step
+#   on a runner of the repository with both labels, where what it leaves
+#   stays for the jobs that run there after it, with their secrets and
+#   tokens.
+on: pull_request
+permissions: {}
+jobs:
+  c:
+    uses: example-org/self-hosted-runner-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

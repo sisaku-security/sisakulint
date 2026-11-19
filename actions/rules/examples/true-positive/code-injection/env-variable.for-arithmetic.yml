@@ -1,0 +1,20 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and names the variable without $ in the
+#   arithmetic of for (( ; ; )).
+# reason: bash evaluates the value of the variable as arithmetic, and a value
+#   such as a[$(...)] holds an array subscript whose command substitution
+#   runs.
+# attack-value: github.event.issue.title = "a[$(echo PWNED >/proc/$$/fd/1)]"
+# attack-run-behavior: bash evaluates the value as arithmetic, runs the command
+#   substitution of the subscript and prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          for (( i=ISSUE_TITLE; i<0; i++ )); do :; done

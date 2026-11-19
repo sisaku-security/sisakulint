@@ -1,0 +1,10 @@
+name: envc
+description: env names in a composite step
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        "A=B": x
+        "C D": y
+      run: env | grep -E '^(A|C)' || echo none

@@ -1,0 +1,17 @@
+# situation: the job's container is an image of Amazon ECR by its tag.
+# reason: the repository of Amazon ECR has tag immutability, so the tag
+#   cannot be pushed again.
+# cause: the rule does not read the registry's setting.
+# attack: whoever can push to the repository build of Amazon ECR pushes an
+#   image of theirs under the tag 1.
+# attack-run-behavior: the repository has tag immutability, so ECR refuses
+#   the push, and the runner still pulls the image first pushed as 1 and
+#   runs make in it.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container:
+      image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/build:1
+    steps:
+      - run: make

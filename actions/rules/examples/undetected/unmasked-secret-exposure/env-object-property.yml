@@ -1,0 +1,21 @@
+# situation: on push, the env of the job has the JSON secret DB under DB,
+#   and the run of a step takes the password out of
+#   (github.head_ref || env).DB with fromJSON.
+# reason: a todo (the same file): on push, github.head_ref is empty, so the
+#   value of || is the env, and the run has the password, which the runner
+#   does not mask.
+# cause: the rule reads a value that is the env in some runs as a value
+#   without the variables of the env.
+# attack: one who may read the log of the run opens the log to read the
+#   password.
+# attack-run-behavior: the header of the step prints the run with the
+#   password in it, unmasked.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DB: ${{ secrets.DB }}
+    steps:
+      - run: ./migrate.sh "${{ fromJSON((github.head_ref || env).DB).password }}"

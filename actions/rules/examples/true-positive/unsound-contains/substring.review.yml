@@ -1,0 +1,20 @@
+# situation: on pull_request_review_comment, the job runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains('alice bob', the commenter's
+#   login) holds.
+# reason: any login that is a part of 'alice bob', such as ali, passes the
+#   if, and anyone with such a login can comment on the diff of a pull
+#   request from a branch of the repository, whose run has the secrets.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: a comment by the account ali on the diff of a pull
+#   request whose branch is in the repository starts the job deploy;
+#   contains('alice bob', 'ali') is true, so ./deploy.sh runs with TOKEN
+#   set to DEPLOY_TOKEN's value.
+on: pull_request_review_comment
+jobs:
+  deploy:
+    if: contains('alice bob', github.event.comment.user.login)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

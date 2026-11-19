@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job sets
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS to true, checks out the base and prints
+#   a file of the repository.
+# reason: a todo (the same file): a command other than echo, printf, cat of
+#   a here-string and tee prints what the rule does not read, which may be
+#   an attacker's.
+# cause: the rule reads what echo, printf, cat and tee print of env and ${{
+#   }}.
+# attack: an attacker whose text reaches the file writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: pull_request_target
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: cat NOTES.md
+      - run: echo next

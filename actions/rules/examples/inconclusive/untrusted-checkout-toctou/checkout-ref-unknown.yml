@@ -1,0 +1,27 @@
+# situation: in a job a label approves (pull_request_target, labeled), the
+#   checkout takes its ref from the output of a step, and npm ci runs after
+#   it.
+# reason: the ref is what a step computes, so whether it names the code of a
+#   pull request is not analyzed.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: when steps.pr.outputs.ref names a ref the author
+#   moves after the label (the head branch of a pull request from the
+#   repository, or refs/pull/<n>/head), the checkout fetches it when the job
+#   runs, which then names the pushed commit, and npm ci runs its
+#   preinstall, with the base repository's GITHUB_TOKEN in .git/config and
+#   its secrets.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: pr
+        run: echo "ref=$(gh pr view --json headRefName -q .headRefName)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ steps.pr.outputs.ref }}
+      - run: npm ci

@@ -1,0 +1,42 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file under site/,
+#   and the label docs to a pull request whose head branch starts with
+#   pages/; labeled.yml runs on pull_request_target on opened and labeled;
+#   the job build checks out the head of the pull request and uploads dist,
+#   and the job deploy, which needs build and runs on labeled when the if
+#   contains(github.event.pull_request.labels.*.name, 'safe-to-test') &&
+#   contains(github.event.pull_request.labels.*.name, 'docs') is true,
+#   downloads dist and runs ./dist/deploy.sh.
+# reason: the attacker gets both labels with one pull request, and the job
+#   runs when the labels of the pull request in the payload of the labeled
+#   run include both, which the authors of the rule did not observe for
+#   labels that one request of actions/labeler adds.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork whose
+#   head branch starts with pages/ and that changes a file under site/;
+#   actions/labeler adds both labels, which start labeled.yml; when the
+#   payload lists both labels, the job deploy downloads dist, which the job
+#   build uploaded from the head of the pull request, and runs
+#   ./dist/deploy.sh, which prints PWNED.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (contains(github.event.pull_request.labels.*.name, 'safe-to-test') && contains(github.event.pull_request.labels.*.name, 'docs'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

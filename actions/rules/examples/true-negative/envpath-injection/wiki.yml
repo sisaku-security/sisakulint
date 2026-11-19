@@ -1,0 +1,19 @@
+# situation: on gollum, a step prints the title of a wiki page from an
+#   environment variable and writes $HOME/.local/bin to $GITHUB_PATH.
+# reason: only the directory named in the script goes to $GITHUB_PATH, and
+#   the title is only printed, so the wiki's editor cannot put a directory
+#   of theirs first in the PATH of the steps after it.
+# attack-value: github.event.pages[0].title = "/tmp/PWNED"
+# attack-run-behavior: echo prints /tmp/PWNED to the log, and the step
+#   writes only the line $HOME/.local/bin, with HOME expanded, to
+#   $GITHUB_PATH; the line /tmp/PWNED is not in it.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].title }}
+        run: |
+          echo "$PAGE"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"

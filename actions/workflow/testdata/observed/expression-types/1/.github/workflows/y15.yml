@@ -1,0 +1,9 @@
+name: y15
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+        timeout-minutes: ${{ format('{0}', '5') }}
+      - run: echo after

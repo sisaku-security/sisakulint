@@ -1,0 +1,22 @@
+# situation: the workflow gives the token only contents: read, and the job
+#   runs actions/checkout, actions/setup-node and npm ci && npm test.
+# reason: in place of write-all, the token may only read contents, so the
+#   actions of other repositories and the npm scripts the job runs get a
+#   token that writes no scope.
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: actions/checkout writes the token into .git/config
+#   as an extraheader; npm ci runs the package's install script, which reads
+#   it there, but the token it sends has contents: read and no other scope,
+#   so GitHub refuses a push, a release or any other write made with it.
+on: push
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci && npm test

@@ -1,0 +1,30 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; when the event is pull_request_target labeled with the label
+#   safe, a step checks out refs/pull/<n>/head and the next step runs npm ci.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, pull_request_target
+#   labeled among the events. The label is the approval, but
+#   refs/pull/<n>/head names the head of the pull request when the checkout
+#   fetches the head, not the commit that was labelled, so a push between the
+#   label and the fetch is what npm ci runs.
+# attack: after a maintainer reads the pull request and adds the label safe,
+#   the author of the pull request pushes to the branch of the fork a commit
+#   whose package.json has a preinstall that prints PWNED, before the checkout
+#   fetches.
+# attack-run-behavior: the labeled run checks out refs/pull/<n>/head, which
+#   GitHub has moved to the pushed commit, and npm ci runs the preinstall,
+#   with the GITHUB_TOKEN of the base repository in .git/config and the
+#   secrets that the job of a workflow that calls the action gives the steps.
+name: test
+description: test the labelled pull request
+runs:
+  using: composite
+  steps:
+    - if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'safe'
+      uses: actions/checkout@v4
+      with:
+        ref: refs/pull/${{ github.event.pull_request.number }}/head
+        allow-unsafe-pr-checkout: true
+    - if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && github.event.label.name == 'safe'
+      run: npm ci
+      shell: bash

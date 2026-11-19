@@ -1,0 +1,9 @@
+# situation: a JavaScript action of the repository declares runs.using:
+#   node24.
+# reason: the runner runs the action on the Node.js version that the action
+#   declares.
+name: build-info
+description: prints the build information
+runs:
+  using: node24
+  main: dist/index.js

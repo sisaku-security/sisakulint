@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   the default branch of the repository of the pull request's head to tar
+#   after the file names, through env and inside quotes.
+# reason: GNU tar, the tar of ubuntu-latest, reads a word that begins with
+#   - as an option even after its file names, and the linter's table of
+#   values has no entry that says whether the default branch of the
+#   repository of the head can begin with -: the owner of a fork names the
+#   branches of the fork, and GitHub accepted
+#   git push origin HEAD:refs/heads/<name> for a name that begins with -,
+#   though git check-ref-format --branch refuses such a name.
+# attack-value: github.event.pull_request.head.repo.default_branch = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: if the default branch had this value, tar would read
+#   the word as --to-command and, while tar extracts notes.txt, run echo
+#   PWNED with the content of notes.txt as the input of echo.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BRANCH: ${{ github.event.pull_request.head.repo.default_branch }}
+        run: tar -xf archive.tar notes.txt "$BRANCH"

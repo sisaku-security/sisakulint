@@ -1,0 +1,41 @@
+# situation: on workflow_run, a run writes to $GITHUB_PATH a value from a
+#   file of an artifact through a variable the script sets, the form of
+#   GHSL-2024-173
+#   (https://securitylab.github.com/advisories/GHSL-2024-173_Feign/);
+#   another writes a commit message through a positional parameter of a
+#   function and an indirection the script sets.
+# reason: a todo (the same file): following the variables of the script
+#   would find it.
+# cause: the value goes through a variable the script sets, which the rule
+#   does not follow.
+# attack-value: the file tool_dir.txt in the artifact tool_dir = "111\n/tmp/PWNED"
+# attack-run-behavior: download-artifact puts tool_dir.txt in the workspace;
+#   TOOL_DIR=$(cat tool_dir.txt) is 111, a line break and /tmp/PWNED, since
+#   $( ) drops only the line breaks at the end, and echo writes the lines
+#   111 and /tmp/PWNED to $GITHUB_PATH. The steps after it get /tmp/PWNED
+#   first in PATH, and the relative path 111 after it.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-173_Feign/
+on:
+  workflow_run:
+    workflows: ["receive-pr"]
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tool_dir
+          run-id: ${{ github.event.workflow_run.id }}
+      - run: |
+          TOOL_DIR=$(cat tool_dir.txt)
+          echo "$TOOL_DIR" >> $GITHUB_PATH
+      # a positional parameter of a function the script calls with the value
+      - env:
+          T: ${{ github.event.workflow_run.head_commit.message }}
+        run: |
+          f() { echo "$1" >> "$GITHUB_PATH"; }
+          f "$T"
+          # the indirection names T through X, which the script sets
+          X=T
+          echo "${!X}" >> "$GITHUB_PATH"

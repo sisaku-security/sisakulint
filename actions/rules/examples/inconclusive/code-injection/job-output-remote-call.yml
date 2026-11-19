@@ -1,0 +1,21 @@
+# situation: the job a calls the reusable workflow
+#   some/repo/.github/workflows/w.yml@v1 of another repository, and the job
+#   b writes needs.a.outputs.o into its run script by ${{ }}.
+# reason: the output is set in that reusable workflow, which is not in the
+#   input, so whether an attacker controls it is not known.
+# cause: the rule does not yet ask for the reusable workflow of another
+#   repository as a fact.
+# attack-value: needs.a.outputs.o = "\"; echo PWNED; echo \""
+# attack-run-behavior: when some/repo/.github/workflows/w.yml@v1 sets its
+#   output o to the value, the script of the job b becomes echo ""; echo
+#   PWNED; echo "", and bash runs the second echo as a command, which prints
+#   PWNED.
+on: issues
+jobs:
+  a:
+    uses: some/repo/.github/workflows/w.yml@v1
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.a.outputs.o }}"

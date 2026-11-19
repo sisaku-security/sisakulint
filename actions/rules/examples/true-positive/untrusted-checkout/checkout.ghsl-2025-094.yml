@@ -1,0 +1,31 @@
+# situation: on pull_request_target, with contents: write, a job checks out
+#   the head branch of the pull request from the head repository with
+#   actions/checkout v4.2.2, a release older than the first release of
+#   actions/checkout that refuses to check out the code of a pull request
+#   without the input allow-unsafe-pr-checkout, and runs uv pip install with
+#   -e on the directory of the checkout. This is pr_autoupdate.yaml of
+#   ag2ai/faststream (commit 12fdfa25651a672ba4abcae981df255d782cbd93, lines
+#   4, 25-26 and 46).
+# reason: uv pip install -e builds the project of the checkout, which runs the
+#   build backend that pyproject.toml of the author of the pull request names;
+#   uv is not in the table of tools of the rule, so the rule reports the kind
+#   checkout, which holds when a later step runs the files.
+# attack: the author of the pull request writes a build backend in
+#   pyproject.toml of the head branch.
+# attack-run-behavior: uv pip install runs the build backend of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-094_ag2ai_faststream/
+on:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review]
+permissions:
+  contents: write
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          persist-credentials: false
+      - run: uv pip install --system --group dev -e .

@@ -1,0 +1,38 @@
+# situation: on pull_request_target, the job runs only when the actor is
+#   dependabot[bot], and then has gh pr merge --auto merge the pull request
+#   with a token that may write contents and pull requests.
+# reason: an actor rule of the Actions policies of the repository allows
+#   only the repository roles with write access to trigger the workflow, and
+#   does not have dependabot[bot] among the allowed actors, so a run whose
+#   actor is dependabot[bot] fails. GitHub's documents say that GitHub
+#   evaluates the policies before a run, and that a run that a policy does not
+#   allow fails with an error; the documents do not say whether a job of such
+#   a run starts before the run fails, and the rule assumes that no job
+#   starts.
+# cause: the rule does not take the actor rules of the Actions policies into
+#   account: repo.pull-request-target-allowed is one value for all the runs of
+#   the workflow file on pull_request_target, and an actor rule blocks a run
+#   by the account that starts the run.
+# attack: the attacker enables Dependabot in the fork of the attacker, opens
+#   a pull request to this repository from the branch of a pull request that
+#   Dependabot opened in the fork, then comments @dependabot recreate on the
+#   pull request of Dependabot in the fork, so that Dependabot pushes to that
+#   branch.
+# attack-run-behavior: dependabot[bot] is not an allowed actor, so the run
+#   on pull_request_target that the push of Dependabot triggers fails with an
+#   error, and no job of the run starts (the assumption of the reason), so gh
+#   pr merge never runs.
+name: policy
+on: pull_request_target
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,14 @@
+# situation: a step runs a script of the repository, which prints
+#   ::set-output name=version::1.0.0.
+# reason: a todo (a file of the repository): the runner adds a warning, and
+#   the step sets no output once GitHub disables set-output.
+# cause: the rule reads the text of the run, not the script it runs.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: version
+        run: ./scripts/version.sh

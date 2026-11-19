@@ -1,0 +1,29 @@
+# situation: on workflow_run, the artifact is downloaded under runner.temp,
+#   and steps run its files from there without naming their path: cd into
+#   it, and working-directory.
+# reason: a todo (the same file): reading cd and working-directory would
+#   find that the files run.
+# cause: only a command that names $RUNNER_TEMP/... or ${{ runner.temp
+#   }}/... is read as running them.
+# attack-value: the file x.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts x.sh under runner.temp/a; cd
+#   $RUNNER_TEMP/a && bash x.sh runs it, and ./x.sh in the working-directory
+#   runner.temp/a runs it again, each printing PWNED, with the base
+#   repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/a
+      - run: cd $RUNNER_TEMP/a && bash x.sh
+      - run: ./x.sh
+        working-directory: ${{ runner.temp }}/a

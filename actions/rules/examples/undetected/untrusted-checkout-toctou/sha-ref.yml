@@ -1,0 +1,30 @@
+# situation: on pull_request_target labeled, a job with the label preview
+#   checks out the pull request's head SHA and runs pip install -r
+#   requirements.txt: the shape of GHSL-2025-077 (beeware/beeware.github.io
+#   ci.yml).
+# reason: limitation: the commit is that of the time of the label, so a
+#   commit pushed after the review and before the label runs with the job's
+#   token and secrets (GHSL-2025-077); whether such a push comes is decided
+#   when the workflow runs.
+# cause: the rule reports a ref the author can move after the approval (a
+#   branch, refs/pull/<n>/...), and a SHA does not move.
+# attack: after a maintainer reviews the pull request and before the label
+#   preview is added, its author pushes a commit whose requirements.txt
+#   names a package of theirs whose setup code prints PWNED.
+# attack-run-behavior: the labeled run checks out head.sha, the commit at
+#   the time of the label, which is the pushed one, and pip install -r
+#   requirements.txt installs that package and runs its setup code, with the
+#   base repository's GITHUB_TOKEN in .git/config and its secrets.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-077_beeware_beeware_github_io/
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  preview:
+    if: contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: pip install -r requirements.txt

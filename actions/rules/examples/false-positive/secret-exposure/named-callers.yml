@@ -1,0 +1,25 @@
+# situation: a reusable workflow, run only when called, passes
+#   toJSON(secrets) to an action; it is called from other repositories,
+#   each of which passes it DEPLOY_TOKEN by name.
+# reason: the job of a called workflow gets the secrets its caller passes,
+#   so toJSON(secrets) has only DEPLOY_TOKEN.
+# cause: the callers are not among the files given to the linter, so the
+#   rule reads the worst case: a caller that passes every secret with
+#   secrets: inherit.
+# attack: the maintainer of some/deploy-action, or one who took over their
+#   account, moves the tag v1 to code that reads the step's env.
+# attack-run-behavior: each caller passes DEPLOY_TOKEN, and the runner of
+#   the called job gets it alone; the action's code finds DEPLOY_TOKEN in
+#   ALL, which the job reads anyway.
+on:
+  workflow_call:
+    secrets:
+      DEPLOY_TOKEN:
+        required: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/deploy-action@v1
+        env:
+          ALL: ${{ toJSON(secrets) }}

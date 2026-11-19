@@ -1,0 +1,9 @@
+name: x27
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      S: ${{ steps.a.outcome }}
+    steps:
+      - run: echo ok

@@ -1,0 +1,16 @@
+# situation: a step passes env[vars.NAME], an env whose name is a variable
+#   of the repository, to tar after the file names, by ${{ }} inside
+#   quotes.
+# reason: which env the name picks is not known from the workflow, and an
+#   env may be one a step before sets at run time, so whether an attacker
+#   controls it is not known.
+# attack-value: a variable of env that a step before sets through $GITHUB_ENV = "--to-command=echo PWNED"
+# attack-run-behavior: when vars.NAME names a variable a step before sets
+#   to the value, tar reads the word as --to-command and runs echo PWNED for
+#   notes.txt as it extracts it, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ env[vars.NAME] }}"

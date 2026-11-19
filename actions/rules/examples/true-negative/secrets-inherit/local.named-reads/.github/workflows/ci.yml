@@ -1,0 +1,6 @@
+on: issues
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

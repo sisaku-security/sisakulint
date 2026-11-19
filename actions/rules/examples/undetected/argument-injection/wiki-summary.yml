@@ -1,0 +1,22 @@
+# situation: on gollum, a step extracts an archive and passes the summary of
+#   the wiki page to tar after the file names, through env and inside
+#   quotes.
+# reason: a limitation (run time): GitHub decides the summary of a wiki page
+#   when the event happens. The gollum payloads that the authors of the
+#   linter saw had a null summary each time, for pages made and edited on
+#   the web interface and pushed by git; an edit by an account with no role
+#   in the repository was not tried.
+# cause: the rule reads the summary of a wiki page as a value that nobody
+#   writes.
+# attack-value: github.event.pages[0].summary = "--to-command=id"
+# attack-run-behavior: if GitHub ever put a summary that the editor of the
+#   wiki writes in the payload, a summary that begins with --to-command=
+#   would make tar run a program.
+on: gollum
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          SUMMARY: ${{ github.event.pages[0].summary }}
+        run: tar -xf archive.tar notes.txt "$SUMMARY"

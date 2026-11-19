@@ -1,0 +1,7 @@
+on: push
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/called.yml
+    secrets:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}

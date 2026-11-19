@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step takes the newlines out of the
+#   issue's body (tr -d '\n') and then writes it to $GITHUB_ENV as body=.
+# reason: in the written line, a newline of the issue's body is what would
+#   start another variable, such as LD_PRELOAD; with every newline taken
+#   out, all of it stays the value of the one line body=.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: printf '%s' "${BODY}" | tr -d '\n' prints xPWNED=1,
+#   so echo appends the one line body=xPWNED=1 to $GITHUB_ENV; the runner
+#   sets body to xPWNED=1, and no variable PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$(printf '%s' "${BODY}" | tr -d '\n')" >> "$GITHUB_ENV"

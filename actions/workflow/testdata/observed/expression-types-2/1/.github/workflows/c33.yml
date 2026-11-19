@@ -1,0 +1,14 @@
+name: c33
+on:
+  workflow_call:
+    inputs:
+      b:
+        type: boolean
+      n:
+        type: number
+        default: 1
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "b=[${{ inputs.b }}] n=[${{ inputs.n }}]"

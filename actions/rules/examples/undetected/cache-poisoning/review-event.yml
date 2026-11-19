@@ -1,0 +1,24 @@
+# situation: on pull_request_review, a job with cache-mode: write saves
+#   build under a key that has the review's body.
+# reason: a todo (the same file, a fact): anyone who may comment reviews a
+#   pull request from a branch of the repository, and the job saves a cache
+#   under the key the attacker wrote; the scope of a cache that a run of a
+#   review saves was not seen, and the rule reads it as the merge ref of
+#   the pull request, not the scope of the default branch.
+# cause: the rule does not read pull_request_review among the events whose
+#   run saves a cache to the scope of the default branch.
+# attack-value: github.event.review.body = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: the attacker reviews an open pull request whose
+#   branch is in the repository; the job saves build under the key they
+#   wrote.
+on: pull_request_review
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.review.body }}

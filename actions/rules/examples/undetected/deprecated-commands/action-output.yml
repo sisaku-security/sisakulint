@@ -1,0 +1,15 @@
+# situation: a step uses an old JavaScript action whose @actions/core
+#   writes outputs with ::set-output.
+# reason: a limitation (run time): the runner adds a warning, and the step
+#   sets no output once GitHub disables set-output.
+# cause: the rule reads the runs of bash and sh, not the code of actions.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: meta
+        uses: example-org/old-metadata-action@v1
+      - run: echo "${{ steps.meta.outputs.tags }}"

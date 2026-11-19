@@ -1,0 +1,23 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step appends to $GITHUB_STEP_SUMMARY, through a pipe to cat in a group, a
+#   line of "key:" and a $( ) in which exec points the standard output to
+#   /dev/null and then an echo prints the secret GCP_SA_KEY without the first
+#   character of the secret.
+# reason: the exec sends the print to /dev/null, so the $( ) is empty and
+#   the job summary gets no part of the secret.
+# cause: the rule reads a pipeline whose last command is a group by every
+#   simple command, and does not read where the exec in the $( ) points the
+#   standard output.
+# attack: anyone who can read the run opens the job summary of the run and
+#   reads the secret.
+# attack-run-behavior: the job summary of the run gets "key:" alone.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "key: $(exec >/dev/null; echo "${GCP_SA_KEY:1}")" | { cat; } >>"$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,10 @@
+name: x28
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    snapshot:
+      image-name: probe-image
+      if: ${{ github.ref == 'refs/heads/none' }}
+    steps:
+      - run: echo ok

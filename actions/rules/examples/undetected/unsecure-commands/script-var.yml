@@ -1,0 +1,24 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step copies the title of the issue to a variable of the script and
+#   prints the variable.
+# reason: a todo (the same file): the variable holds the title, which the
+#   runner reads as a command.
+# cause: the rule reads the value of env, not what the script assigns.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          T="$TITLE"
+          echo "$T"
+      - run: echo next

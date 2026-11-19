@@ -1,0 +1,8 @@
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/callee2.yml
+    with:
+      reqdef: r
+      b: false
+      n: 2

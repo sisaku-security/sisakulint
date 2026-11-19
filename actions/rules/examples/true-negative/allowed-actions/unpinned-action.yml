@@ -1,0 +1,18 @@
+# situation: the setting of allowed actions of GitHub requires a full commit
+#   SHA for each action; the workflow uses actions/cache by a full commit
+#   SHA, and the Docker image alpine by a tag.
+# reason: GitHub requires the full commit SHA of an action only, and a
+#   Docker image may still name a tag (in a run that the authors of the rule
+#   made on GitHub, a docker:// step by a tag ran).
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache
+          key: cache-${{ github.sha }}
+      - uses: docker://alpine:3.20

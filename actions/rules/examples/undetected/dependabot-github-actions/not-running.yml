@@ -1,0 +1,11 @@
+# situation: the repository has a configuration file of Renovate, and
+#   Renovate is not installed on the repository.
+# reason: nothing runs Renovate, so no pull request updates the uses.
+# cause: whether Renovate is installed, or Dependabot is paused or turned
+#   off, is not in the files the rule reads.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4

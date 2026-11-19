@@ -1,0 +1,23 @@
+# situation: on issues opened, a step sets out to $GITHUB_ENV in an if whose
+#   condition is false, writes V= and the issue's body to "$out", and goes
+#   on when the write fails (|| true).
+# reason: bash does not run the branch, so out is empty when echo runs, and
+#   the body does not go to $GITHUB_ENV.
+# cause: the rule does not read the value of the condition of an if, and
+#   reads the assignment in the branch as one that may run.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: bash cannot open the file of the empty name and
+#   writes nothing, || true keeps the step going, and the runner sets no
+#   environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          if false; then out=$GITHUB_ENV; fi
+          echo "V=$V" >> "$out" || true

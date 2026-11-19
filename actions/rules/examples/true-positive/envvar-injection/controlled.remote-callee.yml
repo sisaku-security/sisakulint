@@ -1,0 +1,26 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/envvar-injection-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   controlled (controlled.custom-shell.yml) of the rule, with on:
+#   workflow_call in place of the on of controlled.custom-shell.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, on
+#   issues opened, a step whose shell: is bash -e {0} writes body= and the
+#   issue's body to $GITHUB_ENV.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   runner runs the script in bash with -e, which reads the script as shell:
+#   bash does; anyone who opens an issue writes the body of the issue, and
+#   the runner reads $GITHUB_ENV one line at a time as NAME=value, so a line
+#   of the body such as BASH_ENV=... becomes a separate variable.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds x, a line break and PWNED=1, so echo
+#   appends the two lines body=x and PWNED=1 to $GITHUB_ENV; the runner
+#   reads each line as NAME=value and sets body to x and PWNED to 1 for the
+#   later steps.
+on:
+  issues:
+    types: [opened]
+jobs:
+  c:
+    uses: example-org/envvar-injection-remote/.github/workflows/w.yml@v1
+    secrets: inherit

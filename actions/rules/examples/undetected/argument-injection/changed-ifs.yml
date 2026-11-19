@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a step sets IFS to : and passes the
+#   label of the pull request's head (owner:branch) to tar after the file
+#   names, through env and outside quotes.
+# reason: a todo (the same file): the shell splits a value outside quotes
+#   at the characters of IFS, so with IFS=: the shell splits the label into
+#   the login and the name of the branch, and the name of the branch can
+#   begin with -.
+# cause: the rule assumes that the shell splits a value outside quotes at
+#   blanks only, and does not read an assignment to IFS in the script.
+# attack-value: github.event.pull_request.head.label = "attacker:--to-command=id"
+# attack-run-behavior: the shell splits the label into attacker and
+#   --to-command=id; tar reads --to-command=id as an option and, while tar
+#   extracts notes.txt, runs id with the content of notes.txt as the input
+#   of id, and id prints the user and the groups of the runner.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          LABEL: ${{ github.event.pull_request.head.label }}
+        run: |
+          IFS=:
+          tar -xf archive.tar notes.txt $LABEL

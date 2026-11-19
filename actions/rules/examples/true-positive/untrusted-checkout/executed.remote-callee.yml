@@ -1,0 +1,24 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/untrusted-checkout-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   executed (executed.parallel.yml) of the rule, with on: workflow_call in
+#   place of the on of executed.parallel.yml. The job passes its secrets
+#   with secrets: inherit. In the true positive, pull_request_target checks
+#   out the head of a pull request from a fork in a parallel group, with the
+#   guard of actions/checkout taken away, and npm ci, written before it in
+#   the group, runs its code.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   steps of a parallel group run alongside each other, so npm ci may run
+#   after the checkout has put the fork's commit in the workspace, with the
+#   base repository's token and secrets.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: when the checkout fetches head.sha, the fork's
+#   commit, into the workspace before npm ci reads package.json, npm ci runs
+#   the preinstall of the fork's package.json, which prints PWNED, with the
+#   base repository's GITHUB_TOKEN and its secrets.
+on: pull_request_target
+jobs:
+  c:
+    uses: example-org/untrusted-checkout-remote/.github/workflows/w.yml@v1
+    secrets: inherit

@@ -1,0 +1,11 @@
+# The caller: on issues, it gives the issue's title as lycheeVersion, which
+# the action writes into run (the advisory's input, from an attacker).
+on: issues
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./called
+        with:
+          lycheeVersion: ${{ github.event.issue.title }}

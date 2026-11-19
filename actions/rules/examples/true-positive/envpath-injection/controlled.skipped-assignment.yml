@@ -1,0 +1,23 @@
+# situation: on issues opened, a step sets out to $GITHUB_PATH, defines a
+#   function f that sets out to /dev/null only when Q is set, calls f, and
+#   writes the issue's title to "$out"; the next step runs git status.
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, out holds $GITHUB_PATH, and the title goes to
+#   $GITHUB_PATH.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value goes to $GITHUB_PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          out=$GITHUB_PATH
+          if [ -n "$Q" ]; then f() { out=/dev/null; }; fi
+          f
+          echo "$V" >> "$out"
+      - run: git status

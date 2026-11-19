@@ -1,0 +1,5 @@
+name: y24
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c24.yml

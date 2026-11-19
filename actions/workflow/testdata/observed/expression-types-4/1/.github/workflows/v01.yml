@@ -1,0 +1,12 @@
+name: v01
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  j:
+    if: ${{ case('x', true, false) }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ran

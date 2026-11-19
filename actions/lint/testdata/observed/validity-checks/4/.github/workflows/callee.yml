@@ -1,0 +1,18 @@
+on:
+  workflow_call:
+    inputs:
+      req:
+        required: true
+        type: string
+      flag:
+        type: boolean
+      num:
+        type: number
+    secrets:
+      shh:
+        required: true
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "req=${{ inputs.req }} flag=${{ inputs.flag }} num=${{ inputs.num }}"

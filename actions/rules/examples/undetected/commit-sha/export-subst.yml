@@ -1,0 +1,21 @@
+# situation: on push, a step uses example-org/act@<full SHA>, an action
+#   pinned to a full SHA whose repository gives its action.yml the
+#   attribute export-subst; the run has no answer of action.definition for
+#   the action, and no one was asked (no --online, no answer in --facts).
+# reason: the archive the runner downloads puts the names of the tags of
+#   the commit into the step ($Format:%d$, $Format:%(describe)$): a tag
+#   made after the pin changes the step that runs, as observed on
+#   2026-10-31 (an action of a probe repository, pinned to
+#   cdeca5eaf20c33bc2b65d49b66b9465787e457a3, ran a command written in the
+#   name of a tag made later).
+# cause: the rule reads whether the archive differs from the blob only from
+#   the answer of action.definition, which the run does not have.
+# attack-value: the name of a tag the maintainer of example-org/act makes on the pinned commit = "e6-a';echo${IFS}PWNED;'"
+# attack-run-behavior: the runner downloads the archive with the tag's name
+#   in the step, and the step runs echo PWNED.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/act@cdeca5eaf20c33bc2b65d49b66b9465787e457a3

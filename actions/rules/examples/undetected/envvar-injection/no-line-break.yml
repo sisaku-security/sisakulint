@@ -1,0 +1,52 @@
+# situation: on pull_request_target, workflow_run, merge_group, fork, and
+#   issues and discussion transferred, runs write branches' names, a number
+#   and a SHA after the = of lines of $GITHUB_ENV. issues and discussion run only
+#   when transferred: changes.new_repository is in the payload of that
+#   action alone.
+# reason: no added gain: a branch's name cannot hold a line break: "They
+#   cannot have ASCII control characters (i.e. bytes whose values are lower
+#   than \040, or \177 DEL)" (git-check-ref-format, git v2.51.0). The second
+#   step is the form of GHSL-2025-105 (vets-api,
+#   https://securitylab.github.com/advisories/GHSL-2025-105_vets-api/),
+#   which the advisory reports as code injection: code-injection reports it.
+# cause: the rule's table of contexts reads the branches' names as
+#   structured (an attacker shapes them within a form without line breaks)
+#   and the number and the SHA as fixed. A fixed value is not taken as an
+#   attacker's, and a structured one not as written with line breaks; after
+#   the =, the rule reports only a value written with line breaks.
+# attack-value: github.event.workflow_run.head_branch = "x\nPWNED=1"
+# attack-run-behavior: were a branch so named, the second step's script
+#   would become echo "pr_branch=x<line break>PWNED=1" >> $GITHUB_ENV, which
+#   appends pr_branch=x and PWNED=1, and the runner would set PWNED to 1.
+#   git and GitHub refuse a branch whose name has a line break, so
+#   head_branch never holds this value.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-105_vets-api/
+on:
+  pull_request_target:
+  workflow_run:
+  merge_group:
+  fork:
+  issues:
+    types: [transferred]
+  discussion:
+    types: [transferred]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "h=${{ github.head_ref }} n=${{ github.event.pull_request.number }} s=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+      - run: echo "pr_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_ENV
+      - run: |
+          echo "a=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_ENV"
+          echo "b=${{ github.event.pull_request.head.label }}" >> "$GITHUB_ENV"
+          echo "c=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_ENV"
+          echo "d=${{ github.event.pull_request.base.label }}" >> "$GITHUB_ENV"
+          echo "e=${{ github.event.workflow_run.pull_requests[0].head.ref }}" >> "$GITHUB_ENV"
+          echo "f=${{ github.event.workflow_run.pull_requests[0].base.ref }}" >> "$GITHUB_ENV"
+          echo "g=${{ github.event.workflow_run.referenced_workflows[0].ref }}" >> "$GITHUB_ENV"
+          echo "h=${{ github.event.pull_request.head.repo.default_branch }}" >> "$GITHUB_ENV"
+          echo "i=${{ github.event.pull_request.base.repo.default_branch }}" >> "$GITHUB_ENV"
+          echo "j=${{ github.event.forkee.default_branch }}" >> "$GITHUB_ENV"
+          echo "k=${{ github.event.changes.new_repository.default_branch }}" >> "$GITHUB_ENV"
+          echo "m=${{ github.event.merge_group.head_ref }}" >> "$GITHUB_ENV"
+          echo "n=${{ github.event.merge_group.base_ref }}" >> "$GITHUB_ENV"

@@ -1,0 +1,16 @@
+# situation: on gollum, a run step echoes the title of the first wiki page
+#   changed, written in by ${{ }}.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
+#   assumed true), and ${{ }} puts the page's title into the script before
+#   the shell parses it, so a double quote in it ends the echo's string and
+#   what follows runs as commands.
+# attack-value: github.event.pages[0].title = "$(echo PWNED)"
+# attack-run-behavior: the script becomes echo "$(echo PWNED)", and bash
+#   runs the command substitution inside the double quotes, so echo prints
+#   PWNED.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pages[0].title }}"

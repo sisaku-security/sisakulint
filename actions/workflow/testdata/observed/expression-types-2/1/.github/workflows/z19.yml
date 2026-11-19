@@ -1,0 +1,10 @@
+name: z19
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ${{ github.event }}
+        run: echo ok
+      - run: echo after

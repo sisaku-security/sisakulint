@@ -1,0 +1,17 @@
+# situation: on push, a step sends a request with curl to hooks.example.com,
+#   with the options of the file ci/curl.conf of the repository.
+# reason: a limitation (run time): the file may hold a header with a
+#   credential.
+# cause: the rule reads the words of the command, not the files curl reads.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the workflow sends the request as it always does, and
+#   the server, now the attacker's, logs the value of API_KEY.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -fsS -K ci/curl.conf https://hooks.example.com/

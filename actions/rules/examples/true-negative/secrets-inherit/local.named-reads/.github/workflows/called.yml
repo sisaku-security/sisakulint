@@ -1,0 +1,21 @@
+# situation: a reusable workflow whose job deploy reads one secret by name,
+#   DEPLOY_TOKEN, and does not read the secrets without naming them. ci.yml
+#   calls the reusable workflow on issues with secrets: inherit, and both
+#   files are given to the linter.
+# reason: GitHub passes the runner of the job deploy only the secrets that
+#   the job deploy reads by name, so a flaw in the job deploy gets
+#   DEPLOY_TOKEN alone, as when ci.yml passes DEPLOY_TOKEN by name.
+# attack: a flaw in the job deploy (an injection of the issue's title, for
+#   example) runs the attacker's code in the job deploy.
+# attack-run-behavior: the runner of the job deploy gets DEPLOY_TOKEN and no
+#   other secret of the repository; the attacker's code finds DEPLOY_TOKEN
+#   only.
+on:
+  workflow_call:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

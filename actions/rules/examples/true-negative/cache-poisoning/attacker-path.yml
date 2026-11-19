@@ -1,0 +1,19 @@
+# situation: on issue_comment, a job with cache-mode: read checks out the
+#   base, and saves with actions/cache/save the path the comment's body
+#   names.
+# reason: with cache-mode read nothing is saved to the cache of the default
+#   branch's scope: the files the commenter chooses stay in the job.
+# attack-value: github.event.comment.body = ".git/config"
+# attack-run-behavior: the comment starts the job; the save of .git/config
+#   is denied, and logs that the token has no writable scopes.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ github.event.comment.body }}
+          key: saved-${{ github.run_id }}

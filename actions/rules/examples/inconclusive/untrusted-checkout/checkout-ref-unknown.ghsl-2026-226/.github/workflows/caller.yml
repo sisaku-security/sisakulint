@@ -1,0 +1,23 @@
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  create-test-release:
+    runs-on: ubuntu-latest
+    steps:
+      - id: pr
+        run: echo "head_sha=$head_sha" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: frontend-test-branch
+          path: frontend/
+  publish:
+    needs: create-test-release
+    uses: ./.github/workflows/called.yml
+    with:
+      package-artifact-name: frontend-test-branch
+    permissions:
+      id-token: write

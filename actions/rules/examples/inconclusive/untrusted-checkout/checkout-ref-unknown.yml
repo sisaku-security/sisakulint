@@ -1,0 +1,31 @@
+# situation: on pull_request_target, the checkout takes its ref from the
+#   output of a step, as in the first step of the tj-actions incident
+#   (spotbugs/sonar-findbugs e240bc1aca68337b2b40e100fb24552d27eeb8cc,
+#   .github/workflows/sonarqube.yml:37-45: haya14busa/action-cond gives
+#   refs/pull/<n>/merge, and the checkout reads steps.condval.outputs.value;
+#   ./mvnw runs after it).
+# reason: the ref is what a step computes, so whether it names the code of a
+#   pull request is not analyzed.
+# attack-value: the file mvnw in the pull request's merge commit = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: on pull_request_target, haya14busa/action-cond gives
+#   refs/pull/<n>/merge as steps.condval.outputs.value; when the ref is
+#   that, the checkout fetches the merge commit with the pull request's
+#   mvnw, and ./mvnw verify runs it, which prints PWNED, with the job's
+#   GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    branches: [master]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: haya14busa/action-cond@v1
+        id: condval
+        with:
+          cond: ${{ github.event_name == 'pull_request_target' }}
+          if_true: refs/pull/${{ github.event.pull_request.number }}/merge
+          if_false: ''
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ steps.condval.outputs.value }}
+      - run: ./mvnw verify

@@ -1,0 +1,14 @@
+# situation: the workflow runs on pull_request, and its step reads the
+#   configuration variable LINT_LEVEL, which the repository level defines.
+# reason: a todo (a fact): in a run of a pull request from a fork, GitHub
+#   may give the empty string for LINT_LEVEL; the documentation of GitHub
+#   does not say, and the authors of the rule did not try such a run.
+# cause: the rule reads a defined name as defined in every run.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./lint.sh --level "${{ vars.LINT_LEVEL }}"

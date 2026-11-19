@@ -1,0 +1,21 @@
+# situation: on issues opened, the one step of a job on ubuntu-latest
+#   writes the body of the issue to $GITHUB_PATH.
+# reason: no step runs after the step, and no step with uses is before the
+#   step, so nothing runs with that PATH: on 2026-10-22, in a job of this form on
+#   ubuntu-latest, nothing ran with the directory the step wrote.
+# cause: the rule reports a value an attacker controls written to
+#   $GITHUB_PATH, and does not read what runs after the step or the runner
+#   the label names.
+# attack-value: github.event.issue.body = "/tmp/PWNED"
+# attack-run-behavior: echo writes /tmp/PWNED to $GITHUB_PATH, and the job
+#   ends; no step, post step or hook looks up a command in that PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY" >> "$GITHUB_PATH"

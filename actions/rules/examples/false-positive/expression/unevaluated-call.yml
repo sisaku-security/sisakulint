@@ -1,0 +1,13 @@
+# situation: the workflow runs on push only, and a step prints
+#   github.event_name == 'pull_request' && fromJSON(github.event).
+# reason: the comparison is false in every run, so the runner never
+#   evaluates fromJSON(), which would fail.
+# cause: the rule does not know that the comparison is false in every run.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "${{ github.event_name == 'pull_request' && fromJSON(github.event) }}"

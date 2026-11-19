@@ -1,0 +1,19 @@
+# situation: on issues, a step with no id prints the title of the issue.
+# reason: the runner keeps the outputs of a step only when the step has
+#   an id, so a set-output command in the title sets nothing that a
+#   later step reads.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the runner warns that set-output is deprecated,
+#   and no step reads an output of the step.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: echo next

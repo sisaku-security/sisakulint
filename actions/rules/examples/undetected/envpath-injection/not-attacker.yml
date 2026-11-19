@@ -1,0 +1,18 @@
+# situation: on issues, a run writes secrets, variables and the runner to
+#   $GITHUB_PATH.
+# reason: no added gain: no attacker writes them.
+# cause: the rule reads as what an attacker may write only references to
+#   github (through its table of contexts), env, the outputs of steps and of
+#   jobs needed, inputs and matrix; secrets, vars and runner are none of
+#   these, so it reads them as values no attacker writes.
+# attack-value: vars.NAME = "x\n/tmp/PWNED\ny"
+# attack-run-behavior: the script writes the secret TOKEN, a space and x as
+#   one line, then /tmp/PWNED, then y, a space and runner.os (Linux on
+#   Linux) to $GITHUB_PATH, and the steps after it get /tmp/PWNED first in
+#   PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ secrets.TOKEN }} ${{ vars.NAME }} ${{ runner.os }}" >> "$GITHUB_PATH"

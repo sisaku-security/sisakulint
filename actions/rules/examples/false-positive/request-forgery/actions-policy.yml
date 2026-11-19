@@ -1,0 +1,30 @@
+# situation: on pull_request_target, a step sends a request with curl and
+#   the secret DEPLOY_TOKEN to the host $GITHUB_HEAD_REF names, the name of
+#   the head branch of the pull request.
+# reason: an actor rule of the Actions policies of the repository allows
+#   only the repository roles with write access to trigger the workflow, so a
+#   run that a pull request from an account without write access triggers
+#   fails. GitHub's documents say that GitHub evaluates the policies before a
+#   run, and that a run that a policy does not allow fails with an error; the
+#   documents do not say whether a job of such a run starts before the run
+#   fails, and the rule assumes that no job starts.
+# cause: the rule does not take the actor rules of the Actions policies into
+#   account: repo.pull-request-target-allowed is one value for all the runs of
+#   the workflow file on pull_request_target, and an actor rule blocks a run
+#   by the account that starts the run.
+# attack: the author of a pull request from a fork names the branch
+#   attacker.example.
+# attack-run-behavior: the account of the attacker is not an allowed actor,
+#   so the run on pull_request_target fails with an error, and no job of the
+#   run starts (the assumption of the reason), so curl never sends
+#   DEPLOY_TOKEN.
+name: policy
+on: pull_request_target
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$GITHUB_HEAD_REF/status"

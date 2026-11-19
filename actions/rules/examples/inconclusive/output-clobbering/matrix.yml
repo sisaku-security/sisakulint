@@ -1,0 +1,19 @@
+# situation: the matrix value v is ${{ vars.V }}, not written out in the
+#   workflow, and a step writes matrix.v to $GITHUB_OUTPUT by ${{ }}.
+# reason: what the value holds is not known from the workflow, so whether an
+#   attacker controls it is not known.
+# attack-value: matrix.v = "x\nPWNED=1"
+# attack-run-behavior: when vars.V holds an attacker's text such as this, ${{
+#   }} puts its two lines inside the double quotes of the echo, which writes
+#   the lines v=x and PWNED=1 to $GITHUB_OUTPUT, and the runner sets the
+#   outputs v and PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - v: ${{ vars.V }}
+    steps:
+      - run: echo "v=${{ matrix.v }}" >> "$GITHUB_OUTPUT"

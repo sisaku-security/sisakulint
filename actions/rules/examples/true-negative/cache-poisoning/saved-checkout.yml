@@ -1,0 +1,23 @@
+# situation: on issue_comment, a job with cache-mode: read checks out the
+#   head of the pull request the comment is on, and actions/cache saves
+#   dist, a directory of the tree.
+# reason: with cache-mode read the job restores from the cache of the
+#   default branch's scope and saves nothing there: the pull request's files
+#   are not put in the cache.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches the pull request's head into the
+#   workspace; at the end of the job the post step of actions/cache logs
+#   that saving is denied, and nothing of the attacker's is saved.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}

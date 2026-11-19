@@ -1,0 +1,19 @@
+# situation: the form of the pull_request workflow of coinbase/agentkit in
+#   March 2025: a step uses tj-actions/changed-files@v39, and the workflow has
+#   no permissions key; repo.action-list is * and patterns that start with !,
+#   among them !tj-actions/changed-files@v39.
+# reason: the repository did not list tj-actions/changed-files@v39 as an
+#   action that the repository trusts, and the code of the action runs in the
+#   job with the job's GITHUB_TOKEN.
+# attack: the attacker of agentkit-2025 pointed the tag v39 of
+#   tj-actions/changed-files to a malicious commit made in a fork.
+# attack-run-behavior: the step ran the malicious commit, which leaked the
+#   GITHUB_TOKEN of the job; the token could write, as the workflow had no
+#   permissions key.
+on: pull_request
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tj-actions/changed-files@v39

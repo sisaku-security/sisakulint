@@ -1,0 +1,15 @@
+# situation: a step uses the composite action filter-test-configs of
+#   pytorch/pytorch, pinned to a commit (the SHA is made up).
+# reason: GHSA-hw6r-g8gj-2987, which GitHub rates medium, names its package
+#   https://github.com/pytorch/pytorch/.github/actions/filter-test-configs;
+#   GitHub gives it neither for affects=pytorch/pytorch nor for the path.
+# cause: the rule asks for owner/repo and owner/repo/path, not for a URL.
+# attack: someone uses the vulnerability the advisory describes.
+# attack-run-behavior: the action runs as the uses names it, and the rule
+#   says nothing.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pytorch/pytorch/.github/actions/filter-test-configs@3333333333333333333333333333333333333333

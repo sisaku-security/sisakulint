@@ -1,0 +1,14 @@
+name: u02
+on: push
+concurrency:
+  group: u02-${{ github.run_id }}
+  cancel-in-progress: ${{ format('{0}', 'true') }}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo b

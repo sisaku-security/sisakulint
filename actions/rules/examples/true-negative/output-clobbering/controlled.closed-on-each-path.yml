@@ -1,0 +1,29 @@
+# situation: on issues opened, the step s opens a descriptor on
+#   $GITHUB_OUTPUT with exec {fd} when QUIET is empty and on /dev/null
+#   otherwise, closes the descriptor whose number fd holds with exec
+#   {fd}>&-, writes v= and the issue's body to the descriptor whose number
+#   fd holds, and goes on when the write fails (|| true); the next step
+#   reads the output v.
+# reason: exec {fd}>&- closes the descriptor that exec {fd} in the branch of
+#   if opened, so the write fails on both paths, and the body does not go to
+#   $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the write fails with a bad file descriptor, || true
+#   keeps the step going, and the runner sets no output of the step s.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          if [ -z "$QUIET" ]; then exec {fd}>>"$GITHUB_OUTPUT"; else exec {fd}>/dev/null; fi
+          exec {fd}>&-
+          echo "v=$V" >&$fd || true
+      - env:
+          W: ${{ steps.s.outputs.v }}
+        run: echo "$W"

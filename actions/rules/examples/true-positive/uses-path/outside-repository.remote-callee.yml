@@ -1,0 +1,22 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/uses-path-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   outside-repository (outside-repository.yml) of the rule, with on:
+#   workflow_call in place of the on of outside-repository.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, the
+#   first step uses a composite action of example-org/ci-tools pinned to a
+#   full SHA, whose action.yml uses actions/github-script@v7; the second
+#   step names example-org/ci-tools by a full SHA, but its path goes with ..
+#   above the root of the repository, to actions/github-script/v7.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   runner puts each action of the job, a composite action's own uses among
+#   them, in _actions/<owner>/<repo>/<ref>, and reads the path of the second
+#   step from the directory of example-org/ci-tools there; the second step
+#   runs actions/github-script at the tag v7, not an action of
+#   example-org/ci-tools.
+on: push
+jobs:
+  c:
+    uses: example-org/uses-path-remote/.github/workflows/w.yml@v1
+    secrets: inherit

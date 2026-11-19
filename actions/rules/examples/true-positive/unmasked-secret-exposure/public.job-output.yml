@@ -1,0 +1,25 @@
+# situation: on push, in a public repository (repo.public, assumed true),
+#   an output of the job `read` takes the password out of the JSON secret
+#   DB, and the later job `print` prints the output.
+# reason: the runner masks DB whole, not the password that fromJSON takes
+#   out of DB, so the runner keeps the output, and the job `print` prints
+#   the password in the header of its step before the step runs.
+# attack: anyone signed in to GitHub opens the log of the job `print` and
+#   reads the password.
+# attack-run-behavior: the job `read` prints only the name of the output;
+#   the header of the step of the job `print` shows the run: script of the
+#   step with the password in it, unmasked.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    outputs:
+      password: ${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.password }}"

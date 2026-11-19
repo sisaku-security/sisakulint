@@ -1,0 +1,18 @@
+# situation: the step p prints toJSON(env), and the release step writes
+#   the output tag of the step p into its script.
+# reason: the whole env has what the steps set at run time.
+# cause: the rule does not read the env that the steps set at run time.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ toJSON(env) }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

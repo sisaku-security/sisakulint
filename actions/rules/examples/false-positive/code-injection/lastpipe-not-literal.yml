@@ -1,0 +1,25 @@
+# situation: on issues opened, a step passes the issue's title in the
+#   environment variable TITLE, turns lastpipe on with shopt -s and the
+#   option name in a variable, sets TITLE to a fixed command in the last
+#   command of a pipeline, and runs TITLE with eval.
+# reason: with lastpipe, bash runs the last command of the pipeline in the
+#   shell that runs the pipeline, so TITLE holds the fixed command when eval
+#   runs, and the title of the issue does not run.
+# cause: the rule follows lastpipe only after shopt -s lastpipe written as
+#   literal words, so the rule reads TITLE as the value of the env.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: eval runs the fixed command, which prints "safe".
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          o=lastpipe
+          shopt -s "$o"
+          true | TITLE="echo safe"
+          eval "$TITLE"

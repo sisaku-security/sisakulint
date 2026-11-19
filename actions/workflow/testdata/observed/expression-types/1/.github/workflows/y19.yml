@@ -1,0 +1,9 @@
+name: y19
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON('["a"]') }}
+    steps:
+      - run: echo ok

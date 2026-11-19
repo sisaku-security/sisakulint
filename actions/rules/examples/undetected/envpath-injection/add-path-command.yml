@@ -1,0 +1,30 @@
+# situation: on issues, env sets ACTIONS_ALLOW_UNSECURE_COMMANDS, and a run
+#   prints the issue's title.
+# reason: another rule's: unsecure-commands reports a value printed where
+#   the flag is true. GHSA-mfwh-5m23-j46w
+#   (https://github.com/advisories/GHSA-mfwh-5m23-j46w): "Workflows that log
+#   untrusted data to stdout may invoke these commands, resulting in the
+#   path or environment variables being modified". The runner still reads
+#   ::add-path:: where env sets ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   (actions/runner v2.337.0, src/Runner.Worker/ActionCommandManager.cs 453
+#   to 485): a title of ::add-path::<dir> printed here puts <dir> in PATH.
+# cause: envpath-injection reads writes to $GITHUB_PATH, not what a run
+#   prints to the log.
+# attack-value: github.event.issue.title = "::add-path::/tmp/PWNED"
+# attack-run-behavior: echo prints the line ::add-path::/tmp/PWNED to the
+#   log; since env sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true, the runner
+#   reads it as the command add-path and puts /tmp/PWNED before the PATH of
+#   the steps after it, and make in the next step is looked up there.
+#   Nothing is written to $GITHUB_PATH.
+# advisory: https://github.com/advisories/GHSA-mfwh-5m23-j46w
+on: issues
+env:
+  ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: echo "$T"
+      - run: make

@@ -1,0 +1,11 @@
+# situation: on push, a step runs example-org/cache-composite@v1, a
+#   composite action of another repository whose step saves dist with
+#   actions/cache/save and restores nothing.
+# reason: a save that restored no older cache carries no older content.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: example-org/cache-composite@v1

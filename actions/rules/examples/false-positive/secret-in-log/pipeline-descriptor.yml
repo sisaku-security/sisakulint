@@ -1,0 +1,25 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step opens file descriptor 3 on /dev/null with exec, and appends to
+#   $GITHUB_STEP_SUMMARY, through cat, a line of "key:" and a $( ) in which
+#   exec points the standard output at file descriptor 3 and then an echo
+#   prints the secret GCP_SA_KEY without the first character of the secret.
+# reason: the exec in the $( ) sends the print to file descriptor 3, which
+#   points at /dev/null, so the $( ) is empty and the job summary gets no
+#   part of the secret.
+# cause: the rule reads a pipeline whose last command writes to the job
+#   summary without the file descriptors that the exec before the pipeline
+#   opened, and reads the print as a part of the value of the $( ).
+# attack: anyone who can read the run opens the job summary of the run and
+#   reads the secret.
+# attack-run-behavior: the job summary of the run gets "key:" alone.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          exec 3>/dev/null
+          echo "key: $(exec >&3; echo "${GCP_SA_KEY:1}")" | cat >>"$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs eval on the variable in a $( ) in
+#   the words of for.
+# reason: bash expands the words of for before the loop, and eval reads the
+#   title as code.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: eval runs echo PWNED, and the loop prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          for x in $(eval "$ISSUE_TITLE"); do echo "$x"; done

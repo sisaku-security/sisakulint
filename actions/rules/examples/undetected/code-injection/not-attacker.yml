@@ -1,0 +1,19 @@
+# situation: on issues, a run writes secrets, variables, the runner, the
+#   outcome of a step and the result of a job.
+# reason: no added gain: no attacker writes them.
+# cause: the rule reads as what an attacker may write only references to
+#   github (through its table of contexts), env, the outputs of steps and of
+#   jobs needed, inputs and matrix; secrets, vars, runner, steps.<id>.outcome
+#   and needs.<id>.result are none of these, so it reads them as values no
+#   attacker writes.
+# attack-value: vars.NAME = "\"; echo PWNED; echo \""
+# attack-run-behavior: the variable NAME is set by one who may change the
+#   repository's settings; were it the value, the script would become echo
+#   "<TOKEN> "; echo PWNED; echo " <os> <outcome> <result>", and bash would
+#   run echo PWNED as a command.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ secrets.TOKEN }} ${{ vars.NAME }} ${{ runner.os }} ${{ steps.s.outcome }} ${{ needs.a.result }}"

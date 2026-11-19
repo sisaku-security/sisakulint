@@ -1,0 +1,19 @@
+# situation: on push, in a private repository (repo.public answered false),
+#   a step prints the first characters of the secret DEPLOY_TOKEN to check
+#   which token is set.
+# reason: the runner masks DEPLOY_TOKEN where the whole token is in the log,
+#   not a substring of the token, so the first eight characters of the token
+#   are in the log as they are.
+# attack: one with read access to the repository opens the run's log and
+#   reads the first characters of the token.
+# attack-run-behavior: the step prints "token starts with" and eight
+#   characters of the token; the log keeps them for 90 days by default.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: echo "token starts with ${DEPLOY_TOKEN:0:8}"

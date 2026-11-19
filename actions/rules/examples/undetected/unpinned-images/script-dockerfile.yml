@@ -1,0 +1,19 @@
+# situation: on push, the script of a step writes a Dockerfile whose FROM
+#   names alpine:3 by a tag, without a digest, and builds an image from the
+#   Dockerfile.
+# reason: a todo (the same file): the text that the script writes to the
+#   Dockerfile is in the workflow, and reading the text would find the image.
+# cause: the rule does not read the text that the script writes to a file.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: docker build pulls alpine:3, which is now the image
+#   of the attacker, and runs the RUN commands of the Dockerfile in a
+#   container of alpine:3 on the docker daemon of the runner.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          printf 'FROM alpine:3\nRUN make\n' > Dockerfile
+          docker build -t app .

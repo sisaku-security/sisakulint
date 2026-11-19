@@ -1,0 +1,23 @@
+# situation: on workflow_dispatch, the container of the job is ${{
+#   inputs.image }}.
+# reason: the one who dispatches the workflow chooses the value of the input
+#   image, and the workflow does not tell which value, so the image that
+#   runs is not known; nothing that the rule could read is expected to tell
+#   the value.
+# attack: when inputs.image names an image by a tag and no digest, such as
+#   ghcr.io/o/build:1, whoever can push to that image's repository pushes an
+#   image of theirs under the tag.
+# attack-run-behavior: the runner pulls the image the tag now names when the
+#   job starts and runs echo inside it, with the workspace and the docker
+#   socket mounted; if inputs.image has a digest, the runner pulls that
+#   content and the pushed image is not run.
+on:
+  workflow_dispatch:
+    inputs:
+      image: {type: string}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container: ${{ inputs.image }}
+    steps:
+      - run: echo

@@ -1,0 +1,17 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_STATE.
+# reason: no added gain: $GITHUB_STATE is a file that the
+#   post step of a JavaScript action reads.
+# cause: the rule reads writes to $GITHUB_ENV only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo appends b=x and PWNED=1 to $GITHUB_STATE, and
+#   the runner keeps them as the state b and PWNED, which the post steps of
+#   the job's actions get as STATE_b and STATE_PWNED; nothing is written to
+#   $GITHUB_ENV, and no variable PWNED is set.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$B" >> "$GITHUB_STATE"

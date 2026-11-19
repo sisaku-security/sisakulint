@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/output-clobbering-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   controlled (controlled.default-assignment.yml) of the rule, with on:
+#   workflow_call in place of the on of controlled.default-assignment.yml.
+#   The job passes its secrets with secrets: inherit. In the true positive,
+#   on issues opened, a step sets out to $GITHUB_OUTPUT with the operator :=
+#   of a parameter expansion, and writes v=$V to "$out".
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: bash
+#   assigns $GITHUB_OUTPUT to out, which is unset, so the value goes to
+#   $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_OUTPUT.
+on:
+  issues:
+    types: [opened]
+jobs:
+  c:
+    uses: example-org/output-clobbering-remote/.github/workflows/w.yml@v1
+    secrets: inherit

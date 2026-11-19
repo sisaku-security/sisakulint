@@ -1,0 +1,17 @@
+# situation: on a push, a step writes the head commit into a run by
+#   ${{ github.event.head_commit }}, an object, with no function around the
+#   reference.
+# reason: the runner writes an object into a script as the text Object,
+#   with none of its values in it; so the message of the head commit does
+#   not reach the shell.
+# attack-value: github.event.head_commit = "\"; echo PWNED; echo \""
+# attack-run-behavior: the attack value only marks where the head commit
+#   is written, as the head commit is an object and holds no such text;
+#   the runner writes Object in the place of the ${{ }}, the script becomes
+#   echo "head Object", and echo prints that line.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "head ${{ github.event.head_commit }}"

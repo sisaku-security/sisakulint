@@ -1,0 +1,8 @@
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::set-env name=A::b"
+      - if: always()
+        run: echo "A=$A"

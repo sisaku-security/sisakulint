@@ -1,0 +1,16 @@
+# known-vulnerable-actions: actions pinned to the commits of versions that
+# advisories of the GitHub Advisory Database name. Pinned to full SHAs, so
+# that commit-sha reports nothing and the fixes do not collide with its
+# pins. example-org/example-action and its advisory are made up (no
+# advisory of the actions ecosystem was unrated on 2026-10-15).
+on: push
+permissions: {}
+jobs:
+  vulnerable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4.1.2
+      - uses: tj-actions/branch-names@ab304d8562e2f137165e1d930e6d22d431189074 # v7.0.6
+      - uses: lycheeverse/lychee-action@2bb232618be239862e31382c5c0eaeba12e5e966 # v2.0.1
+      - uses: Azure/setup-kubectl@6025c840858f1afa584a5190a4426c338f59e503 # v2.1
+      - uses: example-org/example-action@1111111111111111111111111111111111111111 # v1.0.0

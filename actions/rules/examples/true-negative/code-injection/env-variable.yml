@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and prints the variable with printf,
+#   inside double quotes, as the remedy says (the mitigation of Radware's
+#   report of 2026-10).
+# reason: bash expands the variable after bash parses the script, and printf
+#   reads the value as text; nothing reads the value again as code.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: printf prints the line $(echo PWNED) as text.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          printf '%s\n' "$ISSUE_TITLE"

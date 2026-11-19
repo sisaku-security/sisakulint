@@ -1,0 +1,27 @@
+# situation: on workflow_dispatch, dawidd6/action-download-artifact takes
+#   the artifact of the run that the input run names, and ./out/publish.sh
+#   runs.
+# reason: whoever dispatches the workflow chooses the value of the input,
+#   and the workflow does not tell who that is, so whether an attacker
+#   chooses the run is not known; nothing the rule could read is expected
+#   to tell it.
+# attack-value: inputs.run = "1234"
+# attack-run-behavior: when the one who dispatches the workflow gives as
+#   the input run the ID 1234 of a pull_request run of a pull request from
+#   a fork, whose workflow uploads out/publish.sh that prints PWNED, the
+#   download puts the file in out, and ./out/publish.sh runs it, which
+#   prints PWNED, with the secrets of the repository.
+on:
+  workflow_dispatch:
+    inputs:
+      run: {type: string}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ inputs.run }}
+          name: out
+          path: out
+      - run: ./out/publish.sh

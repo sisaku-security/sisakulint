@@ -1,0 +1,26 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/permissions-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   write-all (write-all.yml) of the rule, with on: workflow_call in place
+#   of the on of write-all.yml. The job passes its secrets with secrets:
+#   inherit. In the true positive, permissions: write-all is written at the
+#   top of the workflow, and the job runs actions/checkout,
+#   actions/setup-node and npm ci.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   write-all gives the job's token write on every scope; both actions take
+#   it as the default of their token input, and actions/checkout leaves it
+#   in .git/config, where the install scripts of the packages npm ci
+#   installs can read it.
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: actions/checkout writes the token into .git/config as
+#   an extraheader; npm ci runs the package's install script, which reads it
+#   there, and the token it sends writes every scope until the job ends.
+on: push
+permissions: write-all
+jobs:
+  c:
+    uses: example-org/permissions-remote/.github/workflows/w.yml@v1
+    secrets: inherit

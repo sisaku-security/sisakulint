@@ -1,0 +1,15 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo built
+  label:
+    needs: build
+    if: contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

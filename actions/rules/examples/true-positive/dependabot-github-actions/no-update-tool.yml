@@ -1,0 +1,13 @@
+# situation: a workflow pins actions/checkout to a commit SHA and uses
+#   actions/setup-node by a tag, and the repository has no
+#   .github/dependabot.yml and no configuration file of Renovate.
+# reason: no update tool opens a pull request when a new version of either
+#   action is released; the action pinned to a SHA gets no Dependabot alert
+#   either, so the workflow keeps running the old commit.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@v4

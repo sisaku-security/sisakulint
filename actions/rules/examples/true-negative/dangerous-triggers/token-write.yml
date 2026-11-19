@@ -1,0 +1,18 @@
+# situation: on issues, the job, with permissions: {}, puts the issue's
+#   title into a run by ${{ }}.
+# reason: with permissions: {} the job's token has no scope, so it writes
+#   nothing, and the job reads no secret: code run through the title gets
+#   neither.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the job a, and the script
+#   becomes echo ""; echo PWNED; echo "", so echo PWNED runs as a command;
+#   the job's token has no scope (permissions: {}) and the job reads no
+#   secret, so a command in its place finds no token that writes and no
+#   secret.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

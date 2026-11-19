@@ -1,0 +1,23 @@
+# situation: dawidd6/action-download-artifact downloads with the input run_id
+#   github.run_id, the current run, and npm ci runs.
+# reason: the artifacts of the current run are those that the jobs of the
+#   current run made, and github.run_id is never empty, so the action never
+#   searches the runs of the workflow: the rule does not read github.run_id
+#   as a value that may be empty.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the input run_id github.run_id names the current run,
+#   whose artifacts only the jobs of the current run upload, so the download
+#   does not take the artifact of the ci run, and npm ci reads no package.json
+#   of the pull request.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{ github.run_id }}
+      - run: npm ci

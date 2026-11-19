@@ -1,0 +1,24 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step defines a function f that points the standard output to /dev/null
+#   with exec and then prints the secret GCP_SA_KEY without the first
+#   character of the secret, and calls f with an argument, appending the
+#   standard output of the call to $GITHUB_STEP_SUMMARY.
+# reason: the exec sends the print to /dev/null, so the job summary gets no
+#   part of the secret.
+# cause: the rule reads what a call of a function with arguments writes
+#   from every command of the body of the function, and does not read where
+#   the exec in the body points the standard output.
+# attack: anyone who can read the run opens the job summary of the run and
+#   reads the secret.
+# attack-run-behavior: the job summary of the run is empty.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          f() { exec >/dev/null; echo "${GCP_SA_KEY:1}"; }
+          f report >>"$GITHUB_STEP_SUMMARY"

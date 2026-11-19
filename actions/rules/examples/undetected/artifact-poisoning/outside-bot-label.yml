@@ -1,0 +1,37 @@
+# situation: a bot outside the repository adds the label safe-to-test when a
+#   comment /ok-to-test is posted on a pull request; labeled.yml runs on
+#   pull_request_target on labeled when the label is safe-to-test, and the job
+#   downloads the artifact out of the run that the output of a step names, and
+#   runs ./out/publish.sh.
+# reason: whether the bot adds the label for a comment of any user, or only
+#   for a comment of a member of the organization that owns the repository, is
+#   in the settings of the bot, which are outside the repository; when the bot
+#   adds the label for a comment of any user, no person approves the run
+#   before the label starts the run.
+# cause: the rule does not read the bots outside the repository that add
+#   labels.
+# attack-value: the file out/publish.sh in the artifact of a run of the pull request = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork and
+#   comments /ok-to-test; when the bot adds the label for the comment, when
+#   the step names a run of the workflow build.yml of the pull request, the
+#   download puts the out/publish.sh of the attacker in out, and the step runs
+#   the file, which prints PWNED, with the secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - id: run
+        run: echo "id=$(gh run list --workflow build.yml --json databaseId -q '.[0].databaseId')" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: out
+          path: out
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+      - run: ./out/publish.sh

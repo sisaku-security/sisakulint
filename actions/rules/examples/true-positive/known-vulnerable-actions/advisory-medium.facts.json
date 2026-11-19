@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"lycheeverse/lychee-action","ref":"2bb232618be239862e31382c5c0eaeba12e5e966"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"lycheeverse/lychee-action","ref":"7cd0af4c74a61395d455af97419279d86aafaede"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"lycheeverse/lychee-action","ref":"2bb232618be239862e31382c5c0eaeba12e5e966"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"advisory-medium.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"lycheeverse/lychee-action","sha":"2bb232618be239862e31382c5c0eaeba12e5e966"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"lycheeverse/lychee-action","sha":"2bb232618be239862e31382c5c0eaeba12e5e966"},"state":"found","value":["refs/tags/v2.0.1"]},
+{"query":{"kind":"git.commit-tags","repo":"lycheeverse/lychee-action","sha":"7cd0af4c74a61395d455af97419279d86aafaede"},"state":"found","value":["refs/tags/v2.0.2"]},
+{"query":{"kind":"git.ref-commit","repo":"lycheeverse/lychee-action","ref":"v2.0.2"},"state":"found","value":{"ref":"refs/tags/v2.0.2","sha":"7cd0af4c74a61395d455af97419279d86aafaede"}},
+{"query":{"kind":"package.advisories","package":"lycheeverse/lychee-action","version":"v2.0.1"},"state":"found","value":[{"first_patched_version":"2.0.2","ghsa_id":"GHSA-65rg-554r-9j5x","severity":"medium","vulnerable_version_range":"< 2.0.2"}]},
+{"query":{"kind":"package.advisories","package":"lycheeverse/lychee-action","version":"v2.0.2"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"lycheeverse/lychee-action"},"state":"found","value":[{"first_patched_version":"2.0.2","ghsa_id":"GHSA-65rg-554r-9j5x","severity":"medium","vulnerable_version_range":"< 2.0.2"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"lycheeverse/lychee-action"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"advisory-medium.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

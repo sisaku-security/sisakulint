@@ -1,0 +1,25 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a step passes the title of the issue in the environment
+#   variable T, defines a function f that sets T to a fixed word only when Q
+#   is set, calls f, and prints T; a step comes after.
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, T holds the title when echo runs, and the step
+#   prints the title.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the title, and the runner sets
+#   BASH_ENV for the steps after.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          if [ -n "$Q" ]; then f() { T=safe; }; fi
+          f
+          echo "issue: $T"
+      - run: echo next

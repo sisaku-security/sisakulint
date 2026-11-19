@@ -1,0 +1,15 @@
+# bot-conditions and unsound-contains: an if that lets only Dependabot in by
+# the actor, which the attacker passes by having Dependabot push to their
+# pull request, a step that lets in any login that is a part of a name, and
+# a step that lets in any login that has a name as a part.
+on: pull_request_target
+permissions: {}
+jobs:
+  dependabot:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains('alice bob', github.event.pull_request.user.login)
+        run: echo approved
+      - if: contains(github.event.pull_request.user.login, 'alice')
+        run: echo approved

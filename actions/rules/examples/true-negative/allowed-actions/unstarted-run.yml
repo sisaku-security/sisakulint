@@ -1,0 +1,13 @@
+# situation: the setting of allowed actions of GitHub allows gradle/* and
+#   docker://alpine:*, and blocks gradle/actions/setup-gradle@*; the
+#   workflow uses gradle/actions/wrapper-validation and the image alpine.
+# reason: the setting allows each uses, so GitHub starts the run.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: docker://alpine:3.20

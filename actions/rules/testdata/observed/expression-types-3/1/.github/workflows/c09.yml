@@ -1,0 +1,11 @@
+name: c09
+on:
+  workflow_call:
+    secrets:
+      s:
+        required: false
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

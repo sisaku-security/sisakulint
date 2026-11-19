@@ -1,0 +1,23 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secret-exposure-unanswered, whose content is
+#   the workflow of the true positive all-secrets
+#   (all-secrets.container-env.yml) of the rule, with on: workflow_call in
+#   place of the on of all-secrets.container-env.yml. The linter has no
+#   answer of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: the maintainer of some/build-action, or one who took over the
+#   account of the maintainer, moves the tag v1 to code that reads the
+#   variable ALL and sends the value of ALL to a server of the attacker over
+#   the network.
+# attack-run-behavior: GitHub sends the job every secret of the repository,
+#   the runner starts the container with ALL set to all the secrets as one
+#   JSON, and the code of the action reads ALL in the container.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/secret-exposure-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

@@ -1,0 +1,28 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a step passes the title of the issue in the environment
+#   variable T, turns lastpipe on with shopt -s and the option name in a
+#   variable, sets T to a fixed word with read in the last command of a
+#   pipeline, and prints T; a step comes after.
+# reason: with lastpipe, bash runs the last command of the pipeline in the
+#   shell that runs the pipeline, so T holds the fixed word when echo runs,
+#   and the step does not print the title.
+# cause: the rule follows lastpipe only after shopt -s lastpipe written as
+#   literal words, so the rule reads T as holding the value of the env.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints "issue: safe"; nothing is set.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          o=lastpipe
+          shopt -s "$o"
+          echo safe | read -r T
+          echo "issue: $T"
+      - run: echo next

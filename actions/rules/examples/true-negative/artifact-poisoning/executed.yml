@@ -1,0 +1,25 @@
+# situation: on workflow_run, the job downloads the artifact of the run that
+#   started it to ${{ runner.temp }}/artifacts, outside the workspace, and
+#   then runs npm ci in the workspace.
+# reason: the artifact's files land outside the workspace, so they replace
+#   none of the files npm ci reads there, and npm ci runs none of them.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the download puts the artifact's package.json under
+#   runner.temp/artifacts, and npm ci reads the package.json of the
+#   workspace, not that one, so the preinstall does not run.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  actions: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/artifacts
+      - run: npm ci

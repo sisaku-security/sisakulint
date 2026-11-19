@@ -1,0 +1,21 @@
+# situation: a reusable workflow that writes no cache-mode saves build under
+#   a key that has the title of the pull request; ci.yml calls it on
+#   pull_request_target with cache-mode: write.
+# reason: a called workflow that writes no cache-mode runs with its
+#   caller's, so the save of the pull_request_target run goes to the
+#   default branch's scope, under the key the pull request's author writes
+#   in the title.
+# attack-value: github.event.pull_request.title = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: the pull request starts ci.yml, which calls this
+#   workflow with Cache mode: write; the step saves build under the title,
+#   which a later run that computes that key restores.
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.pull_request.title }}

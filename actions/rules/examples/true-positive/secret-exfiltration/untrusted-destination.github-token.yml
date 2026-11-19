@@ -1,0 +1,17 @@
+# situation: on push, a step sends the job's token to coveralls.io with
+#   curl; no file of facts answers for the pair of GITHUB_TOKEN and
+#   coveralls.io.
+# reason: the request carries the job's token to coveralls.io, and whoever
+#   holds that server can use the token while the job runs; the fact names
+#   the token GITHUB_TOKEN.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the server, now the attacker's, receives the token
+#   and calls GitHub's API with the token before the job ends.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: token ${{ github.token }}" -d @coverage.json https://coveralls.io/api/v1/jobs

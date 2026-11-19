@@ -1,0 +1,18 @@
+# situation: the step s runs the Docker image docker://alpine:3, and the
+#   next step writes steps.s.outputs.o to $GITHUB_OUTPUT by ${{ }}.
+# reason: the image writes the output at run time; nothing the rule could
+#   read is expected to tell what it writes, so whether an attacker controls
+#   it is not known.
+# attack-value: steps.s.outputs.o = "x\nPWNED=1"
+# attack-run-behavior: when the image sets o to an attacker's text such as
+#   this, ${{ }} puts its two lines inside the double quotes of the echo,
+#   which writes the lines v=x and PWNED=1 to $GITHUB_OUTPUT, and the runner
+#   sets the outputs v and PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        uses: docker://alpine:3
+      - run: echo "v=${{ steps.s.outputs.o }}" >> "$GITHUB_OUTPUT"

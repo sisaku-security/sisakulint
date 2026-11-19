@@ -1,0 +1,12 @@
+# situation: the repository has a configuration file of Renovate and no
+#   .github/dependabot.yml, and a step writes its uses in a flow mapping.
+# reason: Renovate reads the uses of a line of uses:, so Renovate does not
+#   update the uses in the flow mapping.
+# cause: the rule takes Renovate to update every uses of a file that
+#   Renovate handles.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - {uses: actions/setup-node@v4, with: {node-version: "24"}}

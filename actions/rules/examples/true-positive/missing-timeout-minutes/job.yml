@@ -1,0 +1,10 @@
+# situation: a job builds on push and writes no timeout-minutes.
+# reason: GitHub cancels a job after 360 minutes when timeout-minutes is not
+#   written, so a build that stops making progress holds the runner for 360
+#   minutes.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make

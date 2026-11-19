@@ -1,0 +1,18 @@
+# situation: the service container redis is the image redis:7 with a sha256
+#   digest.
+# reason: with a digest the image is pulled by its content, not by the tag
+#   7, so a push that moves the tag to another image does not change what
+#   the service runs.
+# attack: whoever can push to redis on Docker Hub pushes an image of theirs
+#   under the tag 7.
+# attack-run-behavior: the runner pulls by the sha256 digest, so it gets the
+#   image of that content whatever the tag 7 names, and runs it as the
+#   service redis; the pushed image is not pulled.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    services:
+      redis: redis:7@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    steps:
+      - run: make

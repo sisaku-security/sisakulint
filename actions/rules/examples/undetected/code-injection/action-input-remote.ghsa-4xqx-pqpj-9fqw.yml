@@ -1,0 +1,56 @@
+# situation: on issues, a step gives the issue's title and body to the inputs
+#   summary and description of atlassian/gajira-create v2.0.0 (before 2.0.1),
+#   in the way of GHSL-2020-172, which GHSA-4xqx-pqpj-9fqw cites: "the
+#   built-in GitHub context expressions are used by the users of the action
+#   instead, like: … summary: | ${{ github.event.issue.title }}". The inputs
+#   project and issuetype are the values of the README of the action.
+#   Fourteen of the GHSL advisories of 2020 listed below after
+#   GHSA-4xqx-pqpj-9fqw (all of them but GHSL-2020-323) have the same form: a workflow gives the title or the body of an issue,
+#   the body of a comment or the title of a pull request to an input of
+#   atlassian/gajira-create, of atlassian/gajira-comment, or of a fork of
+#   gajira-create (GHSL-2020-208), and each page says that the action expands
+#   {{ }} in the input. on-push-master-notify-discord.yml of
+#   geek-cookbook/geek-cookbook (commit
+#   769313371db2f84abc7a088e306e9595607eaa49, GHSL-2020-323) gives the message
+#   of the first commit of a push to the input args of
+#   Ilshidur/action-discord@master, which the page says reads the input as a
+#   lodash template.
+# reason: a todo (a fact): what an action of another repository does with an
+#   input is in its code; gajira-create v2.0.0 reads the inputs summary and
+#   description as lodash templates (_.template, with {{ }} as the
+#   interpolation), which run what is between {{ and }} as JavaScript.
+# cause: the rule does not read the code of an action of another repository.
+# attack-value: github.event.issue.title = "{{ process.mainModule.require('child_process').execSync('echo PWNED') }}"
+# attack-run-behavior: the value goes to the input summary; the action reads
+#   the input as a template, and node.js runs the JavaScript between {{ and
+#   }}, which starts echo PWNED, with the environment of the job. No run step
+#   of this workflow has the value.
+# advisory: https://github.com/advisories/GHSA-4xqx-pqpj-9fqw
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-174-codacy-coverage-reporter-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-175-codacy-analysis-cli-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-176-codacy-scalameta-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-177-codacy-pylint-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-178-codacy-bitbucket-scala-client-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-179-codacy-coverage-reporter-action-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-180-codacy-helm-ssm-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-181-symless-synergy-core-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-207-hashicorp-boundary-ui-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-208-SourcePointUSA-android-cmp-app-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-209-ww-tech-primrose-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-210-hyperspacedev-starlight-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-211-namin2-dependabot_jira-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-206-saagie-technologies-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-323-geek-cookbook-workflow/
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: atlassian/gajira-create@77d13eab156b8ad1c08c0655011b8a442c502998 # v2.0.0
+        with:
+          project: GA
+          issuetype: Build
+          summary: |
+            ${{ github.event.issue.title }}
+          description: |
+            ${{ github.event.issue.body }}

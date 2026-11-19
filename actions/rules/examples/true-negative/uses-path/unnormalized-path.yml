@@ -1,0 +1,13 @@
+# situation: a step uses actions/cache/save, pinned to a full SHA, after a
+#   build.
+# reason: the uses is written as GitHub reads the uses.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: build
+          key: build-${{ github.sha }}

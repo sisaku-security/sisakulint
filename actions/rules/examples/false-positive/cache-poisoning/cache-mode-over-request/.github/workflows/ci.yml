@@ -1,0 +1,5 @@
+on: pull_request_target
+jobs:
+  c:
+    cache-mode: write-only
+    uses: ./.github/workflows/called.yml

@@ -1,0 +1,22 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step runs ./deploy.sh with the token of the job only if
+#   contains(the login of the actor, 'alice') holds.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, issue_comment among
+#   the events. contains with the login as the first argument is true for any
+#   login that has alice as a part, such as alice-x, and anyone can register
+#   such a login and comment on an issue.
+# attack-value: github.actor = "alice-x"
+# attack-run-behavior: a comment by the account alice-x on any issue runs
+#   the job of a caller on issue_comment; contains('alice-x', 'alice') is
+#   true, so ./deploy.sh runs with TOKEN set to the token of the job.
+name: deploy
+description: deploy for alice
+runs:
+  using: composite
+  steps:
+    - if: contains(github.actor, 'alice')
+      run: ./deploy.sh
+      shell: bash
+      env:
+        TOKEN: ${{ github.token }}

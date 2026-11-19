@@ -1,0 +1,20 @@
+# situation: the step writes $HOME/tools/ and the branch name after it to
+#   $GITHUB_PATH.
+# reason: git keeps a ref name from holding .., so the line names no
+#   directory out of $HOME/tools/.
+# cause: the rule reports a value an attacker controls written to
+#   $GITHUB_PATH, and does not read the fixed parent before it.
+# attack-value: github.head_ref = "x/tmp/PWNED"
+# attack-run-behavior: echo writes the line $HOME/tools/x/tmp/PWNED, with
+#   HOME expanded, to $GITHUB_PATH; the runner puts it before the PATH as
+#   written, and it names a directory under $HOME/tools/, not /tmp/PWNED.
+#   git refuses a branch name with .. in it, and one that starts with /, so
+#   no head_ref makes the line leave $HOME/tools/.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.head_ref }}
+        run: echo "$HOME/tools/$V" >> "$GITHUB_PATH"

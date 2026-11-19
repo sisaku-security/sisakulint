@@ -1,0 +1,20 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/output-clobbering-unknown, whose content is
+#   the workflow of the true positive controlled
+#   (controlled.default-assignment.yml) of the rule, with on: workflow_call
+#   in place of the on of controlled.default-assignment.yml. The linter
+#   asked the fact workflow.definition for the reusable workflow and got no
+#   answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_OUTPUT.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  c:
+    uses: example-org/output-clobbering-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

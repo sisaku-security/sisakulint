@@ -1,0 +1,22 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs the variable inside quotes as
+#   the command word.
+# reason: the value names the program that runs with the argument --version;
+#   whether naming a program that the runner has causes harm was not
+#   checked.
+# cause: the rule does not report a variable inside quotes as the command
+#   word.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: bash looks for a program named $(echo PWNED), finds
+#   none and fails; nothing runs the command substitution.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          "$ISSUE_TITLE" --version

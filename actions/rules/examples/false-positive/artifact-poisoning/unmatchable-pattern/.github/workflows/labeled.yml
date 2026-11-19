@@ -1,0 +1,36 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file that is under
+#   site/ and not under site/, which no file is; labeled.yml runs on
+#   pull_request_target on opened and labeled; the job build checks out the
+#   head of the pull request and uploads dist, and the job deploy, which
+#   needs build and runs on labeled when the if github.event.label.name ==
+#   'safe-to-test' is true, downloads dist and runs ./dist/deploy.sh.
+# reason: no file matches both globs, so actions/labeler never adds the
+#   label, and only a person adds it.
+# cause: the rule reads each glob as one that a pull request can match.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; actions/labeler adds no label, and
+#   labeled.yml does not run until a person adds the label safe-to-test.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

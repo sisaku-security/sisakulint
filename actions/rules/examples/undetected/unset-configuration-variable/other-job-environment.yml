@@ -1,0 +1,23 @@
+# situation: env of the workflow reads the configuration variable
+#   DEPLOY_HOST, which only the environment level of the environment
+#   production defines; the job deploy names production, and the job test
+#   names no environment and also reads DEPLOY_HOST through env.
+# reason: a todo: the job test gets the empty string as DEPLOY_HOST.
+# cause: for a key of the workflow, the rule takes the names of the
+#   environment level of every job of the workflow as defined.
+on: push
+permissions: {contents: read}
+env:
+  DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./smoke-test.sh "$DEPLOY_HOST"
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - run: ./deploy.sh "$DEPLOY_HOST"

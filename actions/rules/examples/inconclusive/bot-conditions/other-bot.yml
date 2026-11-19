@@ -1,0 +1,26 @@
+# situation: on pull_request_target, a job with write permissions runs only
+#   when github.actor is renovate[bot], a bot other than Dependabot, and
+#   merges the pull request.
+# reason: whether an attacker can have Renovate push to their pull request
+#   is not known.
+# attack: in the case where the attacker can have Renovate push to their
+#   pull request, as Dependabot's recreate is used against the true positive
+#   of dependabot, they open the pull request and have Renovate push to it.
+# attack-run-behavior: Renovate's push runs pull_request_target on
+#   synchronize with github.actor renovate[bot], so the if is true and the
+#   job merge starts with contents: write and pull-requests: write; gh pr
+#   merge --auto --rebase turns on auto-merge for the attacker's pull
+#   request.
+on: pull_request_target
+jobs:
+  merge:
+    if: github.actor == 'renovate[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

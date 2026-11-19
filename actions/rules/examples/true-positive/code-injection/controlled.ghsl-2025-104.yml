@@ -1,0 +1,32 @@
+# situation: on issues opened, a step sends the title of the issue to Slack
+#   with curl, with the title written by ${{ }} into the JSON of the
+#   request, which the script passes to curl as one argument in the single
+#   quotes of the shell; the job reads the secret SLACK_WEBHOOK_URL. This
+#   is notifier.yml of weaviate/weaviate (commit
+#   6d01d5ee0a2822d1ad82ba6d0db66c060699decd, lines 3-6, 50-53 and 65-68).
+#   The step that checks the membership of the actor, the step for pull
+#   requests, and the lines of the JSON other than the title are left out.
+# reason: anyone who opens an issue writes its title, and the runner puts the
+#   title into the script before bash reads the script, so a single quote in
+#   the title ends the quoted argument of curl and what follows runs as
+#   commands, with the secrets of the job.
+# attack-value: github.event.issue.title = "x' || true; echo PWNED; : '"
+# attack-run-behavior: the command curl ends at the single quote of the
+#   title and fails, as the command has no URL; || true keeps bash -e
+#   running, and bash runs echo PWNED, which prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-104_weaviate/
+on:
+  issues:
+    types: [opened]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification for All Issues
+        if: github.actor != 'dependabot[bot]' && github.event_name == 'issues'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{
+            "text": "A new Issue has been opened:\n*Title:* ${{ github.event.issue.title }}"
+          }' $SLACK_WEBHOOK_URL

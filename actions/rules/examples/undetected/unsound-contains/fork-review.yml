@@ -1,0 +1,25 @@
+# situation: on comments on the diff, the job runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains('alice bob', the login of the
+#   commenter) holds and the pull request is from a fork.
+# reason: a todo (a fact): the job runs only for a pull request from a
+#   fork. Where a private repository gives secrets or a token that writes
+#   to the runs of pull requests from forks, the run of a review that the
+#   attacker writes on the pull request of another person from a fork has
+#   those secrets or that token, and the job runs for the attacker.
+# cause: the rule does not read the settings of a private repository for
+#   the runs of pull requests from forks, and does not count the run of a
+#   review of a pull request from a fork as a run of the attacker.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: a comment by the account ali on the diff of the
+#   pull request of another person from a fork starts the job deploy;
+#   contains('alice bob', 'ali') is true, so ./deploy.sh runs with TOKEN
+#   set to the value of DEPLOY_TOKEN.
+on: pull_request_review_comment
+jobs:
+  deploy:
+    if: github.event.pull_request.head.repo.full_name != github.repository && (contains('alice bob', github.event.comment.user.login))
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

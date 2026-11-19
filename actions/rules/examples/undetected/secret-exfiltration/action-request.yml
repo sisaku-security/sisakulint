@@ -1,0 +1,16 @@
+# situation: on push, a step gives the secret CODECOV_TOKEN to an action
+#   that uploads a coverage report.
+# reason: a todo (a fact): the action sends the token where its code says.
+# cause: the rule reads the requests of a run, not those an action sends.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the workflow sends the request as it always does, and
+#   the server, now the attacker's, logs the value of API_KEY.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

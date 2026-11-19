@@ -1,0 +1,24 @@
+# situation: on issues, a step sends two requests with curl and the secret
+#   DEPLOY_TOKEN: one to the host the variable DEPLOY_HOST names, one to the
+#   URL the secret STATUS_URL holds.
+# reason: no added gain in a run that adds no attacker: one who may change
+#   the repository's settings sets the variable and the secret, and no
+#   attacker writes them. A run of the linter that adds variables-writer
+#   (--add-attacker) reports the host of the variable, and a run that adds
+#   secrets-writer reports the URL of the secret.
+# cause: the rule reads vars and secrets as values no attacker writes.
+# attack: one who may change the repository's settings sets DEPLOY_HOST to
+#   attacker.example.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example; in a run that adds no attacker, no attacker can set
+#   the variable or the secret.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ vars.DEPLOY_HOST }}/status"
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "${{ secrets.STATUS_URL }}"

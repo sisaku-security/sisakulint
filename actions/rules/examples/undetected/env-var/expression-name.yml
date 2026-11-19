@@ -1,0 +1,15 @@
+# situation: the job sets an env key written with a ${{ }}, whose value is
+#   A=B.
+# reason: a limitation (run time): the key is known when the workflow runs,
+#   and has = in it.
+# cause: the rule does not read a key with a ${{ }}.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      "${{ 'A=B' }}": x
+    steps:
+      - run: env

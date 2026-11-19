@@ -1,0 +1,12 @@
+# situation: a step adds a directory to the PATH with the workflow command
+#   ::add-path::, and the job does not set ACTIONS_ALLOW_UNSECURE_COMMANDS.
+# reason: GitHub disabled add-path: the runner fails the step.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "::add-path::$HOME/.local/bin"
+      - run: tool --version

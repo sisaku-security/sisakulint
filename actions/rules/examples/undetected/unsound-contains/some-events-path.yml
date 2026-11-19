@@ -1,0 +1,23 @@
+# situation: on issues and issue_comment, a step runs ./deploy.sh only if
+#   contains('alice bob', the login of the commenter) holds.
+# reason: a todo (the same file): on issue_comment, contains with the
+#   login as the second argument is true for any login that is a part of
+#   'alice bob', such as ali, and anyone can register such a login and
+#   comment on an issue.
+# cause: the path github.event.comment.user.login is on issue_comment
+#   only, issues is another privileged event of the job, and the rule does
+#   not report a comparison whose path is missing on a privileged event of
+#   the job.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: a comment by the account ali on any issue runs the
+#   job on issue_comment; contains('alice bob', 'ali') is true, so
+#   ./deploy.sh runs with TOKEN set to the token of the job.
+on: [issues, issue_comment]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains('alice bob', github.event.comment.user.login)
+        run: ./deploy.sh
+        env:
+          TOKEN: ${{ github.token }}

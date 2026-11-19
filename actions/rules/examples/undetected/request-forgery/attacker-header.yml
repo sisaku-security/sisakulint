@@ -1,0 +1,20 @@
+# situation: on issues, a step on a GitHub-hosted runner sends a request
+#   with curl to the host the issue's title names, with a header the issue's
+#   body writes, and no credential.
+# reason: a todo (a fact): the metadata service of the runner's cloud
+#   answers a request with the header Metadata: true, and whether the
+#   response reaches the attacker was not tried.
+# cause: the rule reports a request without a credential only from a
+#   self-hosted runner.
+# attack: the attacker opens an issue titled 169.254.169.254 whose body is
+#   Metadata: true.
+# attack-run-behavior: curl sends the request with the header to the
+#   metadata service of the runner's cloud, whose answer goes to the log of
+#   the job.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -H "${{ github.event.issue.body }}" "http://${{ github.event.issue.title }}/metadata/instance?api-version=2021-02-01"

@@ -1,0 +1,26 @@
+# situation: on repository_dispatch, a job with no cache-mode saves build
+#   with actions/cache/save under a key that has the value key of the
+#   client_payload.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.key = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, a run of repository_dispatch saves to
+#   the cache with no cache-mode, and the job saves build to the cache of the
+#   default branch's scope under build-<value>, a key that the sender of the
+#   repository_dispatch chose.
+on: repository_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ github.event.client_payload.key }}

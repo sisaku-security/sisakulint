@@ -1,0 +1,23 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   format('{0}', github.head_ref), the name of the pull request's head
+#   branch, to tar after the file names, through env and inside quotes.
+# reason: format writes the argument that the placeholder {0} names at the
+#   start of the text of format, so the value begins as the branch name
+#   does; tar
+#   reads a word that begins with - as an option even after its file names,
+#   and GitHub takes a branch whose name begins with -: the attacker names
+#   the branch --to-command=<a program>, and tar runs that program for each
+#   file it extracts, in a job with the repository's token.
+# attack-value: github.head_ref = "--to-command=sh${IFS}-c${IFS}id"
+# attack-run-behavior: tar reads the word as --to-command and runs sh -c id
+#   in the step, with what the step can reach.
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ format('{0}', github.head_ref) }}
+        run: tar -xf archive.tar notes.txt "$HEAD_REF"

@@ -1,0 +1,41 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file under site/;
+#   labeled.yml runs on pull_request_target on labeled, and the job call,
+#   which calls the reusable workflow build.yml, needs the job report, whose
+#   if is always(), and report needs the job check, whose if is false for a
+#   pull request from a fork; the job build of build.yml, which runs when the
+#   label is safe-to-test, checks out the head of the pull request and runs
+#   npm ci.
+# reason: GitHub skips the job check for the pull request of the attacker,
+#   and a skip applies to every job after the skipped job in the chain of the
+#   needs key, also after the job report, whose if calls always(), so GitHub
+#   skips the job call in the labeled run, and build.yml does not run
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-jobs-in-a-workflow-needs.md,
+#   and the observation in https://github.com/actions/runner/issues/2205).
+# cause: the rule reads the ifs of the chain of the needs key of the job
+#   call only up to the job report, whose if calls a status function, and
+#   reads the job call as one that runs.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; actions/labeler adds the label safe-to-test,
+#   which starts labeled.yml; GitHub skips the job check, runs the job report,
+#   and skips the job call.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  check:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo checked
+  report:
+    needs: check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo reported
+  call:
+    needs: report
+    uses: ./.github/workflows/build.yml

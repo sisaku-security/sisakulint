@@ -1,0 +1,19 @@
+# situation: on pull_request_target, a job on a macOS runner extracts an
+#   archive and passes the pull request's title to tar after the file
+#   names, through env and inside quotes.
+# reason: the tar of the macOS runner is bsdtar, which has no option
+#   --to-command and reads a word after its operands as a name of a file,
+#   so the title runs nothing.
+# cause: the rule treats tar, sed and make as GNU tar, GNU sed and GNU make
+#   on every runner where the shell is bash, and does not read runs-on.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: bsdtar looks for a file in the archive named
+#   --to-command=echo PWNED ("Not found in archive"), and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: macos-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar -xf archive.tar notes.txt "$TITLE"

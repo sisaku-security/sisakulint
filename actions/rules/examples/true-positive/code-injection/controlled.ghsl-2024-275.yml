@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a step sets the env ref from the name of
+#   the head branch of the pull request and puts ${{ env.ref }} into the
+#   argument of git push in its script. The workflow is also a reusable
+#   workflow (workflow_call). This is build-images-base.yaml of cilium/cilium
+#   (commit 475310f713fb25897b1b939668c73db7da359d08, lines 310-315).
+# reason: the runner puts the name of the branch into the script before bash
+#   reads the script, so the author of the pull request writes code that the
+#   step runs.
+# attack-value: github.event.pull_request.head.ref = "x;echo${IFS}PWNED"
+# attack-run-behavior: the line becomes git push https://x@github.com/x.git
+#   HEAD:x;echo${IFS}PWNED, and bash prints PWNED after git push.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-274_GHSL-2024-275_Cilium/
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  workflow_call: {}
+jobs:
+  b:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push changes into PR
+        env:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+        run: git push https://x@github.com/x.git HEAD:${{ env.ref }}

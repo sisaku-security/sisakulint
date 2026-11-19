@@ -1,0 +1,8 @@
+name: x03
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - if: secrets.FOO != ''
+        run: echo ok

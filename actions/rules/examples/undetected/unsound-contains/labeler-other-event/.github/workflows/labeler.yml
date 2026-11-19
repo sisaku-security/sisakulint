@@ -1,0 +1,19 @@
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - id: pr
+        run: echo "number=$(gh pr list --repo "$REPO" --search "$SHA" --json number -q '.[0].number')" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}
+          pr-number: ${{ steps.pr.outputs.number }}

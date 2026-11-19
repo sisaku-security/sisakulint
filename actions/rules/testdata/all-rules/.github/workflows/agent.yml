@@ -1,0 +1,68 @@
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          allowed_bots: "*"
+  codex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675 # v1.13
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: "Answer the issue: ${{ github.event.issue.title }}"
+          safety-strategy: unsafe
+          sandbox: danger-full-access
+  gemini:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489 # v0.1.22
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: "Label the issue"
+          settings: '{"model": {"name": "${{ github.event.issue.title }}"}}'
+  claude-later:
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "*"
+          prompt: "Fix the issue"
+          claude_args: --allowedTools Bash
+      - run: npm publish
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  claude-edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "*"
+          prompt: "Fix the issue"
+          claude_args: --permission-mode acceptEdits
+      - run: npm test
+  claude-auto:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "0"
+    steps:
+      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: "Triage the issue"
+          claude_args: --permission-mode auto --allowedTools Read

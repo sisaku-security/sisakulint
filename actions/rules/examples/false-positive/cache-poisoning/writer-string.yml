@@ -1,0 +1,21 @@
+# situation: on issues labeled, a job that writes the cache saves it under
+#   the label's name.
+# reason: only those who can write to the repository create a label, so the
+#   key is no attacker's.
+# cause: the webhook schema gives the name no enum, and the table reads a
+#   free string as arbitrary.
+# attack: no attacker can name a label; were the name theirs, they would
+#   choose the key of the entry the job saves.
+# attack-run-behavior: the job saves build under the label's name, which
+#   only those who can write chose.
+on: {issues: {types: [labeled]}}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.label.name }}

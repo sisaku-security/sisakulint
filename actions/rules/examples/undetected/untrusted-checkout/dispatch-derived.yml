@@ -1,0 +1,30 @@
+# situation: on workflow_dispatch with the input pr, the env REF of the job
+#   is refs/pull/<the input pr>/head, the checkout takes the ref env.REF, and
+#   npm ci runs.
+# reason: the one who dispatches the workflow chooses the input, and the env
+#   or the output of a step makes the value from the input, so the one who
+#   dispatches the workflow chooses the value too.
+# cause: the rule reports an input of workflow_dispatch that a value refers
+#   to directly (input-dispatch), and does not follow a value that an env or
+#   the output of a step makes from the input in a job that runs only on
+#   workflow_dispatch.
+# attack-value: inputs.pr = "1"
+# attack-run-behavior: when the one who dispatches the workflow gives the
+#   value, when the pull request 1 is from a fork whose package.json has the
+#   preinstall script echo PWNED, the checkout fetches the head of the fork's
+#   pull request, and npm ci runs the preinstall script, which prints PWNED,
+#   with the secrets of the repository.
+on:
+  workflow_dispatch:
+    inputs:
+      pr: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      REF: refs/pull/${{ inputs.pr }}/head
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ env.REF }}
+      - run: npm ci

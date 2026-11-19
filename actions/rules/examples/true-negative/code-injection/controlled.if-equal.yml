@@ -1,0 +1,18 @@
+# situation: on issue_comment created, a job runs only when the comment's
+#   body is deploy, and a step writes ${{ github.event.comment.body }} into
+#   its run: script.
+# reason: GitHub compares the two strings ignoring case, so in the job the
+#   body is deploy, ignoring the case of its letters, and no character of
+#   the body is code to the shell.
+# attack-value: github.event.comment.body = "\"; echo PWNED; echo \""
+# attack-run-behavior: the job's if is false for a body that is not deploy,
+#   and the job does not run, so no script runs.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  deploy:
+    if: github.event.comment.body == 'deploy'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.comment.body }}"

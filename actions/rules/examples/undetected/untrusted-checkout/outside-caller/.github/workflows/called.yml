@@ -1,0 +1,30 @@
+# situation: the workflow is called; it checks out the pull request's head
+#   SHA with allow-unsafe-pr-checkout and runs sudo pr/build.sh. Its one
+#   caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no pull request, so the value
+#   that the run reads is not a value that an attacker wrote. Another
+#   repository may call the workflow on an event whose payload has what an
+#   attacker wrote, but that run has the token and the secrets of the other
+#   repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack-value: the file build.sh in the pull request's head = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: ci.yml calls it on push, whose event has no
+#   pull_request, so the ref is empty and the checkout fetches the pushed
+#   commit into pr, and sudo pr/build.sh runs that commit's build.sh; the
+#   pull request's build.sh is not fetched. A workflow of another repository
+#   that calls it on pull_request_target would fetch the pull request's
+#   head, with that repository's token.
+on:
+  workflow_call:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: sudo pr/build.sh

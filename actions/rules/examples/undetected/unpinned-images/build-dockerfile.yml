@@ -1,0 +1,27 @@
+# situation: on push, the script of a step builds an image from the
+#   Dockerfile of the repository and pushes the image; the FROM of the
+#   Dockerfile names alpine:3 by a tag, without a digest.
+# reason: a todo (a file of the repository): the build starts from the image
+#   that the FROM of the Dockerfile names, runs the commands of the
+#   Dockerfile in a container of that image, and copies files out of the
+#   image that a COPY --from names.
+# cause: the Dockerfile is a file of the repository other than the workflow.
+#   The rule does not read the Dockerfile. The script of the step (or the
+#   inputs file and context of docker/build-push-action) names a path to the
+#   Dockerfile, not an image.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: docker build pulls alpine:3, which is now the image
+#   of the attacker, runs the RUN commands of the Dockerfile in a container
+#   of alpine:3 on the docker daemon of the runner, and builds, on top of
+#   alpine:3, the image that the job pushes.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          # the Dockerfile of the repository: FROM alpine:3, RUN make
+          docker build -f Dockerfile -t ghcr.io/o/app:latest .
+          docker push ghcr.io/o/app:latest

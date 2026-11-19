@@ -1,0 +1,15 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/missing-timeout-minutes-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   job (job.yml) of the rule, with on: workflow_call in place of the on of
+#   job.yml. The job passes its secrets with secrets: inherit. In the true
+#   positive, a job builds on push and writes no timeout-minutes.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: GitHub
+#   cancels a job after 360 minutes when timeout-minutes is not written, so
+#   a build that stops making progress holds the runner for 360 minutes.
+on: push
+jobs:
+  c:
+    uses: example-org/missing-timeout-minutes-remote/.github/workflows/w.yml@v1
+    secrets: inherit

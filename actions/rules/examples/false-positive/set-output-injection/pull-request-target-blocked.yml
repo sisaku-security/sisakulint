@@ -1,0 +1,32 @@
+# situation: on pull_request_target, the step p, which has an id, prints the
+#   title of the pull request, and the release step writes the output tag of
+#   the step p into its script.
+# reason: the Actions policies of the repository block the runs of the
+#   workflow on pull_request_target: the default policy that GitHub adds to a
+#   public repository without an applicable event policy, from the time when
+#   GitHub enforces the default policy on the repository, or an event policy
+#   whose list of allowed events does not have pull_request_target. GitHub's
+#   documents say that GitHub evaluates the policies before a run, and that a
+#   run that a policy does not allow fails with an error; the documents do not
+#   say whether a job of such a run starts before the run fails, and the rule
+#   assumes that no job starts.
+# cause: the rule assumes that a run on pull_request_target starts, unless a
+#   file of facts or --fact says that the Actions policies block the runs
+#   (repo.pull-request-target-allowed is assumed true, the worst case).
+# attack: the author of a pull request from a fork titles the pull request x
+#   ##[set-output name=tag;]$(id).
+# attack-run-behavior: the pull request of the attacker triggers
+#   pull_request_target, and the run fails with an error, and no job of the
+#   run starts (the assumption of the reason), so the title is never printed.
+on: pull_request_target
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "pull request: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

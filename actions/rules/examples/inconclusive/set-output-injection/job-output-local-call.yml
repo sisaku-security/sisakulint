@@ -1,0 +1,22 @@
+# situation: the job a calls a reusable workflow of the repository, the
+#   step p of the job b prints needs.a.outputs.o, and the release step
+#   writes the output tag of the step p into its script.
+# reason: the output o is what the called workflow writes.
+# cause: the rule does not read the outputs of a called workflow.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  a:
+    uses: ./.github/workflows/w.yml
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ needs.a.outputs.o }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

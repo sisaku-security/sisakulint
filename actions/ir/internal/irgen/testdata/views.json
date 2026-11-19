@@ -1,0 +1,6 @@
+{
+  "views": [
+    {"name": "Names", "doc": "Names is what a test rule reads: the name and the fix.", "fields": ["thing.name"], "fixes": ["Thing.Fix"]},
+    {"name": "Commits", "doc": "Commits is what another test rule reads.", "fields": ["thing.sha", "thing.tags"], "fixes": []}
+  ]
+}

@@ -1,0 +1,16 @@
+# situation: on fork, a step writes the description of the fork to
+#   $GITHUB_ENV after the = of a line.
+# reason: GitHub refuses a line break in the description of a repository,
+#   so the value stays the value of its one line, and starts no line of a
+#   name of the attacker's.
+# attack-value: github.event.forkee.description = "x PWNED=1"
+# attack-run-behavior: the description holds no line break, so echo writes
+#   the one line d=x PWNED=1 to $GITHUB_ENV, and the runner sets the
+#   environment variable d to x PWNED=1 and no PWNED.
+on: fork
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "d=${{ github.event.forkee.description }}" >> "$GITHUB_ENV"

@@ -1,0 +1,29 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step sets s to x and defines reset, which unsets s; point makes s local
+#   with safe, calls reset, and sets s to the secret DEPLOY_TOKEN without the
+#   first character of the secret. The step calls point and then prints
+#   "token: " and $s.
+# reason: a todo (the same file): the unset in reset takes away the local that
+#   point made, so the assignment in point after reset sets the s of the step:
+#   the token without the first character, which the runner does not mask.
+# cause: the rule keeps the local of point after the unset in reset, and gives
+#   s back x when point returns, so the rule does not read the value that
+#   point set after reset.
+# attack: anyone who can read the run opens the log of the run and reads
+#   the token without the first character.
+# attack-run-behavior: the step prints "token: " and the token without the
+#   first character.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          s=x
+          reset() { unset s; }
+          point() { local s=safe; reset; s="${DEPLOY_TOKEN:1}"; }
+          point
+          echo "token: $s"

@@ -1,0 +1,28 @@
+# situation: labeler.yml runs on pull_request_target and adds the label test
+#   with gh and a personal access token to a pull request whose title has
+#   [site]; labeled.yml runs on pull_request_target on labeled when
+#   contains('safe-to-test', github.event.label.name) is true, and the job
+#   checks out the head of the pull request and runs npm ci.
+# reason: the attacker writes the title of the pull request, and a label that
+#   a personal access token adds starts the labeled run, so no person approves
+#   the run before the label starts the run.
+# cause: the rule reads the steps of actions/labeler, and does not read the
+#   scripts that add labels.
+# attack-value: the title of the pull request = "[site] fix"
+# attack-run-behavior: the attacker opens a pull request from a fork whose
+#   title has [site]; gh adds the label test, which starts labeled.yml, and
+#   contains('safe-to-test', 'test') is true, the checkout fetches the head of
+#   the pull request, and npm ci runs the preinstall script of the pull
+#   request, which prints PWNED, with the secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

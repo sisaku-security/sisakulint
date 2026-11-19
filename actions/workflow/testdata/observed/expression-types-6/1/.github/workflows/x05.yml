@@ -1,0 +1,7 @@
+name: x05
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c05.yml
+    with:
+      b: true

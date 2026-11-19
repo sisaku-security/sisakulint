@@ -1,0 +1,16 @@
+# situation: the env of the job's container sets GITHUB_SHA.
+# reason: the runner passes its own GITHUB_SHA to each step in the
+#   container, so the steps get the commit of the run, not the value
+#   written.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: node:24
+      env:
+        GITHUB_SHA: fixed
+    steps:
+      - run: npm test

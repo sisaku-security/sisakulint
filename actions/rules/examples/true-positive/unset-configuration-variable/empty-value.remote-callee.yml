@@ -1,0 +1,19 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/unset-configuration-variable-remote, which
+#   the fact workflow.definition answers with the workflow of the true
+#   positive empty-value (empty-value.misspelled.yml) of the rule, with on:
+#   workflow_call in place of the on of empty-value.misspelled.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, the job
+#   deploys to the URL of the configuration variable DEPLOY_URL, but the
+#   step writes vars.DEPLOY_ULR.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: no
+#   level defines DEPLOY_ULR (the repository level defines DEPLOY_URL and
+#   NODE_VERSION, and the environment production defines PRODUCTION_KEY_ID),
+#   so the script gets the empty string as the URL.
+on: push
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/unset-configuration-variable-remote/.github/workflows/w.yml@v1
+    secrets: inherit

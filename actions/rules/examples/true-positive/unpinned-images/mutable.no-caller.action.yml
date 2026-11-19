@@ -1,0 +1,22 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step runs the container ghcr.io/o/build:1, named by a tag
+#   and no digest, by uses: docker://.
+# reason: the runner pulls the image the tag 1 names when the job of a
+#   caller runs, so the image pushed last as ghcr.io/o/build:1 decides the
+#   files, the programs and the environment of the step.
+# attack: whoever can push to ghcr.io/o/build pushes an image of their own
+#   under the tag 1, as in 2026 images that steal the secrets of CI were
+#   pushed to aquasec/trivy on Docker Hub as 0.69.4 to 0.69.6 and latest was
+#   re-pointed to the images.
+# attack-run-behavior: the runner pulls ghcr.io/o/build:1, which is now the
+#   attacker's image, when the job runs, and runs the image with the workspace
+#   mounted and the environment of the step, so the files and programs of the
+#   image see what the step is given.
+name: build
+description: build in the container
+runs:
+  using: composite
+  steps:
+    - uses: docker://ghcr.io/o/build:1
+      with:
+        args: make

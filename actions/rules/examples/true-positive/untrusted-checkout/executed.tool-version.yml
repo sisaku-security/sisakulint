@@ -1,0 +1,23 @@
+# situation: pull_request_target checks out the head of a pull request, and
+#   a step runs yarn --version in its tree.
+# reason: yarn reads the .yarnrc of the working directory before it parses
+#   --version, and spawns its yarn-path ("const yarnPath = rc['yarn-path']
+#   || rc['yarnPath']", the start of yarn 1.22.22,
+#   https://github.com/yarnpkg/yarn/blob/v1.22.22/src/cli/index.js#L631-L641),
+#   so a .yarnrc of the pull request runs its code.
+# attack-value: the file .yarnrc in the pull request's head = "yarn-path \"./x.js\"\n"
+# attack-run-behavior: the checkout puts the pull request's .yarnrc and x.js
+#   (a script that prints PWNED) at the top of the workspace; yarn --version
+#   reads .yarnrc and runs node ./x.js before it parses --version, in the
+#   job that has the base repository's GITHUB_TOKEN in .git/config and its
+#   secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: yarn --version

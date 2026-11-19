@@ -1,0 +1,28 @@
+# situation: the job runs on workflow_run, downloads the artifact of the run
+#   before it and runs ./build.sh with no chmod.
+# reason: the files of an artifact lose their mode ("File permissions are
+#   not maintained during zipped artifact upload. All directories will have
+#   755 and all files will have 644.", the README of
+#   actions/upload-artifact,
+#   https://github.com/actions/upload-artifact/blob/043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/README.md#permission-loss),
+#   so ./build.sh fails and runs nothing.
+# cause: the rule reads a step that names ./build.sh as running what the
+#   download put, and does not ask whether the file can be executed.
+# attack-value: the file build.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts build.sh in the workspace with mode
+#   644, and ./build.sh fails with permission denied, so the echo PWNED in
+#   it does not run.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: ./build.sh

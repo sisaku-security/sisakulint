@@ -1,0 +1,18 @@
+# situation: a job starts the service redis from the image redis:7;
+#   repo.action-list is * and patterns that start with !, and none of the
+#   patterns that start with ! names redis.
+# reason: repo.action-list allows the image, so the repository listed the
+#   publisher of redis as one that the repository trusts.
+# attack: the publisher of an image that the repository did not list pushes
+#   an image that reads what the job sends to the service.
+# attack-run-behavior: the job starts only a service whose image
+#   repo.action-list allows.
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+    steps:
+      - run: make test

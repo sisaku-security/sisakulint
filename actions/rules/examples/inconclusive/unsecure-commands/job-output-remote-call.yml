@@ -1,0 +1,24 @@
+# situation: on issues, a job b prints the output o of the job a, which
+#   calls a reusable workflow of another repository. The job b sets
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS to true, and a step comes after.
+# reason: the output is known at run time only, so whether an attacker
+#   controls it is not known.
+# cause: the rule does not read the called workflow.
+# attack: an attacker who controls the output writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  a:
+    uses: some/repo/.github/workflows/w.yml@v1
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ needs.a.outputs.o }}"
+      - run: echo next

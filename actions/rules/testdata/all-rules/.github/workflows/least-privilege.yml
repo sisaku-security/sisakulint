@@ -1,0 +1,25 @@
+# permissions and secrets-inherit: a job that writes no permissions in a
+# workflow that writes none, a job given write-all, and two jobs that call a
+# reusable workflow with secrets: inherit: one of another repository, and
+# one of the repository whose job reads toJSON(secrets)
+# (inherit-called.yml). on: push, so that the rules of an attacker's events
+# report nothing here.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+  release:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - run: make release
+  provenance:
+    permissions: {}
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    secrets: inherit
+  local:
+    permissions: {}
+    uses: ./.github/workflows/inherit-called.yml
+    secrets: inherit

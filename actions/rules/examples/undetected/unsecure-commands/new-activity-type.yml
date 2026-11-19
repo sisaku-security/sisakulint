@@ -1,0 +1,25 @@
+# situation: on issues of an activity type the tables do not have, a job
+#   sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true, and a step prints the
+#   title of the issue.
+# reason: a todo (a pin update): an activity type GitHub adds after the
+#   tables, written in types, is dropped, as GitHub drops one it has no such
+#   type for.
+# cause: the tables are made from the schemas of the pin.
+# attack: were the activity type GitHub's, the attacker would title the
+#   issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: GitHub does not run the workflow for a type it does
+#   not have.
+on:
+  issues:
+    types: [no-such-type]
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "$TITLE"
+      - run: echo next

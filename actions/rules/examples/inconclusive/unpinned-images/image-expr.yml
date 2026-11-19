@@ -1,0 +1,24 @@
+# situation: on push, the container of the job is node:${{ matrix.v }}, and
+#   the matrix gives v the values 18 and 20.
+# reason: the image mixes a value of the matrix with the text node:, and the
+#   rule reads the values of the matrix only for an image that is a ${{
+#   matrix.<name> }} alone, so the rule does not determine the image that
+#   the value names; reading the matrix of the same file would determine the
+#   image.
+# attack: the images are node:18 and node:20 of Docker Hub
+#   (docker.io/library/node), named by a tag and no digest; whoever can push
+#   to that repository of Docker Hub pushes an image of theirs under the
+#   tag.
+# attack-run-behavior: the runner pulls the image the tag now names when the
+#   job starts and runs echo inside it, with the workspace and the docker
+#   socket mounted.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container: node:${{ matrix.v }}
+    strategy:
+      matrix:
+        v: [18, 20]
+    steps:
+      - run: echo

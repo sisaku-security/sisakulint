@@ -1,0 +1,46 @@
+# situation: on workflow_run, a job checks out the head commit of the run
+#   that triggered the workflow with actions/checkout v4.2.2, a release older
+#   than the first release of actions/checkout that refuses to check out the
+#   code of a pull request without the input allow-unsafe-pr-checkout, runs
+#   pnpm i and pnpm build, and runs the action at the root of the checkout
+#   with the secret DATADOG_API_KEY. This is e2e-target.yaml of
+#   int128/datadog-actions-metrics (commit
+#   80abe764e776a1984a738a073309c094d654eb2e, lines 3-44), reduced to the
+#   checkout and the steps after the checkout: the step of
+#   actions/github-script before the checkout is left out.
+#   publish-docs-deploy.yml of element-plus/element-plus (commit
+#   6032af54056982624d089feec4b196a01d4e5a74, GHSL-2024-159) has the same
+#   form with actions/checkout@v4 (which named an older release then) and runs
+#   pnpm run docs:crowdin-credentials with the secret CROWDIN_TOKEN.
+# reason: the run that triggers the workflow can be a run of a pull request
+#   from a fork, whose author writes package.json and the action of the
+#   checkout, which pnpm i and uses: ./ run with the secret of the base
+#   repository.
+# attack: the author of the pull request writes a script preinstall in
+#   package.json of the head commit.
+# attack-run-behavior: pnpm i runs the script of the author, with
+#   DATADOG_API_KEY in the environment of a later step of the job.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-084_int128_datadog-actions-metrics/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-159_Element-Plus/
+on:
+  workflow_run:
+    workflows:
+      - ts
+    types:
+      - completed
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - run: pnpm i
+      - run: pnpm build
+      - uses: ./
+        with:
+          datadog-api-key: ${{ secrets.DATADOG_API_KEY }}

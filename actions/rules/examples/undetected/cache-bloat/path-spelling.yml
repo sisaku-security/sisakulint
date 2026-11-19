@@ -1,0 +1,23 @@
+# situation: the restore names the npm cache directory as ~/.npm, and the
+#   save names the same directory as /home/runner/.npm.
+# reason: on the runner, ~ is /home/runner, so the save stores the content
+#   that the restore took from an older cache by restore-keys under a new
+#   key.
+# cause: the rule pairs a save with a restore only when a line of path is
+#   the same text in both steps.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - run: npm ci
+      - uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}-${{ github.run_id }}

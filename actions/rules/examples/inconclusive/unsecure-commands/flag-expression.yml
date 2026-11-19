@@ -1,0 +1,21 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to a
+#   variable of the repository, and a step prints the title of the issue.
+# reason: whether the variable is true is known at run time only, so whether
+#   the runner reads a set-env command in the title is not known.
+# cause: the rule reads the flag written in the workflow, not the value of
+#   vars.
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(id).
+# attack-run-behavior: where the variable is true, the runner sets BASH_ENV,
+#   and the bash of the next step runs id; where the variable is not true,
+#   the runner fails the step.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: ${{ vars.UNSECURE }}
+    steps:
+      - run: echo "${{ github.event.issue.title }}"
+      - run: echo next

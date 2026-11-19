@@ -1,0 +1,27 @@
+# situation: on push, a service of the job `test` has toJSON(secrets) in
+#   its env, under the variable ALL, and the repository has a secret whose
+#   value is a JSON.
+# reason: a todo (the same file): the runner prints the docker create
+#   command of the service with the JSON of the secrets escaped a second
+#   time, the mask does not match a value escaped twice, and so the runner
+#   prints the secret that has a double quote in its value unmasked.
+# cause: the rule inspects values taken out of a secret by fromJSON, not a
+#   whole secret that the runner escapes twice.
+# attack: one who may read the log of the run opens the log of the job
+#   `test`.
+# attack-run-behavior: the log section Initialize containers, which the
+#   runner prints at the start of the job, has docker create
+#   with -e "ALL=" and the JSON, where each secret without a double quote is
+#   *** and the JSON secret is in the escaped form, unmasked.
+on: push
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16
+        env:
+          ALL: ${{ toJSON(secrets) }}
+    steps:
+      - run: make test

@@ -1,0 +1,29 @@
+# situation: the workflow of the true positive private (private.yml) of the
+#   rule, with a job added whose step uses example-org/not-allowed-action,
+#   which the setting of allowed actions of GitHub (repo.allowed-actions)
+#   blocks with !example-org/not-allowed-action@*. In the true positive, on
+#   pull_request, a job runs make on a runner labelled self-hosted and
+#   linux, in a private or internal repository that lets those who may read
+#   it fork it and runs the workflows of pull requests from its forks
+#   (repo.public false, repo.allow-forking true, repo.fork-pr-run-workflows
+#   true).
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: one who may read the repository forks it and opens a pull request
+#   whose copy of this workflow runs a step of their own in place of make.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: pull_request
+jobs:
+  a:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

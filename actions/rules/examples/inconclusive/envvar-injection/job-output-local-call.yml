@@ -1,0 +1,23 @@
+# situation: the job a calls the reusable workflow ./.github/workflows/w.yml
+#   of the same repository, and the job b writes needs.a.outputs.o to
+#   $GITHUB_ENV by ${{ }}.
+# reason: the output is set in that reusable workflow, another file, so
+#   whether an attacker controls it is not known from this one.
+# cause: the rule does not read the outputs a called workflow sets: it
+#   gives this kind to needs.<id>.outputs of any job that calls a workflow
+#   of the same repository, whether that workflow is among the files read
+#   or not.
+# attack-value: needs.a.outputs.o = "x\nPWNED=1"
+# attack-run-behavior: when ./.github/workflows/w.yml sets o to an
+#   attacker's text such as this value, the script of b becomes echo
+#   "v=x<line break>PWNED=1" >> "$GITHUB_ENV", which appends v=x and
+#   PWNED=1; the runner sets v to x and PWNED to 1.
+on: issues
+jobs:
+  a:
+    uses: ./.github/workflows/w.yml
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ needs.a.outputs.o }}" >> "$GITHUB_ENV"

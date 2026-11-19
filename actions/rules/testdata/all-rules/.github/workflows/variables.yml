@@ -1,0 +1,13 @@
+# The quality rules unset-configuration-variable and expression: a ${{ }}
+# that reads a configuration variable that no level defines (facts.json
+# answers repo.configuration-variables), or that no level can define.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh "${{ vars.DEPLOY_ULR }}"
+      - run: ./test.sh ${{ join(fromJSON(vars.TEST_SHARDS), ' ') }}
+      - run: echo "${{ vars.GITHUB_X }}"

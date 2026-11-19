@@ -1,0 +1,18 @@
+# situation: on issues opened, a step writes to $GITHUB_ENV the variable X,
+#   which the script does not set, with the issue's body as the word of
+#   the operator :- (${X:-$V}).
+# reason: X is empty, so ${X:-$V} writes the value of V, and a line break
+#   in the body adds another environment variable.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the runner sets PWNED=1 as an environment variable of
+#   the steps after.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: echo "A=${X:-$V}" >> "$GITHUB_ENV"

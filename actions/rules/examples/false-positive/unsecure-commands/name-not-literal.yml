@@ -1,0 +1,25 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a step passes the title of the issue in the environment
+#   variable T, sets n to the name T, assigns a fixed word to the variable
+#   that n names with declare, and prints T; a step comes after.
+# reason: bash assigns the fixed word to T, so T holds the fixed word when
+#   echo runs, and the step does not print the title.
+# cause: the variable name of the assignment is not a literal word, so the
+#   rule reads T as holding the value of the env.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints "issue: safe"; nothing is set.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          n=T
+          declare "$n=safe"
+          echo "issue: $T"
+      - run: echo next

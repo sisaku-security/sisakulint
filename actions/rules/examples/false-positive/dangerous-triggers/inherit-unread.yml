@@ -1,0 +1,22 @@
+# situation: on issues, the job calls ./.github/workflows/called.yml with
+#   secrets: inherit and permissions: {}. The jobs of called.yml read no
+#   secret, by name or without a name, and called.yml is not among the files
+#   given to the linter.
+# reason: GitHub passes the runner of a job of a called workflow only the
+#   secrets that the job reads, so no secret is passed to the runners of the
+#   jobs of called.yml; with permissions: {}, a flaw in called.yml gives an
+#   attacker no secret and no token that writes.
+# cause: the linter does not have the contents of called.yml, and the rule
+#   assumes that the jobs of called.yml read every secret.
+# attack: the attacker opens an issue, and a flaw in a job of called.yml (an
+#   injection of the issue's title, for example) runs the attacker's code in
+#   the job of the flaw.
+# attack-run-behavior: the issue starts this workflow, which runs the jobs
+#   of called.yml with no secret in the runners of those jobs; the
+#   attacker's code finds no secret in the runner.
+on: issues
+permissions: {}
+jobs:
+  triage:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

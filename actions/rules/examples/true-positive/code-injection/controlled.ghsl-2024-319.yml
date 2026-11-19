@@ -1,0 +1,39 @@
+# situation: on workflow_run, a step writes the head branch of the triggering
+#   run into its run by ${{ }}, inside a JSON object in single quotes, with
+#   the AWS secret of the repository in its env. This is the step Upload test
+#   results to S3 of upload-test-results.yml of trinodb/trino (commit
+#   f6e0a94c7cc311aa64dbe61ed5fc278150185954, lines 1-5 and the step; line 95
+#   is the jq command); the other jobs and steps, the if of the step, the
+#   selectors of yq, the find commands, the loop and the upload to S3 are left
+#   out, and the JSON object keeps only the branch and the head sha.
+# reason: on workflow_run, the author of a pull request from a fork names the
+#   head branch of the triggering run, which
+#   github.event.workflow_run.head_branch gives, and the runner puts the name
+#   into the script before bash reads the script, so a ' in the name ends the
+#   quoting and the rest runs as commands. The advisory names a branch with
+#   backquotes, which bash does not run inside the single quotes.
+# attack-value: github.event.workflow_run.head_branch = "x\"}'${IFS}-n;echo${IFS}PWNED;'"
+# attack-run-behavior: the author of a pull request from a fork names its head
+#   branch x"}'${IFS}-n;echo${IFS}PWNED;' (a name of a branch has no space,
+#   and ${IFS} stands for one). The name closes the JSON object and the
+#   quoting, so jq gets the valid object and -n, prints null and exits 0
+#   under -euo pipefail, and bash runs echo PWNED, which prints PWNED, with
+#   TEST_RESULTS_AWS_SECRET_ACCESS_KEY in the env of the step.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-319_Trino_DB/
+on:
+  workflow_run:
+    workflows: ["ci", "docs"]
+    types:
+      - completed
+jobs:
+  upload-to-s3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload test results to S3
+        env:
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TEST_RESULTS_AWS_SECRET_ACCESS_KEY }}
+        shell: bash --noprofile --norc -euo pipefail {0}
+        run: |
+          jq -c \
+            --argjson addObj '{"branch":"${{ github.event.workflow_run.head_branch }}","git_sha":"${{ github.event.workflow_run.head_sha }}"}' \
+            '. + $addObj' results.ndjson > out.json

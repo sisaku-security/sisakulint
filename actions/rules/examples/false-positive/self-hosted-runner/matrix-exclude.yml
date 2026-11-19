@@ -1,0 +1,22 @@
+# situation: runs-on is a value of a matrix of self-hosted and
+#   ubuntu-latest.
+# reason: exclude takes out the self-hosted value, so every job runs on
+#   ubuntu-latest.
+# cause: the rule does not read exclude.
+# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
+#   that was merged), then opens a pull request from a fork whose copy of
+#   this workflow runs a step of their own in place of make.
+# attack-run-behavior: exclude leaves the matrix only os: ubuntu-latest, so
+#   the one job runs the attacker's step on ubuntu-latest, a machine GitHub
+#   discards after the job.
+on: pull_request
+jobs:
+  a:
+    strategy:
+      matrix:
+        os: [self-hosted, ubuntu-latest]
+        exclude:
+          - os: self-hosted
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: make

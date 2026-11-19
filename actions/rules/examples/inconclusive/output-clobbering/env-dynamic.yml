@@ -1,0 +1,16 @@
+# situation: the env of the job is the whole ${{ fromJSON(vars.E) }}, and a
+#   step writes env.X to $GITHUB_OUTPUT by ${{ }}.
+# reason: which names that env sets, and their values, are known only at run
+#   time, so whether an attacker controls env.X is not known.
+# attack-value: env.X = "x\nPWNED=1"
+# attack-run-behavior: when vars.E sets X to an attacker's text such as this,
+#   ${{ }} puts its two lines inside the double quotes of the echo, which
+#   writes the lines v=x and PWNED=1 to $GITHUB_OUTPUT, and the runner sets
+#   the outputs v and PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.E) }}
+    steps:
+      - run: echo "v=${{ env.X }}" >> "$GITHUB_OUTPUT"

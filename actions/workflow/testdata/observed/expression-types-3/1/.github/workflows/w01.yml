@@ -1,0 +1,12 @@
+name: w01
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  b:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ format('{0}', '5') }}
+    steps:
+      - run: echo b

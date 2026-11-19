@@ -1,0 +1,21 @@
+# situation: on pull_request, in a public repository or in a private or
+#   internal one that runs the workflows of pull requests from its forks,
+#   the job runs make on ubuntu-latest.
+# reason: ubuntu-latest is a runner GitHub hosts, which GitHub makes new for
+#   each job and discards after it, unlike a self-hosted runner whose state
+#   persists, so a pull request from a fork leaves nothing on the runner for the
+#   later jobs.
+# attack: one who may fork the repository opens a pull request whose copy of
+#   this workflow runs a step of their own in place of make: in a public
+#   repository, anyone who may open a pull request (in pytorch-2023, the
+#   attacker first became a contributor by a typo fix that was merged); in a
+#   private or internal one, one who may read the repository.
+# attack-run-behavior: the job a runs the attacker's step on ubuntu-latest,
+#   a machine GitHub makes for the job and discards after it, so nothing the
+#   step leaves reaches a later job.
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make

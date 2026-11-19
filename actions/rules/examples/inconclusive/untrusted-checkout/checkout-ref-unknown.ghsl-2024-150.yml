@@ -1,0 +1,35 @@
+# situation: on workflow_run, the job changes runs the composite action
+#   gradio-app/gradio/.github/actions/changes, which writes the merge commit
+#   of the pull request of the run to its output merge_sha, and the job
+#   test-hygiene checks out needs.changes.outputs.merge_sha and runs a
+#   script of the checkout. This is test-hygiene.yml of gradio-app/gradio
+#   (commit edcd5748f6c0faf2028a8e6a330aad5eccf103d5, line 41); what the
+#   advisory calls a reusable workflow is a composite action.
+# reason: the ref of the checkout is an output of a job, which the rule does
+#   not follow to the composite action that writes the output.
+# attack: the author of a pull request writes scripts/generate_notebooks.py
+#   in the pull request.
+# attack-run-behavior: the job test-hygiene checks out the merge commit of
+#   the pull request and runs python scripts/generate_notebooks.py of the
+#   author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-150_GHSL-2024-157_Gradio/
+on:
+  workflow_run:
+    workflows: [trigger]
+    types: [requested]
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      merge_sha: ${{ steps.changes.outputs.merge_sha }}
+    steps:
+      - uses: gradio-app/gradio/.github/actions/changes@main
+        id: changes
+  test-hygiene:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.changes.outputs.merge_sha }}
+      - run: pip install nbformat && python scripts/generate_notebooks.py

@@ -1,0 +1,29 @@
+# situation: on push, the step c writes the value user, which jq takes out
+#   of the secret CONFIG, to its output user, and the if of the next step
+#   compares steps.c.outputs.user with an empty string.
+# reason: a rerun with debug logging prints the values that the if
+#   evaluates, and the runner does not mask the value that jq takes out of a
+#   secret; a credential whose only write access is to the permission
+#   Actions can start the rerun, and the credential premise keeps the holder
+#   of such a credential as a possible attacker.
+# cause: in the workflow file, the rule reads the commands of a run script
+#   that print to the log, and not the if that reads an output of a step.
+# attack: the attacker reruns the run with debug logging, with a credential
+#   whose only write access is to the permission Actions, and reads the log
+#   of the rerun.
+# attack-run-behavior: on 2026-10-23, a rerun with debug logging printed the
+#   values that the if of a step evaluated in the lines ##[debug]Evaluating
+#   and ##[debug]Expanded; here the line ##[debug]Expanded would have the
+#   value user of the secret CONFIG.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - id: c
+        env:
+          CONFIG: ${{ secrets.CONFIG }}
+        run: echo "user=$(jq -r .user <<< "$CONFIG")" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.c.outputs.user != '' }}
+        run: ./deploy.sh

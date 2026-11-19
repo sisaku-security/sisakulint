@@ -1,0 +1,22 @@
+# situation: on issues opened, a step defines a function that writes V= and the
+#   issue's body to descriptor 3, opens descriptor 3 on $GITHUB_ENV with
+#   exec, and calls the function.
+# reason: the function runs where it is called, where descriptor 3 is open
+#   on $GITHUB_ENV, so a line break in the body adds another environment
+#   variable.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the runner sets PWNED=1 as an environment variable of the
+#   steps after.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          f() { echo "V=$V" >&3; }
+          exec 3>> "$GITHUB_ENV"
+          f

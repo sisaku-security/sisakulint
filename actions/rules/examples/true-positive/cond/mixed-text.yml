@@ -1,0 +1,14 @@
+# situation: the job deploy has an if of two ${{ }} joined by && outside
+#   them, meant to run the job only for a push to main.
+# reason: GitHub reads the if as the string "true && false" or "false &&
+#   false", which is not empty and so true: the job runs for every push and
+#   every pull request of every branch.
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.ref == 'refs/heads/main' }} && ${{ github.event_name == 'push' }}
+    steps:
+      - run: ./deploy.sh

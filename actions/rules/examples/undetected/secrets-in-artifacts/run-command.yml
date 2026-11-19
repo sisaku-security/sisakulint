@@ -1,0 +1,20 @@
+# situation: a command writes a key into key.json in the workspace, and
+#   actions/upload-artifact uploads it.
+# reason: a todo (the same file): reading the command would find the key.
+# cause: the rule does not read the commands of a run.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the key
+#   from key.json.
+# attack-run-behavior: the step writes secrets.KEY into key.json in the
+#   workspace, and the upload of path . puts it in the artifact; the key
+#   keeps working after the run.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "$KEY" > key.json
+        env:
+          KEY: ${{ secrets.KEY }}
+      - uses: actions/upload-artifact@v4
+        with: {path: .}
