@@ -1,3 +1,10 @@
 
 # Use bd merge for beads JSONL files
 .beads/issues.jsonl merge=beads
+
+# Generated files of the v1 linter
+*_gen.go linguist-generated
+*.golden linguist-generated
+*.golden.* linguist-generated
+actions/rules/examples/**/*.facts.json linguist-generated
+internal/regexpcalls/allowed.tsv linguist-generated

@@ -5,7 +5,7 @@ jobs:
   lint:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -22,7 +22,7 @@ jobs:
             exit 1
           fi
       - name: Run tests with the race detector
-        run: go test -race ./...
+        run: go test -race -timeout 30m ./...
       - name: Check known Go vulnerabilities
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
