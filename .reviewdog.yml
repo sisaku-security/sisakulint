@@ -1,5 +1,5 @@
 runner:
   sisakulint:
-    cmd: sisakulint -format '{{sarif .}}'
+    cmd: sisakulint --format sarif --exclude actions
     format: sarif
     name: sisakulint
