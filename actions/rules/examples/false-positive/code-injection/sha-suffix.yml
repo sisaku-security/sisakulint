@@ -1,0 +1,16 @@
+# situation: the job writes merge_commit_sha in a run.
+# reason: merge_commit_sha is the SHA of a commit GitHub makes, 40 hex
+#   digits, which no attacker shapes into code.
+# cause: the table's **.sha does not match its name, so it is read as
+#   arbitrary.
+# attack-value: github.event.pull_request.merge_commit_sha = "\"; echo PWNED; echo \""
+# attack-run-behavior: GitHub sets merge_commit_sha to the 40 hex digits of
+#   the SHA of the merge commit it makes, so the script is echo "<40 hex
+#   digits>"; were it the value, the script would become echo ""; echo
+#   PWNED; echo "", and bash would run the second echo as a command.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.merge_commit_sha }}"

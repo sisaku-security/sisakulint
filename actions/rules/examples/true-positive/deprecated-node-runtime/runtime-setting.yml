@@ -1,0 +1,15 @@
+# situation: a workflow sets ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION in the
+#   env of a job, to keep an action that declares node20 on Node.js 20.
+# reason: the runners of GitHub no longer obey the setting and run the
+#   action on Node.js 24, so the setting does nothing there; a runner that
+#   obeys the setting runs the action on Node.js 20, which no longer gets
+#   security fixes.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+    steps:
+      - run: make

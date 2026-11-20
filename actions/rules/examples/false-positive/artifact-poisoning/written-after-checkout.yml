@@ -1,0 +1,37 @@
+# situation: on pull_request_target, the job build checks out the head of
+#   the pull request into the root of the workspace, runs nothing of the
+#   checkout, writes the number of the pull request into number.txt and
+#   uploads number.txt; the job deploy, which lists build in its needs,
+#   downloads the artifact and runs ./run.sh, a file that the artifact does
+#   not hold, so the step ./run.sh fails.
+# reason: the artifact holds number.txt only, which a run step of build
+#   writes from the number that GitHub gives the pull request, and holds no
+#   file of the checkout, so ./run.sh does not run what the author of the
+#   pull request wrote.
+# cause: the checkout has no input path of actions/checkout, so the
+#   directory of the checkout is the root of the workspace, and the rule
+#   takes the upload of any file under the root as an upload of the code of
+#   the pull request.
+# attack-value: the file run.sh in the pull request's head = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the checkout puts the head of the pull request in the
+#   workspace of build, and no step runs a file of the checkout; the upload
+#   takes number.txt only, so the download in deploy puts no run.sh of the
+#   pull request in the workspace.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo ${{ github.event.pull_request.number }} > number.txt
+      - uses: actions/upload-artifact@v4
+        with: {name: out, path: number.txt}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: out}
+      - run: ./run.sh

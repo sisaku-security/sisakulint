@@ -1,0 +1,26 @@
+# situation: the workflow is called by caller.yml on push; the workflow
+#   outputs a substring of the secret TOKEN, and a job of caller.yml after
+#   the call prints the output.
+# reason: a todo (a file of the repository): the header of the step prints the
+#   substring, which the runner does not mask.
+# cause: the rule does not read the outputs of a called workflow.
+# attack: one who may read the run's log opens the log and reads the
+#   substring.
+# attack-run-behavior: the header of the step of show prints the substring
+#   of TOKEN as it is.
+on:
+  workflow_call:
+    outputs:
+      prefix:
+        value: ${{ jobs.cut.outputs.prefix }}
+permissions: {}
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    outputs:
+      prefix: ${{ steps.p.outputs.prefix }}
+    steps:
+      - id: p
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: echo "prefix=${TOKEN:0:12}" >> "$GITHUB_OUTPUT"

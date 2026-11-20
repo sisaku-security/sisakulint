@@ -1,0 +1,15 @@
+# situation: the run names the rule with --rule and has no answer of
+#   repo.configuration-variables; the step writes vars.DEPLOY_ULR for
+#   DEPLOY_URL.
+# reason: a todo (a fact): without the names that the repository defines,
+#   the rule does not know whether DEPLOY_ULR is defined.
+# cause: the rule compares names only with an answer of
+#   repo.configuration-variables.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh "${{ vars.DEPLOY_ULR }}" --list-unknown

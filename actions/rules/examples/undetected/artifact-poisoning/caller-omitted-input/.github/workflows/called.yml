@@ -1,0 +1,29 @@
+# situation: caller.yml runs on push and calls called.yml without the input
+#   run; called.yml downloads with dawidd6/action-download-artifact v6 the
+#   artifact named out, from the run that the input run names, and runs
+#   build.sh with bash.
+# reason: a todo (a file of the repository): the input run is not required,
+#   and the call gives no value, so the input run_id is empty, and the
+#   action searches the runs of the workflow, which takes the run of a
+#   review of a pull request from a fork.
+# cause: the rule reads an input of a workflow that callers in the
+#   repository call as a value that the callers give, which is not empty.
+# attack-value: the file build.sh in the artifact named out, from the pull_request_review run of the fork's pull request = "echo PWNED\n"
+# attack-run-behavior: the pull request from a fork adds pull_request_review
+#   to called.yml and uploads build.sh in the artifact named out; the author
+#   writes a comment-only review, and the next push run of caller.yml calls
+#   called.yml, whose download takes that run, and bash build.sh prints
+#   PWNED.
+on:
+  workflow_call:
+    inputs:
+      run: {type: string, required: false}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ inputs.run }}
+          name: out
+      - run: bash build.sh

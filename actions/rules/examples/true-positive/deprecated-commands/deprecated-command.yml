@@ -1,0 +1,15 @@
+# situation: a step sets its output version with the workflow command
+#   ::set-output.
+# reason: the runner adds a warning to every run of the step, and the step
+#   sets no output once GitHub disables set-output, which GitHub planned and
+#   postponed.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: version
+        run: echo "::set-output name=version::$(cat VERSION)"
+      - run: echo "building ${{ steps.version.outputs.version }}"

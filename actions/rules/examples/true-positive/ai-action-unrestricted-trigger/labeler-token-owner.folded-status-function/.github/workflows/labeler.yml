@@ -1,0 +1,16 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  gate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "a pull request from a branch of the repository"
+  label:
+    needs: gate
+    if: ${{ 'always()' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

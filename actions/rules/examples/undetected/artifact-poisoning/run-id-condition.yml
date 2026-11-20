@@ -1,0 +1,27 @@
+# situation: on push and schedule, dawidd6/action-download-artifact v6
+#   downloads with the input run_id github.run_id on push and an empty value
+#   on schedule, the artifact named out into the workspace, and build.sh runs
+#   with bash.
+# reason: a todo (the same file): on schedule the input run_id is empty, so
+#   the action searches the runs of the workflow, which takes the run of a
+#   review of a pull request from a fork.
+# cause: the rule reads a run_id that writes github.run_id as a value that
+#   is never empty, and does not read the condition around github.run_id.
+# attack-value: the file build.sh in the artifact named out, from the pull_request_review run of the fork's pull request = "echo PWNED\n"
+# attack-run-behavior: the pull request from a fork adds pull_request_review
+#   to the workflow and uploads build.sh in the artifact named out; the
+#   author writes a comment-only review, and the next schedule run takes that
+#   run, and bash build.sh prints PWNED.
+on:
+  push:
+  schedule:
+    - cron: "0 0 * * *"
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event_name == 'push' && github.run_id || '' }}
+          name: out
+      - run: bash build.sh

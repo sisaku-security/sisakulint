@@ -1,0 +1,31 @@
+on: push
+jobs:
+  commands:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s1
+        run: |
+          echo "  ::set-output name=o1::v1"
+      - id: s2
+        run: |
+          echo "x ##[set-output name=o2;]v2"
+      - id: s3
+        run: |
+          echo "::SET-OUTPUT name=o3::v3"
+      - id: s4
+        run: |
+          echo "::save-state name=st::v4"
+      - run: |
+          echo "o1=${{ steps.s1.outputs.o1 }} o2=${{ steps.s2.outputs.o2 }} o3=${{ steps.s3.outputs.o3 }}"
+      - id: s6
+        continue-on-error: true
+        run: |
+          echo "x ##[set-env name=E1;]v6"
+      - id: s7
+        continue-on-error: true
+        run: |
+          echo "x ##[add-path]/tmp/p7"
+      - run: |
+          echo "E1=${E1-unset}"
+          echo "PATH=$PATH"
+          echo "s6=${{ steps.s6.outcome }} s7=${{ steps.s7.outcome }}"

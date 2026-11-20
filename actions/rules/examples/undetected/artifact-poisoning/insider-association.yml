@@ -1,0 +1,29 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER downloads an artifact with
+#   dawidd6/action-download-artifact and runs ./run.sh.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: the file run.sh in the artifact of the latest ci.yml run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: for an issue whose author is a MEMBER, the if is
+#   true; dawidd6/action-download-artifact@v3, with workflow ci.yml and no
+#   run_id, takes the artifact of the latest ci.yml run, which may be a
+#   fork's, and ./run.sh runs it; for an author with NONE, FIRST_TIMER,
+#   FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR the job is skipped.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ci.yml
+      - run: ./run.sh

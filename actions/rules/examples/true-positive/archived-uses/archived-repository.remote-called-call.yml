@@ -1,0 +1,10 @@
+# situation: a job calls example-org/nested-workflow/.github/workflows/build.yml@v1,
+#   a reusable workflow of another repository whose job calls a reusable
+#   workflow of actions/create-release, an archived repository.
+# reason: the called workflow calls a workflow that no one maintains, whose
+#   flaws no one fixes; workflow.definition answers the file of the called
+#   workflow.
+on: push
+jobs:
+  build:
+    uses: example-org/nested-workflow/.github/workflows/build.yml@v1

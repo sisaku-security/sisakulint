@@ -1,0 +1,31 @@
+# situation: on issues opened, a step sets out to /dev/null and defines reset,
+#   which unsets out; point makes out local with /dev/null, calls reset, and
+#   sets out to $GITHUB_OUTPUT. The step calls point and then writes v= and
+#   "$V" to the file in "$out".
+# reason: a todo (the same file): the unset in reset takes away the local that
+#   point made, so the assignment in point after reset sets the out of the
+#   step: $GITHUB_OUTPUT, which gets the issue's body.
+# cause: the rule keeps the local of point after the unset in reset, and gives
+#   out back /dev/null when point returns, so the rule does not read the value
+#   that point set after reset.
+# attack-value: github.event.issue.body = "x\napproved=true"
+# attack-run-behavior: the step s has the output approved.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          out=/dev/null
+          reset() { unset out; }
+          point() { local out=/dev/null; reset; out="$GITHUB_OUTPUT"; }
+          point
+          echo "v=$V" >> "$out"
+      - env:
+          W: ${{ steps.s.outputs.v }}
+        run: echo "$W"

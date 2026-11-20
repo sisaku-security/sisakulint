@@ -1,0 +1,28 @@
+# situation: on pull_request, the job test checks out the pull request and
+#   runs npm test; the job deploy downloads the artifact site and runs
+#   ./site/deploy.sh.
+# reason: a limitation (run time): a step of the run that has
+#   ACTIONS_RUNTIME_TOKEN replaces the artifact another job downloads; which
+#   code has it is decided at run time.
+# cause: the download has no run-id, so the rule reads it as of the current
+#   run, which it does not take as an attacker's.
+# attack: the pull request's test script takes the run's
+#   ACTIONS_RUNTIME_TOKEN and with it uploads an artifact named site whose
+#   deploy.sh prints PWNED.
+# attack-run-behavior: the job deploy downloads site of the current run,
+#   which holds the attacker's files, and ./site/deploy.sh runs it, in the
+#   pull_request run, whose token for a fork's pull request is read-only.
+on: pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm test
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: site}
+      - run: ./site/deploy.sh

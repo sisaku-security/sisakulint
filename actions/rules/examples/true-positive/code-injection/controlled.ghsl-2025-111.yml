@@ -1,0 +1,30 @@
+# situation: on pull_request_target, a step echoes the title of the pull
+#   request, written into the script by ${{ }}. This is
+#   pr-title-validation.yml of nrwl/nx (commit
+#   0f3070161c15cfb0dfbf7f730c257d6322a2235a, lines 3-11 and 35-37). The
+#   default branch removed the trigger pull_request_target, but the branches
+#   21.4.x and website-21 kept the workflow, and pull_request_target runs the
+#   workflow of the base branch of the pull request.
+#   The steps before the step Validate PR title are left out, and the node
+#   command after the echo is left out.
+# reason: anyone who opens a pull request writes its title, and the runner
+#   puts the title into the script before bash reads the script, so a double
+#   quote in the title ends the string of echo and what follows runs as
+#   commands, with the token and the secrets of the base repository.
+# attack-value: github.event.pull_request.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo "Validating PR title: ";
+#   echo PWNED; echo "", and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-111_nrwl_nx/
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+jobs:
+  validate-pr-title:
+    if: ${{ github.repository_owner == 'nrwl' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        run: |
+          echo "Validating PR title: ${{ github.event.pull_request.title }}"

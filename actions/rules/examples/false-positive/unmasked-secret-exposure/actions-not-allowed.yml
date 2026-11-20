@@ -1,0 +1,31 @@
+# situation: the workflow of the true positive private (private.yml) of the
+#   rule, with a job added whose step uses example-org/not-allowed-action,
+#   which the setting of allowed actions of GitHub (repo.allowed-actions)
+#   blocks with !example-org/not-allowed-action@*. In the true positive, on
+#   push, in a private repository (repo.public false), a step takes clientId
+#   and clientSecret out of the JSON secret AZURE_CREDENTIALS into its env.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: someone with read access to the repository, who may not read its
+#   secrets, opens the run's log and reads the client secret.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: log in to azure
+        env:
+          CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
+          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
+        run: az login --service-principal -u "$CLIENT_ID" -p "$CLIENT_SECRET" --tenant contoso.onmicrosoft.com
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

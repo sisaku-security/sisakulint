@@ -1,0 +1,24 @@
+# situation: on push, the env of the job has the JSON secret DB under the
+#   name DB, a step writes a JSON literal to $GITHUB_ENV under the name DB,
+#   and a later step takes the password out of env.DB with fromJSON into
+#   the env of the later step.
+# reason: the runner puts the value of $GITHUB_ENV over the env of the job,
+#   so env.DB in the later step is the JSON literal, which holds no secret.
+# cause: the rule reads env.DB only from the env written in the workflow
+#   file, where env.DB is the secret DB.
+# attack: one who may read the log of the run opens the log to read the
+#   password.
+# attack-run-behavior: the header of the later step prints PASSWORD with
+#   the value placeholder of the JSON literal.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DB: ${{ secrets.DB }}
+    steps:
+      - run: echo 'DB={"password":"placeholder"}' >> "$GITHUB_ENV"
+      - env:
+          PASSWORD: ${{ fromJSON(env.DB).password }}
+        run: ./migrate.sh

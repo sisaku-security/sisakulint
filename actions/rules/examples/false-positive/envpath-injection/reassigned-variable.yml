@@ -1,0 +1,23 @@
+# situation: on issues opened, the step's env sets V to the issue's title,
+#   and the script sets V to "$HOME/tools" before the script writes "$V" to
+#   $GITHUB_PATH; the next step runs git status.
+# reason: the script writes the path of $HOME/tools, the value that the
+#   script sets, not the issue's title.
+# cause: the rule reads $V as the value of env, and does not read the
+#   assignment in the script before the write.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: V is the path of $HOME/tools when echo runs, so the
+#   PATH of the next step has no /tmp/PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          V="$HOME/tools"
+          echo "$V" >> "$GITHUB_PATH"
+      - run: git status

@@ -1,0 +1,8 @@
+name: q02
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ vars.EXPR_TYPES_PROBE }}
+    steps:
+      - run: echo ok

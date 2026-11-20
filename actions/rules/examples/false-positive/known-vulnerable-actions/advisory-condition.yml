@@ -1,0 +1,21 @@
+# situation: a job analyzes Python alone with github/codeql-action/init
+#   and analyze pinned to the commit of v3.28.2.
+# reason: GHSA-vqf5-2xx6-9wfm exposes the environment only for a
+#   "Code scanning workflow configured to scan the Java/Kotlin languages"
+#   (its text): the CodeQL Kotlin extractor logs the environment. This job
+#   scans Python, so the extractor does not run.
+# cause: the rule does not read what an advisory says its vulnerability
+#   needs.
+# attack: someone who can read the artifacts of the repository downloads
+#   the debug artifact of a failed analysis.
+# attack-run-behavior: no Kotlin extractor runs, so no file of the
+#   environment is written for a debug artifact to hold.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: github/codeql-action/init@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        with:
+          languages: python
+      - uses: github/codeql-action/analyze@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2

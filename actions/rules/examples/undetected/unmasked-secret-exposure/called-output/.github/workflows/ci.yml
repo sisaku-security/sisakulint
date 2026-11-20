@@ -1,0 +1,11 @@
+on: push
+permissions: {}
+jobs:
+  config:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit
+  print:
+    needs: config
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.config.outputs.password }}"

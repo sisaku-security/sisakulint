@@ -1,0 +1,28 @@
+# situation: the workflow runs on push; the job deploy needs the job build,
+#   has the if needs.build.result == 'failure', writes no permissions, and
+#   runs the action some/action.
+# reason: GitHub evaluates the if of the job deploy, which calls no status
+#   function, only when the job build succeeded, where needs.build.result is
+#   success, so the if is false; when the job build fails or is skipped,
+#   GitHub skips the job deploy; so the job deploy does not run
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/expressions.md,
+#   status check functions).
+# cause: the rule reports every job that writes no permissions, and does
+#   not read whether GitHub runs the job.
+# attack: the attacker publishes the code of the action some/action, which
+#   the job deploy runs.
+# attack-run-behavior: GitHub never runs the job deploy, so no code runs with
+#   the GITHUB_TOKEN of the job deploy.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo built
+  deploy:
+    needs: build
+    if: needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/action@0123456789abcdef0123456789abcdef01234567

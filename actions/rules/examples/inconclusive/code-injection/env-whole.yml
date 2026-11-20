@@ -1,0 +1,16 @@
+# situation: a step writes toJSON(env) into its run script by ${{ }}, the
+#   whole env.
+# reason: the whole env has what steps set at run time, so whether an
+#   attacker controls a part of it is not known.
+# attack-value: a variable of env that a step before sets through $GITHUB_ENV = "'; echo PWNED; echo '"
+# attack-run-behavior: when a step before sets a variable to the value,
+#   toJSON(env) writes it inside a JSON string, where a single quote stays
+#   as it is, so the script becomes echo '{ ... "<name>": "'; echo PWNED;
+#   echo '" ... }': the single quote ends echo's string, and bash runs echo
+#   PWNED as a command, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo '${{ toJSON(env) }}'

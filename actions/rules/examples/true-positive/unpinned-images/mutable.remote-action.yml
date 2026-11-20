@@ -1,0 +1,16 @@
+# situation: a step runs example-org/docker-action@v1, a Docker container
+#   action of another repository whose runs.image is
+#   docker://ghcr.io/o/scan:1, named by a tag and no digest.
+# reason: the runner pulls the image the tag 1 names when the step runs;
+#   action.definition answers the file of the action, as the archive the
+#   runner downloads has it.
+# attack: whoever can push to ghcr.io/o/scan pushes an image of theirs
+#   under the tag 1.
+# attack-run-behavior: the runner pulls ghcr.io/o/scan:1, which is now that
+#   image, and runs the step inside it with the workspace mounted.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/docker-action@v1

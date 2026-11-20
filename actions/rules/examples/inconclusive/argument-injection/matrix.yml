@@ -1,0 +1,19 @@
+# situation: the matrix value v is ${{ vars.V }}, not written out in the
+#   workflow, and a step passes matrix.v to tar after the file names, by
+#   ${{ }} inside quotes.
+# reason: what the value holds is not known from the workflow, so whether an
+#   attacker controls it is not known.
+# attack-value: matrix.v = "--to-command=echo PWNED"
+# attack-run-behavior: when vars.V holds the value, tar reads the word as
+#   --to-command and runs echo PWNED for notes.txt as it extracts it, which
+#   prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - v: ${{ vars.V }}
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ matrix.v }}"

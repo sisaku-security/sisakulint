@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and assigns the variable to another
+#   variable of the script and runs eval with that one.
+# reason: the value reaches eval through an assignment in the script.
+# cause: the rule reads a variable whose value env gives, and does not follow
+#   the value through the script.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: X holds $(echo PWNED); eval reads echo $(echo PWNED) as
+#   a command and prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: X=$ISSUE_TITLE; eval "echo $X"

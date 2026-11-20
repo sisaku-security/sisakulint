@@ -1,0 +1,23 @@
+# situation: on issues opened, the step's env sets V to the issue's body,
+#   and the script sets V to safe before the script writes v= and "$V" to
+#   $GITHUB_OUTPUT.
+# reason: the script writes v=safe, the value that the script sets, not the
+#   issue's body.
+# cause: the rule reads $V as the value of env, and does not read the
+#   assignment in the script before the write.
+# attack-value: github.event.issue.body = "x\napproved=true"
+# attack-run-behavior: V is safe when echo runs, so the runner sets the
+#   output v to safe and sets no output approved.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          V=safe
+          echo "v=$V" >> "$GITHUB_OUTPUT"

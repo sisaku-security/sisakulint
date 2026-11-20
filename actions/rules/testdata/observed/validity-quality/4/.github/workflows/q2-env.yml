@@ -1,0 +1,45 @@
+on: push
+jobs:
+  in-container:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.20
+      env:
+        "A=B": x
+        "C D": y
+    steps:
+      - run: env | grep -E '^(A|C)' || echo none
+  service:
+    runs-on: ubuntu-latest
+    services:
+      svc:
+        image: redis:7-alpine
+        env:
+          "A=B": x
+    steps:
+      - run: |
+          for c in $(docker ps -q); do docker inspect -f '{{.Config.Image}} {{json .Config.Env}}' "$c"; done
+  composite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: ./.github/actions/envc
+  defaults:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_SHA: job-sha
+      CI: job-ci
+      HOME: /tmp/job-home
+      GITHUB_WORKSPACE: /tmp/job-ws
+      RUNNER_TEMP: /tmp/job-rt
+      GITHUB_REF: job-ref
+      GITHUB_ACTIONS: job-actions
+      GITHUB_TOKEN: job-token
+    steps:
+      - run: |
+          for n in GITHUB_SHA CI HOME GITHUB_WORKSPACE RUNNER_TEMP GITHUB_REF GITHUB_ACTIONS GITHUB_TOKEN; do printf '%s=%s\n' "$n" "${!n}"; done
+      - env:
+          GITHUB_SHA: step-sha
+          GITHUB_REF: step-ref
+        run: |
+          for n in GITHUB_SHA GITHUB_REF; do printf '%s=%s\n' "$n" "${!n}"; done

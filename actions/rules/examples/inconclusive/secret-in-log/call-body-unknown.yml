@@ -1,0 +1,41 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step defines a function w that sets PRIVATE_KEY to the private key out
+#   of the secret GCP_SA_KEY,
+#   runs a chain of functions f0 to f13 in which each function calls the
+#   function before it twice (16,383 calls), calls w, and
+#   prints PRIVATE_KEY.
+# reason: the call of w comes after the 4,096 calls of functions that the
+#   rule follows when it reads what the commands of the step print, so the
+#   rule does not read the body of w for the prints and reports an
+#   Inconclusive at the call of w; the rule still reads the value that w
+#   assigns, and also reports the print of the private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          w() { PRIVATE_KEY="$(echo "$GCP_SA_KEY" | jq -r '.private_key')"; }
+          f0() { :; }
+          f1() { f0; f0; }
+          f2() { f1; f1; }
+          f3() { f2; f2; }
+          f4() { f3; f3; }
+          f5() { f4; f4; }
+          f6() { f5; f5; }
+          f7() { f6; f6; }
+          f8() { f7; f7; }
+          f9() { f8; f8; }
+          f10() { f9; f9; }
+          f11() { f10; f10; }
+          f12() { f11; f11; }
+          f13() { f12; f12; }
+          f13
+          w
+          echo "key: $PRIVATE_KEY"

@@ -1,0 +1,23 @@
+# situation: on gollum, a step extracts an archive and passes the name of
+#   the wiki page (page_name) to tar after the file names, through env and
+#   inside quotes.
+# reason: anyone may edit the wiki when the wiki is open to all
+#   (repo.wiki-open, assumed true). For a page made on the web interface,
+#   GitHub makes the name of the page from the title, turns each +, < and >
+#   of the title into a -, and turns each blank of the title into a - after
+#   trimming the blanks at the head and the end of the title, so the editor
+#   of the wiki makes the name begin with -, and tar reads a word that begins with - as an option even
+#   after the file names of tar. Double quotes keep the name as one word
+#   but do not stop tar from reading the word as an option. The title
+#   ++to+command=id makes the name --to-command=id.
+# attack-value: github.event.pages[0].page_name = "--to-command=id"
+# attack-run-behavior: tar reads the word as --to-command and runs id for
+#   each file that tar extracts, in the step, with what the step can reach.
+on: gollum
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].page_name }}
+        run: tar -xf archive.tar notes.txt "$PAGE"

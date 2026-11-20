@@ -1,0 +1,87 @@
+name: shell-options-probe
+on:
+  push:
+jobs:
+  shells:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [bash, sh, dash]
+    steps:
+      - name: versions
+        run: |
+          bash --version | head -1; ls -l /bin/sh; dpkg -s dash | grep Version
+          python3 --version; node --version; perl -v | sed -n 2p; ruby --version || true
+      - name: quoted, -c joined to the code, before a script
+        env:
+          X: -cecho MARK-Q-JOINED
+          S: ${{ matrix.shell }}
+        run: |
+          printf 'echo SCRIPT-RAN\n' > x.sh
+          "$S" "$X" x.sh 2>&1 || true
+      - name: quoted, -c and the code with a blank in one word
+        env:
+          X: -c echo MARK-Q-BLANK
+          S: ${{ matrix.shell }}
+        run: |
+          "$S" "$X" 2>&1 || true
+          printf 'echo SCRIPT-RAN\n' > x.sh
+          "$S" "$X" x.sh 2>&1 || true
+      - name: unquoted, -c and code without blanks, alone and before a script
+        env:
+          X: -c echo${IFS}MARK-U-IFS
+          S: ${{ matrix.shell }}
+        run: |
+          "$S" $X 2>&1 || true
+          printf 'echo SCRIPT-RAN\n' > x.sh
+          "$S" $X x.sh 2>&1 || true
+      - name: unquoted, brace expansion in the code
+        env:
+          X: -c {echo,MARK-U-BRACE}
+          S: ${{ matrix.shell }}
+        run: |
+          "$S" $X 2>&1 || true
+      - name: unquoted, after the script
+        env:
+          X: -c echo${IFS}MARK-U-AFTER
+          S: ${{ matrix.shell }}
+        run: |
+          printf 'echo SCRIPT-RAN\n' > x.sh
+          "$S" x.sh $X 2>&1 || true
+  interpreters:
+    runs-on: ubuntu-latest
+    steps:
+      - name: python -c
+        env:
+          Q: -cprint('MARK-PY-Q')
+          U: -c print('MARK-PY-U')
+        run: |
+          printf 'print("SCRIPT-RAN")\n' > x.py
+          python3 "$Q" x.py 2>&1 || true
+          python3 $U 2>&1 || true
+          python3 x.py "$Q" 2>&1 || true
+      - name: node -e and --eval=
+        env:
+          Q: --eval=console.log('MARK-NODE-Q')
+          J: -econsole.log('MARK-NODE-J')
+          U: -e console.log('MARK-NODE-U')
+        run: |
+          printf 'console.log("SCRIPT-RAN")\n' > x.js
+          node "$Q" x.js 2>&1 || true
+          node "$J" x.js 2>&1 || true
+          node $U 2>&1 || true
+      - name: perl -e
+        env:
+          Q: -eprint "MARK-PERL-Q\n"
+          U: -e print("MARK-PERL-U\n")
+        run: |
+          printf 'print "SCRIPT-RAN\\n";\n' > x.pl
+          perl "$Q" x.pl 2>&1 || true
+          perl $U 2>&1 || true
+      - name: ruby -e
+        env:
+          Q: -eputs 'MARK-RUBY-Q'
+        run: |
+          printf 'puts "SCRIPT-RAN"\n' > x.rb
+          ruby "$Q" x.rb 2>&1 || true

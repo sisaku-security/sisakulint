@@ -1,0 +1,23 @@
+# situation: the key of the restore, deps-, is a prefix of the key that the
+#   save writes, deps- and the hash of go.sum; neither step has restore-keys.
+# reason: GitHub restores by the prefix of the key when no cache has the key
+#   itself, so the restore takes the newest deps- cache, and the save stores
+#   the content of the deps- cache, with what the build added, under a new
+#   key.
+# cause: the rule reads only restore-keys as a restore of another key, and
+#   does not compare the key of the restore with the key of the save.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/go/pkg/mod
+          key: deps-
+      - run: go build ./...
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/go/pkg/mod
+          key: deps-${{ hashFiles('go.sum') }}

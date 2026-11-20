@@ -1,0 +1,22 @@
+# situation: on pull_request_target labeled, refs/pull/<n>/head is checked
+#   out, and npm ci runs.
+# reason: another rule's: a label approves the run;
+#   untrusted-checkout-toctou reads it.
+# cause: the rule leaves out a job a label approves.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes a commit whose package.json has a preinstall that prints
+#   PWNED, before the job's checkout fetches.
+# attack-run-behavior: the labeled run checks out refs/pull/<n>/head, which
+#   then names the pushed commit, and npm ci runs its preinstall, with the
+#   base repository's GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      - run: npm ci

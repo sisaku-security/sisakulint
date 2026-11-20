@@ -1,0 +1,17 @@
+# situation: the matrix names the configuration variable of each region,
+#   EU_ENDPOINT and US_ENDPOINT, and the step reads vars[matrix.endpoint];
+#   the repository level defines US_ENDPOINT only.
+# reason: a todo: the run of the region eu gets the empty string as the
+#   endpoint.
+# cause: the rule does not compute a name that is not a literal.
+on: push
+permissions: {contents: read}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        endpoint: [EU_ENDPOINT, US_ENDPOINT]
+    steps:
+      - run: curl -fsS "${{ vars[matrix.endpoint] }}/health"

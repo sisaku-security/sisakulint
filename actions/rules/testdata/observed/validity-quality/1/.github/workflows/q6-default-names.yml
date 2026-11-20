@@ -1,0 +1,61 @@
+on: push
+jobs:
+  names:
+    runs-on: ubuntu-latest
+    env:
+      CI: over
+      GITHUB_ACTION: over
+      GITHUB_ACTIONS: over
+      GITHUB_ACTION_PATH: over
+      GITHUB_ACTION_REF: over
+      GITHUB_ACTION_REPOSITORY: over
+      GITHUB_ACTOR: over
+      GITHUB_ACTOR_ID: over
+      GITHUB_API_URL: over
+      GITHUB_ARTIFACTS: over
+      GITHUB_ARTIFACTS_LIST: over
+      GITHUB_BASE_REF: over
+      GITHUB_ENV: over
+      GITHUB_EVENT_NAME: over
+      GITHUB_EVENT_PATH: over
+      GITHUB_GRAPHQL_URL: over
+      GITHUB_HEAD_REF: over
+      GITHUB_JOB: over
+      GITHUB_OUTPUT: over
+      GITHUB_PATH: over
+      GITHUB_REF: over
+      GITHUB_REF_NAME: over
+      GITHUB_REF_PROTECTED: over
+      GITHUB_REF_TYPE: over
+      GITHUB_REPOSITORY: over
+      GITHUB_REPOSITORY_ID: over
+      GITHUB_REPOSITORY_OWNER: over
+      GITHUB_REPOSITORY_OWNER_ID: over
+      GITHUB_RETENTION_DAYS: over
+      GITHUB_RUN_ATTEMPT: over
+      GITHUB_RUN_ID: over
+      GITHUB_RUN_NUMBER: over
+      GITHUB_SERVER_URL: over
+      GITHUB_SHA: over
+      GITHUB_STATE: over
+      GITHUB_STEP_SUMMARY: over
+      GITHUB_TRIGGERING_ACTOR: over
+      GITHUB_WORKFLOW: over
+      GITHUB_WORKFLOW_REF: over
+      GITHUB_WORKFLOW_SHA: over
+      GITHUB_WORKSPACE: over
+      RUNNER_ARCH: over
+      RUNNER_DEBUG: over
+      RUNNER_ENVIRONMENT: over
+      RUNNER_NAME: over
+      RUNNER_OS: over
+      RUNNER_TEMP: over
+      RUNNER_TOOL_CACHE: over
+      RUNNER_WORKSPACE: over
+    steps:
+      - run: |
+          env | grep -a -E '=over$' | sort || echo none
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            console.log(Object.entries(process.env).filter(([k, v]) => v === 'over').map(([k]) => k).sort().join(' '))

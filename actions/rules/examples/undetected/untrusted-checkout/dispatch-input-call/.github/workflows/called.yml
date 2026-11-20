@@ -1,0 +1,29 @@
+# situation: caller.yml runs on workflow_dispatch with the input x, and
+#   calls called.yml with the input x of the dispatch as the input x of
+#   called.yml; called.yml checks out the ref that the input x names, and runs
+#   npm ci.
+# reason: the one who dispatches caller.yml chooses the value:
+#   input-dispatch reports such a value where a workflow on workflow_dispatch
+#   refers to its input directly, but through the call the value is the input
+#   x of called.yml.
+# cause: the rule reads the events of a called workflow from the table of
+#   the callers, and does not follow the value of an input of
+#   workflow_dispatch that a caller gives in with.
+# attack-value: inputs.x = "refs/pull/1/head"
+# attack-run-behavior: when the one who dispatches caller.yml gives the
+#   value as x, when the pull request 1 is from a fork whose package.json has
+#   the preinstall script echo PWNED, the checkout fetches the head of the
+#   fork's pull request, and npm ci runs the preinstall script, which prints
+#   PWNED, with the secrets of the repository.
+on:
+  workflow_call:
+    inputs:
+      x: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.x }}
+      - run: npm ci

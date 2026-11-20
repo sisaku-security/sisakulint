@@ -1,0 +1,27 @@
+# situation: the bundle-size workflow of the TanStack incident (2026-05-11)
+#   as it was: pull_request_target checks out the merge of the pull
+#   request, a composite action sets up pnpm with actions/cache, a build
+#   runs the pull request's code, and no cache-mode is written.
+# reason: since 2026-06-26 GitHub gives a run of pull_request_target read
+#   access only to the cache of the default branch's scope unless a
+#   cache-mode asks for write: the store the code changes is not saved.
+#   The build still runs the pull request's code with the job's token,
+#   which untrusted-checkout reports.
+# attack-value: the file packages/history/vite_setup.mjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: the build runs the pull request's code; at the end of
+#   the job the post step of actions/cache logs that saving is denied, and
+#   the release workflow restores no entry of the attacker's.
+on:
+  pull_request_target:
+    paths: ['packages/**']
+permissions:
+  contents: read
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+      - run: pnpm nx run @benchmarks/bundle-size:build

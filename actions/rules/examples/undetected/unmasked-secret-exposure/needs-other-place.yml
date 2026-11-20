@@ -1,0 +1,30 @@
+# situation: on push, an output of the job `read` has the password of the
+#   JSON secret DB, and the later job `print` writes the output into the
+#   options of its container.
+# reason: a todo (the same file): the runner prints the docker create
+#   command with the options at the start of the job `print`, and does not
+#   mask the password.
+# cause: the rule inspects only the keys where GitHub allows the secrets
+#   context in an expression, and options is not one of those keys.
+# attack: one who may read the log of the run opens the log of the job
+#   `print`.
+# attack-run-behavior: the log section Initialize containers of the job
+#   `print`, which the runner prints at the start of the job, has docker
+#   create with --label v= and the password, unmasked.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    outputs:
+      password: ${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --label v=${{ needs.read.outputs.password }}
+    steps:
+      - run: echo print

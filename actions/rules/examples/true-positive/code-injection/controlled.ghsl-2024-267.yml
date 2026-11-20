@@ -1,0 +1,44 @@
+# situation: on workflow_run, after the artifact of the triggering run is
+#   unzipped, a step reads pr/pr_base of the artifact into a variable of the
+#   script and writes PR_BASE=<value> to $GITHUB_ENV, and a later step writes
+#   env.PR_BASE and github.event.workflow_run.head_branch into its run by
+#   ${{ }}. This is pr-sonar.yml of adobe/react-spectrum-charts (commit
+#   886e2d55d381ff4233a83b4a46f602bac73f2e0f, lines 1-9 and 42-68); the
+#   checkout of the code of the pull request, the download with
+#   actions/github-script, the lines for PR_NUMBER and PR_BRANCH, the echo
+#   lines and the steps after line 68 are left out.
+# reason: on workflow_run, the author of a pull request from a fork names the
+#   head branch of the triggering run, which github.event.workflow_run.head_branch
+#   gives, and the runner puts the name into the script before bash reads the
+#   script (GHSL-2024-267). The rule reports the head branch; it does not
+#   follow pr_base through the variable of the script into $GITHUB_ENV and
+#   env.PR_BASE (GHSL-2024-266 and the rest of GHSL-2024-267; the
+#   envvar-injection undetected form script-var).
+# attack-value: github.event.workflow_run.head_branch = "x;echo${IFS}PWNED;#"
+# attack-run-behavior: the author of a pull request from a fork names its head
+#   branch x;echo${IFS}PWNED;# (a name of a branch has no space, and ${IFS}
+#   stands for one). The step Checkout base branch runs git checkout x, then
+#   echo PWNED, which prints PWNED, with the token of the job.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-266_GHSL-2024-267_Adobe_React_Spectrum_Charts/
+on:
+  workflow_run:
+    workflows: [PR Build]
+    types: [completed]
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Unzip artifacts 📁
+        run: unzip rsc-pr-build-artifacts.zip
+      - name: Setup workflow variables 📝
+        run: |
+          pr_base="$(<pr/pr_base)"
+          echo "PR_BASE=${pr_base}" >> $GITHUB_ENV
+      - name: Checkout base branch 🌳
+        run: |
+          git remote add upstream ${{ github.event.repository.clone_url }}
+          git fetch upstream
+          git checkout -B ${{ env.PR_BASE }} upstream/${{ env.PR_BASE }}
+          git checkout ${{ github.event.workflow_run.head_branch }}
+          git clean -ffdx && git reset --hard HEAD

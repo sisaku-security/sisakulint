@@ -1,0 +1,19 @@
+# situation: on push, a step uses an action by a ref of 64 hexadecimal
+#   digits.
+# reason: another rule's: 64 hexadecimal digits (a SHA-256 repository) are
+#   not a full SHA here; commit-sha reports the ref as not pinned.
+# cause: the rule reads a ref of 40 hexadecimal digits as a full SHA.
+# attack: with owner/repo a SHA-256 repository, someone pushes a commit to
+#   their fork of it and gets its SHA of 64 hexadecimal digits written as
+#   the ref.
+# attack-run-behavior: if GitHub serves a fork's commit by the repository's
+#   name in a SHA-256 repository as it does in a SHA-1 one, the runner
+#   fetches that commit by the name owner/repo and runs its action as the
+#   step; this was not tried, and GitHub refuses to create a branch or a tag
+#   of 64 hexadecimal digits, so the ref is not a tag that can be moved.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: owner/repo@0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

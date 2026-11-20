@@ -1,0 +1,7 @@
+name: x07
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ withJson() }}"

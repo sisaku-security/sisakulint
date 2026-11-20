@@ -1,0 +1,26 @@
+# situation: on issues, the job calls ./.github/workflows/deploy.yml with
+#   secrets: inherit and permissions: {}. deploy.yml is not among the files
+#   given to the linter, so the linter does not have the contents of
+#   deploy.yml.
+# reason: secrets: inherit lets deploy.yml reference every secret that this
+#   job has, rather than a list that this job names; when a job of
+#   deploy.yml reads the secrets without naming them, such as by
+#   toJSON(secrets), GitHub passes every one of the secrets to the runner
+#   of the job of deploy.yml that reads toJSON(secrets). Which secrets are
+#   passed is set by deploy.yml, which this file does not show, and not by
+#   this job; the rule
+#   assumes the worst case for a called workflow whose contents the linter
+#   does not have.
+# attack: a flaw in a job of deploy.yml, such as an injection of the issue's
+#   title, runs the attacker's code in the job of the flaw.
+# attack-run-behavior: opening an issue starts this workflow, which runs
+#   deploy.yml; if the job of the flaw reads toJSON(secrets), the runner of
+#   the job of the flaw has every secret of the repository and the
+#   organization that this job has, and the attacker's code reads every
+#   such secret.
+on: issues
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit

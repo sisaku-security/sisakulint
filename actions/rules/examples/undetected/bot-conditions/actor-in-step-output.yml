@@ -1,0 +1,31 @@
+# situation: on pull_request_target, a step writes github.actor to its
+#   output, and the next step merges when the output is dependabot[bot].
+# reason: a todo (the same file): following the output would find the
+#   comparison.
+# cause: the actor reaches the if through the output of a step, which the
+#   rule does not follow.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot]; the step who writes
+#   actor=dependabot[bot] to GITHUB_OUTPUT, so the next step's if is true,
+#   and gh pr merge --auto --rebase runs on the attacker's pull request with
+#   a token that has contents: write.
+on: pull_request_target
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - id: who
+        run: echo "actor=${{ github.actor }}" >> "$GITHUB_OUTPUT"
+      - if: steps.who.outputs.actor == 'dependabot[bot]'
+        run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

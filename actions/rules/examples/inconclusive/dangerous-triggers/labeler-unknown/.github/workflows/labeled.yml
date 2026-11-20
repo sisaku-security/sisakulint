@@ -1,0 +1,29 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token, and the configuration is at the path that the
+#   variable LABELER_CONFIG names; labeled.yml runs on pull_request_target on
+#   labeled when the label is safe-to-test, and the job reads the secret
+#   NPM_TOKEN, checks out the head of the pull request and runs npm ci.
+# reason: which configuration actions/labeler reads, and so which labels the
+#   attacker gets, is in the variable, which the linter does not know.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: when the configuration adds the label safe-to-test to a
+#   pull request that changes a file under site/, the attacker opens a pull
+#   request from a fork that changes a file under site/ and the files of the
+#   attack; actions/labeler adds the label safe-to-test, which starts
+#   labeled.yml, and npm ci runs the preinstall script of the pull request,
+#   which prints PWNED, with NPM_TOKEN in its env.
+on:
+  pull_request_target:
+    types: [labeled]
+permissions: {}
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

@@ -1,0 +1,9 @@
+name: y08
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      X: ${{ github.event }}
+    steps:
+      - run: printf 'X=[%s]\n' "$X"

@@ -1,0 +1,19 @@
+# situation: a job uses the local composite action
+#   ./.github/actions/auth-and-upload.
+# reason: a todo (a file of the repository): the credential is left and
+#   uploaded in a composite action the job calls, or across jobs.
+# cause: the rule pairs the steps of one job or of one composite action read
+#   as an input of its own.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the
+#   service account key from gha-creds-*.json.
+# attack-run-behavior: when the local composite action writes a credential
+#   file in the workspace and uploads the workspace, the artifact holds it,
+#   and the reader takes it; the action.yml is not part of this example.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/auth-and-upload
+      - run: echo after

@@ -1,0 +1,67 @@
+# situation: two jobs write an output of an action of another repository into
+#   a run script by ${{ }}, in the forms of two advisories. The job docs is
+#   docs_pr_comment.yml of PX4/PX4-Autopilot (commit
+#   8c6337e94eccfdd4dc8bce3df10b644ed16d72ba, lines 2-13, 45-49 and 57-59): on
+#   workflow_run, juliangruber/read-file-action reads
+#   errorsFilteredByPrPages.md, a file of the artifact of the run of
+#   docs_flaw_checker.yml on pull_request_target, and a step echoes the content.
+#   The download of the artifact with actions/github-script and unzip (lines
+#   14-36) and the steps after line 59 are left out. The job branch is the form
+#   of GHSA-gq52-6phf-x2r6: on pull_request_target, tj-actions/branch-names
+#   v8.2.1 gives the name of the head branch in its output head_ref_branch, and
+#   a step echoes the output, as the proof of concept of the advisory does
+#   ("Running on pr: $(…)").
+#   ci-failure-comment.yml of monkeytypegame/monkeytype (commit
+#   1838816bff756453290d558ba913ef907cd3dae6, GHSL-2024-167) has the form of
+#   the job docs: juliangruber/read-file-action reads pr_num.txt of the artifact
+#   of the triggering workflow_run, and actions/github-script writes the output
+#   content into its script (line 34).
+# reason: the outputs are what the two actions set, and the action.yml of each
+#   action is not among the files that the linter reads, so whether an attacker
+#   controls an output is not known. markdown_link_checker_sc writes the path of
+#   each page with a broken link into errorsFilteredByPrPages.md unchanged
+#   (src/output_errors.js of version 0.0.138, line 46), and the author of the
+#   pull request names the files of the pull request; tj-actions/branch-names
+#   before 9.0.0 unescapes the escaped name of the branch with eval printf
+#   before the action writes the name to its output (the advisory).
+# cause: the rule does not yet ask for the action.yml of another repository as
+#   a fact, and does not read what an action does with a file.
+# attack-value: steps.read-errors-by-page.outputs.content = "\"; echo PWNED; echo \""
+# attack-run-behavior: the author of a pull request from a fork adds a page
+#   whose name holds the value and that has a broken link, and the file of the
+#   artifact holds the name. The script of the step File detail info becomes
+#   echo ""; echo PWNED; echo "", and bash runs the second echo as a command,
+#   which prints PWNED, with the token of the job. In the job branch, the name
+#   of the head branch of the pull request goes into the output head_ref_branch
+#   and into the script the same way.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-087_PX4_PX4-Autopilot/
+# advisory: https://github.com/advisories/GHSA-gq52-6phf-x2r6
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-167_monkeytype/
+on:
+  workflow_run:
+    workflows: ["Docs - Check for flaws in PX4 Guide Source"]
+    types: [completed]
+  pull_request_target:
+jobs:
+  docs:
+    if: github.event_name == 'workflow_run'
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read errorsFilteredByPrPages.md file
+        id: read-errors-by-page
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./errorsFilteredByPrPages.md
+      - name: File detail info
+        run: |
+          echo "${{ steps.read-errors-by-page.outputs.content }}"
+  branch:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - id: branch
+        uses: tj-actions/branch-names@dde14ac574a8b9b1cedc59a1cf312788af43d8d8 # v8.2.1
+      - run: |
+          echo "Running on pr: ${{ steps.branch.outputs.head_ref_branch }}"

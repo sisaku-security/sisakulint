@@ -1,0 +1,20 @@
+# Which secrets reach the runner of a called workflow's job, by what the
+# caller passes (PROBE_A by name, or inherit) and by whether the called job
+# reads toJSON(secrets) or PROBE_A by name.
+on: push
+permissions: {}
+jobs:
+  named-tojson:
+    uses: ./.github/workflows/called-tojson.yml
+    secrets:
+      PROBE_A: ${{ secrets.PROBE_A }}
+  inherit-tojson:
+    uses: ./.github/workflows/called-tojson.yml
+    secrets: inherit
+  named-plain:
+    uses: ./.github/workflows/called-plain.yml
+    secrets:
+      PROBE_A: ${{ secrets.PROBE_A }}
+  inherit-plain:
+    uses: ./.github/workflows/called-plain.yml
+    secrets: inherit

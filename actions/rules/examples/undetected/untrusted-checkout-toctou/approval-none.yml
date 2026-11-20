@@ -1,0 +1,19 @@
+# situation: on pull_request_target, refs/pull/<n>/head is checked out, and
+#   npm ci runs; no one approves the run.
+# reason: another rule's: untrusted-checkout reports it.
+# cause: the rule reads a job a person approves (a label, an environment)
+#   only.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: no label or reviewer stands before the job: the
+#   checkout fetches refs/pull/<n>/head, the fork's head, and npm ci runs
+#   its preinstall, which prints PWNED, with the base repository's
+#   GITHUB_TOKEN in .git/config and its secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      - run: npm ci

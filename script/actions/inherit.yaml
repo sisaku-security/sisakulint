@@ -1,5 +1,0 @@
-on: push
-jobs:
-  release:
-    uses: actions/checkout@v2
-    secrets: inherit # `inherit` should not be used

@@ -1,0 +1,28 @@
+# situation: on workflow_run, the script of a step copies into $GITHUB_OUTPUT, with
+#   cat, the content of a file of an artifact that was uploaded by the run
+#   that triggered the workflow, by printing the file, not through a shell
+#   variable.
+# reason: a todo (the same file): reading, in the workflow, the command that
+#   copies the file and the step that downloads the file would find it.
+#   artifact-poisoning reports the download of the artifact, and this rule
+#   reports nothing.
+# cause: the rule reads the text of the script, and does not follow where
+#   the file comes from (the step that downloads the file).
+# attack-value: the file values.txt of the artifact values = "version=1.2.3\nPWNED=1"
+# attack-run-behavior: download-artifact puts values.txt in the workspace, and cat appends
+#   the two lines of values.txt to $GITHUB_OUTPUT; the runner sets the
+#   outputs version and PWNED of the step publish.
+on:
+  workflow_run:
+    workflows: ["receive-pr"]
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: values
+          run-id: ${{ github.event.workflow_run.id }}
+      - id: publish
+        run: cat values.txt >> "$GITHUB_OUTPUT"

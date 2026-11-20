@@ -1,0 +1,23 @@
+# situation: on issues, a job with cache-mode: write saves build with
+#   actions/cache/save under a key that has ${{ inputs.x }}.
+# reason: the value of inputs.x is what the caller gives, and no file read
+#   here calls this workflow, so whether an attacker controls it is not known.
+# attack-value: inputs.x = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when ${{ inputs.x }} holds the value, the job saves
+#   build to the cache of the default branch's scope under build-<value>, a key
+#   the attacker chose.
+on:
+  issues:
+  workflow_call:
+    inputs:
+      x:
+        type: string
+cache-mode: write
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ inputs.x }}

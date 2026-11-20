@@ -1,0 +1,8 @@
+name: y20
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ format('{0} {1}', 'a') }}"
+      - run: echo after

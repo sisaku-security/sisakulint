@@ -1,0 +1,26 @@
+# argument-injection.option and argument-injection.wiki of sisakulint.
+# How to run it: the README of the all-rules example. Not for GitHub.
+on:
+  pull_request_target:
+    types: [opened]
+  gollum:
+permissions: {}
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      # argument-injection.option: tar reads a word that begins with - as an
+      # option even after its file names; a branch named --to-command=... runs
+      # that program
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: tar -xf archive.tar notes.txt "$HEAD_REF"
+  wiki:
+    runs-on: ubuntu-latest
+    steps:
+      # argument-injection.wiki (gollum alone): GitHub turns a + at the head
+      # of the title of a wiki page into a - at the head of the name of the
+      # page, so ++to+command=... in the title is --to-command=... for tar
+      - env:
+          PAGE: ${{ github.event.pages[0].page_name }}
+        run: tar -xf archive.tar notes.txt "$PAGE"

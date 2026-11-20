@@ -1,0 +1,14 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: a
+        run: |
+          echo "X=from-a" >> "$GITHUB_ENV"
+          echo "o=from-a" >> "$GITHUB_OUTPUT"
+          sleep 5
+        background: true
+      - run: echo "before-wait X=[$X] o=[${{ steps.a.outputs.o }}]"
+      - wait: a
+      - run: echo "after-wait X=[$X] o=[${{ steps.a.outputs.o }}]"

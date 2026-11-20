@@ -1,0 +1,27 @@
+# situation: on issues, the job a of ci.yml calls this reusable workflow,
+#   called.yml, with secrets: inherit and permissions: {}. The job deploy of
+#   called.yml echoes the issue's title, written in by ${{ }}, and runs
+#   ./deploy with the secret DEPLOY_TOKEN in TOKEN; called.yml reads no
+#   other secret. The finding is reported on the job a of ci.yml.
+# reason: issues runs the job for anyone who opens an issue, with no
+#   approval, and GitHub passes DEPLOY_TOKEN, which the job deploy reads by
+#   name, to the runner of the job deploy; the title written in by ${{ }} is
+#   a flaw that runs the opener's code in the step whose environment has
+#   TOKEN. The finding names DEPLOY_TOKEN, not every secret: GitHub passes
+#   the runner of the job deploy only the secrets that the job deploy reads.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts ci.yml, which runs
+#   the job deploy of called.yml; the script becomes echo ""; echo PWNED;
+#   echo "" && ./deploy, and the shell runs echo PWNED as a command in the
+#   step whose environment has TOKEN, set to DEPLOY_TOKEN's value; a command
+#   that the attacker writes where echo PWNED is reads the value as $TOKEN.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.issue.title }}" && ./deploy
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

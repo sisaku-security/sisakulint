@@ -1,0 +1,23 @@
+# situation: on issues opened, a step runs exec 3>> "$GITHUB_OUTPUT" in the
+#   background, waits for it, and writes the issue's body to
+#   descriptor 3, and goes on when the write fails (|| true).
+# reason: the background exec opens descriptor 3 in a subshell that ends
+#   with it, so the write to descriptor 3 fails and nothing reaches
+#   $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: descriptor 3 is not open when echo runs, so bash
+#   reports a bad file descriptor, || true keeps the step going, and the
+#   runner gets no output from the value.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          exec 3>> "$GITHUB_OUTPUT" &
+          wait
+          echo "v=$V" >&3 || true

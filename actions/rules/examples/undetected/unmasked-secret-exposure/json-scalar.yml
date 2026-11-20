@@ -1,0 +1,19 @@
+# situation: on push, the secret API_KEY holds a JSON string, "k-123" with
+#   its quotes, and a step reads it whole by fromJSON.
+# reason: a todo (the same file): fromJSON gives k-123 without the quotes,
+#   and the runner masks a value without its quotes only when the value is
+#   longer than 8 characters ("k-123" is 7).
+# cause: the rule takes a secret read whole by fromJSON as an object or an
+#   array, which a string makes Object or Array.
+# attack: one who may read the run's log opens it to read the key.
+# attack-run-behavior: the header of the step prints KEY with k-123, which
+#   the runner does not mask.
+on: push
+permissions: {}
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          KEY: ${{ fromJSON(secrets.API_KEY) }}
+        run: ./call.sh

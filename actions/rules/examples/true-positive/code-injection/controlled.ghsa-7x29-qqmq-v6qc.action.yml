@@ -1,0 +1,22 @@
+# situation: a composite action puts github.event.pull_request.head.ref and
+#   github.head_ref into the script of its step. This is the form of the
+#   composite action ultralytics/actions at commit af42cbd, which wrote the
+#   two values into the run: key of its step.
+# reason: the runner puts the name of the head branch into the script before
+#   bash reads the script, so the author of a pull request writes code that
+#   the step runs in the workflow that uses the action.
+# attack-value: github.event.pull_request.head.ref = "x\";echo${IFS}PWNED;#"
+# attack-run-behavior: the first line of the script becomes echo
+#   "github.event.pull_request.head.ref: x";echo${IFS}PWNED;#", and bash
+#   prints PWNED.
+# advisory: https://github.com/advisories/GHSA-7x29-qqmq-v6qc
+name: actions
+description: the form of ultralytics/actions af42cbd
+runs:
+  using: composite
+  steps:
+    - name: Print
+      run: |
+        echo "github.event.pull_request.head.ref: ${{ github.event.pull_request.head.ref }}"
+        echo "github.head_ref: ${{ github.head_ref }}"
+      shell: bash

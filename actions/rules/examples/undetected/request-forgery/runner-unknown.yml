@@ -1,0 +1,18 @@
+# situation: on issues, a job on a runner labelled linux.2xlarge sends a
+#   request with curl to the host the issue's title names, without a
+#   credential.
+# reason: a todo (a fact): a label of its own may name a self-hosted runner,
+#   whose network the request reaches.
+# cause: the rule reads a runner as self-hosted by the label self-hosted
+#   only, as self-hosted-runner does.
+# attack: the attacker opens an issue titled 10.0.0.5:8500.
+# attack-run-behavior: curl sends the request from the runner to
+#   10.0.0.5:8500, which a self-hosted runner may reach.
+on: issues
+jobs:
+  j:
+    runs-on: linux.2xlarge
+    steps:
+      - shell: bash
+        run: |
+          curl -fsS "https://${{ github.event.issue.title }}/status"

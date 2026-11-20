@@ -1,0 +1,13 @@
+# situation: the job sets timeout-minutes to a property of fromJSON() of a
+#   configuration variable.
+# reason: when the property is a string in the JSON, GitHub does not start
+#   the job.
+# cause: the type of the property is known only when the workflow runs.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.CONFIG).timeout }}
+    steps:
+      - run: make test

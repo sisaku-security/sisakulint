@@ -1,0 +1,15 @@
+# situation: a reusable workflow that reads the title of an issue, and that
+#   only the repository's own workflows call, all of them on push.
+# reason: the issue it reads is never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the callers in the repository run on push, whose
+#   payload has no issue, so the expression is empty and the script is echo
+#   ""; were the title the value, the script would become echo ""; echo
+#   PWNED; echo "", and bash would run the second echo as a command.
+on: workflow_call
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

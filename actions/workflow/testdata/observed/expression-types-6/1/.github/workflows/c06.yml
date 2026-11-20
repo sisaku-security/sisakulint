@@ -1,0 +1,13 @@
+name: c06
+on:
+  workflow_call:
+    inputs:
+      b:
+        type: boolean
+        required: true
+        default: ${{ format('{0}', 'true') }}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "b=[${{ inputs.b }}]"

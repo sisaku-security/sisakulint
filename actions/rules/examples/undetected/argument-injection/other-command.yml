@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step runs awk with the program in
+#   count.awk and passes the pull request's title to it as the file to read,
+#   through env and inside quotes.
+# reason: a todo (the same file): gawk reads options up to its first word
+#   that is not one, so a title that begins with - is an option, and its
+#   option --source adds program text, where system() runs a command; an
+#   entry of awk in the table of commands would find it.
+# cause: awk is not in the table of commands, so the rule does not know
+#   which of its words it reads as options, nor that one runs a program.
+# attack-value: github.event.pull_request.title = "--source=BEGIN { system(\"echo PWNED\") }"
+# attack-run-behavior: gawk reads the word as --source, adds its text to
+#   the program of count.awk, and runs system("echo PWNED") before it reads
+#   any input, which prints PWNED.
+on: pull_request_target
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: awk -f count.awk "$TITLE"

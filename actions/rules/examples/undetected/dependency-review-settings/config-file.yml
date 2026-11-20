@@ -1,0 +1,15 @@
+# situation: actions/dependency-review-action reads settings from the file
+#   that config-file names, and the file may say warn-only: true.
+# reason: a setting of the file that the with does not override applies, and
+#   warn-only in the file makes the check succeed whatever the check finds.
+# cause: the rule reads the with of the step only, not the file.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          config-file: ./.github/dependency-review-config.yml

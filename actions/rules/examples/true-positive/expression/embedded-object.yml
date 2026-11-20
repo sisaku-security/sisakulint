@@ -1,0 +1,12 @@
+# situation: a step prints the names of the labels of the pull request with
+#   github.event.pull_request.labels.*.name in the text of run.
+# reason: the value of the ${{ }} is an array, and GitHub writes the text
+#   Array in place of the names: the step prints labels=Array.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "labels=${{ github.event.pull_request.labels.*.name }}"

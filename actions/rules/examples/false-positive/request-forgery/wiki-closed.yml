@@ -1,0 +1,20 @@
+# situation: on gollum, a step sends a request with curl and the secret
+#   DEPLOY_TOKEN to the host the title of a wiki page names, in a repository
+#   whose wiki only collaborators may edit.
+# reason: no harm when only collaborators may edit the wiki: they can write
+#   to the repository.
+# cause: the rule assumes anyone may edit the wiki (repo.wiki-open) unless a
+#   file of facts says otherwise.
+# attack: the attacker titles a wiki page attacker.example, where the wiki
+#   lets anyone edit.
+# attack-run-behavior: with the wiki closed to outsiders, the attacker
+#   cannot edit the page, and no request goes to attacker.example.
+on: gollum
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.pages[0].title }}/status"

@@ -1,0 +1,22 @@
+# situation: the step s uses a Docker image, the step p prints the
+#   output o of the step s, and the release step writes the output tag
+#   of the step p into its script.
+# reason: whether an attacker controls the output of the step s is not
+#   known.
+# cause: what the image writes is decided at run time.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        uses: docker://alpine:3
+      - id: p
+        run: echo "${{ steps.s.outputs.o }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

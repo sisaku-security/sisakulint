@@ -1,0 +1,22 @@
+# The flags of gh api that take a value: the cmd.Flags() lines of
+# pkg/cmd/api/api.go that are not BoolVar or BoolVarP, by their name and
+# shorthand. cli/cli fa92838bef95fe4a29c1587693885d5e9bdb6cf1, lines
+# 292-307, retrieved 2026-10-19. To make it again:
+#   curl -sfL https://raw.githubusercontent.com/cli/cli/fa92838bef95fe4a29c1587693885d5e9bdb6cf1/pkg/cmd/api/api.go | grep -n 'cmd.Flags()\.' | grep -v BoolVar
+--cache
+--field
+--header
+--hostname
+--input
+--jq
+--method
+--preview
+--raw-field
+--template
+-F
+-H
+-X
+-f
+-p
+-q
+-t

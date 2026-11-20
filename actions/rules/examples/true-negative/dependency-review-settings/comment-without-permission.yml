@@ -1,0 +1,16 @@
+# situation: a pull request runs actions/dependency-review-action with
+#   comment-summary-in-pr: always, and the job writes pull-requests: write.
+# reason: the GITHUB_TOKEN may write the comment.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          comment-summary-in-pr: always

@@ -1,0 +1,11 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"job.remote-callee.yml"},"state":"found","value":true},
+{"query":{"kind":"git.ref-commit","repo":"example-org/missing-timeout-minutes-remote","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"example-org/missing-timeout-minutes-remote"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/missing-timeout-minutes-remote/.github/workflows/w.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"example-org/missing-timeout-minutes-remote"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"workflow.definition","repo":"example-org/missing-timeout-minutes-remote","path":".github/workflows/w.yml","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"# situation: a job builds on push and writes no timeout-minutes.\n# reason: GitHub cancels a job after 360 minutes when timeout-minutes is not\n#   written, so a build that stops making progress holds the runner for 360\n#   minutes.\non: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make\n"}},
+{"query":{"kind":"workflow.definition","repo":"example-org/missing-timeout-minutes-remote","path":".github/workflows/w.yml","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"# situation: a job builds on push and writes no timeout-minutes.\n# reason: GitHub cancels a job after 360 minutes when timeout-minutes is not\n#   written, so a build that stops making progress holds the runner for 360\n#   minutes.\non: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make\n"}}
+]}

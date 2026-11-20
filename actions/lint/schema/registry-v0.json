@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The registry of rules of sisakulint (sisakulint/registry/v0): each rule's description, and the only place the severities of its kinds are written. The kinds of facts are in facts-v0.json.",
+  "type": "object",
+  "properties": {
+    "schema": {"const": "sisakulint/registry/v0"},
+    "rules": {"type": "array", "items": {"$ref": "#/$defs/meta"}},
+    "quality_rules": {"description": "The quality rules. A quality rule's finding alone gives no attacker a gain: an attack needs another flaw. The flaw that a quality rule finds may still let an attack through another flaw give the attacker more, or keep a vulnerability unfixed for longer. The quality rules check reliability and maintainability, in the words of GitHub Code Quality. A quality rule has no threat, no CVSS and no severity. The findings of a quality rule set no bit of the exit code; the findings of the other rules, of every certainty, and the inputs set the bits as in a run without the quality rules.", "type": "array", "items": {"$ref": "#/$defs/quality-meta"}}
+  },
+  "required": ["schema", "rules", "quality_rules"],
+  "additionalProperties": false,
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"},
+    "finding-kind-id": {"description": "A kind of finding: the rule's ID and the kind's, joined by a dot.", "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$"},
+    "finding-kind": {"type": "object", "properties": {
+      "id": {"$ref": "#/$defs/finding-kind-id"},
+      "detected": {"description": "The text of what a finding of the kind detects: {name} stands for an argument of the kind (findings-v0.json of actions/rules).", "type": "string", "minLength": 1},
+      "consequence": {"description": "Why a finding of the kind is bad: no argument.", "type": "string", "minLength": 1},
+      "remedy": {"description": "What a person does about it: no argument.", "type": "string", "minLength": 1},
+      "severity": {"$ref": "#/$defs/severity"},
+      "severity_basis": {"$ref": "#/$defs/severity-basis"},
+      "cvss": {"$ref": "#/$defs/cvss"},
+      "attackers": {"description": "The attackers of the rule's threat.actors it refers to.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/attacker"}},
+      "preconditions": {"description": "The IDs of the rule's threat.preconditions it refers to. A finding of the kind does not mean that each of these preconditions holds on the input of the finding.", "type": "array", "items": {"$ref": "#/$defs/id"}},
+      "incidents": {"description": "The IDs of the rule's threat.incidents it refers to: what its Exploit Maturity (E) rests on.", "type": "array", "items": {"$ref": "#/$defs/id"}},
+      "fixes": {"description": "The IDs of the rule's fixes a finding of it may give.", "type": "array", "items": {"$ref": "#/$defs/id"}},
+      "fact_kinds": {"description": "The kinds of facts the condition of a finding of it asks about.", "type": "array", "items": {"$ref": "#/$defs/fact-kind"}},
+      "true_positives": {"description": "Inputs on which the rule reports a finding of the kind.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/example"}},
+      "true_negatives": {"description": "Inputs close to the true positives on which the rule reports nothing and the consequence of the kind does not occur: the input of a true positive, fixed as the remedy says, or an input without a condition that the kind needs. The input of a true negative may also be a form that another rule reports (an undetected form whose disposition is other-rule). An undetected form whose disposition is no-added-gain is a set of inputs on which the rule reports nothing too, declared with the claim why; in the way of no-added-gain where the attacker gets the same without the flaw, unlike on a true negative, the run of such an input can still give the attacker secrets or a token.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/example"}}
+    }, "required": ["id", "detected", "consequence", "remedy", "severity", "severity_basis", "cvss", "attackers", "preconditions", "incidents", "fixes", "fact_kinds", "true_positives", "true_negatives"], "additionalProperties": false},
+    "fact-kind": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"},
+    "severity": {"description": "How bad a kind's threat is on any repository: the kind's worst case, not the risk to one organization. It is found from cvss by a table, not by CVSS scoring: the impact is the highest of VC, VI, VA, SC, SI and SA; the likelihood is high for AV:N, AT:N and PR:N, medium for AV:N with AT:P and PR:N or with AT:N and PR:L, low otherwise, and AC:H or UI:A lowers it one step (once); impact H is medium, high, critical for low, medium, high likelihood, L is info, low, medium, and N is info.", "oneOf": [
+      {"const": "info", "description": "The impact is N, or L with a low likelihood."},
+      {"const": "low", "description": "The impact is L with a medium likelihood."},
+      {"const": "medium", "description": "The impact is H with a low likelihood, or L with a high likelihood."},
+      {"const": "high", "description": "The impact is H with a medium likelihood."},
+      {"const": "critical", "description": "The impact is H with a high likelihood."}
+    ]},
+    "safety": {
+      "description": "Whether a fix may be applied without a person looking.",
+      "oneOf": [
+        {"const": "safe", "description": "It may be applied without a person looking."},
+        {"const": "review", "description": "A person looks first."}
+      ]
+    },
+    "side-effect": {
+      "description": "What applying a fix may change besides the finding: why a person looks first.",
+      "oneOf": [
+        {"const": "unquoted-one-word", "description": "An unquoted place becomes one word: a value with blanks is no longer read as several words, and outside [[ ]] is no longer globbed."},
+        {"const": "pattern-literal", "description": "On the right of ==, =, != or =~ inside [[ ]], the value is compared as a string, not matched as a pattern or a regular expression."},
+        {"const": "pwsh-unchecked", "description": "The rule does not read the quoting of pwsh, so how $env:NAME is read at that place is not checked."},
+        {"const": "github-script-unchecked", "description": "The rule does not read the JavaScript of github-script, so how process.env.NAME is read at that place is not checked."},
+        {"const": "line-breaks-removed", "description": "The line breaks of a value written to $GITHUB_ENV or $GITHUB_OUTPUT are taken out, which changes a value that had them."},
+        {"const": "random-delimiter", "description": "The random delimiter is made with od and /dev/urandom; in a container without them the step fails."},
+        {"const": "value-not-read-as-script", "description": "The value of the ${{ }} expression is no longer parsed by the program that reads the script (the shell, or the JavaScript runtime of actions/github-script) as part of the script text: characters of the value that the program interpreted before the fix (such as $, `, \\, double quotes and line breaks) are taken as plain characters, and a workflow that relied on the program interpreting those characters runs differently."},
+        {"const": "merge-commit-replaced", "description": "The job checks out the head commit, not the merge commit with the base, so the code it gets differs."},
+        {"const": "pr-code-not-built", "description": "The job no longer builds or tests the code of the pull request."},
+        {"const": "credential-not-persisted", "description": "Later steps that push or fetch with the credential of the checkout lose it."},
+        {"const": "artifact-path-moved", "description": "Steps that read the files of the artifact where they were no longer find them."},
+        {"const": "actor-not-compared", "description": "A workflow meant to compare the actor (as for a run after a push of Dependabot) changes its meaning."},
+        {"const": "substring-not-matched", "description": "A part of the string no longer matches, and how the string is split into values is a guess of what the author meant."},
+        {"const": "superstring-not-matched", "description": "The fix assumes that the author meant the whole value: a value that has the string as a part and is not the string no longer matches."},
+        {"const": "cache-not-saved", "description": "The job no longer saves to the cache; later runs that restore what it saved miss, until a trusted workflow saves it."},
+        {"const": "version-changed", "description": "The action or the reusable workflow runs another version, whose inputs, outputs and behavior may differ."}
+      ]
+    },
+    "input-kind": {
+      "description": "What an input is read as.",
+      "oneOf": [
+        {"const": "workflow", "description": "A workflow: a file GitHub runs from .github/workflows."},
+        {"const": "action-metadata", "description": "An action.yml or action.yaml: the metadata of an action."},
+        {"const": "repo-file", "description": "A file of the repository that is not an input: the linter reads the file (such as the configuration of actions/labeler) and does not lint the file."}
+      ]
+    },
+    "citation": {"description": "An https URL with a host, without spaces, < or >.", "type": "string", "pattern": "^https://[^/?#<> ]+[^<> ]*$"},
+    "date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "event": {"description": "The name of an event that triggers a workflow.", "type": "string", "pattern": "^[a-z][a-z_]*$"},
+    "attacker": {
+      "description": "Who the attacker is. Each value is defined by its description; actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "maintainer-of-called", "description": "The maintainer of the action or reusable workflow called, or whoever takes over a maintainer's account."},
+        {"const": "anyone-who-forks", "description": "Anyone who can fork the repository whose files are given to the linter: on a public repository, anyone with a GitHub account; on a private repository where the owner of the repository permits forking, those who have any of the roles read, triage, write, maintain and admin in the repository."},
+        {"const": "forker-of-called", "description": "Anyone who can fork the repository of an action that a workflow calls; the attacker needs no access to the repository whose files are given to the linter."},
+        {"const": "fork-pr-author", "description": "The author of a pull request from a fork: they write its title, its body and the name of its branch, and the message, the author name and the committer name of each commit of the pull request."},
+        {"const": "issue-author", "description": "Anyone who can open an issue or a discussion; on a public repository, anyone."},
+        {"const": "commenter", "description": "Anyone who can comment on an issue, a pull request or a discussion, or review a pull request; on a public repository, anyone."},
+        {"const": "merged-commit-author", "description": "The author of a commit merged from a pull request: they write its message and its author's name."},
+        {"const": "wiki-editor", "description": "Anyone who can edit the wiki: by default those who can write to the repository; anyone with an account on GitHub where the repository allows it (a public repository only)."},
+        {"const": "artifact-reader", "description": "Anyone who can download the artifacts of the repository's runs: signed in to GitHub with read access; on a public repository, anyone with an account."},
+        {"const": "image-publisher", "description": "Whoever can push to the repository of an image in its registry: its maintainer, or whoever takes over their account or a token that pushes to it."},
+        {"const": "repository-reader", "description": "Anyone who can read the files of the repository: on a public repository, anyone; on a private one, those with read access, the apps given its contents, whoever has their tokens, and those who kept a clone."},
+        {"const": "log-reader", "description": "Anyone who can view the logs of the repository's workflow runs: signed in to GitHub with read access; on a public repository, anyone with an account."},
+        {"const": "advisory-attacker", "description": "Whoever an advisory of the GitHub Advisory Database says can exploit the vulnerability it describes: who that is differs from one advisory to another."},
+        {"const": "destination-holder", "description": "Whoever runs the server of a destination the workflow names, or takes it over: a breached vendor, or whoever registers a lapsed domain."}
+      ]
+    },
+    "gain": {
+      "description": "What the attacker gets. Each value is defined by its description; actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "run-code", "description": "Their code runs in the job."},
+        {"const": "read-secrets", "description": "They read the job's secrets and its GITHUB_TOKEN."},
+        {"const": "write-with-token", "description": "They write what the job's GITHUB_TOKEN may write: pushes, releases, packages."},
+        {"const": "write-cache", "description": "They save entries to the cache of the default branch's scope, which later runs of the repository restore and use."},
+        {"const": "set-env", "description": "They set environment variables of the steps after this one in the job, and so what those steps run."},
+        {"const": "set-outputs", "description": "They set outputs of the step, which the steps and the jobs after it take as its own."},
+        {"const": "set-path", "description": "They choose a directory of the PATH of the steps after this one in the job, and so what those steps run for a command they call by name."},
+        {"const": "persist-on-runner", "description": "Their code stays on a self-hosted runner and runs beside the jobs that come after it there: it reads their secrets and tokens, changes what they build, and reaches the runner's network."},
+        {"const": "use-registry-account", "description": "They sign in to a registry as the account whose password is written: they pull its private images and push what it may push."},
+        {"const": "reach-runner-network", "description": "Requests from the job reach the hosts the runner reaches and the attacker does not: services of a self-hosted runner's network."}
+      ]
+    },
+    "weakness": {
+      "description": "The kind of flaw of a workflow through which what an attacker does becomes harm. Each value is defined by its description; actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "script-injection", "description": "A string an attacker writes is read as a script, put into it by ${{ }}."},
+        {"const": "argument-injection", "description": "A string an attacker writes begins a word a command gets, and the command reads the word as an option; the option makes the command run a program or code that is written after the name of the option."},
+        {"const": "request-forgery", "description": "An attacker's value decides where a request of the job goes."},
+        {"const": "environment-file-injection", "description": "A string an attacker writes is written to an environment file ($GITHUB_ENV, $GITHUB_OUTPUT, $GITHUB_PATH)."},
+        {"const": "untrusted-code-execution", "description": "A run executes code or a file an attacker made: the tree of a pull request, or an artifact."},
+        {"const": "agent-hijack", "description": "An AI agent follows what an attacker writes, or holds capabilities wide enough for an attacker to use."},
+        {"const": "gate-bypass", "description": "An attacker passes a check meant to stop them: an if, or the check of who started the action of an AI agent."},
+        {"const": "untrusted-reference", "description": "What a workflow refers to (an action, an image) can be replaced by someone else."},
+        {"const": "credential-leak", "description": "A credential is put where others read it: an artifact, the text of the workflow, the log of a run, or a request to a host the workflow names."},
+        {"const": "excessive-privilege", "description": "A run holds more permissions or secrets than it needs, or holds them where the event of an attacker reaches; it widens the harm of the other weaknesses."},
+        {"const": "workflow-command-injection", "description": "A string an attacker writes is printed to the log of a step that allows the set-env and add-path commands, and the runner reads the string as a set-env or add-path command."}
+      ]
+    },
+    "attack-means": {
+      "description": "What an attacker puts into the run. Each value is defined by its description; actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "string", "description": "A string that reaches ${{ }} or an AI agent."},
+        {"const": "code", "description": "Code or files: the tree of a pull request, or an artifact."},
+        {"const": "operation", "description": "An act: moving a tag, pushing after an approval, a commit in a fork, publishing an image, making Dependabot start a run."},
+        {"const": "none", "description": "Nothing into the form the rule detects: they read what leaked, or use a run they got through another weakness."}
+      ]
+    },
+    "facets": {
+      "description": "The values of the rule on each axis that sorts the rules, for people to find rules alike; they change nothing the rule reports. Each axis is a property, and has one value at least, each once (actions/lint checks it); actions/lint generates its Go type and the enumeration of its axes from these properties.",
+      "x-go-axes": "facet",
+      "type": "object",
+      "properties": {
+        "weakness": {"description": "The kind of flaw of a workflow through which what an attacker does becomes harm.", "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/weakness"}},
+        "attack_means": {"description": "What an attacker puts into the run.", "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/attack-means"}}
+      },
+      "required": ["weakness", "attack_means"],
+      "additionalProperties": false
+    },
+    "run-starter": {
+      "description": "Who starts the run of an event an actor takes. The value is for an event, not for one run: each event of an actor has one value, by the runs that the attack of the actor takes: attacker when the attack can take a run that the attacker starts by an act of the attacker, even when another person (such as a maintainer who adds a label) starts other runs of the same event; other when the attack takes only runs that another person or a schedule starts (such as the run after a maintainer approves). Each value is defined by its description; actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "attacker", "description": "The attacker starts it by an act of their own: they open, comment, push to their pull request, fork or edit the wiki; or it follows a run of theirs, or a bot they have act starts it."},
+        {"const": "other", "description": "Someone else's act starts it (a maintainer merges, puts in the merge queue, dispatches or labels) or a schedule does; what the attacker wrote reaches it."}
+      ]
+    },
+    "actor": {
+      "description": "An attacker, how they go about it (via), the events it takes when the threat depends on them, who starts the run of each of those events, and what they get.",
+      "type": "object",
+      "properties": {
+        "attacker": {"$ref": "#/$defs/attacker"},
+        "via": {"type": "string", "minLength": 1},
+        "events": {"type": "array", "items": {"$ref": "#/$defs/event"}},
+        "run_starters": {
+          "description": "One for each of the events, in their order.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {"event": {"$ref": "#/$defs/event"}, "run_starter": {"$ref": "#/$defs/run-starter"}},
+            "required": ["event", "run_starter"],
+            "additionalProperties": false
+          }
+        },
+        "gains": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/gain"}}
+      },
+      "required": ["attacker", "via", "events", "run_starters", "gains"],
+      "additionalProperties": false
+    },
+    "need": {
+      "description": "What would be added to decide a form or a kind of place a rule does not report, as it is judged now. actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "same-file", "description": "More analysis of the same file by the linter, not a change that a user makes: reading parts of the file that the rule does not read now (keys, expressions, scripts), such as following an expression, what a script writes to $GITHUB_OUTPUT or $GITHUB_ENV, the credentials of the container of a job, or a scope of permissions."},
+        {"const": "repo-file", "description": "A file of the repository that is not the input: an action.yml, a reusable workflow, a workflow that calls this one, or a file of settings such as .github/dependabot.yml."},
+        {"const": "fact", "description": "A fact asked of the world outside the input (actions/facts): an action.yml of another repository, a setting of the repository, a registry."},
+        {"const": "pin-update", "description": "An update of the pinned upstream schemas that the tables of the analysis are made from: the workflow schema and GitHub's webhooks."}
+      ]
+    },
+    "decider": {
+      "description": "What decides a form or a kind of place when nothing that can be added is expected to, as it is judged now. actions/lint generates its Go type from this list.",
+      "oneOf": [
+        {"const": "run-time", "description": "What happens when the workflow runs: what a step, an action or an image computes."},
+        {"const": "remote-caller", "description": "A caller in another repository: a job that calls the workflow (uses: owner/repo/path@ref) and is in a workflow of another repository. The called workflow runs on the event of the run of the calling workflow (github.event_name of the called workflow is the event of the calling workflow), and the calling job chooses the permissions of the GITHUB_TOKEN of the called workflow, the secrets that the calling job passes and the inputs that the calling job gives under the key with. A caller in the repository of the called workflow is not a remote-caller, because the linter can read the files of that repository."},
+        {"const": "dispatcher", "description": "Whoever dispatches the workflow: the person or the program that creates the workflow_dispatch event, by the Run workflow button, GitHub CLI or the REST API, and chooses the ref and the inputs of the workflow_dispatch event. The value dispatcher is for workflow_dispatch only: no declaration names the sender of a repository_dispatch event as what decides a value. The linter takes the dispatcher as what decides an input of a workflow that has workflow_dispatch, also when the workflow has workflow_call, because a workflow_dispatch run takes any value that the dispatcher chooses. A token that cannot change the files of the repository can dispatch the workflow, such as a fine-grained token that has the permission Actions with write access and no permission Contents (https://github.com/github/docs/blob/5815d11586b0796688963a98c889680e60d72dc4/src/github-apps/data/fpt-2026-03-10/fine-grained-pat-permissions.json, the endpoint create-a-workflow-dispatch-event under actions, with access write)."}
+      ]
+    },
+    "disposition": {
+      "description": "Why a rule does not report a form (undetected-form) or a kind of place (inconclusive-kind), as it is judged now: limitation and todo change as what can be done is found. A kind of inconclusive place is a limitation or a todo only. Each value's fields are in $defs/disposition-fields.",
+      "type": "string",
+      "enum": ["no-added-gain", "other-rule", "limitation", "todo"]
+    },
+    "disposition-fields": {"description": "The fields that a disposition brings into the object that holds it, by its value: rule for other-rule, decided_by for limitation, needs for todo, and none for no-added-gain. The object that holds a disposition says which values it takes.", "oneOf": [{"description": "On a form of this value, the flaw that the rule detects (the problem of the rule) adds nothing to what the attacker of the threat of the rule gets from the repository of the input. A form has this value in one of two ways. In the first way, the form does not have the flaw, or the flaw on the form gives the attacker nothing. In the second way, the attacker gets the same without the flaw, such as the author of a pull request, who can change the workflow of a pull_request run; in the second way, the run can give the attacker secrets or a token that writes, and the workflow can be dangerous while the rule reports nothing. A quality rule has no threat, so no form of a quality rule has this value. The value says nothing of the threats of other rules: another rule may report a form of this value, and the value does not mean that a workflow with the form is safe.", "properties": {"disposition": {"const": "no-added-gain"}}}, {"description": "Another rule reports the same form, as a form of the threat of that rule: rule.", "properties": {"disposition": {"const": "other-rule"}, "rule": {"$ref": "#/$defs/id"}}, "required": ["rule"]}, {"description": "Nothing that can be added is expected to decide it now; decided_by does.", "properties": {"disposition": {"const": "limitation"}, "decided_by": {"$ref": "#/$defs/decider"}}, "required": ["decided_by"]}, {"description": "Adding what needs names is expected to decide it for some of its places; needs are in the order of $defs/need (the registry checks the order).", "properties": {"disposition": {"const": "todo"}, "needs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/need"}}}, "required": ["needs"]}]},
+    "added-attacker": {"description": "An attacker that the rules do not count in a run of the linter by default, and that a run of the linter counts when the user adds the attacker with --add-attacker. Each value names one credential that the attacker holds, and says which ifs, approvals and checks the attacker gets past, and does not get past, with the credential.", "oneOf": [{"const": "read-member", "description": "The attacker holds an account that is a member of the organization that owns the repository or a collaborator of the repository, and that has the read role in the repository. The account cannot push to the repository. A run of the linter that adds this attacker lets the attacker past an if that compares author_association with MEMBER or COLLABORATOR. The run does not let the attacker past an approval by a label on a pull request, an approval by the required reviewers of an environment, or the check of claude-code-action that the actor can write to the repository. The check of claude-code-action counts the read role as no write access. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "triage-account", "description": "The attacker holds an account that has the triage role in the repository. The account can add a label that the repository has to an issue or a pull request, cannot create a label, and cannot push to the repository. A run of the linter that adds this attacker lets the attacker past an if that compares author_association with MEMBER or COLLABORATOR, and past an approval by a label on a pull request. The run does not let the attacker past an approval by the required reviewers of an environment, or the check of claude-code-action that the actor can write to the repository. The check of claude-code-action counts the triage role as read access. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "writer-pull-requests-token", "description": "The attacker holds a token of an account that has the write role or a higher role in the repository. The token is a fine-grained personal access token or a user access token of a GitHub App, and the only permission of the token with write access is the Pull requests permission (the token may have read access to other permissions). With the token, the attacker can comment on a pull request, review a pull request and add a label to a pull request, and cannot open an issue, comment on an issue or push. In a workflow run that a comment, a review or a label that the token writes starts, a run of the linter that adds this attacker lets the attacker past an if that compares author_association with OWNER, MEMBER or COLLABORATOR, past an if that compares the actor with a name (the linter reads the actor as an account that may have any name that the workflow writes), past an approval by a label on a pull request, and past the check of claude-code-action that the actor can write to the repository. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "writer-issues-token", "description": "The attacker holds a token of an account that has the write role or a higher role in the repository. The token is a fine-grained personal access token or a user access token of a GitHub App, and the only permission of the token with write access is the Issues permission (the token may have read access to other permissions). With the token, the attacker can open an issue and comment on an issue, and cannot comment on a pull request, review a pull request, add a label to a pull request or push. In a workflow run that an issue or a comment that the token writes starts, a run of the linter that adds this attacker lets the attacker past an if that compares author_association with OWNER, MEMBER or COLLABORATOR, past an if that compares the actor with a name (the linter reads the actor as an account that may have any name that the workflow writes), and past the check of claude-code-action that the actor can write to the repository. The run does not let the attacker past an approval by a label on a pull request, because the token cannot add a label to a pull request. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "required-reviewer", "description": "The attacker holds an account that is a required reviewer of an environment of the repository, and that has the read role or the triage role in the repository. The account cannot push to the repository. A run of the linter that adds this attacker lets the attacker past the approval by the required reviewers of every environment that a job of the repository names, because the linter does not know which environments the attacker reviews, and past an if that compares author_association with MEMBER or COLLABORATOR. The run does not let the attacker past an approval by a label on a pull request, or the check of claude-code-action that the actor can write to the repository. For a reviewer with the triage role, add triage-account too, which gets past an approval by a label on a pull request. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "app-installation-token", "description": "The attacker holds an installation access token of a GitHub App that is installed on the repository, with write access to both the Issues permission and the Pull requests permission. The token cannot push to the repository. The actor of a workflow run that the token starts is the name of the App followed by [bot]. A run of the linter that adds this attacker lets the attacker past an approval by a label on a pull request and past an if that compares the actor with a name (the linter reads the actor as an account that may have any name that the workflow writes). The run does not let the attacker past an if that compares author_association with OWNER, MEMBER or COLLABORATOR, because a comment that the token writes has the author_association NONE (seen of comments only), or past the check of claude-code-action that the actor can write to the repository. The check of claude-code-action stops an actor that is not a user unless the input allowed_bots names the actor. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "variables-writer", "description": "The attacker holds a credential that can write the configuration variables that the workflows of the repository read, such as a fine-grained personal access token with write access to the Variables permission. The credential cannot push to the repository. A run of the linter that adds this attacker reads the value of each reference to vars (vars.NAME) as a value that the attacker writes, in any workflow run, whoever starts the workflow run. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}, {"const": "secrets-writer", "description": "The attacker holds a credential that can write the secrets that the workflows of the repository read, such as a fine-grained personal access token with write access to the Secrets permission. The credential cannot push to the repository. A run of the linter that adds this attacker reads the value of each reference to secrets (secrets.NAME) except secrets.GITHUB_TOKEN as a value that the attacker writes, in any workflow run, whoever starts the workflow run. GitHub makes the secret GITHUB_TOKEN for each job. A finding that appears only because of this attacker has the severity and the texts of its finding kind, written for an attacker outside the repository."}]},
+    "added-attackers": {"description": "Added attackers, each once, in the order of $defs/added-attacker.", "type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/added-attacker"}},
+    "undetected-form": {"description": "A form the rule does not detect, and why (disposition). finding_kinds are the kinds of finding the rule does not report on the form: every kind of the rule when the rule reports nothing on the form; some of the kinds of the rule when the rule reports a finding of another kind of the rule on the form (a kind whose conditions the form also meets). A test of the rules holds each to an input on which the rule reports no finding of finding_kinds.", "type": "object", "properties": {"id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1}, "finding_kinds": {"type": "array", "items": {"$ref": "#/$defs/finding-kind-id"}}, "added_attackers": {"description": "The added attackers (--add-attacker) such that a run that adds one of them reports a finding of the rule on each example of this form. A test of the rules checks that a run that adds each of these attackers alone reports a finding of finding_kinds on each example.", "$ref": "#/$defs/added-attackers"}, "disposition": {"$ref": "#/$defs/disposition"}, "examples": {"description": "The inputs that show the declaration, the main one first: a test of the rules checks that each gives what the declaration says.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/example"}}}, "required": ["id", "text", "finding_kinds", "disposition", "examples"], "$ref": "#/$defs/disposition-fields", "unevaluatedProperties": false},
+    "inconclusive-kind": {"description": "A kind of place that the rule finds and examines, where the rule cannot decide whether the workflow departs from the expected state (expected), or whether the consequence of a finding kind of the rule can occur at the place, because the value or the content that decides the answer is outside what the rule reads, such as a value that an attacker may write, the value of a setting, or the content of a file that the rule does not read; and why the rule reports no confirmed or conditional finding at such a place (disposition: limitation or todo only; under the disposition, decided_by or needs gives what would decide the answer). The output of a run lists each place of the kind as a finding whose certainty is inconclusive (certainty in the JSON output) and whose kind (args.kind_id) is <rule>.<kind>, in the same form as the ID of a finding kind; no finding kind of the rule has the ID of an inconclusive kind of the rule.", "type": "object", "properties": {"id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1}, "disposition": {"enum": ["limitation", "todo"]}, "examples": {"description": "The inputs that show the declaration, the main one first: a test of the rules checks that each gives what the declaration says.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/example"}}}, "required": ["id", "text", "disposition", "examples"], "$ref": "#/$defs/disposition-fields", "unevaluatedProperties": false},
+    "example": {"type": "object", "description": "An input that shows what a declaration is about; a test of the rules holds it to what the declaration says.", "properties": {"input_kind": {"$ref": "#/$defs/input-kind"}, "name": {"description": "The name of the file.", "type": "string", "minLength": 1}, "text": {"description": "The input, UTF-8.", "type": "string", "minLength": 1}, "others": {"description": "The other files of the repository the example is, by name: it is run as the whole repository (a caller and the workflow or action it calls).", "type": "array", "items": {"$ref": "#/$defs/example-file"}}, "added_attackers": {"description": "For a true positive, the added attackers (--add-attacker) such that a run that adds one of the added attackers alone reports a finding of the kind on the example, marked with the added attacker, and a run that adds no attacker reports no finding of the rule on the example (the lines added-attacker: of the notes at the top of the file of the example). A test of the rules runs the example once with no attacker added and once for each added attacker alone, and checks both statements.", "$ref": "#/$defs/added-attackers"}, "facts": {"description": "The answers the example runs with (--registry=full only): a fact not here is not known.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/entry"}}, "notes": {"description": "What the example is about (--registry=full only): what the workflow does, why it is what its declaration says, and for a false positive form or an undetected form what of the rule makes its verdict differ, and what an attacker puts in and what the run does with it.", "type": "object", "properties": {"situation": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}, "cause": {"type": "string", "minLength": 1}, "attack": {"description": "What an attacker does, when it is not a string they put in.", "type": "string", "minLength": 1}, "attack_value": {"description": "The string an attacker puts in, and its carrier: where it goes, an expression of the example or words.", "type": "object", "properties": {"carrier": {"type": "string", "minLength": 1}, "value": {"type": "string"}}, "required": ["carrier", "value"], "additionalProperties": false}, "attack_run_behavior": {"description": "What the run does with the attack in it.", "type": "string", "minLength": 1}, "advisories": {"description": "The pages of the advisories whose workflow the example reproduces steps of (the lines advisory: of the notes at the top of the file of the example, one line for each page), in the order of the lines: a page of GitHub Security Lab, of the GitHub Advisory Database, or of the security advisories of a repository.", "type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "sources": {"description": "The files of repositories at a commit whose steps the example reproduces, for a form that no advisory reports (the lines source: of the notes at the top of the file of the example, one line for each file), in the order of the lines: https://github.com/<owner>/<repository>/blob/<commit>/<path>, with #L<n> or #L<n>-L<m> or no fragment.", "type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}, "required": ["situation", "reason", "attack_run_behavior"], "oneOf": [{"required": ["attack"]}, {"required": ["attack_value"]}], "additionalProperties": false}}, "required": ["input_kind", "name", "text"], "additionalProperties": false},
+    "example-file": {"type": "object", "description": "Another file of an example of several files.", "properties": {"input_kind": {"$ref": "#/$defs/input-kind"}, "name": {"description": "The name of the file.", "type": "string", "minLength": 1}, "text": {"description": "The file, UTF-8.", "type": "string", "minLength": 1}}, "required": ["input_kind", "name", "text"], "additionalProperties": false},
+    "fact-kind-provider": {"type": "object", "description": "A kind of fact and where it comes from.", "properties": {"kind": {"$ref": "#/$defs/fact-kind"}, "provider": {"$ref": "facts-v0.json#/$defs/provider"}}, "required": ["kind", "provider"], "additionalProperties": false},
+    "false-positive-form": {"description": "A form on which the rule reports a finding of finding_kinds (of the rule), though the consequence of the kind does not occur on the inputs of the form: what the rule would need to stop reporting it (a limitation or a todo), or the kinds of facts whose answer removes it now. A test of the rules checks each example of each form.", "type": "object", "properties": {"id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1}, "finding_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/finding-kind-id"}}, "added_attackers": {"description": "The added attackers (--add-attacker) such that a run reports the findings of finding_kinds on each example of this form only when the run adds at least one of them. A test of the rules checks that a run that adds no attacker does not report the findings on an example, and that a run that adds each of these attackers alone reports the findings.", "$ref": "#/$defs/added-attackers"}, "examples": {"description": "The inputs that show the declaration, the main one first: a test of the rules checks that each gives what the declaration says.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/example"}}}, "required": ["id", "text", "finding_kinds", "examples"], "oneOf": [{"required": ["disposition"], "properties": {"disposition": {"enum": ["limitation", "todo"]}}, "$ref": "#/$defs/disposition-fields"}, {"description": "A false positive form that an answer of each of fact_kinds other than its assumed value removes now.", "properties": {"fact_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fact-kind-provider"}}}, "required": ["fact_kinds"]}], "unevaluatedProperties": false},
+    "attack-vector": {
+      "description": "Attack Vector (AV) of CVSS v4.0.",
+      "oneOf": [
+        {"const": "N", "x-name": "network", "description": "Network."},
+        {"const": "A", "x-name": "adjacent", "description": "Adjacent."},
+        {"const": "L", "x-name": "local", "description": "Local."},
+        {"const": "P", "x-name": "physical", "description": "Physical."}
+      ]
+    },
+    "attack-complexity": {
+      "description": "Attack Complexity (AC) of CVSS v4.0.",
+      "oneOf": [
+        {"const": "L", "x-name": "low", "description": "Low."},
+        {"const": "H", "x-name": "high", "description": "High."}
+      ]
+    },
+    "attack-requirements": {
+      "description": "Attack Requirements (AT) of CVSS v4.0.",
+      "oneOf": [
+        {"const": "N", "x-name": "none", "description": "None."},
+        {"const": "P", "x-name": "present", "description": "Present."}
+      ]
+    },
+    "privileges-required": {
+      "description": "Privileges Required (PR) of CVSS v4.0.",
+      "oneOf": [
+        {"const": "N", "x-name": "none", "description": "None."},
+        {"const": "L", "x-name": "low", "description": "Low."},
+        {"const": "H", "x-name": "high", "description": "High."}
+      ]
+    },
+    "user-interaction": {
+      "description": "User Interaction (UI) of CVSS v4.0.",
+      "oneOf": [
+        {"const": "N", "x-name": "none", "description": "None."},
+        {"const": "P", "x-name": "passive", "description": "Passive."},
+        {"const": "A", "x-name": "active", "description": "Active."}
+      ]
+    },
+    "impact": {
+      "description": "The impact metrics of CVSS v4.0: Confidentiality Impact to the Vulnerable System (VC), Integrity Impact to the Vulnerable System (VI), Availability Impact to the Vulnerable System (VA), Confidentiality Impact to the Subsequent System (SC), Integrity Impact to the Subsequent System (SI) and Availability Impact to the Subsequent System (SA). The values below are listed from the worst value, H, to N.",
+      "oneOf": [
+        {"const": "H", "x-name": "high", "description": "High."},
+        {"const": "L", "x-name": "low", "description": "Low."},
+        {"const": "N", "x-name": "none", "description": "None."}
+      ]
+    },
+    "exploit-maturity": {
+      "description": "Exploit Maturity (E) of CVSS v4.0 without its X (Not Defined), which the specification scores as A: a rule always says which it is. U is that no report was found, not that nothing happened.",
+      "oneOf": [
+        {"const": "A", "x-name": "attacked", "description": "Attacked."},
+        {"const": "P", "x-name": "proof-of-concept", "description": "Proof-of-Concept."},
+        {"const": "U", "x-name": "unreported", "description": "Unreported."}
+      ]
+    },
+    "likelihood": {
+      "description": "How readily a finding's threat comes about, for the table of severity: the ease of the attack, from AV, AT and PR, lowered by AC and UI. It is not Exploit Maturity (E), which the CVSS specification calls the likelihood of the vulnerability being attacked: the table leaves E out, and only cvss.bt takes it.",
+      "oneOf": [
+        {"const": "low", "description": "Neither of the rows below; or medium, lowered by AC:H or UI:A."},
+        {"const": "medium", "description": "AV:N with AT:P and PR:N, or with AT:N and PR:L; or high, lowered by AC:H or UI:A."},
+        {"const": "high", "description": "AV:N, AT:N and PR:N, and neither AC:H nor UI:A."}
+      ]
+    },
+    "metric-reason": {"type": "string", "minLength": 1},
+    "metric-cites": {"type": "array", "items": {"$ref": "#/$defs/citation"}},
+    "metric": {
+      "description": "One metric of the vector, in its order, its value and why it has it.",
+      "type": "object",
+      "properties": {"reason": {"$ref": "#/$defs/metric-reason"}, "cites": {"$ref": "#/$defs/metric-cites"}},
+      "required": ["metric", "value", "reason", "cites"],
+      "oneOf": [
+        {"properties": {"metric": {"const": "AV"}, "value": {"$ref": "#/$defs/attack-vector"}}},
+        {"properties": {"metric": {"const": "AC"}, "value": {"$ref": "#/$defs/attack-complexity"}}},
+        {"properties": {"metric": {"const": "AT"}, "value": {"$ref": "#/$defs/attack-requirements"}}},
+        {"properties": {"metric": {"const": "PR"}, "value": {"$ref": "#/$defs/privileges-required"}}},
+        {"properties": {"metric": {"const": "UI"}, "value": {"$ref": "#/$defs/user-interaction"}}},
+        {"properties": {"metric": {"const": "VC"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "VI"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "VA"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "SC"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "SI"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "SA"}, "value": {"$ref": "#/$defs/impact"}}},
+        {"properties": {"metric": {"const": "E"}, "value": {"$ref": "#/$defs/exploit-maturity"}}}
+      ],
+      "unevaluatedProperties": false
+    },
+    "severity-basis": {
+      "description": "How severity was found from cvss: the level of the impact and the metrics that have it, and the level of the likelihood, the metrics of the row of the table that matched (none for low), and the metrics that lowered it.",
+      "type": "object",
+      "properties": {
+        "impact": {
+          "type": "object",
+          "properties": {"level": {"$ref": "#/$defs/impact"}, "from": {"type": "array", "items": {"type": "string"}}},
+          "required": ["level", "from"],
+          "additionalProperties": false
+        },
+        "likelihood": {
+          "type": "object",
+          "properties": {
+            "level": {"$ref": "#/$defs/likelihood"},
+            "from": {"type": "array", "items": {"type": "string"}},
+            "lowered_by": {"type": "array", "items": {"enum": ["AC:H", "UI:A"]}}
+          },
+          "required": ["level", "from", "lowered_by"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["impact", "likelihood"],
+      "additionalProperties": false
+    },
+    "score-rating": {
+      "description": "The rating of a CVSS score (Table 22 of the CVSS v4.0 specification).",
+      "oneOf": [
+        {"const": "none", "description": "0.0."},
+        {"const": "low", "description": "0.1 to 3.9."},
+        {"const": "medium", "description": "4.0 to 6.9."},
+        {"const": "high", "description": "7.0 to 8.9."},
+        {"const": "critical", "description": "9.0 to 10.0."}
+      ]
+    },
+    "cvss-score": {
+      "description": "A CVSS v4.0 score by the reference calculator of FIRST (https://github.com/FIRSTdotorg/cvss-v4-calculator/tree/c5b0d409ae9f57c44264c6ce5f27d89298e1d32a), with one decimal, and its rating.",
+      "type": "object",
+      "properties": {
+        "score": {"type": "string", "pattern": "^(10\\.0|[0-9]\\.[0-9])$"},
+        "rating": {"$ref": "#/$defs/score-rating"}
+      },
+      "required": ["score", "rating"],
+      "additionalProperties": false
+    },
+    "cvss": {
+      "description": "The CVSS v4.0 Base metrics of the kind and its Exploit Maturity (E, never X), and their scores: b is CVSS-B, of the Base metrics, and bt is CVSS-BT, with E (cvss-score). The scores are for reference and answer another question than severity, which is the kind's worst case found by a table, and from which the exit code is found.",
+      "type": "object",
+      "properties": {
+        "vector": {"type": "string", "pattern": "^CVSS:4\\.0/AV:[NALP]/AC:[LH]/AT:[NP]/PR:[NLH]/UI:[NPA]/VC:[HLN]/VI:[HLN]/VA:[HLN]/SC:[HLN]/SI:[HLN]/SA:[HLN]/E:[APU]$"},
+        "metrics": {"type": "array", "items": {"$ref": "#/$defs/metric"}},
+        "b": {"$ref": "#/$defs/cvss-score"},
+        "bt": {"$ref": "#/$defs/cvss-score"}
+      },
+      "required": ["vector", "metrics", "b", "bt"],
+      "additionalProperties": false
+    },
+    "default-run-fact-kinds": {
+      "description": "default_run_fact_kinds of a rule, there only when default_run is facts or given-facts.",
+      "oneOf": [
+        {"properties": {"default_run": {"enum": ["always", "named"]}}},
+        {"properties": {"default_run": {"enum": ["facts", "given-facts"]}, "default_run_fact_kinds": {"description": "The kinds of facts of a default_run of facts or of given-facts.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fact-kind"}}}, "required": ["default_run_fact_kinds"]}
+      ]
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "default_run": {"description": "Whether the rule runs in a run without --rule (a run that names no rule, or a run of --skip-rule). always: in a run without --rule, the rule runs unless --skip-rule names the rule. named: the rule runs only when --rule names the rule. facts: the rule runs when --rule names the rule; in a run without --rule, the rule runs when --online is given, or when --facts or --fact gives a found or absent answer to any fact of a kind of default_run_fact_kinds. given-facts: the rule runs when --rule names the rule; in a run without --rule, the rule runs only when --facts or --fact (also the key facts or fact of a configuration file) answers a fact of a kind of default_run_fact_kinds with found (a value) or with absent (an answer, written in a file of facts or in --fact, that the fact does not exist); a fact that the file of facts and --fact leave out has no answer, and then the rule does not run, and --online alone does not make the rule run either. A rule left out of a run is in skipped_rules of the report of the run.", "enum": ["always", "named", "facts", "given-facts"]},
+        "problem": {"description": "What the rule detects, and why it is a problem: one sentence of the rule as a whole.", "type": "string", "minLength": 1},
+        "expected": {"description": "The state that the rule asks for (the ideal). The rule reports a finding where a workflow departs from the state, and reports nothing where the workflow keeps the state, with three exceptions: where a workflow has an undetected form (undetected_forms), the rule reports nothing, even where the workflow departs from the state; on the places of an inconclusive kind (inconclusive_kinds), the rule cannot decide whether the workflow departs from the state, or whether the consequence of a finding kind of the rule can occur at the place, and the rule reports a finding whose certainty is inconclusive (an inconclusive finding); where a workflow has a false positive form (false_positive_forms), the rule reports a finding though the consequence of the finding kind does not occur in the workflow, even where the workflow keeps the state. The declaration of each form and of each inconclusive kind gives the reason: the disposition, or, for a false positive form, the disposition or the fact kinds. Whether a finding is a false positive is decided by the consequence of the finding kind, not by the state: a finding where the workflow departs from the state is a false positive too when the consequence of the finding kind does not occur in the workflow.", "type": "string", "minLength": 1},
+        "facets": {"$ref": "#/$defs/facets"},
+        "severity": {"description": "The worst of the severities of its kinds.", "$ref": "#/$defs/severity"},
+        "threat": {
+          "description": "Who can do what, and what they get.",
+          "type": "object",
+          "properties": {
+            "actors": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/actor"}},
+            "preconditions": {
+              "description": "The statements that the threat rests on (about GitHub, the runner, an action or a program that a job runs, an AI agent, or the repository), and what backs each statement: observations on GitHub (with the day, and the runner's version when a runner took part), or documents; at least one. The rule checks some preconditions on the input or by a kind of facts, and does not check other preconditions; some preconditions are about one form of input only.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"$ref": "#/$defs/id"},
+                  "text": {"type": "string", "minLength": 1},
+                  "observed": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {"$ref": "#/$defs/date"},
+                        "runner": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
+                        "what": {"type": "string", "minLength": 1}
+                      },
+                      "required": ["date", "what"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "cites": {"type": "array", "items": {"$ref": "#/$defs/citation"}}
+                },
+                "required": ["id", "text", "observed", "cites"],
+                "additionalProperties": false
+              }
+            },
+            "incidents": {
+              "description": "Reported attacks of the rule's kinds; a kind's Exploit Maturity (E) rests on those it refers to.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"$ref": "#/$defs/id"},
+                  "date": {"$ref": "#/$defs/date"},
+                  "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+                  "advisory": {"$ref": "#/$defs/citation"},
+                  "compromised": {"description": "The repositories the attacker changed.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/repo"}},
+                  "downstream": {"description": "Repositories not changed, but hit through one of compromised they use.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/repo"}},
+                  "summary": {"type": "string", "minLength": 1}
+                },
+                "required": ["id", "date", "advisory", "compromised", "downstream", "summary"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["actors", "preconditions", "incidents"],
+          "additionalProperties": false
+        },
+        "citations": {"description": "What the rule as a whole rests on, which nothing of its text (a precondition, a metric, an incident) cites: https URLs only, so that they stay readable outside this repository.", "type": "array", "items": {"$ref": "#/$defs/citation"}},
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/input-kind"}},
+        "finding_kinds": {"description": "The kinds of findings it reports.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/finding-kind"}},
+        "fix_kinds": {"type": "array", "items": {"$ref": "#/$defs/fix-kind"}},
+        "undetected_forms": {"type": "array", "items": {"$ref": "#/$defs/undetected-form"}},
+        "inconclusive_kinds": {"type": "array", "items": {"$ref": "#/$defs/inconclusive-kind"}},
+        "false_positive_forms": {"type": "array", "items": {"$ref": "#/$defs/false-positive-form"}}
+      },
+      "required": ["id", "default_run", "problem", "expected", "facets", "severity", "threat", "citations", "targets", "finding_kinds", "fix_kinds", "undetected_forms", "inconclusive_kinds", "false_positive_forms"],
+      "$ref": "#/$defs/default-run-fact-kinds",
+      "unevaluatedProperties": false
+    },
+    "fix-kind": {
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "title": {"description": "What the fix does.", "type": "string", "minLength": 1},
+        "fact_kinds": {"type": "array", "items": {"$ref": "#/$defs/fact-kind"}},
+        "safety": {"$ref": "#/$defs/safety"},
+        "possible_side_effects": {"description": "What a fix of the kind may change besides the finding, with what each is: none for a safe kind, one at least for a kind to review; a fix given has those of them it makes.", "type": "array", "items": {
+          "type": "object",
+          "properties": {"id": {"$ref": "#/$defs/side-effect"}, "text": {"type": "string", "minLength": 1}},
+          "required": ["id", "text"],
+          "additionalProperties": false
+        }}
+      },
+      "required": ["id", "title", "fact_kinds", "safety", "possible_side_effects"],
+      "oneOf": [
+        {"properties": {"safety": {"const": "safe"}, "possible_side_effects": {"const": []}}},
+        {"properties": {"safety": {"const": "review"}, "possible_side_effects": {"minItems": 1}}}
+      ],
+      "additionalProperties": false
+    },
+    "quality-example": {"type": "object", "description": "An input that shows what a declaration of a quality rule is about; a test of the rules holds it to what the declaration says.", "properties": {"input_kind": {"$ref": "#/$defs/input-kind"}, "name": {"description": "The name of the file.", "type": "string", "minLength": 1}, "text": {"description": "The input, UTF-8.", "type": "string", "minLength": 1}, "others": {"description": "The other files of the repository the example is, by name: it is run as the whole repository (a caller and the workflow or action it calls).", "type": "array", "items": {"$ref": "#/$defs/example-file"}}, "facts": {"description": "The answers the example runs with (--registry=full only): a fact not here is not known.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/entry"}}, "notes": {"description": "What the example is about (--registry=full only): what the workflow does, why it is what its declaration says, and for a false positive form or an undetected form what of the rule makes its verdict differ. A quality rule has no threat: no attack, attack_value or attack_run_behavior.", "type": "object", "properties": {"situation": {"type": "string", "minLength": 1}, "reason": {"type": "string", "minLength": 1}, "cause": {"type": "string", "minLength": 1}}, "required": ["situation", "reason"], "additionalProperties": false}}, "required": ["input_kind", "name", "text"], "additionalProperties": false},
+    "quality-finding-kind": {"type": "object", "description": "A kind of finding of a quality rule: the text of the finding, and the kinds of facts that the condition of the finding asks about. A kind of a quality rule has no severity, no CVSS, no threat and no fix.", "properties": {"id": {"$ref": "#/$defs/finding-kind-id"}, "detected": {"description": "The text of what a finding of the kind detects: {name} stands for an argument of the kind (findings-v0.json of actions/rules).", "type": "string", "minLength": 1}, "consequence": {"description": "Why a finding of the kind is bad: no argument.", "type": "string", "minLength": 1}, "remedy": {"description": "What a person does about it: no argument.", "type": "string", "minLength": 1}, "fact_kinds": {"description": "The kinds of facts the condition of a finding of it asks about.", "type": "array", "items": {"$ref": "#/$defs/fact-kind"}}, "true_positives": {"description": "Inputs on which the rule reports a finding of the kind.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/quality-example"}}, "true_negatives": {"description": "Inputs close to the true positives on which the quality rule reports nothing and the consequence of the kind does not occur.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/quality-example"}}}, "required": ["id", "detected", "consequence", "remedy", "fact_kinds", "true_positives", "true_negatives"], "additionalProperties": false},
+    "quality-undetected-form": {"description": "A form a quality rule does not detect, and why: as an undetected-form, but never no-added-gain, since a quality rule has no threat. Which of rule, decided_by and needs a disposition has, and what finding_kinds are, is as in undetected-form.", "type": "object", "properties": {"id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1}, "finding_kinds": {"type": "array", "items": {"$ref": "#/$defs/finding-kind-id"}}, "disposition": {"enum": ["other-rule", "limitation", "todo"]}, "examples": {"description": "The inputs that show the declaration, the main one first: a test of the rules checks that each gives what the declaration says.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/quality-example"}}}, "required": ["id", "text", "finding_kinds", "disposition", "examples"], "$ref": "#/$defs/disposition-fields", "unevaluatedProperties": false},
+    "quality-false-positive-form": {"description": "A form on which a quality rule reports a finding of finding_kinds though the consequence of the kind does not occur on the inputs of the form: as a false-positive-form, with a disposition (a limitation or a todo) or fact_kinds.", "type": "object", "properties": {"id": {"$ref": "#/$defs/id"}, "text": {"type": "string", "minLength": 1}, "finding_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/finding-kind-id"}}, "examples": {"description": "The inputs that show the declaration, the main one first: a test of the rules checks that each gives what the declaration says.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/quality-example"}}}, "required": ["id", "text", "finding_kinds", "examples"], "oneOf": [{"required": ["disposition"], "properties": {"disposition": {"enum": ["limitation", "todo"]}}, "$ref": "#/$defs/disposition-fields"}, {"description": "A false positive form that an answer of each of fact_kinds other than its assumed value removes now.", "properties": {"fact_kinds": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fact-kind-provider"}}}, "required": ["fact_kinds"]}], "unevaluatedProperties": false},
+    "quality-meta": {"type": "object", "description": "A quality rule. A quality rule's finding alone gives no attacker a gain: an attack needs another flaw. The flaw that a quality rule finds may still let an attack through another flaw give the attacker more, or keep a vulnerability unfixed for longer. The quality rules check reliability and maintainability, in the words of GitHub Code Quality. A quality rule has no threat, no CVSS and no severity. The findings of a quality rule set no bit of the exit code; the findings of the other rules, of every certainty, and the inputs set the bits as in a run without the quality rules.", "properties": {"id": {"$ref": "#/$defs/id"}, "default_run": {"description": "Whether the rule runs in a run without --rule (a run that names no rule, or a run of --skip-rule). always: in a run without --rule, the rule runs unless --skip-rule names the rule. named: the rule runs only when --rule names the rule. facts: the rule runs when --rule names the rule; in a run without --rule, the rule runs when --online is given, or when --facts or --fact gives a found or absent answer to any fact of a kind of default_run_fact_kinds. given-facts: the rule runs when --rule names the rule; in a run without --rule, the rule runs only when --facts or --fact (also the key facts or fact of a configuration file) answers a fact of a kind of default_run_fact_kinds with found (a value) or with absent (an answer, written in a file of facts or in --fact, that the fact does not exist); a fact that the file of facts and --fact leave out has no answer, and then the rule does not run, and --online alone does not make the rule run either. A rule left out of a run is in skipped_rules of the report of the run.", "enum": ["always", "named", "facts", "given-facts"]}, "problem": {"description": "What the rule detects, and why it is a problem: one sentence of the rule as a whole.", "type": "string", "minLength": 1}, "expected": {"description": "The state that the rule asks for (the ideal). The rule reports a finding where a workflow departs from the state, and reports nothing where the workflow keeps the state, with two exceptions: where a workflow has an undetected form (undetected_forms), the rule reports nothing, even where the workflow departs from the state; where a workflow has a false positive form (false_positive_forms), the rule reports a finding though the consequence of the finding kind does not occur in the workflow, even where the workflow keeps the state. The declaration of each form gives the reason: the disposition, or, for a false positive form, the disposition or the fact kinds. Whether a finding is a false positive is decided by the consequence of the finding kind, not by the state.", "type": "string", "minLength": 1}, "citations": {"description": "What the rule rests on: https URLs only.", "type": "array", "items": {"$ref": "#/$defs/citation"}}, "targets": {"type": "array", "items": {"$ref": "#/$defs/input-kind"}}, "finding_kinds": {"description": "The kinds of findings it reports.", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/quality-finding-kind"}}, "undetected_forms": {"type": "array", "items": {"$ref": "#/$defs/quality-undetected-form"}}, "false_positive_forms": {"type": "array", "items": {"$ref": "#/$defs/quality-false-positive-form"}}}, "required": ["id", "default_run", "problem", "expected", "citations", "targets", "finding_kinds", "undetected_forms", "false_positive_forms"], "$ref": "#/$defs/default-run-fact-kinds", "unevaluatedProperties": false}
+  }
+}

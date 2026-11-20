@@ -1,0 +1,16 @@
+# situation: the job names the environment production for main and staging
+#   for other branches with a ${{ }}, and the step reads vars.API_URLL;
+#   no level that the run answers defines API_URLL.
+# reason: a todo: the environment level of the environment may define
+#   API_URLL, or not.
+# cause: the rule does not compute the name of an environment written with
+#   a ${{ }}.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    steps:
+      - run: ./deploy.sh "${{ vars.API_URLL }}"

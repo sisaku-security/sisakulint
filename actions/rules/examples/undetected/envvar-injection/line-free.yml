@@ -1,0 +1,17 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_ENV through
+#   $( ) whose pipeline ends with tr -d '\n'.
+# reason: no added gain: the line breaks are taken out, so the value is one
+#   line.
+# cause: the rule reads such a pipeline as taking the line breaks out.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo "$B" | tr -d '\n' prints xPWNED=1, so echo
+#   appends the one line b=xPWNED=1 to $GITHUB_ENV; the runner sets b to
+#   xPWNED=1, and no variable PWNED, with any body.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$(echo "$B" | tr -d '\n')" >> "$GITHUB_ENV"

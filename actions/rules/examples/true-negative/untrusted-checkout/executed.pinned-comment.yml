@@ -1,0 +1,18 @@
+# situation: on issue_comment pinned, the checkout fetches
+#   refs/pull/<the issue's number>/head, and npm ci runs in it.
+# reason: GitHub pins comments of issues only, not of pull requests, so the
+#   issue's number names no pull request and the ref fetches no code of
+#   one.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the issue of a pinned comment is no pull request, so
+#   refs/pull/<number>/head does not exist, the checkout fails, and npm ci
+#   does not run.
+on: {issue_comment: {types: [pinned]}}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - run: npm ci

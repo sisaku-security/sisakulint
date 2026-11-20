@@ -1,0 +1,14 @@
+# situation: a workflow builds and tests a project on Node.js 20 with
+#   actions/setup-node.
+# reason: the support of Node.js 20 ended on 2026-04-30, so the build and
+#   the tests run on a Node.js version that no longer gets security fixes.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - run: npm test

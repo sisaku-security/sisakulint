@@ -1,0 +1,23 @@
+# situation: on workflow_run, aochmann/actions-download-artifact downloads
+#   the artifact of ci.yml, and ./run.sh runs.
+# reason: a todo (a fact): an action of neither table downloads the
+#   artifact; what its inputs mean is in its action.yml, another
+#   repository's.
+# cause: the rule reads the downloads of actions/download-artifact and
+#   dawidd6/action-download-artifact only.
+# attack-value: the file run.sh in the artifact of the latest ci.yml run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: aochmann/actions-download-artifact takes the artifact
+#   of a ci.yml run, which may be a fork's, into the workspace, and ./run.sh
+#   runs it, which prints PWNED, with the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aochmann/actions-download-artifact@1.0.4
+        with:
+          workflow: ci.yml
+      - run: ./run.sh

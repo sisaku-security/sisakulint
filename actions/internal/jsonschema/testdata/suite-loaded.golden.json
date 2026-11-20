@@ -1,0 +1,17 @@
+{
+  "additionalProperties.json": 1,
+  "const.json": 15,
+  "defs.json": 0,
+  "enum.json": 15,
+  "items.json": 2,
+  "minItems.json": 2,
+  "minLength.json": 2,
+  "oneOf.json": 3,
+  "pattern.json": 3,
+  "properties.json": 2,
+  "ref.json": 7,
+  "required.json": 5,
+  "type.json": 6,
+  "unevaluatedProperties.json": 8,
+  "uniqueItems.json": 1
+}

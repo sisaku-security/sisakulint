@@ -1,0 +1,14 @@
+# situation: the job deploy has its whole condition in one ${{ }}, and the
+#   step has its condition without ${{ }}.
+# reason: GitHub reads both ifs as expressions: the job runs only for a push
+#   to main, and the step only when the event is not pull_request.
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    steps:
+      - if: github.event_name != 'pull_request'
+        run: ./deploy.sh

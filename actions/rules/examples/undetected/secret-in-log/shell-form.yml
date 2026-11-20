@@ -1,0 +1,20 @@
+# situation: on push, a step prints the first four characters of the
+#   secret DEPLOY_TOKEN with printf and a precision.
+# reason: a todo (the same file): printf %.4s prints four characters of the
+#   token, which the runner does not mask.
+# cause: the rule reads printf of %s as the value as it is, which the runner
+#   masks, not a precision that cuts the value.
+# attack: one who may read the run's log opens the log and reads the four
+#   characters.
+# attack-run-behavior: the step prints "token: " and four characters of the
+#   token.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          printf 'token: %.4s\n' "$DEPLOY_TOKEN"

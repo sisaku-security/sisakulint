@@ -1,0 +1,21 @@
+# situation: an issue runs the job with a token that may write issues, and
+#   the job only labels the issue.
+# reason: nothing of the attacker's reaches code.
+# cause: the rule does not read the sinks, and holds that the attacker can
+#   run code as the precondition of AT:P.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the job a with issues:
+#   write; the title is in no step, and gh issue edit gets only NUMBER, the
+#   number GitHub gives the issue, so the job adds the label triage and runs
+#   nothing of the attacker's.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - run: gh issue edit "$NUMBER" --add-label triage
+        env:
+          NUMBER: ${{ github.event.issue.number }}
+          GH_TOKEN: ${{ github.token }}

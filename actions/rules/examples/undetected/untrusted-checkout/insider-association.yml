@@ -1,0 +1,28 @@
+# situation: on pull_request_target, a job whose if lets in MEMBER or
+#   COLLABORATOR checks out the pull request's head SHA with
+#   allow-unsafe-pr-checkout, and npm ci runs.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: for a pull request whose author is a MEMBER or
+#   COLLABORATOR, the if is true, the checkout fetches head.sha, and npm ci
+#   runs the preinstall with the base repository's GITHUB_TOKEN in
+#   .git/config and its secrets; for an author with NONE, FIRST_TIMER,
+#   FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR the job is skipped.
+on: pull_request_target
+jobs:
+  a:
+    if: contains(fromJSON('["MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

@@ -1,0 +1,13 @@
+name: c12
+on:
+  workflow_call:
+    inputs:
+      t:
+        type: string
+        default: '5'
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.t }}
+    steps:
+      - run: echo ok

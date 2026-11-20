@@ -1,0 +1,17 @@
+# situation: repo.action-list is docker://alpine:*, and a step runs
+#   docker://docker.io/library/alpine:3.
+# reason: Docker reads docker.io/library/alpine and alpine as the same
+#   image, so the step runs an image that the repository listed as trusted.
+# cause: the rule compares the text of the image as written.
+# attack: the publisher of an image that the repository did not list pushes
+#   an image that reads the secrets of CI.
+# attack-run-behavior: the step runs the image alpine, which the repository
+#   listed, so no image of that publisher runs.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://docker.io/library/alpine:3
+        with:
+          args: echo hello

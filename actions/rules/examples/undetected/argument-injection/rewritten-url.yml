@@ -1,0 +1,26 @@
+# situation: on pull_request_target, a step sets git to rewrite an HTTPS
+#   URL to the local path /tmp/r, and fetches from that URL with the name of
+#   the pull request's head branch after the URL, through env and inside
+#   quotes.
+# reason: a todo (the same file): git fetch reads the word as --upload-pack,
+#   and git rewrites the URL to /tmp/r by url./tmp/r.insteadOf (the key
+#   url.<base>.insteadOf with /tmp/r as the base), so git runs the program
+#   given as the value of --upload-pack on the runner; reading the git config of
+#   the script would find it.
+# cause: the rule takes the URL as written in the script, without the git
+#   config commands that run earlier in the script, and reports nothing for
+#   an HTTPS remote, where git does not use the program.
+# attack-value: github.head_ref = "--upload-pack=echo${IFS}PWNED>&2;false"
+# attack-run-behavior: git fetches from /tmp/r in place of the URL and runs
+#   echo${IFS}PWNED>&2;false through the shell: the shell expands ${IFS}
+#   to a blank and prints PWNED, and the fetch then fails.
+on: pull_request_target
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git config --global url./tmp/r.insteadOf https://example.com/r
+          git fetch https://example.com/r "$HEAD_REF"

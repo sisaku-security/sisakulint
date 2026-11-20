@@ -1,0 +1,13 @@
+name: coe
+inputs:
+  c:
+    description: c
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: exit 1
+      continue-on-error: ${{ inputs.c }}
+    - shell: bash
+      run: echo after-in-action

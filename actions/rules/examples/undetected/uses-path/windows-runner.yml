@@ -1,0 +1,13 @@
+# situation: a job on a Windows runner uses ./.github\actions\setup after a
+#   checkout.
+# reason: a Windows runner may read the backslash as a separator of the
+#   path, so the step may run ./.github/actions/setup.
+# cause: the rule reads the uses as a Linux runner reads the uses, where a
+#   backslash of a ./ path is a character of the name of a directory.
+on: push
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: ./.github\actions\setup

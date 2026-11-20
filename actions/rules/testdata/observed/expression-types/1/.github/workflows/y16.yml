@@ -1,0 +1,9 @@
+name: y16
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+        continue-on-error: ${{ format('{0}', 'true') }}
+      - run: echo after

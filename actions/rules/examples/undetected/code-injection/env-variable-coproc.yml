@@ -1,0 +1,27 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE, starts bash as a coproc, and writes
+#   the variable to the coproc's input through a descriptor copied from the
+#   coproc's array.
+# reason: the coproc's bash runs what it reads from its input as code, and
+#   the descriptor 4 is a copy of the coproc's input.
+# cause: the rule does not read the input of a coproc as code for the value
+#   of a variable, and does not follow a descriptor copied from the
+#   coproc's array.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: the coproc's bash runs echo PWNED, and cat prints
+#   PWNED from the coproc's output.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          coproc bash
+          exec 4>&"${COPROC[1]}"
+          echo "$ISSUE_TITLE" >&4
+          exec 4>&- {COPROC[1]}>&-
+          cat <&"${COPROC[0]}"

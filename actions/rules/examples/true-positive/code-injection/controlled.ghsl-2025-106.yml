@@ -1,0 +1,31 @@
+# situation: on issue_comment created, when the comment is on a pull request
+#   and starts with @esphomebot generate image, a step assigns the body of
+#   the comment to a variable, with the body written into the script by
+#   ${{ }}. This is component-image.yml of esphome/esphome-docs (commit
+#   696a3d4163cf10cca73ac7c5ea53f1ce9fd0083f, lines 3-13 and 33-38).
+#   The step Comment, the last line of the script and the job after the job
+#   prepare are left out.
+# reason: anyone who can comment on a pull request writes the body of the
+#   comment, and the runner puts the body into the script before bash reads
+#   the script, so a double quote in the body ends the string and what
+#   follows runs as commands.
+# attack-value: github.event.comment.body = "@esphomebot generate image x\"; echo PWNED; echo \""
+# attack-run-behavior: the first line of the script becomes comment="...x";
+#   echo PWNED; echo "", and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-106_esphome_esphome-docs/
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  pull-requests: write
+jobs:
+  prepare:
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '@esphomebot generate image')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Component name
+        id: get_component
+        run: |-
+          comment="${{ github.event.comment.body }}"
+          component=$(echo $comment | sed -n 's/^@esphomebot generate image //p')
+          echo "name=$component" >> $GITHUB_OUTPUT

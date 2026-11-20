@@ -1,0 +1,22 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step of pwsh prints the title of the issue.
+# reason: a todo (the same file): the runner reads the line pwsh prints as a
+#   command.
+# cause: the rule reads runs of bash and sh.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - shell: pwsh
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: Write-Output $env:TITLE
+      - run: echo next

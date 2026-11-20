@@ -1,0 +1,746 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The kinds of facts sisakulint asks about the world outside a workflow, and the file of facts (sisakulint/facts/v0). Each member of $defs whose name has a dot is a kind: an object whose kind is the name and whose other properties say what the fact is about. x-value is the schema of its value when it is found, x-provider where it comes from (a value of $defs/provider) and x-permission the permission of a token it needs. x-assume, when there, is the value answered when nothing else does, and why (the report gives such an answer the source assumption). The kinds of the domain test. are for the tests of sisakulint; nothing outside the tests answers them.",
+  "$defs": {
+    "repo": {
+      "description": "A repository, owner/name. GitHub compares the owner and the name without case, so two facts are the same when the two facts differ only in the case of ASCII letters; sisakulint writes the owner and the name in lower case.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "x-go-type": "Repo"
+    },
+    "sha": {
+      "description": "A commit, 40 (SHA-1) or 64 (SHA-256) hexadecimal digits. sisakulint writes the digits in lower case.",
+      "type": "string",
+      "pattern": "^([0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$",
+      "x-go-type": "SHA"
+    },
+    "ref-name": {
+      "description": "The full name of a branch or a tag.",
+      "type": "string",
+      "pattern": "^refs/(heads|tags)/.+$",
+      "x-go-type": "RefName"
+    },
+    "ref-commit": {
+      "description": "What the runner runs for a ref: the commit, and the branch or the tag it was found as; no ref when the ref is a full SHA found as a commit.",
+      "type": "object",
+      "properties": {
+        "sha": {"$ref": "#/$defs/sha"},
+        "ref": {"$ref": "#/$defs/ref-name"}
+      },
+      "required": ["sha"],
+      "additionalProperties": false,
+      "x-go-type": "RefCommit"
+    },
+    "package-name": {
+      "description": "The name of a package of the actions ecosystem of the GitHub Advisory Database: owner/repo of an action or a reusable workflow, and the path to the action or the workflow in the repository when the action or the workflow is not at the root. GitHub compares owner and repo without case; sisakulint writes owner and repo in lower case, and the path as written.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[^@\\s]+)?$",
+      "x-go-type": "PackageName"
+    },
+    "package-version": {
+      "description": "A version of a package in the form that the GitHub Advisory Database compares: an optional v, numbers of at most 9 digits joined by dots, and a prerelease after a hyphen, such as v4.1.2, 4 or 2.0.0-beta.1. A version tag of an action has the same form.",
+      "type": "string",
+      "pattern": "^v?[0-9]{1,9}(\\.[0-9]{1,9})*(-[0-9A-Za-z.-]+)?$",
+      "x-go-type": "PackageVersion"
+    },
+    "ghsa-id": {
+      "description": "The ID of an advisory of the GitHub Advisory Database, GHSA-xxxx-xxxx-xxxx.",
+      "type": "string",
+      "pattern": "^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$",
+      "x-go-type": "GHSAID"
+    },
+    "advisory-severity": {
+      "description": "The severity GitHub gives an advisory. It is GitHub's rating of the advisory, found by a table other than the one that finds the severity of the kinds of findings of sisakulint, so the two need not agree.",
+      "oneOf": [
+        {"const": "critical", "description": "GitHub rates it critical."},
+        {"const": "high", "description": "GitHub rates it high."},
+        {"const": "medium", "description": "GitHub rates it medium."},
+        {"const": "low", "description": "GitHub rates it low."},
+        {"const": "unknown", "description": "GitHub has not rated it."}
+      ]
+    },
+    "advisory": {
+      "description": "An advisory of the GitHub Advisory Database, as GET /advisories gives it: its ID, the severity GitHub gives it (not the severity of a kind of finding of sisakulint), and of the vulnerability of the package asked about, the range of versions it affects and the first version that fixes it (none when no version fixes it).",
+      "type": "object",
+      "properties": {
+        "ghsa_id": {"$ref": "#/$defs/ghsa-id"},
+        "severity": {"$ref": "#/$defs/advisory-severity"},
+        "vulnerable_version_range": {"type": "string", "minLength": 1},
+        "first_patched_version": {"$ref": "#/$defs/package-version"}
+      },
+      "required": ["ghsa_id", "severity", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-go-type": "Advisory"
+    },
+    "input-path": {
+      "description": "The path of an input, relative to the root of the run, with / between its parts: no empty part, no . or .., no backslash.",
+      "type": "string",
+      "pattern": "^(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+)(?:/(?:[^/\\\\.][^/\\\\]*|\\.[^/\\\\.][^/\\\\]*|\\.\\.[^/\\\\]+))*$",
+      "x-go-type": "InputPath"
+    },
+    "uses-path": {
+      "description": "The path of an action in its repository, the path of uses: {owner}/{repo}/{path}@{ref}: parts with / between them, no empty part, no . or .., no backslash, no @ and no white space. It is not the path of an input (input-path), which is relative to the root of the run.",
+      "type": "string",
+      "pattern": "^(?:[^/\\\\.@\\s][^/\\\\@\\s]*|\\.[^/\\\\.@\\s][^/\\\\@\\s]*|\\.\\.[^/\\\\@\\s]+)(?:/(?:[^/\\\\.@\\s][^/\\\\@\\s]*|\\.[^/\\\\.@\\s][^/\\\\@\\s]*|\\.\\.[^/\\\\@\\s]+))*$",
+      "x-go-type": "UsesPath"
+    },
+    "step-path": {
+      "description": "Where a step is in its input: jobs.<id>.steps[<n>] in a workflow, jobs.<id>.steps[<n>].parallel[<m>] for a step of the parallel group at n, runs.steps[<n>] in an action.yml, n and m from 0.",
+      "type": "string",
+      "pattern": "^(jobs\\.(?:[A-Za-z][A-Za-z0-9_-]{0,98}|_(?:[A-Za-z0-9-][A-Za-z0-9_-]{0,97})?)\\.steps\\[(0|[1-9][0-9]*)\\](\\.parallel\\[(0|[1-9][0-9]*)\\])?|runs\\.steps\\[(0|[1-9][0-9]*)\\])$",
+      "x-go-type": "StepPath"
+    },
+    "environment-name": {
+      "description": "The name of a deployment environment of the repository: 1 to 255 characters. GitHub compares names without case; sisakulint writes them in lower case.",
+      "type": "string",
+      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]{1,255}$",
+      "x-go-type": "EnvironmentName"
+    },
+    "configuration-variable-name": {
+      "description": "The name of a configuration variable (vars.<name>): ASCII letters, digits and _, not starting with a digit, and not starting with GITHUB_ with any of its letters in upper case or lower case; GitHub refuses to create a name that does not follow these rules. GitHub keeps the name in upper case, and reads the name in vars.<name> in upper case or lower case alike; sisakulint keeps the name in upper case, so that two names that differ only in upper case and lower case letters are one name.",
+      "type": "string",
+      "pattern": "^(?:[A-FH-Za-fh-z_]|[Gg](?:$|[A-HJ-Za-hj-z0-9_]|[Ii](?:$|[A-SU-Za-su-z0-9_]|[Tt](?:$|[A-GI-Za-gi-z0-9_]|[Hh](?:$|[A-TV-Za-tv-z0-9_]|[Uu](?:$|[AC-Zac-z0-9_]|[Bb](?:$|[A-Za-z0-9])))))))[A-Za-z0-9_]*$",
+      "x-go-type": "ConfigurationVariableName"
+    },
+    "secret-name": {
+      "description": "The name of a secret: a letter or _, then letters, digits and _. GitHub compares names without case; sisakulint reads them in upper case. The job's token is GITHUB_TOKEN.",
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "x-go-type": "SecretName"
+    },
+    "action-pattern": {
+      "description": "A pattern of repo.action-list names the uses that the repository allows. A pattern has the form of a value of uses of a workflow or of an action metadata file (owner/repo@ref, owner/repo/path@ref, or docker://image), and may have * and a ! at the start. Before the comparison, the rule reads a uses of another repository as GitHub reads a uses: empty parts (as in owner//repo@v1) and . are dropped, and .. is resolved. A pattern matches a uses when the pattern matches the whole uses, and a * of the pattern stands for any characters, a / and an @ among them; ** is the same as *. So actions/* matches actions/checkout@v4, and a pattern with no * matches only a uses with the same text: crazy-max/ghaction-dump-context does not match crazy-max/ghaction-dump-context@v2, and crazy-max/ghaction-dump-context@* does. A pattern without ! compares the owner and the name of the repository before the first * of the pattern without case, as GitHub compares those names; the pattern compares the path and the ref as written, also before the first *, and so the letters after the first * and a Docker image. A pattern with ! compares the whole uses without case, so that the block holds whatever case a uses is written in. A pattern that starts with ! blocks: a uses that the pattern matches is not allowed, whatever the other patterns are, and whatever the order of the patterns is. A pattern has no white space and no comma. The settings of GitHub write several patterns separated by a comma; write each of those patterns as a separate pattern of repo.action-list.",
+      "type": "string",
+      "pattern": "^!?[^\\s,!][^\\s,]*$",
+      "x-go-type": "ActionPattern"
+    },
+    "allowed-actions-setting": {
+      "description": "The setting of allowed actions of GitHub, written with the names of the REST API: allowed_actions; when allowed_actions is selected, also github_owned_allowed, verified_allowed and patterns_allowed; and sha_pinning_required.",
+      "type": "object",
+      "properties": {
+        "allowed_actions": {"$ref": "#/$defs/allowed-actions-policy"},
+        "sha_pinning_required": {"type": "boolean", "description": "Whether a uses of an action must name a full commit SHA. A uses of a reusable workflow may still name a tag or a branch, and a uses of a Docker image may still name a tag."}
+      },
+      "required": ["allowed_actions", "sha_pinning_required"],
+      "oneOf": [
+        {"properties": {"allowed_actions": {"enum": ["all", "local_only"]}}},
+        {"properties": {"allowed_actions": {"const": "selected"}, "github_owned_allowed": {"type": "boolean", "description": "Whether the actions of the organizations actions and github are allowed."}, "verified_allowed": {"type": "boolean", "description": "Whether the actions of the verified creators of GitHub Marketplace are allowed."}, "patterns_allowed": {"type": "array", "items": {"$ref": "#/$defs/allowed-actions-pattern"}}}, "required": ["github_owned_allowed", "verified_allowed", "patterns_allowed"]}
+      ],
+      "unevaluatedProperties": false,
+      "x-go-type": "AllowedActionsSetting"
+    },
+    "allowed-actions-policy": {
+      "description": "Which actions and reusable workflows the setting of allowed actions of GitHub allows: allowed_actions of the REST API. An action and a reusable workflow of the repository itself (a uses of ./ or $/) are always allowed.",
+      "oneOf": [
+        {"const": "all", "description": "Any action and any reusable workflow."},
+        {"const": "local_only", "description": "Only the actions and the reusable workflows of the repositories of the owner of the repository; in GitHub Enterprise, of the repositories of the enterprise."},
+        {"const": "selected", "description": "The actions and the reusable workflows of the repositories of the owner of the repository (in GitHub Enterprise, of the repositories of the enterprise), and the others that github_owned_allowed, verified_allowed and patterns_allowed allow."}
+      ]
+    },
+    "allowed-actions-pattern": {
+      "description": "A pattern of patterns_allowed of the setting of allowed actions of GitHub, as the setting writes the pattern. A pattern has the form of a value of uses (owner/repo@ref, owner/repo/path@ref, or docker://image), may have *, which stands for any characters, a / and an @ among them, and may start with !. GitHub compares a pattern with the whole uses, in upper case or lower case alike. A pattern with no * matches only a uses with the same text, in upper case or lower case alike: crazy-max/ghaction-dump-context does not match crazy-max/ghaction-dump-context@v2. A pattern that starts with ! blocks each uses that the pattern matches, whatever the other patterns are, and whatever the order of the patterns is. A pattern has no white space and no comma: the settings page of GitHub separates the patterns with a comma, and each of those patterns is a separate pattern of patterns_allowed.",
+      "type": "string",
+      "pattern": "^!?[^\\s,!][^\\s,]*$",
+      "x-go-type": "AllowedActionsPattern"
+    },
+    "request-destination": {
+      "description": "Where a request goes, as a workflow writes it: a host without its port; or, in ${{ }}, the path of a context whose value is the URL (${{ secrets.UPLOAD_API }}, ${{ vars.HOOK }}, ${{ inputs.url }}). sisakulint reads either in lower case.",
+      "type": "string",
+      "pattern": "^([A-Za-z0-9_.-]+|\\[[0-9A-Fa-f:]+\\]|\\$\\{\\{ [A-Za-z_][A-Za-z0-9_.*-]* \\}\\})$",
+      "x-go-type": "RequestDestination"
+    },
+    "runs-using": {
+      "description": "A runs.using of the metadata of an action that the runner accepts, in lower case (the runner compares it without case).",
+      "oneOf": [
+        {"const": "composite", "description": "A composite action."},
+        {"const": "docker", "description": "A Docker container action, or an action with a Dockerfile and no action.yml or action.yaml."},
+        {"const": "node12", "description": "A JavaScript action that declares Node.js 12."},
+        {"const": "node16", "description": "A JavaScript action that declares Node.js 16."},
+        {"const": "node20", "description": "A JavaScript action that declares Node.js 20."},
+        {"const": "node24", "description": "A JavaScript action that declares Node.js 24."}
+      ],
+      "x-go-type": "RunsUsing"
+    },
+    "package-ecosystem": {
+      "description": "A value of package-ecosystem in .github/dependabot.yml: the package manager that an entry of updates is for.",
+      "oneOf": [
+        {"const": "github-actions", "description": "The actions and the reusable workflows that uses names, in workflows and in action metadata files."}
+      ],
+      "x-go-type": "PackageEcosystem"
+    },
+    "renovate-manager": {
+      "description": "The name of a manager of Renovate: the part of Renovate that reads the dependencies of one kind of file.",
+      "oneOf": [
+        {"const": "github-actions", "description": "The manager of the uses of workflows and of action metadata files."}
+      ],
+      "x-go-type": "RenovateManager"
+    },
+    "action-file": {
+      "description": "The file that defines an action, as the archive that the runner downloads has it.",
+      "type": "object",
+      "properties": {
+        "commit": {"description": "The commit the ref named when the run asked.", "$ref": "#/$defs/sha"},
+        "file": {"description": "The file that defines the action, as the runner looks for it in the directory: action.yml (read first), action.yaml (when action.yml is not a file), Dockerfile or dockerfile (a Docker container action without metadata).", "enum": ["action.yml", "action.yaml", "Dockerfile", "dockerfile"]},
+        "content": {"description": "The text of the metadata; empty for a Dockerfile.", "type": "string"},
+        "archive_substituted": {"description": "Whether the metadata in the archive differs from its blob in the commit: the repository applies export-subst of .gitattributes to it, and an archive of the same commit can have other contents later, after a tag is made.", "type": "boolean"}
+      },
+      "required": ["commit", "file", "content", "archive_substituted"],
+      "additionalProperties": false,
+      "x-go-type": "ActionFile"
+    },
+    "action.definition": {
+      "description": "The file that defines the action that the runner runs for uses: <repo>/<path>@<ref> (without path, the action at the root of repo), as the archive of the commit that the runner downloads has it. The ref is read as the fact kind git.ref-commit reads it, the tag when a tag and a branch have the same name. In the directory, action.yml when it is a file or a symlink to a file, else action.yaml, else a Dockerfile (or dockerfile). Absent when the archive has none of these there; unknown when the archive cannot be read.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "action.definition"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "path": {"$ref": "#/$defs/uses-path"},
+        "ref": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "repo", "ref"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/action-file"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "workflow-file": {
+      "description": "A reusable workflow of another repository, as the commit has it: GitHub runs it from the commit, so export-subst of .gitattributes does not touch it, unlike the file of an action.",
+      "type": "object",
+      "properties": {
+        "commit": {"description": "The commit the ref named when the run asked.", "$ref": "#/$defs/sha"},
+        "content": {"description": "The text of the file.", "type": "string"}
+      },
+      "required": ["commit", "content"],
+      "additionalProperties": false,
+      "x-go-type": "WorkflowFile"
+    },
+    "workflow.definition": {
+      "description": "The reusable workflow that uses: <repo>/<path>@<ref> of a job calls, as the commit of the ref has it. The ref is read as the fact kind git.ref-commit reads it, the tag when a tag and a branch have the same name. Absent when the ref is not there, or the commit has no file at path; unknown when the file cannot be read.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "workflow.definition"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "path": {"$ref": "#/$defs/uses-path"},
+        "ref": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "repo", "path", "ref"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/workflow-file"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "action.runs-using": {
+      "description": "The runs.using of the action that the runner runs for uses: <repo>/<path>@<ref> (without path, the action at the root of repo). The ref is read as the fact kind git.ref-commit reads it, the tag when a tag and a branch have the same name, and the metadata is read at that commit: action.yml, else action.yaml, at path; with neither, the runs.using of an action with a Dockerfile (or dockerfile) there is docker. Absent when the ref is not there, or none of these files is there.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "action.runs-using"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "path": {"$ref": "#/$defs/uses-path"},
+        "ref": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "repo", "ref"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/runs-using"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "checkout.executed": {
+      "description": "Whether a step after the actions/checkout step at step of input_path runs what that checkout brings, reads it as the settings of a tool, or follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read, such as an artifact: a script of the tree, a build or a test that reads its files, an action of it, a file of the tree that a tool reads as settings that decide where a request goes or what command runs (SonarSource's scanner reads sonar.host.url from a project file of the tree and can send a secret to the host that the pull request names), or a symlink of the tree that a tool follows (a parse error of tmatens/compose-lint quotes a line of the file outside the checkout that a symlink of a pull request names). A user answers the fact in a file of facts, with false to say that the tree is read neither as code, nor as the settings of a tool, nor by a tool that follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read; no other source answers the fact. When no one answers the fact, the run answers the fact by the assumed value.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "checkout.executed"},
+        "input_path": {"$ref": "#/$defs/input-path"},
+        "step": {"$ref": "#/$defs/step-path"}
+      },
+      "required": ["kind", "input_path", "step"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "user-supplied",
+      "x-assume": {"value": true, "reason": "the worst case, so that a checkout of a pull request's code in a privileged job is not dropped when no step is seen to run it; write false in a file of facts for a checkout whose tree is read neither as code, nor as the settings of a tool, nor by a tool that follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read"}
+    },
+    "dependabot.version-updates": {
+      "description": "Whether Dependabot version updates read the file input_path for package_ecosystem: whether .github/dependabot.yml (else .github/dependabot.yaml) has an entry of updates whose package-ecosystem is package_ecosystem and whose directory, or one of whose directories, reads input_path. The directory / reads the .yml and .yaml files right under .github/workflows and the action.yml or action.yaml at the root of the repository; another directory reads the .yml and .yaml files right under that directory. An entry with open-pull-requests-limit: 0 does not count. False when neither file is there.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "dependabot.version-updates"},
+        "package_ecosystem": {"$ref": "#/$defs/package-ecosystem"},
+        "input_path": {"$ref": "#/$defs/input-path"}
+      },
+      "required": ["kind", "package_ecosystem", "input_path"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-file"
+    },
+    "download.executed": {
+      "description": "Whether a step after the download step at step of input_path (actions/download-artifact, dawidd6/action-download-artifact) runs what it puts in the workspace: a script of the artifact, a build or a test that reads its files. A user answers the fact in a file of facts, with false to say that an artifact is only read as data; no other source answers the fact. When no one answers the fact, the run answers the fact by the assumed value.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "download.executed"},
+        "input_path": {"$ref": "#/$defs/input-path"},
+        "step": {"$ref": "#/$defs/step-path"}
+      },
+      "required": ["kind", "input_path", "step"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "user-supplied",
+      "x-assume": {
+        "value": true,
+        "reason": "the worst case, so that an artifact of an attacker's run put in a privileged job's workspace is not dropped when no step is seen to run it; write false in a file of facts for a download whose files are only read as data"
+      }
+    },
+    "git.commit-contains": {
+      "description": "Whether the commit commit is in the history of the commit sha of repo, sha itself included. The API answers it by comparing commit...sha: identical or ahead is true; behind, diverged, or no common ancestor false.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "git.commit-contains"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "sha": {"$ref": "#/$defs/sha"},
+        "commit": {"$ref": "#/$defs/sha"}
+      },
+      "required": ["kind", "repo", "sha", "commit"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "git.commit-ref": {
+      "description": "A branch or a tag of repo that has the commit sha: its full name. Absent when no branch and no tag of repo has it, as for a commit only in a fork of repo, or a sha that is nowhere. When several have it: the first, in the order of their names, of those that point to sha, else of those whose history has it. A file of facts that has git.ref-commit of repo at sha, found as a branch or a tag, answers it with that ref.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "git.commit-ref"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "sha": {"$ref": "#/$defs/sha"}
+      },
+      "required": ["kind", "repo", "sha"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/ref-name"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "git.commit-tags": {
+      "description": "The tags of repo that point to the commit sha: their full names, refs/tags/<name>, in the order of their names. An annotated tag is compared by the commit it points to. Empty when no tag points to it.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "git.commit-tags"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "sha": {"$ref": "#/$defs/sha"}
+      },
+      "required": ["kind", "repo", "sha"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"$ref": "#/$defs/ref-name"}},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "git.ref-commit": {
+      "description": "The commit the runner runs for uses: <repo>@<ref>, and the tag or the branch it is found as: the tag named ref if there is one, else the branch, else the commit when ref is its full SHA (with no ref). Absent when none of these is there (a shortened SHA is not resolved: the runner refuses it).",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "git.ref-commit"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "ref": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "repo", "ref"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/ref-commit"},
+      "x-provider": "github",
+      "x-permission": "contents: read"
+    },
+    "package.advisories": {
+      "description": "The advisories of the GitHub Advisory Database, of the actions ecosystem, reviewed or malware and not withdrawn, that affect the package package; with version, those GitHub says affect that version (GET /advisories, affects=package@version). One member for each vulnerability of the package: an advisory with several ranges of it has one member for each, not all of whose ranges have the version. Empty when there is none.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "package.advisories"},
+        "package": {"$ref": "#/$defs/package-name"},
+        "version": {"$ref": "#/$defs/package-version"}
+      },
+      "required": ["kind", "package"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"$ref": "#/$defs/advisory"}},
+      "x-provider": "github"
+    },
+    "renovate.manager-enabled": {
+      "description": "Whether the configuration of Renovate in the repository enables the manager and has the manager update the file input_path. Renovate reads the first of these files that is there: renovate.json, renovate.jsonc, renovate.json5, the same three under .github/, .renovaterc, .renovaterc.json, .renovaterc.jsonc, .renovaterc.json5, and package.json when package.json has the key renovate. False when none of these files is there. A configuration from outside the repository (a global configuration, an inherited configuration) is not read.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "renovate.manager-enabled"},
+        "manager": {"$ref": "#/$defs/renovate-manager"},
+        "input_path": {"$ref": "#/$defs/input-path"}
+      },
+      "required": ["kind", "manager", "input_path"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-file"
+    },
+    "repo.archived": {
+      "description": "Whether the repository repo is archived: read-only, and no longer maintained (all the repositories of an archived organization are archived). The REST API gives it: GET /repos/{owner}/{repo}, archived. Unlike the other kinds of repo., repo is required and is any repository, such as one that a uses names, and the kind comes from the API, not from a setting of the repository of the inputs. The API never answers it absent: GitHub answers 404 both for a repository that is not there and for one the token cannot see, and the answer is then unknown; a file of facts or --fact may answer absent, for a repository known not to be there.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.archived"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind", "repo"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "github"
+    },
+    "repo.public": {
+      "description": "Whether the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) is public, so that anyone with an account can fork it and open a pull request, whose workflow may run on its self-hosted runners. The REST API gives it of a named repository: GET /repos/{owner}/{repo}, visibility public (private and internal are not). A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.public"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "the worst case, so that a finding that holds on a public repository is not dropped; write false in a file of facts for a private or internal repository"}
+    },
+    "repo.wiki-open": {
+      "description": "Whether anyone with an account on GitHub may edit the wiki of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the wiki is on, the repository is public, and \"Restrict editing to collaborators only\" is off in its settings. The REST API tells only that it is false: has_wiki false (a wiki turned off is hidden), or a repository that is not public (GET /repos/{owner}/{repo}); whether only collaborators may edit is in no API. A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.wiki-open"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "the worst case, so that a finding that holds when anyone may edit the wiki is not dropped; GitHub's default is collaborators only, and a private repository or one without a wiki is never open, so write false in a file of facts where that is so"}
+    },
+    "repo.allow-forking": {
+      "description": "Whether the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) lets those who may read it fork it. A public repository can always be forked; a private one only when its owner allows it. The REST API gives it of a named repository: GET /repos/{owner}/{repo}, allow_forking. A fact without repo is answered by a file of facts or --fact, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.allow-forking"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting"
+    },
+    "repo.fork-pr-run-workflows": {
+      "description": "Whether a private or internal repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) runs the workflows of pull requests from its forks: the setting Run workflows from fork pull requests. A public repository has no such setting, so the fact is absent there. The REST API gives it of a named repository to a token that may read its Actions settings: GET /repos/{owner}/{repo}/actions/permissions/fork-pr-workflows-private-repos, run_workflows_from_fork_pull_requests. A fact without repo is answered by a file of facts or --fact, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.fork-pr-run-workflows"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting"
+    },
+    "repo.fork-pr-write-tokens": {
+      "description": "Whether a private or internal repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) gives the workflows of pull requests from its forks a GITHUB_TOKEN that may write: the setting Send write tokens to workflows from pull requests. A public repository has no such setting, so the fact is absent there. The REST API gives it of a named repository to a token that may read its Actions settings: GET /repos/{owner}/{repo}/actions/permissions/fork-pr-workflows-private-repos, send_write_tokens_to_workflows. A fact without repo is answered by a file of facts or --fact, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.fork-pr-write-tokens"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting"
+    },
+    "repo.fork-pr-secrets": {
+      "description": "Whether a private or internal repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) gives the workflows of pull requests from its forks its secrets: the setting Send secrets to workflows from pull requests. A public repository has no such setting, so the fact is absent there. The REST API gives it of a named repository to a token that may read its Actions settings: GET /repos/{owner}/{repo}/actions/permissions/fork-pr-workflows-private-repos, send_secrets_and_variables. A fact without repo is answered by a file of facts or --fact, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.fork-pr-secrets"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting"
+    },
+    "repo.default-token-write": {
+      "description": "Whether the GITHUB_TOKEN of a job whose workflow and job write no permissions may write, in the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the repository's default workflow permissions. The REST API gives it of a named repository to a token that may read its Actions settings (GET /repos/{owner}/{repo}/actions/permissions/workflow, default_workflow_permissions write); the GITHUB_TOKEN of a run may not. A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.default-token-write"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "the worst case, so that a finding that holds when the token may write is not dropped; write false in a file of facts where the default is read"}
+    },
+    "repo.environment-protected": {
+      "description": "Whether the deployment environment named environment of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) has required reviewers, so that a person approves a job that references it before the job runs. A wait timer or a rule of branches is not an approval. Referencing an environment that does not exist makes one with no protection rules. The REST API gives it of a named repository (GET /repos/{owner}/{repo}/environments/{environment_name}, a protection rule of the type required_reviewers). A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.environment-protected"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "environment": {"$ref": "#/$defs/environment-name"}
+      },
+      "required": ["kind", "environment"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": false, "reason": "the worst case, so that a job whose environment approves nothing is read as one with no approval; an environment is made with no protection rules, so write true in a file of facts for one with required reviewers"}
+    },
+    "repo.fork-pr-app-checks": {
+      "description": "Whether an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run in the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) for a commit of a pull request from a fork, whose message, author name and committer name the author of the pull request writes. The commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. GitHub Actions makes a check run for each job of a workflow run: do not count those check runs, nor a commit status or a check run that a workflow makes with the GITHUB_TOKEN of its run, because GitHub's documents say that events that the GITHUB_TOKEN triggers create no workflow run (the documents name two exceptions, workflow_dispatch and repository_dispatch, which are not events of a commit status or a check run). Count a commit status or a check run that a workflow makes with another token, such as a personal access token or the installation access token of a GitHub App, as one that an app outside GitHub Actions makes, because the events of such a commit status or check run start workflow runs. --online never asks GitHub for this fact: the REST API lists the commit statuses and the check runs of one commit, which tells that an app made one for that commit, and does not tell that no app makes one for the commits to come; the REST API lists the installations of GitHub Apps of an organization only to an owner of the organization (GET /orgs/{org}/installations), and gives a GitHub App only the installation of that app (GET /repos/{owner}/{repo}/installation). A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.fork-pr-app-checks"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "The rule assumes repo.fork-pr-app-checks to be true so that the rule does not miss a finding that holds where an outside app checks the commits of the pull requests from forks. Write false in a file of facts when no app outside GitHub Actions makes a commit status or a check run for a commit of a pull request from a fork"}
+    },
+    "repo.merge-commit-app-checks": {
+      "description": "Whether an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run in the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) for a commit after the merge of a pull request puts the commit in a branch of the repository, whichever way the pull request is merged (a merge commit, a squash or a rebase), or for a commit that a merge queue of the repository makes for a pull request. The merge puts in the branch the commit that merges the pull request, whose message can have the title of the pull request, or the commits of the pull request, whose messages the author of the pull request writes. For a commit of a pull request, count only a commit status or a check run that the app makes after the commit is in the branch: a commit status or a check run that the app makes for a commit of a pull request from a fork while the pull request is open is repo.fork-pr-app-checks. Count a commit status or a check run that the app makes for a commit that a merge queue makes, even while the pull request is open. An app that checks each commit that is pushed to a branch of the repository makes such a commit status or check run. The commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. GitHub Actions makes a check run for each job of a workflow run: do not count those check runs, nor a commit status or a check run that a workflow makes with the GITHUB_TOKEN of its run, because GitHub's documents say that events that the GITHUB_TOKEN triggers create no workflow run (the documents name two exceptions, workflow_dispatch and repository_dispatch, which are not events of a commit status or a check run). Count a commit status or a check run that a workflow makes with another token, such as a personal access token or the installation access token of a GitHub App, as one that an app outside GitHub Actions makes, because the events of such a commit status or check run start workflow runs. --online never asks GitHub for this fact: the REST API lists the commit statuses and the check runs of one commit, which tells that an app made one for that commit, and does not tell that no app makes one for the commits to come; the REST API lists the installations of GitHub Apps of an organization only to an owner of the organization (GET /orgs/{org}/installations), and gives a GitHub App only the installation of that app (GET /repos/{owner}/{repo}/installation). A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.merge-commit-app-checks"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "The rule assumes repo.merge-commit-app-checks to be true so that the rule does not miss a finding that holds where an outside app checks the commits that the merges of pull requests put in the branches of the repository. Write false in a file of facts when no app outside GitHub Actions makes a commit status or a check run for a commit after the merge of a pull request puts the commit in a branch of the repository, nor for a commit that a merge queue of the repository makes"}
+    },
+    "repo.pull-request-target-allowed": {
+      "description": "Whether the Actions policies of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) let a run of the workflow file input_path start on pull_request_target. The argument input_path names one workflow file, and a file of facts answers the fact once for each workflow file. An event policy has a list of the events that the event policy allows, and the event policy blocks the runs of each event that the list does not have. GitHub adds to a public repository that has no applicable event policy a default policy that blocks pull_request_target. GitHub's documents say that GitHub enforces the default policy from 2026-12-02 on the public repositories that the default policy covered before the Actions policies became generally available on 2026-09-17. The documents do not say when GitHub enforces the default policy on a public repository created after the policies became generally available, and do not say whether a repository created on 2026-09-17 counts as created before. Write true unless a policy that is not in evaluate mode blocks the runs, because a policy in evaluate mode blocks no run. When the documents do not settle the answer, write false only after a run of the workflow file on pull_request_target has failed with the error of a policy (the documents show an example of the error only for workflow_dispatch: Event 'workflow_dispatch' is not allowed to trigger Actions workflows. Workflow file: '<the path>'.; the documents do not show the error for pull_request_target), and otherwise write nothing, so that the assumed value true applies. --online never asks GitHub for this fact, whatever the token: the REST API gives the policies of a repository only to a token with write access to the repository permission Administration, and the REST API does not tell whether the default policy applies. A fact without repo is answered by a file of facts, --fact or the assumption, and never matches one with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.pull-request-target-allowed"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "input_path": {"$ref": "#/$defs/input-path"}
+      },
+      "required": ["kind", "input_path"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "the worst case, so that a finding that holds when the run starts is not dropped; write false in a file of facts for a workflow file when the Actions policies block the runs of the workflow file on pull_request_target"}
+    },
+    "repo.configuration-variables": {
+      "description": "The names of the configuration variables of the repository level and of the organization level that the workflows of a repository can read in the vars context, without the names of the environment level (repo.environment-configuration-variables). The repository is the value of the argument repo; without the argument repo, the repository is that of the files given to the linter, in a run without --repo. A workflow that reads vars.<name> of a name that no level defines gets the empty string. When a token that can read the Variables of the repository is given, --online answers the fact (GET /repos/{owner}/{repo}/actions/variables and GET /repos/{owner}/{repo}/actions/organization-variables); in a run of --online with the GITHUB_TOKEN of a workflow, the token cannot read the Variables, and the answer is unknown. A repository whose owner is a user, not an organization, has no organization level. The answer holds the names only, not the values. A repository with no configuration variable has the empty list: write the empty list, not absent; for an answer of absent, a rule reports nothing, as for no answer. An entry of a file of facts or of --fact without the argument repo answers only a query without the argument repo, and never a query with the argument repo: in a run with --repo, write the argument repo in the entry.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.configuration-variables"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"$ref": "#/$defs/configuration-variable-name"}},
+      "x-provider": "repo-setting"
+    },
+    "repo.environment-configuration-variables": {
+      "description": "The names of the configuration variables of the environment level of the deployment environment named by the argument environment, of a repository: the value of the argument repo, or without the argument repo, the repository of the files given to the linter, in a run without --repo. A job that names the environment reads them in the vars context in the keys that the runner reads after the job starts (such as env and the keys of the steps), and not in run-name of the workflow or the if and the name of the job. When a token that can read the environments of the repository is given, --online answers the fact (GET /repos/{owner}/{repo}/environments/{environment_name}/variables); for an environment that does not exist, --online answers the empty list, since GitHub makes the environment with no variables when a job names the environment. The answer holds the names only, not the values. Write the empty list, not absent, for an environment with no configuration variable; for an answer of absent, a rule reports nothing, as for no answer. An entry of a file of facts or of --fact without the argument repo answers only a query without the argument repo, and never a query with the argument repo: in a run with --repo, write the argument repo in the entry.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.environment-configuration-variables"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "environment": {"$ref": "#/$defs/environment-name"}
+      },
+      "required": ["kind", "environment"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"$ref": "#/$defs/configuration-variable-name"}},
+      "x-provider": "repo-setting"
+    },
+    "repo.action-list": {
+      "description": "The patterns of the uses that the repository that the linter checks allows its workflows and action metadata files to use: the repository's own policy, which a user writes in a file of facts, in --fact, or in the facts or fact of a configuration file. A uses of another repository or of a Docker image (docker://) that matches no pattern, or matches a pattern that starts with !, is not allowed; a uses of ./ or $/ is always allowed. The fact is not GitHub's setting of allowed actions, and --online never asks GitHub for the fact. The fact has no argument repo: the fact is always about the repository that the linter checks, so --repo does not change the fact. An empty list allows no uses of another repository and no Docker image. When the repository has no policy, do not answer the fact: leave repo.action-list out of the file of facts and out of --fact.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.action-list"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"$ref": "#/$defs/action-pattern"}},
+      "x-provider": "user-supplied"
+    },
+    "repo.allowed-actions": {
+      "description": "The setting of allowed actions of GitHub that applies to the workflows of a repository: which actions and reusable workflows the workflows may use. The repository is the value of the argument repo; without the argument repo, the repository is that of the files given to the linter, in a run without --repo. The value is the setting that takes effect for the workflows of the repository, with the settings of the organization and of the enterprise that own the repository applied: a repository can only narrow the setting of the organization. GitHub does not start a run of a workflow that uses an action or a reusable workflow that the setting does not allow, and a job fails when a composite action that the job uses has a step whose action the setting does not allow. When a token that can read the Actions settings of the repository (the repository permission Administration, read) is given, --online answers the fact (GET /repos/{owner}/{repo}/actions/permissions and, when allowed_actions is selected, GET /repos/{owner}/{repo}/actions/permissions/selected-actions). GitHub includes the setting of an organization in the answer of the API of the repository: a repository can only narrow the setting of the organization, and the API of the repository then answers the narrowed setting. The authors of the rule did not try whether GitHub includes the setting of an enterprise in the same way. In a run of --online with the GITHUB_TOKEN of a workflow, the token cannot read the setting, and the answer is unknown. For a repository where GitHub Actions is disabled, --online gives the answer absent, and a file of facts or --fact should give the answer absent too. An entry of a file of facts or of --fact without the argument repo answers only a query without the argument repo, and never a query with the argument repo: in a run with --repo, write the argument repo in the entry.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.allowed-actions"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/allowed-actions-setting"},
+      "x-provider": "repo-setting"
+    },
+    "request.destination-trusted": {
+      "description": "Whether the repository trusts the destination to receive the secret: that whoever runs the server of the destination may hold the secret (the vendor whose API the secret opens, a service of the repository's own). A user answers the fact in a file of facts, for a pair of a secret and a destination the workflows send the secret to, with true when the repository trusts the destination; no other source answers the fact. When no one answers the fact, the run answers the fact by the assumed value.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "request.destination-trusted"},
+        "secret": {"$ref": "#/$defs/secret-name"},
+        "destination": {"$ref": "#/$defs/request-destination"}
+      },
+      "required": ["kind", "secret", "destination"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "user-supplied",
+      "x-assume": {"value": false, "reason": "the worst case, so that a secret sent to a destination no one said to trust is reported; write true in a file of facts for a pair of a secret and a destination the repository trusts"}
+    },
+    "test.commit": {
+      "description": "A commit of a repository whose value is a commit, for tests.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "test.commit"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "sha": {"$ref": "#/$defs/sha"}
+      },
+      "required": ["kind", "repo", "sha"],
+      "additionalProperties": false,
+      "x-value": {"$ref": "#/$defs/sha"},
+      "x-provider": "test"
+    },
+    "test.flag": {
+      "description": "A boolean named name, for tests.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "test.flag"},
+        "name": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "name"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "test"
+    },
+    "test.list": {
+      "description": "A list of strings named name, for tests.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "test.list"},
+        "name": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "name"],
+      "additionalProperties": false,
+      "x-value": {"type": "array", "items": {"type": "string"}},
+      "x-provider": "test"
+    },
+    "test.repo-flag": {
+      "description": "A boolean about a repository, for tests.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "test.repo-flag"},
+        "repo": {"$ref": "#/$defs/repo"}
+      },
+      "required": ["kind", "repo"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "test"
+    },
+    "test.text": {
+      "description": "A string named name, for tests.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "test.text"},
+        "name": {"type": "string", "minLength": 1}
+      },
+      "required": ["kind", "name"],
+      "additionalProperties": false,
+      "x-value": {"type": "string"},
+      "x-provider": "test"
+    },
+    "query": {
+      "description": "One fact: an object of one of the kinds.",
+      "oneOf": [
+        {"$ref": "#/$defs/action.definition"},
+        {"$ref": "#/$defs/action.runs-using"},
+        {"$ref": "#/$defs/checkout.executed"},
+        {"$ref": "#/$defs/dependabot.version-updates"},
+        {"$ref": "#/$defs/download.executed"},
+        {"$ref": "#/$defs/git.commit-contains"},
+        {"$ref": "#/$defs/git.commit-ref"},
+        {"$ref": "#/$defs/git.commit-tags"},
+        {"$ref": "#/$defs/git.ref-commit"},
+        {"$ref": "#/$defs/package.advisories"},
+        {"$ref": "#/$defs/renovate.manager-enabled"},
+        {"$ref": "#/$defs/repo.action-list"},
+        {"$ref": "#/$defs/repo.allowed-actions"},
+        {"$ref": "#/$defs/repo.allow-forking"},
+        {"$ref": "#/$defs/repo.archived"},
+        {"$ref": "#/$defs/repo.configuration-variables"},
+        {"$ref": "#/$defs/repo.default-token-write"},
+        {"$ref": "#/$defs/repo.environment-configuration-variables"},
+        {"$ref": "#/$defs/repo.environment-protected"},
+        {"$ref": "#/$defs/repo.fork-pr-app-checks"},
+        {"$ref": "#/$defs/repo.merge-commit-app-checks"},
+        {"$ref": "#/$defs/repo.fork-pr-run-workflows"},
+        {"$ref": "#/$defs/repo.fork-pr-secrets"},
+        {"$ref": "#/$defs/repo.fork-pr-write-tokens"},
+        {"$ref": "#/$defs/repo.public"},
+        {"$ref": "#/$defs/repo.pull-request-target-allowed"},
+        {"$ref": "#/$defs/repo.wiki-open"},
+        {"$ref": "#/$defs/request.destination-trusted"},
+        {"$ref": "#/$defs/test.commit"},
+        {"$ref": "#/$defs/test.flag"},
+        {"$ref": "#/$defs/test.list"},
+        {"$ref": "#/$defs/test.repo-flag"},
+        {"$ref": "#/$defs/test.text"},
+        {"$ref": "#/$defs/workflow.definition"}
+      ]
+    },
+    "provider": {
+      "description": "Where a kind of fact comes from: the values of x-provider.",
+      "oneOf": [
+        {"const": "github", "description": "A GitHub API."},
+        {"const": "repo-setting", "description": "A setting of a repository. The API gives some settings and not others (not whether only collaborators may edit the wiki); under each kind of fact, the line after the provider says how --online answers the kind."},
+        {"const": "repo-file", "description": "A file of the repository that is not an input, such as .github/dependabot.yml."},
+        {"const": "user-supplied", "description": "Given by the user."},
+        {"const": "embedded", "description": "A table in sisakulint."},
+        {"const": "test", "description": "For tests; nothing outside the tests answers it."}
+      ]
+    },
+    "source": {
+      "description": "Where an answer comes from, in a report.",
+      "oneOf": [
+        {"const": "file", "description": "A file of facts (--facts)."},
+        {"const": "github", "description": "A GitHub API (--online)."},
+        {"const": "assumption", "description": "The x-assume of its kind, which no one found out."},
+        {"const": "argument", "description": "Given on the command line (--fact)."},
+        {"const": "repo-file", "description": "Read from a file of the repository under --root that is not an input."}
+      ]
+    },
+    "state": {
+      "description": "What is known of a fact.",
+      "x-go-zero": "unknown",
+      "oneOf": [
+        {"const": "found", "description": "Known, with a value."},
+        {"const": "absent", "description": "Known not to exist."},
+        {"const": "unknown", "description": "Not known; the entry says why (reason)."}
+      ]
+    },
+    "entry": {
+      "description": "One fact and its answer. value is there when state is found, and matches the x-value of the kind; reason is there when state is unknown. source, in a report, is where the answer comes from: assumption when the value is the x-assume of its kind and no one found it out (only with state found). A file of facts need not have source, a store reads it as the file's, and it never has assumption.",
+      "type": "object",
+      "properties": {
+        "query": {"$ref": "#/$defs/query"},
+        "state": {"$ref": "#/$defs/state"},
+        "source": {"$ref": "#/$defs/source"}
+      },
+      "required": ["query", "state"],
+      "oneOf": [
+        {"properties": {"state": {"const": "found"}, "value": {}}, "required": ["value"]},
+        {"properties": {"state": {"const": "absent"}}},
+        {"properties": {"state": {"const": "unknown"}, "reason": {"type": "string", "minLength": 1}}, "required": ["reason"]}
+      ],
+      "unevaluatedProperties": false
+    },
+    "file": {
+      "description": "A file of facts: answers found before, given back without asking again. Its entries never have the source assumption.",
+      "type": "object",
+      "properties": {
+        "schema": {"const": "sisakulint/facts/v0"},
+        "facts": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+      },
+      "required": ["schema", "facts"],
+      "additionalProperties": false
+    }
+  }
+}

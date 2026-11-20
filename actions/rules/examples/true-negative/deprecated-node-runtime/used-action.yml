@@ -1,0 +1,13 @@
+# situation: a workflow checks out its repository with actions/checkout@v5,
+#   whose action.yml declares runs.using: node24.
+# reason: the runner runs the action on the Node.js version that the action
+#   declares.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false

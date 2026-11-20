@@ -1,0 +1,26 @@
+# situation: the step writes the body to an environment file in a heredoc
+#   whose delimiter the author made random.
+# reason: the delimiter of the heredoc is random, which no one can guess.
+# cause: the rule reads a delimiter as random only when the delimiter is a
+#   variable that the assignment of the fix of the rule sets (ghadelimiter_
+#   and 16 bytes of /dev/urandom in hex); a delimiter from uuidgen is not read
+#   as random.
+# attack-value: github.event.issue.body = "x\n00000000-0000-0000-0000-000000000000\nPWNED=1"
+# attack-run-behavior: the step writes v<<$D, the three lines of the body and
+#   $D, where $D is the UUID uuidgen made in the run; the line
+#   00000000-0000-0000-0000-000000000000 is not $D, so the runner reads all
+#   three lines as the value of v, closes it at $D, and sets no PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          D=$(uuidgen)
+          echo "v<<$D" >> "$GITHUB_OUTPUT"
+          echo "$V" >> "$GITHUB_OUTPUT"
+          echo "$D" >> "$GITHUB_OUTPUT"

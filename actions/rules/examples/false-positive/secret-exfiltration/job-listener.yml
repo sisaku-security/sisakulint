@@ -1,0 +1,23 @@
+# situation: on push, a job on a runner labelled linux.2xlarge starts a
+#   server on port 8080 and sends the secret API_KEY to the server with
+#   curl.
+# reason: no harm when the runner is one machine of the job: only the job's
+#   own server listens on the port.
+# cause: the rule reads a runner as GitHub's by its label, and linux.2xlarge
+#   is not one of GitHub's labels.
+# attack: the attacker leaves a process listening on port 8080 of the
+#   runner, in a job of the attacker's own on the same machine, if the
+#   machine is shared.
+# attack-run-behavior: on a machine of the job alone, the request goes to
+#   the job's own server.
+on: push
+jobs:
+  j:
+    runs-on: linux.2xlarge
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          python3 -m http.server 8080 &
+          curl -fsS -H "x-apikey: $API_KEY" http://localhost:8080/

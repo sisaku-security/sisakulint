@@ -1,0 +1,8 @@
+name: z01
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ format('{0}', '5') }}
+    steps:
+      - run: echo ok

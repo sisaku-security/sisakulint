@@ -1,0 +1,12 @@
+name: c32
+on:
+  workflow_call:
+    inputs:
+      b:
+        type: boolean
+        default: ${{ format('{0}', 'true') }}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "b=[${{ inputs.b }}]"

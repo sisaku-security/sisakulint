@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a step runs tar in its old form, tar
+#   xf, and passes the pull request's title after it, through env and inside
+#   quotes.
+# reason: in the old form the f of the first word takes the next word as
+#   the archive, so tar reads the title as the name of the archive, not as
+#   an option.
+# cause: the rule reads xf as an operand, after which tar reads a word that
+#   begins with - as an option.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: tar tries to open the archive --to-command=echo
+#   PWNED, fails with "Cannot open: No such file or directory", and runs
+#   nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar xf "$TITLE"

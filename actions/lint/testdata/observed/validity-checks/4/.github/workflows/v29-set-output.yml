@@ -1,0 +1,8 @@
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        run: echo "::set-output name=o::v"
+      - run: echo "o=${{ steps.s.outputs.o }}"

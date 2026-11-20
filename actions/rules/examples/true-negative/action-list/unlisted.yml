@@ -1,0 +1,19 @@
+# situation: the steps use actions/checkout by a full SHA, a local action of
+#   the repository with ./, and an action of the repository with $/;
+#   repo.action-list is * and patterns that start with !, and no pattern with
+#   ! matches actions/checkout.
+# reason: the pattern * of repo.action-list allows actions/checkout, and the
+#   code of ./ and $/ is the repository's own, which the rule does not compare
+#   with the list.
+# attack: the maintainer of an action that the repository did not list
+#   writes code that reads the job's secrets into the action.
+# attack-run-behavior: no step runs an action that repo.action-list does not
+#   allow, so the code of that maintainer does not run in the job.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: ./.github/actions/build
+      - uses: $/.github/actions/test

@@ -1,0 +1,19 @@
+# situation: on push, a step writes the base64 of the secret SIGNING_KEY to
+#   a file and prints the file.
+# reason: a todo (the same file): the base64 with its line break is not a
+#   form the runner registers, and cat prints the base64.
+# cause: the rule does not follow a value through a file.
+# attack: one who may read the run's log opens the log and decodes the
+#   base64.
+# attack-run-behavior: cat prints the base64 of the key as it is.
+on: push
+permissions: {}
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          echo "$SIGNING_KEY" | base64 > key.b64
+          cat key.b64

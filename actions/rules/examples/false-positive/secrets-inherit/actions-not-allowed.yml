@@ -1,0 +1,26 @@
+# situation: the workflow of the true positive remote (remote.yml) of the
+#   rule, with a job added whose step uses example-org/not-allowed-action,
+#   which the setting of allowed actions of GitHub (repo.allowed-actions)
+#   blocks with !example-org/not-allowed-action@*. In the true positive, in
+#   a repository of the organization octo-org, the job calls deploy.yml of
+#   octo-org/shared-workflows at @v1 with secrets: inherit.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: a maintainer of octo-org/shared-workflows, or whoever takes over
+#   one of their accounts, moves the tag v1 to a commit whose deploy.yml has
+#   a step that sends toJSON(secrets) out.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+jobs:
+  deploy:
+    uses: octo-org/shared-workflows/.github/workflows/deploy.yml@v1
+    secrets: inherit
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

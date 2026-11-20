@@ -1,0 +1,20 @@
+# situation: on pull_request, a job with cache-mode: write saves build under
+#   a key that has the title of the pull request.
+# reason: a run of pull_request saves its caches to the scope of the merge
+#   ref, with cache-mode: write too: no run of the default branch restores
+#   them.
+# attack-value: github.event.pull_request.title = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: the job saves build under the title, in the scope of
+#   refs/pull/<n>/merge, which only re-runs of the same pull request
+#   restore.
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.pull_request.title }}

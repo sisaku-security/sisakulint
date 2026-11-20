@@ -1,0 +1,40 @@
+# situation: labeler.yml runs actions/labeler on workflow_run with a personal
+#   access token, on the pull request whose number a step finds; the
+#   configuration .github/labeler.yml adds the label safe-to-test to a pull
+#   request that changes a file under site/; labeled.yml runs on
+#   pull_request_target on labeled when the label is safe-to-test, and the job
+#   downloads the artifact out of the run that the output of a step names, and
+#   runs ./out/publish.sh.
+# reason: the pull request of the attacker starts the run of build, whose
+#   workflow_run runs actions/labeler on the pull request of the attacker, and
+#   a label that the token adds starts the labeled run, so no person approves
+#   the run before the label starts the run.
+# cause: the rule reads actions/labeler on the events of a pull request only,
+#   and does not read the step that finds the number of the pull request for
+#   pr-number.
+# attack-value: the file out/publish.sh in the artifact of a run of the pull request = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; when labeler.yml runs on schedule,
+#   actions/labeler adds the label safe-to-test, which starts labeled.yml, and
+#   when the step names a run of the workflow build.yml of the pull request,
+#   the download puts the out/publish.sh of the attacker in out, and the step
+#   runs the file, which prints PWNED, with the secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - id: run
+        run: echo "id=$(gh run list --workflow build.yml --json databaseId -q '.[0].databaseId')" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: out
+          path: out
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+      - run: ./out/publish.sh

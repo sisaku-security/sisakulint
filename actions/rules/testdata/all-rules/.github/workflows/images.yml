@@ -1,0 +1,15 @@
+# unpinned-images と credentials の例。on: push なので、ほかの rule の指摘は出ない。
+on: push
+permissions: {}
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/o/build:1
+      credentials:
+        username: u
+        password: hunter2
+    services:
+      redis: redis
+    steps:
+      - uses: docker://alpine:3

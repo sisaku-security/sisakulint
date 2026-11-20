@@ -1,0 +1,22 @@
+# situation: on push, a step assigns the secret DEPLOY_TOKEN without the
+#   first character of the secret to X in an arm of a case statement that
+#   matches the name of the event, and prints X.
+# reason: a todo (the same file): on push the arm runs, and the step prints
+#   the token without the first character, which the runner does not mask.
+# cause: the rule finds the case statement and does not read the commands
+#   in the arms of the case statement.
+# attack: one who may read the run's log opens the log and reads the token
+#   without the first character.
+# attack-run-behavior: the step prints "token: " and the token without the
+#   first character.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in push) X="${DEPLOY_TOKEN:1}";; *) X=none;; esac
+          echo "token: $X"

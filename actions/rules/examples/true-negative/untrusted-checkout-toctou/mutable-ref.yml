@@ -1,0 +1,25 @@
+# situation: on pull_request_target labeled, the checkout fetches
+#   github.event.pull_request.head.sha, and npm ci runs it.
+# reason: in place of refs/pull/<n>/head, which a push after the label
+#   moves, the job checks out the head SHA the labeled event recorded; a
+#   later push does not change that SHA, so npm ci runs the commit that was
+#   there when the label was added.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: the checkout fetches the head.sha the labeled event
+#   recorded, the commit that was labelled, not the pushed one, so npm ci
+#   runs the package.json the maintainer read; the push starts a synchronize
+#   event, which this workflow does not take.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

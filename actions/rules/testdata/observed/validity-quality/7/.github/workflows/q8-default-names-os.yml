@@ -1,0 +1,203 @@
+on: push
+jobs:
+  upper:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CI: over
+      GITHUB_ACTION: over
+      GITHUB_ACTIONS: over
+      GITHUB_ACTION_PATH: over
+      GITHUB_ACTION_REF: over
+      GITHUB_ACTION_REPOSITORY: over
+      GITHUB_ACTOR: over
+      GITHUB_ACTOR_ID: over
+      GITHUB_API_URL: over
+      GITHUB_ARTIFACTS: over
+      GITHUB_ARTIFACTS_LIST: over
+      GITHUB_BASE_REF: over
+      GITHUB_ENV: over
+      GITHUB_EVENT_NAME: over
+      GITHUB_EVENT_PATH: over
+      GITHUB_GRAPHQL_URL: over
+      GITHUB_HEAD_REF: over
+      GITHUB_JOB: over
+      GITHUB_OUTPUT: over
+      GITHUB_PATH: over
+      GITHUB_REF: over
+      GITHUB_REF_NAME: over
+      GITHUB_REF_PROTECTED: over
+      GITHUB_REF_TYPE: over
+      GITHUB_REPOSITORY: over
+      GITHUB_REPOSITORY_ID: over
+      GITHUB_REPOSITORY_OWNER: over
+      GITHUB_REPOSITORY_OWNER_ID: over
+      GITHUB_RETENTION_DAYS: over
+      GITHUB_RUN_ATTEMPT: over
+      GITHUB_RUN_ID: over
+      GITHUB_RUN_NUMBER: over
+      GITHUB_SERVER_URL: over
+      GITHUB_SHA: over
+      GITHUB_STATE: over
+      GITHUB_STEP_SUMMARY: over
+      GITHUB_TRIGGERING_ACTOR: over
+      GITHUB_WORKFLOW: over
+      GITHUB_WORKFLOW_REF: over
+      GITHUB_WORKFLOW_SHA: over
+      GITHUB_WORKSPACE: over
+      RUNNER_ARCH: over
+      RUNNER_DEBUG: over
+      RUNNER_ENVIRONMENT: over
+      RUNNER_NAME: over
+      RUNNER_OS: over
+      RUNNER_TEMP: over
+      RUNNER_TOOL_CACHE: over
+      RUNNER_WORKSPACE: over
+    steps:
+      - shell: pwsh
+        run: |
+          (Get-ChildItem env: | Where-Object { $_.Value -eq 'over' } | ForEach-Object { $_.Name } | Sort-Object) -join ' '
+      - shell: bash
+        run: |
+          env | grep -a -E '=over$' | sort | tr '\n' ' '; echo
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            console.log(Object.entries(process.env).filter(([k, v]) => v === 'over').map(([k]) => k).sort().join(' '))
+  lower:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      ci: over
+      github_action: over
+      github_actions: over
+      github_action_path: over
+      github_action_ref: over
+      github_action_repository: over
+      github_actor: over
+      github_actor_id: over
+      github_api_url: over
+      github_artifacts: over
+      github_artifacts_list: over
+      github_base_ref: over
+      github_env: over
+      github_event_name: over
+      github_event_path: over
+      github_graphql_url: over
+      github_head_ref: over
+      github_job: over
+      github_output: over
+      github_path: over
+      github_ref: over
+      github_ref_name: over
+      github_ref_protected: over
+      github_ref_type: over
+      github_repository: over
+      github_repository_id: over
+      github_repository_owner: over
+      github_repository_owner_id: over
+      github_retention_days: over
+      github_run_attempt: over
+      github_run_id: over
+      github_run_number: over
+      github_server_url: over
+      github_sha: over
+      github_state: over
+      github_step_summary: over
+      github_triggering_actor: over
+      github_workflow: over
+      github_workflow_ref: over
+      github_workflow_sha: over
+      github_workspace: over
+      runner_arch: over
+      runner_debug: over
+      runner_environment: over
+      runner_name: over
+      runner_os: over
+      runner_temp: over
+      runner_tool_cache: over
+      runner_workspace: over
+    steps:
+      - shell: pwsh
+        run: |
+          (Get-ChildItem env: | Where-Object { $_.Value -eq 'over' } | ForEach-Object { $_.Name } | Sort-Object) -join ' '
+      - shell: bash
+        run: |
+          env | grep -a -E '=over$' | sort | tr '\n' ' '; echo
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            console.log(Object.entries(process.env).filter(([k, v]) => v === 'over').map(([k]) => k).sort().join(' '))
+  mixed:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      Ci: over
+      Github_Action: over
+      Github_Actions: over
+      Github_Action_Path: over
+      Github_Action_Ref: over
+      Github_Action_Repository: over
+      Github_Actor: over
+      Github_Actor_Id: over
+      Github_Api_Url: over
+      Github_Artifacts: over
+      Github_Artifacts_List: over
+      Github_Base_Ref: over
+      Github_Env: over
+      Github_Event_Name: over
+      Github_Event_Path: over
+      Github_Graphql_Url: over
+      Github_Head_Ref: over
+      Github_Job: over
+      Github_Output: over
+      Github_Path: over
+      Github_Ref: over
+      Github_Ref_Name: over
+      Github_Ref_Protected: over
+      Github_Ref_Type: over
+      Github_Repository: over
+      Github_Repository_Id: over
+      Github_Repository_Owner: over
+      Github_Repository_Owner_Id: over
+      Github_Retention_Days: over
+      Github_Run_Attempt: over
+      Github_Run_Id: over
+      Github_Run_Number: over
+      Github_Server_Url: over
+      Github_Sha: over
+      Github_State: over
+      Github_Step_Summary: over
+      Github_Triggering_Actor: over
+      Github_Workflow: over
+      Github_Workflow_Ref: over
+      Github_Workflow_Sha: over
+      Github_Workspace: over
+      Runner_Arch: over
+      Runner_Debug: over
+      Runner_Environment: over
+      Runner_Name: over
+      Runner_Os: over
+      Runner_Temp: over
+      Runner_Tool_Cache: over
+      Runner_Workspace: over
+    steps:
+      - shell: pwsh
+        run: |
+          (Get-ChildItem env: | Where-Object { $_.Value -eq 'over' } | ForEach-Object { $_.Name } | Sort-Object) -join ' '
+      - shell: bash
+        run: |
+          env | grep -a -E '=over$' | sort | tr '\n' ' '; echo
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            console.log(Object.entries(process.env).filter(([k, v]) => v === 'over').map(([k]) => k).sort().join(' '))

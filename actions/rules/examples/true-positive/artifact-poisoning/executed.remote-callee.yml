@@ -1,0 +1,29 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/artifact-poisoning-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   executed (executed.push-search.yml) of the rule, with on: workflow_call
+#   in place of the on of executed.push-search.yml. The job passes its
+#   secrets with secrets: inherit. In the true positive, on push, the job
+#   downloads with dawidd6/action-download-artifact v3, whose step has no
+#   input run_id, the artifact named out, from the newest run of its own
+#   workflow into the workspace, and then runs build.sh with bash.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: with
+#   no input run_id, the version v3 takes the newest successful run of the
+#   workflow, the run of a pull request from a fork too, whatever event the
+#   job runs on: the search does not filter the runs by the event of the
+#   job.
+# attack-value: the file build.sh in the artifact named out, from the fork's pull_request run of the workflow = "echo PWNED\n"
+# attack-run-behavior: the pull request from a fork changes the workflow to
+#   run on pull_request too, and the pull_request run uploads build.sh in
+#   the artifact named out; the next push run takes that run, the newest
+#   successful one, and bash build.sh prints PWNED in a job that has the
+#   base repository's secrets and a token of actions: read.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  c:
+    uses: example-org/artifact-poisoning-remote/.github/workflows/w.yml@v1
+    secrets: inherit

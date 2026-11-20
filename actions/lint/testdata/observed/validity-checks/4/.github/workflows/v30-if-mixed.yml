@@ -1,0 +1,7 @@
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    if: ${{ false }} && ${{ false }}
+    steps:
+      - run: echo ran

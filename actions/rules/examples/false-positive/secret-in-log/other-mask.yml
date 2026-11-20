@@ -1,0 +1,21 @@
+# situation: on push, a step registers the password taken out of the secret
+#   DB with ::add-mask:: of a substitution, and prints the password from
+#   another variable after.
+# reason: the runner masks the password from the line after its ::add-mask::
+#   on, so the password is printed as ***.
+# cause: the rule reads a registration of one variable, not of a
+#   substitution that writes the same value.
+# attack: one who may read the run's log opens the log to read the password.
+# attack-run-behavior: the step prints "password: ***".
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DB: ${{ secrets.DB }}
+        run: |
+          echo "::add-mask::$(jq -r .password <<< "$DB")"
+          PASSWORD=$(jq -r .password <<< "$DB")
+          echo "password: $PASSWORD"

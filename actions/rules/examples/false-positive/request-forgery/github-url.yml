@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step sends a request with curl and
+#   the secret DEPLOY_TOKEN to the API URL of the repository of the pull
+#   request's head, which GitHub makes of owner/name.
+# reason: no harm: the URL begins with https://api.github.com/repos/, and
+#   the name of a repository, which the attacker chooses, holds only ASCII
+#   letters, digits, ., - and _, so the name cannot change the host.
+# cause: the table of contexts reads the URL as structured, as the name of
+#   a branch.
+# attack: the attacker names the repository of the head
+#   attacker.example; the URL is then
+#   https://api.github.com/repos/<login>/attacker.example.
+# attack-run-behavior: curl sends the request with the secret to
+#   api.github.com, whatever the attacker names the repository.
+on: pull_request_target
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "${{ github.event.pull_request.head.repo.url }}/pulls"

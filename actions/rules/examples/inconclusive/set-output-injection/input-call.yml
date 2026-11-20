@@ -1,0 +1,24 @@
+# situation: a reusable workflow prints its input x in the step p, and
+#   the release step writes the output tag of the step p into its
+#   script; no caller is in the repository.
+# reason: the caller gives the input x.
+# cause: the rule does not know what a caller of another repository
+#   gives.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on:
+  workflow_call:
+    inputs:
+      x:
+        type: string
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ inputs.x }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

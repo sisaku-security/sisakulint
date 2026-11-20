@@ -1,0 +1,63 @@
+# The quality rules (rules whose finding alone gives no attacker a gain).
+# Their findings are in quality_findings of the report, and set no bit of
+# the exit code. archived-uses and deprecated-node-runtime run when
+# facts.json answers repo.archived and action.runs-using (DefaultRun facts).
+# The job paths writes uses that GitHub does not read as written (uses-path).
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - run: make
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/dependency-review-action@v4
+        with:
+          warn-only: true
+          vulnerability-check: false
+          license-check: false
+          deny-licenses: GPL-3.0
+          comment-summary-in-pr: always
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.ref == 'refs/heads/main' }} && ${{ github.event_name == 'push' }}
+    env:
+      DATABASE=URL: postgres://db
+      GITHUB_SHA: ${{ github.event.after }}
+    steps:
+      - id: version
+        run: |
+          echo "::set-output name=version::1.0.0"
+          echo "::add-path::/opt/deploy/bin"
+      - run: ./deploy.sh
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - uses: ./.github/actions/old-node
+      - uses: actions/create-release@v1
+        with:
+          tag_name: v1.0.0
+  paths:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node/./@v5
+        with:
+          node-version: 24
+      - uses: actions/setup-node/../v4@v5
+      - uses: ./../all-rules/.github/actions/old-node

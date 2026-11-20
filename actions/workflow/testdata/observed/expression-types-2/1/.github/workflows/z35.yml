@@ -1,0 +1,8 @@
+name: z35
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    name: n ${{ github.event }}
+    steps:
+      - run: echo ok

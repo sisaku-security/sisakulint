@@ -1,0 +1,10 @@
+name: w05
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    services:
+      s:
+        image: ${{ github.event }}
+    steps:
+      - run: echo ok

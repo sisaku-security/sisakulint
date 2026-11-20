@@ -1,0 +1,22 @@
+# situation: on status, which an app outside GitHub Actions starts when the
+#   app writes a status for a commit, the job writes the message of the
+#   commit of the status (github.event.commit.commit.message) into a run,
+#   before a step that reads an output.
+# reason: an outside CI that writes a status for a commit of a pull request
+#   from a fork starts a run of status on the default branch, with the
+#   message of that commit, which the author of the pull request writes, in
+#   the payload (seen on GitHub).
+# attack-value: github.event.commit.commit.message = "::set-output name=tag::v9"
+# attack-run-behavior: an outside CI writes a status for the commit of the
+#   pull request from a fork whose message is the value; the run of status
+#   starts on the default branch, and the message, printed by the run, sets
+#   the output tag of the step to v9, which the next step reads.
+on: status
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ github.event.commit.commit.message }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

@@ -1,0 +1,27 @@
+# The matrix of fixes (interplay_test.go of actions/rules): commit-sha pins
+# actions/download-artifact@v4 and dawidd6/action-download-artifact@v3 to
+# the commits their tags pointed to on 2026-10-04, which the tables of
+# actions/prcode list, so artifact-poisoning's findings keep their
+# certainty and condition after the pins.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  official:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ci.yml
+          path: out
+      - run: bash out/run.sh

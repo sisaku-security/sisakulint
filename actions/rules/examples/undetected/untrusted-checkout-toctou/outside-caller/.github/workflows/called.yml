@@ -1,0 +1,30 @@
+# situation: the workflow is called; it checks out refs/pull/<n>/head with
+#   allow-unsafe-pr-checkout and runs npm ci. Its one caller in the
+#   repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no pull request, so the value
+#   that the run reads is not a value that an attacker wrote. Another
+#   repository may call the workflow on an event whose payload has what an
+#   attacker wrote, but that run has the token and the secrets of the other
+#   repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: ci.yml calls it on push, whose event has no
+#   pull_request, so the ref is refs/pull//head, which names nothing, and
+#   the checkout fails before npm ci. A workflow of another repository that
+#   calls it on a labeled pull_request_target would fetch the pushed commit,
+#   with that repository's token.
+on:
+  workflow_call:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

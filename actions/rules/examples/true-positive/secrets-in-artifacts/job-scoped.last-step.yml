@@ -1,0 +1,29 @@
+# situation: google-github-actions/auth, with Workload Identity Federation,
+#   writes a credential of the job to gha-creds-*.json in the workspace, and
+#   actions/upload-artifact, the last step, uploads the workspace.
+# reason: path: . puts gha-creds-*.json in the artifact; v4 artifacts can be
+#   downloaded while the run goes on, and the credential still works through
+#   the post steps.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes from gha-creds-*.json its credential_source: the URL of
+#   the OIDC token request and the bearer token of its Authorization header.
+# attack-run-behavior: google-github-actions/auth writes
+#   gha-creds-<hex>.json at the top of the workspace, with
+#   ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN; the
+#   upload of path . puts it in the artifact, which can be downloaded once
+#   the upload ends, and while the post steps run, the request token still
+#   gets OIDC tokens of the job, which Google's STS (the file's token_url)
+#   exchanges for the service account's access.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1/locations/global/workloadIdentityPools/p/providers/github
+          service_account: ci@p.iam.gserviceaccount.com
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .

@@ -1,0 +1,25 @@
+# situation: the job writes a credential file with
+#   google-github-actions/auth and uploads the workspace with
+#   include-hidden-files: tRuE.
+# reason: core.getBooleanInput throws on tRuE
+#   (https://github.com/actions/toolkit/blob/6cb87687384f971ebb756e43c7a56f62cd80a31d/packages/core/src/core.ts#L198-L208),
+#   so the step fails and uploads nothing.
+# cause: the rule reads include-hidden-files as true in any case of the
+#   letters, so it takes the upload as one of the hidden files.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the
+#   service account key from gha-creds-*.json.
+# attack-run-behavior: core.getBooleanInput throws on tRuE, so the upload
+#   step fails and makes no artifact; the reader has nothing to download.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+          include-hidden-files: tRuE

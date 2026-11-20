@@ -1,0 +1,23 @@
+# situation: on issues, the step p prints the title of the issue with
+#   pwsh, and the release step writes the output tag of the step p into
+#   its script.
+# reason: a todo (the same file): the runner reads the output of pwsh as
+#   it reads the output of bash.
+# cause: the rule reads bash and sh.
+# attack: the attacker writes x ##[set-output name=tag;]$(id) in the
+#   value.
+# attack-run-behavior: the step prints the value, the runner sets the
+#   output tag of the step to $(id), and the release step writes the
+#   output into its script and runs id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        shell: pwsh
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: Write-Output $env:TITLE
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

@@ -1,0 +1,56 @@
+# situation: on workflow_run, the step get_pr_data asks the API for a pull
+#   request, the step pr_meta writes the name of the head branch of the pull
+#   request (.head.ref of the answer, read with jq) to $GITHUB_OUTPUT, and a
+#   later step puts steps.pr_meta.outputs.head_ref into its script. These are
+#   the steps of sonarcloud.yml of kptdev/kpt (commit
+#   6dfff203a6b49396add815a428c1d94370e9a3d6, lines 69-97); the number of the
+#   pull request, which the original reads from an artifact, is 1 in this
+#   example. The example adds the last step, from lines 144-156 of the file,
+#   which prints github.event.workflow_run.event, the name of the event of the
+#   run that triggered the workflow, a value that an attacker does not decide.
+#   vendor-gems.yml of Homebrew/brew (commit
+#   fd69a7407574c63e3de8faf782b1b8d494ef827d, GHSL-2021-044) has the same
+#   form: a run checks out the pull request with gh pr checkout, writes a part
+#   of the name of the current branch to the output gem_name, and a later
+#   step writes the output into its script (line 45).
+# reason: whether the output head_ref holds a value of the attacker is decided
+#   by what the script of the step pr_meta writes, which the rule does not
+#   read.
+# attack-value: the name of the head branch of the pull request of a fork = "x\";echo${IFS}PWNED;#"
+# attack-run-behavior: jq writes the name to the output head_ref, the runner
+#   puts the name into the script of the step "Debug - Show PR metadata", and
+#   the line echo "Head Ref: x";echo${IFS}PWNED;#" prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-207_kptdev_kpt_repository/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-044-homebrew-brew-workflows/
+on:
+  workflow_run:
+    workflows: [Go]
+    types: [completed]
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Request GitHub API for PR data
+        uses: octokit/request-action@b91aabaa861c777dcdb14e2387e30eddf04619ae # v3.0.0
+        id: get_pr_data
+        with:
+          route: GET /repos/{full_name}/pulls/{number}
+          number: 1
+          full_name: ${{ github.event.repository.full_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract PR metadata
+        id: pr_meta
+        env:
+          PR_DATA: ${{ steps.get_pr_data.outputs.data }}
+        run: |
+          echo "head_ref=$(echo "$PR_DATA" | jq -r '.head.ref')" >> "$GITHUB_OUTPUT"
+      - name: Debug - Show PR metadata
+        run: |
+          echo "Head Ref: ${{ steps.pr_meta.outputs.head_ref }}"
+      - name: Debug - Check condition variables before SonarQube scan
+        run: |
+          echo "Event type: ${{ github.event.workflow_run.event }}"

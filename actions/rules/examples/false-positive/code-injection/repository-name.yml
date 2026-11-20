@@ -1,0 +1,20 @@
+# situation: on pull_request_target, the job writes the name of the
+#   repository of the pull request's head, owner/name, in a run, and the URL
+#   GitHub builds from owner/name in another.
+# reason: GitHub allows only ASCII letters, digits, ., - and _ in the name
+#   of a repository, and a login in front of it, so the value holds no $, no
+#   quote and no white space that a shell reads as code.
+# cause: the table reads a repository's name as structured, as a branch's
+#   name, which can hold $( ), and code-injection reports structured values.
+# attack-value: github.event.pull_request.head.repo.full_name = "\"; echo PWNED; echo \""
+# attack-run-behavior: GitHub turns each character it does not allow in the
+#   name into -, so the script is echo "<login>/<name>"; were it the value,
+#   the script would become echo ""; echo PWNED; echo "", and bash would run
+#   the second echo as a command.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.head.repo.full_name }}"
+      - run: echo "${{ github.event.pull_request.head.repo.html_url }}"

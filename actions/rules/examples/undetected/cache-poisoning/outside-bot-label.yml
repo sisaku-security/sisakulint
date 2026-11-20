@@ -1,0 +1,31 @@
+# situation: a bot outside the repository adds the label safe-to-test when a
+#   comment /ok-to-test is posted on a pull request; labeled.yml runs on
+#   pull_request_target on labeled when the label is safe-to-test, and the job
+#   has cache-mode write, checks out the head of the pull request and runs npm
+#   ci.
+# reason: whether the bot adds the label for a comment of any user, or only
+#   for a comment of a member of the organization that owns the repository, is
+#   in the settings of the bot, which are outside the repository; when the bot
+#   adds the label for a comment of any user, no person approves the run
+#   before the label starts the run.
+# cause: the rule does not read the bots outside the repository that add
+#   labels.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"mkdir -p ~/.npm && echo PWNED > ~/.npm/PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork and
+#   comments /ok-to-test; when the bot adds the label for the comment, npm ci
+#   runs the preinstall script of the pull request in a job that may save to
+#   the cache of the scope of the default branch, so the code of the attacker
+#   can save an entry there.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

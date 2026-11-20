@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step takes the newlines out of the
+#   issue's body (tr -d '\n') and then writes it to $GITHUB_OUTPUT as body=.
+# reason: in the written line, a newline of the issue's body is what would
+#   set another output of the step; with every newline taken out, all of it
+#   stays the value of the one line body=.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: tr -d '\n' takes the line break out, so echo writes the
+#   one line body=xPWNED=1 to $GITHUB_OUTPUT, and the runner sets the output
+#   body to xPWNED=1 and no PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$(printf '%s' "${BODY}" | tr -d '\n')" >> "$GITHUB_OUTPUT"

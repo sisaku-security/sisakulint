@@ -1,0 +1,25 @@
+# situation: on pull_request_target, a job checks out refs/pull/<number>/head
+#   with actions/checkout v4.2.2, a release older than the first release of
+#   actions/checkout that refuses to check out the code of a pull request
+#   without the input allow-unsafe-pr-checkout, and runs npm ci and node
+#   test/util/report.js. This is coverage-report.yml of w3c/aria-practices
+#   (commit c4d8d143169ac33bf1cf6a607ca394260969efd8, lines 4, 17 and 20).
+# reason: npm ci runs the scripts of package.json of the checkout, and node
+#   runs test/util/report.js of the checkout; the author of the pull request
+#   writes both.
+# attack: the author of the pull request writes test/util/report.js in the
+#   head commit.
+# attack-run-behavior: node runs the script of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-277-w3c-aria-practices-workflow/
+on:
+  pull_request_target:
+    paths: ['examples/**']
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      - run: npm ci
+      - run: node test/util/report.js

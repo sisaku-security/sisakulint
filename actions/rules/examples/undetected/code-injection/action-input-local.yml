@@ -1,0 +1,22 @@
+# situation: on issues, a step gives the issue's title to an input of a
+#   local action (./, in the workspace of the job).
+# reason: a todo (a file of the repository): what the action does with the
+#   input is in the action.yml of ./.github/actions/greet.
+# cause: the run reads only this workflow file (a file named on the command
+#   line, without --read-all), and the rule reads the steps of an action.yml
+#   only when the run reads the action.yml.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the value goes to the input text of
+#   ./.github/actions/greet; when that action's step writes inputs.text into
+#   its run by ${{ }} inside double quotes, as echo "${{ inputs.text }}",
+#   its script becomes echo ""; echo PWNED; echo "", and bash runs the
+#   second echo as a command, which prints PWNED. No run step of this
+#   workflow has the value.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/greet
+        with:
+          text: ${{ github.event.issue.title }}

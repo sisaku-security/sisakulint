@@ -1,0 +1,14 @@
+# situation: the repository has a configuration file of Renovate and no
+#   .github/dependabot.yml, and a workflow pins an action to eight
+#   hexadecimal digits with no comment on the line.
+# reason: Renovate does not read eight digits as a commit SHA, so whether
+#   Renovate updates the uses is not known; the uses may stay on the old
+#   commit.
+# cause: the rule reads a ref that is not a SHA of Renovate as one that
+#   Renovate updates.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/build-action@abcdef12

@@ -1,0 +1,13 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/labeler@v5
+        if: always()
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

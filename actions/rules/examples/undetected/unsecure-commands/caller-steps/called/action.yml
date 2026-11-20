@@ -1,0 +1,24 @@
+# situation: a composite action whose only step sets
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS to true and prints its input; the
+#   workflow ci.yml calls the action on issues with the title of the issue,
+#   and has a step after the call.
+# reason: a todo (a file of the repository): set-env in the last step of
+#   the action reaches the steps of the caller after the action.
+# cause: the rule reads the steps of the action, and no step of the action
+#   comes after the printing step.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the runner sets BASH_ENV, and the bash of the step of
+#   ci.yml after the action runs id.
+name: print
+description: prints its input
+inputs:
+  text:
+    description: the text
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ACTIONS_ALLOW_UNSECURE_COMMANDS: "true"
+        TEXT: ${{ inputs.text }}
+      run: echo "$TEXT"

@@ -1,0 +1,37 @@
+# situation: on issues opened, a step defines a function w that sets out
+#   to $GITHUB_PATH,
+#   runs a chain of functions f0 to f13 in which each function calls the
+#   function before it twice (16,383 calls), calls w, and writes $V to "$out".
+# reason: the call of w comes after the 4,096 calls of functions that the
+#   rule follows, so the rule does not read the body of w, and does not
+#   decide whether $V goes to $GITHUB_PATH.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value goes to $GITHUB_PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          w() { out="$GITHUB_PATH"; }
+          f0() { :; }
+          f1() { f0; f0; }
+          f2() { f1; f1; }
+          f3() { f2; f2; }
+          f4() { f3; f3; }
+          f5() { f4; f4; }
+          f6() { f5; f5; }
+          f7() { f6; f6; }
+          f8() { f7; f7; }
+          f9() { f8; f8; }
+          f10() { f9; f9; }
+          f11() { f10; f10; }
+          f12() { f11; f11; }
+          f13() { f12; f12; }
+          f13
+          w
+          echo "$V" >> "$out"

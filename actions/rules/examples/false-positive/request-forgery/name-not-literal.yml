@@ -1,0 +1,25 @@
+# situation: on issues, a step passes the issue's title in the environment
+#   variable HOST, sets n to the name HOST, assigns a fixed host to the
+#   variable that n names with declare, and sends a request with curl and
+#   the secret DEPLOY_TOKEN to HOST.
+# reason: bash assigns the fixed host to HOST, so HOST holds the fixed host
+#   when curl runs, and the request goes to the fixed host.
+# cause: the variable name of the assignment is not a literal word, so the
+#   rule reads HOST as holding the value of the env.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request to api.example.com, and the
+#   server of the attacker gets nothing.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - env:
+          HOST: ${{ github.event.issue.title }}
+        run: |
+          n=HOST
+          declare "$n=api.example.com"
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"

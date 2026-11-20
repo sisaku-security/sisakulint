@@ -1,0 +1,16 @@
+name: p
+description: prints its input in a step with an id
+inputs:
+  m:
+    required: true
+outputs:
+  o1:
+    value: ${{ steps.x.outputs.o1 }}
+runs:
+  using: composite
+  steps:
+    - id: x
+      shell: bash
+      env:
+        M: ${{ inputs.m }}
+      run: echo "$M"

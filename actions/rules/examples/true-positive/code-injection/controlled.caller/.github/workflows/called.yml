@@ -1,0 +1,18 @@
+# situation: the called workflow writes inputs.t into a run by ${{ }}; the
+#   caller ci.yml runs on issues and gives the issue's title as t.
+# reason: anyone who opens an issue writes its title, and ${{ }} puts the
+#   title into the script before the shell parses it, so a double quote in
+#   it ends the echo's string and what follows runs as commands.
+# attack-value: inputs.t = "\"; echo PWNED; echo \""
+# attack-run-behavior: ci.yml gives the title as t, and the script of the
+#   called workflow's step becomes echo ""; echo PWNED; echo "", and the
+#   shell runs the second echo as a command, which prints PWNED.
+on:
+  workflow_call:
+    inputs:
+      t: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.t }}"

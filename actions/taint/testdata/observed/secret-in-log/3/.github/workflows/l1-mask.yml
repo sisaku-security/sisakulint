@@ -1,0 +1,60 @@
+name: l1-mask
+on:
+  push:
+    branches: [probe/secret-in-log]
+permissions: {}
+jobs:
+  mask:
+    runs-on: ubuntu-latest
+    outputs:
+      d: ${{ steps.out.outputs.o }}
+      w: ${{ steps.out.outputs.w }}
+    env:
+      S: ${{ secrets.PROBE_A }}
+      J: ${{ secrets.PROBE_JSON }}
+    steps:
+      - name: shell
+        run: |
+          echo "m01=$S"
+          X=$(echo "$S"); echo "m02=$X"
+          echo "m03=${S:0:10}"
+          echo "m04=${S#probe-}"
+          echo "m05=${S//-/_}"
+          echo "m06=${S^^}"
+          echo "m07=$(echo "$S" | base64)"
+          echo "m08=$(echo -n "$S" | base64)"
+          echo "m09=$(printf '%s' "$S" | rev)"
+          echo "m10=$(printf '%s' "$S" | xxd -p)"
+          echo "m11=$(jq -r .pass <<< "$J")"
+          echo "m12 begin"; echo "$J" | jq .; echo "m12 end"
+          echo "m13=$(echo "$J" | jq -c .)"
+          echo "m14=$(printf '%s' "$S" | sha256sum)"
+          M1="${S}x"; echo "::add-mask::$M1"; echo "m15a=$M1"; echo "m15b=$(echo "$M1" | base64)"
+          echo "m17 begin"; printf '%s' "$J" | base64; echo "m17 end"
+          echo "m17w=$(printf '%s' "$J" | base64 -w0)"
+          D=${S:3}; echo "::add-mask::$D"; echo "m18=$D"
+          D2=${S:4}; echo "m19a=$D2"; echo "::add-mask::$D2"; echo "m19b=$D2"
+          ML=$(jq -r '.user + "\n" + .pass' <<< "$J"); echo "m20 begin"; echo "::add-mask::$ML"; echo "m20 mid"; echo "m20=$ML"; echo "m20 end"
+          echo "m21 begin"; set -x; D3=${S:5}; set +x; echo "m21 end"
+          echo "m27 begin"; echo "$S" | fold -w 9; echo "m27 end"
+      - name: write
+        id: out
+        run: |
+          echo "DER=${S:6}" >> "$GITHUB_ENV"
+          echo "WHOLE=$S" >> "$GITHUB_ENV"
+          echo "o=${S:7}" >> "$GITHUB_OUTPUT"
+          echo "w=$S" >> "$GITHUB_OUTPUT"
+          D4=${S:9}; echo "::add-mask::$D4"; echo "D4=$D4" >> "$GITHUB_ENV"
+      - name: read
+        run: |
+          echo "m22=$DER whole=$WHOLE"
+          echo "m23=${{ steps.out.outputs.o }}"
+          echo "m26=$D4"
+  next:
+    needs: mask
+    runs-on: ubuntu-latest
+    steps:
+      - name: needs
+        run: |
+          echo "m24d=${{ needs.mask.outputs.d }}"
+          echo "m24w=${{ needs.mask.outputs.w }}"

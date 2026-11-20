@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a step exits with an error when the
+#   pull request's title begins with -, and then passes the title to tar
+#   after the file names, through env and inside quotes.
+# reason: tar runs only with a title that does not begin with -, which it
+#   reads as a name of a file, not as an option.
+# cause: the rule does not read the flow of the script, so it does not see
+#   that the step stops before tar.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: [[ $TITLE != -* ]] is false, so exit 1 ends the step
+#   with an error before tar runs, and nothing is printed.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          [[ $TITLE != -* ]] || exit 1
+          tar -xf archive.tar notes.txt "$TITLE"

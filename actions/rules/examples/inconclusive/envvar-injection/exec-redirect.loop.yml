@@ -1,0 +1,23 @@
+# situation: a step puts the body of the issue in the env B and, in a for
+#   loop of two rounds, runs echo "b=$B" and then sends the output of its
+#   script to $GITHUB_ENV by exec.
+# reason: in the second round, echo "b=$B" runs after the exec, so it
+#   writes to the file; the rule does not analyze what the script writes
+#   after the exec.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: in the second round, echo "b=$B" writes to
+#   $GITHUB_ENV, appending b=x and PWNED=1; the runner sets b to x and
+#   PWNED to 1. Nothing unknown decides this: the rule does not read the
+#   writes after the exec.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: |
+          for i in 1 2; do
+            echo "b=$B"
+            exec >> "$GITHUB_ENV"
+          done

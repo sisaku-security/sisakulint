@@ -1,0 +1,32 @@
+# situation: on push, the env CONFIG of the job holds the secret CONFIG, and
+#   the if of a step compares the value user, which fromJSON takes out of
+#   env.CONFIG, with an empty string (an if cannot refer to the secrets
+#   context itself).
+# reason: a rerun with debug logging prints the values that the if
+#   evaluates, and the runner does not mask a value that fromJSON takes out of
+#   a secret; a credential whose only write access is to the permission
+#   Actions can start the rerun, and the credential premise keeps the holder
+#   of such a credential as a possible attacker. The authors of the linter did
+#   not check whether the rerun prints a value taken out of a secret, as the
+#   observation used a JSON literal.
+# cause: in the workflow file, the rule reads only the places whose values
+#   the header of a step prints in the log (the env, the run, the with and the
+#   name of the step), and not the if.
+# attack: the attacker reruns the run with debug logging, with a credential
+#   whose only write access is to the permission Actions, and reads the log
+#   of the rerun.
+# attack-run-behavior: on 2026-10-23, a rerun with debug logging of a step
+#   whose if took the value user out of a JSON literal by fromJSON printed
+#   the line ##[debug]Expanded: (true && ('<the value>' != '')) in the log of
+#   the step; with the secret CONFIG, the line would have the value user of
+#   the secret.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CONFIG: ${{ secrets.CONFIG }}
+    steps:
+      - if: fromJSON(env.CONFIG).user != ''
+        run: ./deploy.sh

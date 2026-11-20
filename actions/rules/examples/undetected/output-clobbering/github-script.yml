@@ -1,0 +1,18 @@
+# situation: on issues, actions/github-script calls core.setOutput with the
+#   issue's body.
+# reason: no added gain: @actions/core writes a random delimiter, and
+#   refuses a value that has it.
+# cause: the rule does not read JavaScript.
+# attack-value: the issue's body, which the script reads from the payload = "x\nPWNED=1"
+# attack-run-behavior: core.setOutput writes b<<ghadelimiter_ and a random
+#   UUID, the two lines and the delimiter to $GITHUB_OUTPUT, and refuses a
+#   value that has the delimiter; the runner reads both lines as the value of
+#   b and sets no PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: core.setOutput('b', context.payload.issue.body)

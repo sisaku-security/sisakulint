@@ -1,0 +1,12 @@
+# The called workflow: its one caller, reusable-caller.yml, runs on issues
+# and gives the issue's title as title, which this writes into run.
+on:
+  workflow_call:
+    inputs:
+      title: {type: string}
+permissions: {}
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.title }}"

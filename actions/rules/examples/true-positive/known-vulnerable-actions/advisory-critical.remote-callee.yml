@@ -1,0 +1,25 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/known-vulnerable-actions-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   advisory-critical (advisory-critical.yml) of the rule, with on:
+#   workflow_call in place of the on of advisory-critical.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, on
+#   pull_request_target, a step reads the branch names with
+#   tj-actions/branch-names pinned to the commit of v7.0.6.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   GHSA-8v8w-v8xg-79rf and GHSA-gq52-6phf-x2r6, which GitHub rates
+#   critical, say that a branch name runs as code: GHSA-8v8w-v8xg-79rf, the
+#   head ref in a run step of the action; GHSA-gq52-6phf-x2r6, the name that
+#   the action escapes and unescapes again by eval printf and writes to its
+#   outputs, which a run step of the caller runs (the example
+#   step-output-remote-action.ghsl-2025-087 of code-injection has that
+#   form).
+# attack-value: the name of the pull request's branch = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: the action's script runs the command in the branch
+#   name, with the token and the secrets of the job of the base repository.
+on: pull_request_target
+jobs:
+  c:
+    uses: example-org/known-vulnerable-actions-remote/.github/workflows/w.yml@v1
+    secrets: inherit

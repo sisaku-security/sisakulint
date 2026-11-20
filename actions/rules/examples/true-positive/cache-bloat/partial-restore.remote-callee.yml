@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/cache-bloat-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   partial-restore (partial-restore.remote-composite.yml) of the rule, with
+#   on: workflow_call in place of the on of
+#   partial-restore.remote-composite.yml. The job passes its secrets with
+#   secrets: inherit. In the true positive, on push, a step runs
+#   example-org/bloat-composite@v1, a composite action of another repository
+#   whose step uses actions/cache under a key unique to the run, with
+#   restore-keys.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: no
+#   cache has the key of the run, so the step of the composite action
+#   restores the newest older cache by the prefix and saves its content
+#   under a new key at the end of the job; action.definition answers the
+#   file of the composite action.
+on: push
+jobs:
+  c:
+    uses: example-org/cache-bloat-remote/.github/workflows/w.yml@v1
+    secrets: inherit

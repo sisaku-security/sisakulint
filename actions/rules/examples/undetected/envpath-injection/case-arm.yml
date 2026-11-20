@@ -1,0 +1,23 @@
+# situation: on issues opened, a step writes the issue's title to
+#   $GITHUB_PATH inside an arm of a case that skips an empty value.
+# reason: a todo (the same file): the arm runs, and the title is a
+#   directory the steps after it look for commands in.
+# cause: the shell parser does not read the commands of a case.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value is not empty, so the case takes its
+#   second arm, and echo writes /tmp/PWNED to $GITHUB_PATH; the runner
+#   puts it at the head of the PATH of the steps after it.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          case "$V" in
+            "") ;;
+            *) echo "$V" >> "$GITHUB_PATH" ;;
+          esac

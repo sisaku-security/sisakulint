@@ -1,0 +1,30 @@
+# situation: on pull_request_target, the job build checks out and builds the
+#   pull request's head and uploads dist; the job deploy, which needs build,
+#   downloads dist from the current run and runs ./dist/deploy.sh.
+# reason: the artifact of the current run is what the build of the pull
+#   request's code made, so the files that the download puts decide the code
+#   that deploy runs with the base repository's token and secrets.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+# attack-run-behavior: the job build checks out the fork's head, and npm run
+#   build runs its build script, which writes dist/deploy.sh; the upload
+#   takes dist, the job deploy downloads dist from the current run, and
+#   ./dist/deploy.sh runs the file, which prints PWNED, with the base
+#   repository's token and secrets.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

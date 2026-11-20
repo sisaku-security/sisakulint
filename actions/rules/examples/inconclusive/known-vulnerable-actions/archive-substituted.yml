@@ -1,0 +1,14 @@
+# situation: a step runs example-org/substituted-composite@v1, a composite action of another
+#   repository; the archive the runner downloads has the file of the action unlike its blob (export-subst).
+# reason: whether a step of the action uses an action with an advisory is
+#   in a file the run could not read, or one the runner may run otherwise.
+# attack: someone who makes the artifact a step of the composite action
+#   downloads puts in it a file whose name climbs out of the path.
+# attack-run-behavior: when the step is there, v4.1.2 writes the files of
+#   a crafted artifact where their names point.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/substituted-composite@v1

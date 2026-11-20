@@ -1,0 +1,59 @@
+# situation: on issue_comment, when the comment is on a pull request and
+#   contains /update-vrt, a step uses gotson/pull-request-comment-branch, and
+#   a later step writes the output head_ref of the step comment-branch into
+#   the ref of git push by ${{ }}. This is update-vrt.yml of
+#   actualbudget/actual (commit c0f9073f35f8cfc3bf29810613ea889203672f0d,
+#   lines 1-27, 44-45 and 55). The container of the job, the concurrency of
+#   the workflow, the steps between and the lines of the script before git
+#   push are left out. blossom-ci.yml of NVIDIA/spark-rapids (commit
+#   6c020cca952f87ed35e7aae6be894f34987758a5, GHSL-2020-239) and
+#   android-debug-artifact-ondemand.yml of TeamAmaze/AmazeFileManager
+#   (commit 2d0c8eccc1c77f4cd7d5cc287b771c2b05ddcb08, GHSL-2021-046) have the
+#   same form on issue_comment: octokit/request-action gets the pull request
+#   of the comment from the API, and a run writes
+#   fromJson of the output data's head.ref into its script (line 51 and line
+#   24). zwave-js-bot.yml of zwave-js/zwavejs2mqtt (commit
+#   e758e76c3a7015d9a8cbb901e344dfba00a25d82, GHSL-2021-047) gets the pull
+#   request with actions/github-script and writes the title of the pull
+#   request from fromJSON of the output result into git commit -m (line
+#   281). shadow-pr.yml of hasura/graphql-engine (commit
+#   64a0a14fe2358aa790df7e371af98a411abc2319, GHSL-2021-031), on
+#   pull_request_target, sets the output ossPrTitle to the title of the pull
+#   request in actions/github-script, and a later actions/github-script
+#   writes the output into its script (line 135).
+# reason: the output head_ref of the action is the name of the head branch
+#   of the pull request, which the author of the pull request writes; the
+#   rule does not know what an output of an action of another repository
+#   holds.
+# cause: the rule does not yet ask for the action.yml of another repository
+#   as a fact.
+# attack-value: steps.comment-branch.outputs.head_ref = "x$(echo${IFS}PWNED>/proc/$$/fd/1)"
+# attack-run-behavior: when the action sets the output head_ref to the name
+#   of the head branch, bash runs the command substitution in the name
+#   before git push runs; $$ is the ID of the process of the script, so the step
+#   prints PWNED. A name of a branch can hold $, ( and ) but no space, so
+#   the value uses ${IFS} for the space.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-325_GHSL-2024-326_Actual/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-239-NVIDIA-spark-rapids-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-046-TeamAmaze-AmazeFileManager-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-047-zwave-js-zwavejs2mqtt-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-031-hasura-graphql-engine-workflows/
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  pull-requests: write
+  contents: write
+jobs:
+  update-vrt:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/update-vrt')
+    steps:
+      - name: Get PR branch
+        uses: gotson/pull-request-comment-branch@head-repo-owner-dist
+        id: comment-branch
+      - name: Commit and push changes
+        run: |
+          git push origin HEAD:${{ steps.comment-branch.outputs.head_ref }}

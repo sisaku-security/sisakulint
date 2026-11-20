@@ -1,0 +1,33 @@
+# situation: on pull_request_target, the job build checks out and builds the
+#   pull request's head and uploads dist; the job deploy, which does not
+#   need build, downloads dist from the current run and runs ./dist/deploy.sh.
+# reason: deploy may download dist after build uploads dist, and then runs
+#   what the pull request's code made, with the base repository's token and
+#   secrets.
+# cause: the rule reads an upload of the current run only in a job that the
+#   job of the download needs, directly or through other jobs; without
+#   needs, the two jobs run at the same time, and whether the upload comes
+#   first depends on the run.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+# attack-run-behavior: when the job build uploads dist before the job deploy
+#   downloads, ./dist/deploy.sh runs the file that the build of the pull
+#   request wrote, which prints PWNED, with the base repository's token and
+#   secrets; when the download comes first, the download fails because the
+#   artifact dist is not there yet.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

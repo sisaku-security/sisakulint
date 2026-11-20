@@ -1,0 +1,16 @@
+# situation: the run names action-list with --rule but has no answer of
+#   repo.action-list, and a step uses untrusted/action@v1.
+# reason: the repository may not trust untrusted/action, whose code runs in
+#   the job with the job's secrets and GITHUB_TOKEN.
+# cause: without an answer of repo.action-list the rule has no list to
+#   compare the uses with.
+# attack: the maintainer of untrusted/action writes code that reads the
+#   job's secrets into the commit that v1 names.
+# attack-run-behavior: the runner runs the commit that v1 names as the step,
+#   with the job's secrets and GITHUB_TOKEN in reach.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: untrusted/action@v1

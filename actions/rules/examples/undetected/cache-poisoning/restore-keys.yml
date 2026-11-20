@@ -1,0 +1,20 @@
+# situation: on issue_comment, a job restores build from a restore key that
+#   has the comment's body.
+# reason: no added gain: restore-keys chooses what is restored among the
+#   entries of the default branch's scope, which the repository's runs save,
+#   or another flaw that the rule reports where it saves; it saves nothing.
+# cause: the rule reads the key and the path of a step that saves, not
+#   restore-keys.
+# attack-value: github.event.comment.body = "deps-"
+# attack-run-behavior: the comment starts the job, which restores the newest
+#   entry whose key starts with deps-, an entry the repository's runs saved.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/restore@v4
+        with:
+          path: build
+          key: build-${{ github.sha }}
+          restore-keys: ${{ github.event.comment.body }}

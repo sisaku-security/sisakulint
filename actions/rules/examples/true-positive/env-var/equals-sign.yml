@@ -1,0 +1,15 @@
+# situation: the job sets an env key DATABASE=URL, meant as the variable
+#   DATABASE_URL.
+# reason: no name of an environment variable can have =: the step gets no
+#   variable DATABASE_URL, and the runner sets the variable DATABASE to
+#   URL=postgres://db instead.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE=URL: postgres://db
+    steps:
+      - run: ./test.sh

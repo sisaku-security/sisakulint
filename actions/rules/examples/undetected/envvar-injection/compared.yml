@@ -1,0 +1,15 @@
+# situation: on issues, a run writes to $GITHUB_ENV the issue's body given
+#   to contains and compared with ==.
+# reason: no added gain: what is written out is a bool.
+# cause: the rule reads the value of a comparison or of contains as a bool,
+#   not the attacker's text.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: contains and == make false of the body, so the script
+#   becomes echo "t=false false" >> "$GITHUB_ENV", and the runner sets t to
+#   false false, and no variable PWNED, with any body.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ contains(github.event.issue.body, 'x') }} ${{ github.event.issue.body == 'x' }}" >> "$GITHUB_ENV"

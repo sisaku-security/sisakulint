@@ -1,0 +1,9 @@
+name: z05
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "always()"
+      run: echo ran
+    - shell: bash
+      run: echo after

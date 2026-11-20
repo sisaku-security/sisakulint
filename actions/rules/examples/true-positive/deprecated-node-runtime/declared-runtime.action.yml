@@ -1,0 +1,10 @@
+# situation: a JavaScript action of the repository declares runs.using:
+#   node20.
+# reason: the runner runs the action on Node.js 24, not on Node.js 20, and
+#   adds a warning to every job that uses the action; code of the action
+#   that depends on Node.js 20 may behave differently.
+name: build-info
+description: prints the build information
+runs:
+  using: node20
+  main: dist/index.js

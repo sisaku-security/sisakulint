@@ -1,0 +1,9 @@
+name: postif
+description: pre-if and post-if with text outside the ${{ }}
+runs:
+  using: node24
+  pre: pre.js
+  pre-if: ${{ false }} && ${{ false }}
+  main: main.js
+  post: post.js
+  post-if: x ${{ false }}

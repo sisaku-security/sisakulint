@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs eval with it.
+# reason: anyone who opens an issue writes its title. bash expands
+#   $ISSUE_TITLE after bash parses the script, and eval then reads the
+#   expanded text as a command, so a command substitution in the title runs.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: ISSUE_TITLE holds $(echo PWNED); eval reads echo
+#   $(echo PWNED) as a command, runs the command substitution and prints
+#   PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: eval "echo $ISSUE_TITLE"

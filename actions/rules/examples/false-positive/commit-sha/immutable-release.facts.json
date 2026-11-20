@@ -1,0 +1,11 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"o/immutable-action","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"o/immutable-action","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"o/immutable-action","ref":"v1"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"immutable-release.yml"},"state":"found","value":true},
+{"query":{"kind":"git.ref-commit","repo":"o/immutable-action","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"o/immutable-action"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"o/immutable-action"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

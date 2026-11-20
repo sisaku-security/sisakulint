@@ -1,0 +1,42 @@
+# situation: on workflow_run, a run writes to $GITHUB_ENV a value from a
+#   file of an artifact through a variable the script sets, the form of
+#   Feign's comment-pr.yml (GHSL-2024-173,
+#   https://securitylab.github.com/advisories/GHSL-2024-173_Feign/); another
+#   writes a commit message through a positional parameter of a function and
+#   an indirection the script sets.
+# reason: a todo (the same file): following the variables of the script
+#   would find it.
+# cause: the value goes through a variable the script sets, which the rule
+#   does not follow.
+# attack-value: the file pr_number.txt of the artifact pr_number = "111\nLD_PRELOAD=/home/runner/work/feign/feign/inject.so\nPWNED=1"
+# attack-run-behavior: the value is that of GHSL-2024-173's PoC, with the
+#   line PWNED=1 added. PR_NUMBER=$(cat pr_number.txt) holds its three
+#   lines, and echo appends PR_NUMBER=111,
+#   LD_PRELOAD=/home/runner/work/feign/feign/inject.so and PWNED=1 to
+#   $GITHUB_ENV; the runner sets the three, and a program a later step
+#   starts, such as node, loads inject.so from the artifact.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-173_Feign/
+on:
+  workflow_run:
+    workflows: ["receive-pr"]
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr_number
+          run-id: ${{ github.event.workflow_run.id }}
+      - run: |
+          PR_NUMBER=$(cat pr_number.txt)
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+      # a positional parameter of a function the script calls with the value
+      - env:
+          T: ${{ github.event.workflow_run.head_commit.message }}
+        run: |
+          f() { echo "a=$1" >> "$GITHUB_ENV"; }
+          f "$T"
+          # the indirection names T through X, which the script sets
+          X=T
+          echo "a=${!X}" >> "$GITHUB_ENV"

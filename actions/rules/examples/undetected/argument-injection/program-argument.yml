@@ -1,0 +1,26 @@
+# situation: on issue_comment, a step puts the comment's body into the
+#   script of sed, through env and inside quotes. This is the example of the
+#   help of CodeQL's query of argument injection
+#   (https://github.com/github/codeql/blob/35510a53689cb54aa6fc664b169b1e44920fb88e/actions/ql/src/experimental/Security/CWE-088/ArgumentInjectionCritical.md).
+# reason: a todo (the same file): sed reads its first word that is not an
+#   option as its script, and the e command of GNU sed's script runs a
+#   command; reading the value inside the script of sed (or the program of
+#   awk) would find it.
+# cause: the rule reads a value only where the command can read it as an
+#   option: at the head of a word, or outside quotes, where a blank in it
+#   starts a new word. Here the value is inside quotes, after
+#   s/BODY_PLACEHOLDER/ in the word of the script.
+# attack-value: github.event.comment.body = "BAR/g;1e echo PWNED;#"
+# attack-run-behavior: the script becomes s/BODY_PLACEHOLDER/BAR/g;1e echo
+#   PWNED;#/g, and sed runs echo PWNED as the e command at the first line,
+#   which writes PWNED into replaced.txt.
+on: issue_comment
+
+jobs:
+  echo-body:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          cat file.txt | sed  "s/BODY_PLACEHOLDER/$BODY/g" > replaced.txt

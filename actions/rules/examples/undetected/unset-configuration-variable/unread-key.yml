@@ -1,0 +1,17 @@
+# situation: the matrix of the job reads its operating systems from the
+#   configuration variable OSES with fromJSON(), and no level defines OSES.
+# reason: a todo: fromJSON() of the empty string fails, so GitHub does not
+#   start the job.
+# cause: the rule does not read a variable of strategy.matrix whose value
+#   is one ${{ }}.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        os: ${{ fromJSON(vars.OSES) }}
+    steps:
+      - run: make test

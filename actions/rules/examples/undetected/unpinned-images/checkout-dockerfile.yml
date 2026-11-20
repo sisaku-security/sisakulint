@@ -1,0 +1,25 @@
+# situation: on push, a step checks out another repository at a full commit
+#   SHA, and the script of a later step builds an image from the Dockerfile
+#   of that repository, whose FROM names alpine:3 by a tag, without a
+#   digest.
+# reason: a todo (a fact): the commit decides the content of the
+#   Dockerfile, and a fact that gives a file of another repository would
+#   let the rule read the FROM of the Dockerfile.
+# cause: no fact gives the rule a file of another repository other than the
+#   file of an action or of a reusable workflow.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: docker build pulls alpine:3, which is now the image
+#   of the attacker, and runs the RUN commands of the Dockerfile in a
+#   container of alpine:3 on the docker daemon of the runner.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: example-org/build-files
+          ref: 0123456789abcdef0123456789abcdef01234567
+          path: build-files
+      - run: docker build -t app build-files

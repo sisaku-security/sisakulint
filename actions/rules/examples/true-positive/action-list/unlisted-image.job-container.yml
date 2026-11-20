@@ -1,0 +1,19 @@
+# situation: a job runs in the container aquasec/trivy:0.69.4; repo.action-list
+#   is * and patterns that start with !, among them !docker://aquasec/trivy:*.
+# reason: the steps of the job run in the container, with the secrets and the
+#   GITHUB_TOKEN of the job, and the publisher of aquasec/trivy decides what
+#   the image holds, though the repository did not list the image as one
+#   that the repository trusts.
+# attack: the publisher of aquasec/trivy pushes an image that reads the
+#   secrets of CI under the tag 0.69.4.
+# attack-run-behavior: the runner pulls the image and runs the steps of the
+#   job in the container of the image.
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    container: aquasec/trivy:0.69.4
+    steps:
+      - run: trivy fs .
+        env:
+          TOKEN: ${{ secrets.SCAN_TOKEN }}

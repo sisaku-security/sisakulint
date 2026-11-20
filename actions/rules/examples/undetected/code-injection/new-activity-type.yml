@@ -1,0 +1,19 @@
+# situation: on issues of an activity type added_later, a run writes the
+#   issue's title.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: when GitHub sends issues with the activity type
+#   added_later, the script becomes echo ""; echo PWNED; echo "", and bash
+#   runs the second echo as a command, which prints PWNED.
+on:
+  issues:
+    types: [added_later]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

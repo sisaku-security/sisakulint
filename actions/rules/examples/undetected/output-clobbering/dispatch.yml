@@ -1,0 +1,23 @@
+# situation: on workflow_dispatch, a run writes github.event.issue.body to
+#   $GITHUB_OUTPUT. If the workflow also ran on issues, the rule would
+#   report the same step.
+# reason: no added gain: on workflow_dispatch the event has no issue object,
+#   so the expression of the body gives an empty string; whoever dispatches
+#   the workflow chooses the ref and the inputs of the dispatch, and the step
+#   reads no input of the dispatch.
+# cause: the table of the attacker's events that the rule reads does not
+#   have workflow_dispatch; the rule reports an input of a dispatch with the
+#   inconclusive kind input-dispatch.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: with the value put in, ${{ }} puts the two lines
+#   inside the double quotes of the echo, which writes the lines t=x and
+#   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs t and PWNED.
+#   On workflow_dispatch the event has no issue object, though: the
+#   expression gives an empty string, and the script writes the line t=
+#   only.
+on: workflow_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ github.event.issue.body }}" >> "$GITHUB_OUTPUT"

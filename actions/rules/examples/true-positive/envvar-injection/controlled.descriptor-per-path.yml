@@ -1,0 +1,19 @@
+# situation: on issues opened, a step opens descriptor 3 on $GITHUB_ENV when
+#   QUIET is empty and on /dev/null otherwise, and writes V=$V to
+#   descriptor 3.
+# reason: QUIET is not set in the step, so bash runs the branch that
+#   opens descriptor 3 on $GITHUB_ENV, and the value goes to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          if [ -z "$QUIET" ]; then exec 3>>"$GITHUB_ENV"; else exec 3>/dev/null; fi
+          echo "V=$V" >&3

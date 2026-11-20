@@ -1,0 +1,23 @@
+# situation: on comments on the diff, a step writes the lines of the diff
+#   (github.event.comment.diff_hunk) and the path of the file that the
+#   comment is on (github.event.comment.path) into its run: script.
+# reason: GitHub takes the lines and the path of the diff from the commits
+#   of the head of the pull request, not from the comment. A review that
+#   starts a run with the secrets is of a pull request from a branch of
+#   the repository, whose commits are written only by those who can push
+#   to the repository; the author of a pull request from a fork can change
+#   the workflow of the run of a review of that pull request, so a value
+#   of the head gives that author nothing more.
+# attack-value: github.event.comment.diff_hunk = "\"; echo PWNED; echo \""
+# attack-run-behavior: the attacker writes the body of the comment, not
+#   the lines of the diff, so the attacker cannot put this text into the
+#   lines of the diff; the script prints the path and the lines of the
+#   diff, which those who can push to the repository wrote.
+on: pull_request_review_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "${{ github.event.comment.path }}"
+          echo "${{ github.event.comment.diff_hunk }}"

@@ -1,0 +1,20 @@
+# situation: on issues, a job whose token may write contents echoes the
+#   issue's title, written in by ${{ }}.
+# reason: issues runs the job for anyone who opens an issue, with no
+#   approval, and contents: write gives its token write; the title written
+#   in by ${{ }} is a flaw that runs the opener's code in the job that holds
+#   that token.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the job a, which has no if
+#   and waits for no approval, with a token that has contents: write; the
+#   script becomes echo ""; echo PWNED; echo "", and the shell runs echo
+#   PWNED as a command, so any command the attacker writes in its place runs
+#   in the job that holds that token.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

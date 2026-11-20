@@ -1,0 +1,15 @@
+# situation: the job sets GITHUB_REPOSITORY to ${{ github.repository }} and
+#   RUNNER_TEMP to ${{ runner.temp }}, for a tool that reads them.
+# reason: the runner writes the same values over the keys, so each step gets
+#   the values written.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      RUNNER_TEMP: ${{ runner.temp }}
+    steps:
+      - run: ./build.sh

@@ -1,0 +1,23 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secrets-in-artifacts-unanswered, whose
+#   content is the workflow of the true positive lasting (lasting.yml) of
+#   the rule, with on: workflow_call in place of the on of lasting.yml. The
+#   linter has no answer of the fact workflow.definition for the reusable
+#   workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the
+#   service account key from gha-creds-*.json.
+# attack-run-behavior: google-github-actions/auth writes the service account
+#   key of secrets.GCP_KEY to gha-creds-<hex>.json at the top of the
+#   workspace, and the upload of path . puts it in the artifact; the key
+#   keeps working after the run until someone deletes it in Google Cloud.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/secrets-in-artifacts-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

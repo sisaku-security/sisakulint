@@ -1,0 +1,11 @@
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./called
+        with:
+          text: ${{ github.event.issue.title }}
+      - run: echo next

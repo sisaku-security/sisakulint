@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"tj-actions/changed-files","ref":"56284d80811fb5963a972b438f2870f175e5b7c8"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tj-actions/verify-changed-files","ref":"54e20d3c522fbeed99ebaf2e38a1eb33214c58ba"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"tj-actions/changed-files","ref":"56284d80811fb5963a972b438f2870f175e5b7c8"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"tj-actions/verify-changed-files","ref":"54e20d3c522fbeed99ebaf2e38a1eb33214c58ba"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"step-output-remote-action.ghsa-mcph-m25j-8j63.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"tj-actions/changed-files","sha":"56284d80811fb5963a972b438f2870f175e5b7c8"},"state":"absent"},
+{"query":{"kind":"git.commit-ref","repo":"tj-actions/verify-changed-files","sha":"54e20d3c522fbeed99ebaf2e38a1eb33214c58ba"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"tj-actions/changed-files","sha":"56284d80811fb5963a972b438f2870f175e5b7c8"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"tj-actions/changed-files"},"state":"found","value":[{"first_patched_version":"46.0.1","ghsa_id":"GHSA-mrrh-fwg8-r2c3","severity":"high","vulnerable_version_range":"<= 45.0.7"},{"first_patched_version":"41","ghsa_id":"GHSA-mcph-m25j-8j63","severity":"high","vulnerable_version_range":"< 41"}]},
+{"query":{"kind":"package.advisories","package":"tj-actions/verify-changed-files"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"tj-actions/changed-files"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"tj-actions/verify-changed-files"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"step-output-remote-action.ghsa-mcph-m25j-8j63.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

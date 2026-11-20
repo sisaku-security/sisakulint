@@ -1,0 +1,13 @@
+name: l3-wfenv
+on:
+  push:
+    branches: [probe/secret-in-log]
+permissions: {}
+env:
+  ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+jobs:
+  wf:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::set-env name=W1::v1"
+      - run: echo "W1=[$W1]"

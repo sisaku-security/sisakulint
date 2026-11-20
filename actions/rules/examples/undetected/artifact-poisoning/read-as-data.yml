@@ -1,0 +1,43 @@
+# situation: on workflow_run, the artifact is downloaded under runner.temp,
+#   and a run writes its file pr-id.txt to $GITHUB_OUTPUT (GHSL-2024-124,
+#   quarkusio/quarkus preview.yml: echo
+#   "id=$(<documentation-temp/pr-id.txt)" >> $GITHUB_OUTPUT, then ${{
+#   steps.pr.outputs.id }} in a run). GHSL-2024-276 and GHSL-2024-281 have
+#   the same form: preview-deploy.yml of ant-design-blazor/ant-design-blazor
+#   (commit d3668d9cecc65f2ee0dac920aa55e8f393c6773d) and of
+#   ant-design/ant-design-web3 (commit
+#   cbbf0cefce42cabb9ef0348db507ddd3ce00dcf4) download the artifact pr with
+#   dawidd6/action-download-artifact into the workspace, write pr-id.txt to
+#   the output id, and write ${{ steps.pr.outputs.id }} into the run of
+#   npx surge. In those files, artifact-poisoning reports executed for
+#   another reason: npx surge --project ./ runs in the workspace where the
+#   artifact is.
+# reason: a todo (the same file): the artifact's file is read as a value,
+#   which may run as code; following the value would find it.
+# cause: the value's way through the shell is not followed.
+# attack-value: the file pr-id.txt in the artifact of the pull request's ci run = "1$(echo PWNED)"
+# attack-run-behavior: the download puts pr-id.txt under runner.temp/pr, and
+#   the step writes id=1$(echo PWNED) to GITHUB_OUTPUT; the shell does not
+#   expand the output of the command substitution again, so nothing runs
+#   here, and a later run step that writes steps.pr.outputs.id with ${{ }},
+#   as quarkus preview.yml does, would run echo PWNED. This example has no
+#   such step.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-124_GHSL-2024-125_quarkus/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-276_Ant-design-blazor/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-281_Ant-design-web3/
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/pr
+      - id: pr
+        run: echo "id=$(cat $RUNNER_TEMP/pr/pr-id.txt)" >> $GITHUB_OUTPUT

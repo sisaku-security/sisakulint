@@ -1,0 +1,24 @@
+# situation: on push, runs-on is ${{ matrix.prefix }}-hosted, and the matrix
+#   gives prefix the value self.
+# reason: the label mixes a value of the matrix with the text -hosted, and
+#   the rule reads the values of the matrix only for a label that is a ${{
+#   matrix.<name> }} alone, so the rule does not determine the runner that
+#   the label names; reading the matrix of the same file would determine the
+#   label.
+# attack: the label is self-hosted, so the repository has a self-hosted
+#   runner; the attacker opens a pull request from a fork whose workflow
+#   runs a step of their own on runs-on: self-hosted.
+# attack-run-behavior: the job a runs on a runner with the label
+#   self-hosted; the attacker's pull_request run, from the workflow their
+#   pull request writes, is picked up by a runner with that label too, and
+#   their step runs on that machine, where what it leaves stays for the jobs
+#   after it, such as this one.
+on: push
+jobs:
+  a:
+    runs-on: ${{ matrix.prefix }}-hosted
+    strategy:
+      matrix:
+        prefix: [self]
+    steps:
+      - run: echo

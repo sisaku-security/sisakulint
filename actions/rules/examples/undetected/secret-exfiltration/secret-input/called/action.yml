@@ -1,0 +1,32 @@
+# situation: the composite action sends inputs.api-key, and inputs.token,
+#   whose default is the token of the job, to www.virustotal.com with curl;
+#   ci.yml calls the action on push and gives the secret API_KEY as api-key.
+# reason: a todo (a file of the repository): the requests carry the secret
+#   and the token to www.virustotal.com, and whoever holds the server can use
+#   the secret and the token.
+# cause: the rule does not follow the value under with: of the caller into
+#   inputs.api-key of the action, and does not read the default of
+#   inputs.token, so the rule does not know that inputs.api-key holds a secret
+#   and inputs.token holds the token.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the server, now the attacker's, receives the value of
+#   API_KEY and the token of the job, and uses the two.
+name: scan
+description: scan the build
+inputs:
+  api-key:
+    description: the API key of VirusTotal
+  token:
+    description: the token of the job
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - env:
+        API_KEY: ${{ inputs.api-key }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        curl -fsS -H "x-apikey: $API_KEY" https://www.virustotal.com/api/v3/files -F file=@dist/app.zip
+        curl -fsS -H "Authorization: token $GH_TOKEN" https://www.virustotal.com/api/v3/comments
+      shell: bash

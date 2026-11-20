@@ -1,0 +1,9 @@
+name: x04
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env: ${{ format('{0}', 'a') }}
+        run: echo ok
+      - run: echo after

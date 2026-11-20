@@ -1,0 +1,20 @@
+# situation: a step uses example-org/unlisted-tools with a path that goes
+#   with .. above the directory where the runner puts the actions of the job;
+#   repo.action-list is * and patterns that start with !, among them
+#   !example-org/unlisted-*.
+# reason: the runner downloads example-org/unlisted-tools, which
+#   repo.action-list does not allow, and what the path names is decided when
+#   the job runs.
+# cause: the rule compares each action that the runner may run for the uses,
+#   with the path read as the runner reads the path, and a path above the
+#   directory of actions names no action.
+# attack: the maintainer of example-org/unlisted-tools writes code into the
+#   commit that v1 names.
+# attack-run-behavior: the runner downloads the commit, and the job fails or
+#   runs files that the path names when the job runs.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/unlisted-tools/../../../../setup@v1

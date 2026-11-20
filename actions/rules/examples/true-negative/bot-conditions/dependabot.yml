@@ -1,0 +1,29 @@
+# situation: on pull_request_target, the job merges the pull request only if
+#   its author, github.event.pull_request.user.login, is dependabot[bot].
+# reason: the if reads the author of the pull request, not the actor of the
+#   run: Dependabot's push to an attacker's pull request makes Dependabot
+#   the actor, but the attacker stays the author, so the if does not pass.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], but
+#   github.event.pull_request.user.login is the attacker's login, as they
+#   opened the pull request, so the if is false and the job merge is
+#   skipped.
+on: pull_request_target
+jobs:
+  merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,23 @@
+# situation: on pull_request_target, the step p prints a file of the
+#   repository with cat, and the release step writes the output tag of
+#   the step p into its script.
+# reason: a todo (the same file): a command other than echo, printf, cat
+#   of a here-string and tee prints what the rule does not read, which
+#   may be an attacker's.
+# cause: the rule reads what echo, printf, cat and tee print of env and
+#   ${{ }}.
+# attack: an attacker whose text reaches the file writes x ##[set-output
+#   name=tag;]$(id) in the file.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: pull_request_target
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: cat NOTES.md
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

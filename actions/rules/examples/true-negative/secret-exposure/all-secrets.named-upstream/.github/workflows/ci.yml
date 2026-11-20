@@ -1,0 +1,7 @@
+on: push
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/mid.yml
+    secrets:
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}

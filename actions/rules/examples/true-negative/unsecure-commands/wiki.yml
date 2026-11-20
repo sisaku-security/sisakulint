@@ -1,0 +1,18 @@
+# situation: on gollum, a step prints the name of the wiki page (page_name);
+#   a step comes after, and no env sets ACTIONS_ALLOW_UNSECURE_COMMANDS.
+# reason: without the flag, the runner does not read add-path in the log,
+#   so the name of the page does not change the PATH of the next step.
+# attack-value: github.event.pages[0].page_name = "::add-path::/tmp/x"
+# attack-run-behavior: the step prints the name; the runner reports that
+#   the add-path command is disabled, and the PATH of the next step stays
+#   the same.
+on: gollum
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NAME: ${{ github.event.pages[0].page_name }}
+        run: echo "$NAME"
+      - run: git status

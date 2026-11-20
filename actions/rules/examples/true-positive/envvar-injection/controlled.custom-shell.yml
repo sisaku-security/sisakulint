@@ -1,0 +1,23 @@
+# situation: on issues opened, a step whose shell: is bash -e {0} writes
+#   body= and the issue's body to $GITHUB_ENV.
+# reason: the runner runs the script in bash with -e, which reads the
+#   script as shell: bash does; anyone who opens an issue writes the body of
+#   the issue, and the runner reads $GITHUB_ENV one line at a time as
+#   NAME=value, so a line of the body such as BASH_ENV=... becomes a
+#   separate variable.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds x, a line break and PWNED=1, so echo
+#   appends the two lines body=x and PWNED=1 to $GITHUB_ENV; the runner
+#   reads each line as NAME=value and sets body to x and PWNED to 1 for the
+#   later steps.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash -e {0}
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$BODY" >> "$GITHUB_ENV"

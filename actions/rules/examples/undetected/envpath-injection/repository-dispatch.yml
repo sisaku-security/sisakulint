@@ -1,0 +1,20 @@
+# situation: on repository_dispatch, a run writes the value body of the
+#   client_payload to $GITHUB_PATH.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.body = "/tmp/PWNED"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, the script writes the line /tmp/PWNED to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH.
+on: repository_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.client_payload.body }}" >> "$GITHUB_PATH"

@@ -1,0 +1,18 @@
+# situation: the step uses actions/checkout by the full SHA of a commit
+#   (v4.2.2).
+# reason: a tag can be moved to another commit by whoever pushes to
+#   actions/checkout; a full SHA names the content of one commit, and no
+#   push makes it name another.
+# attack: the owner of actions/checkout, or whoever has taken over a token
+#   that pushes to it, moves the tag v4 to a commit of theirs, as the tags
+#   v1 to v45.0.7 of tj-actions/changed-files were moved in 2025 to a commit
+#   that prints secrets to the log.
+# attack-run-behavior: the uses names the full SHA 11bd7190, so the runner
+#   fetches that commit without looking up any tag; the moved v4 does not
+#   change what the step runs.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

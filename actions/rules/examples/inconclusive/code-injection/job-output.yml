@@ -1,0 +1,31 @@
+# situation: the job a sets its output o from the output of its step s,
+#   which a script writes to $GITHUB_OUTPUT; the job b writes
+#   needs.a.outputs.o into its run script by ${{ }}. diff_report.yml of
+#   checkstyle/checkstyle (commit 11ce9d3b20c951741c5518ec6a967c407ee54e14,
+#   GHSL-2020-183) has this form on issue_comment: the job parse_body writes
+#   lines of the description of the pull request to the outputs of its step
+#   parse, and the job make_report writes needs.parse_body.outputs.projects_link
+#   into its run (line 82).
+# reason: the value is what another job computes at run time, so whether an
+#   attacker controls it is not known.
+# cause: the rule does not yet follow the output of a job back to what sets
+#   it.
+# attack-value: needs.a.outputs.o = "\"; echo PWNED; echo \""
+# attack-run-behavior: when the step s writes o with the value to
+#   $GITHUB_OUTPUT, the script of the job b becomes echo ""; echo PWNED;
+#   echo "", and bash runs the second echo as a command, which prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-183-checkstyle-checkstyle-workflow/
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs.o }}
+    steps:
+      - id: s
+        run: echo "o=x" >> "$GITHUB_OUTPUT"
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.a.outputs.o }}"

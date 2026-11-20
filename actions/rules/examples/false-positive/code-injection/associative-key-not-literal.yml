@@ -1,0 +1,23 @@
+# situation: on issues opened, a step passes the issue's title in the
+#   environment variable KEY, declares the associative array m with declare
+#   -A and an initial value in the same word, and prints the element of m
+#   whose key is KEY.
+# reason: the subscript of an associative array is a key, and bash does not
+#   read the key as arithmetic, so the title of the issue does not run.
+# cause: the word that declares m holds an initial value, so the word is
+#   not literal, and the rule does not read m as an associative array and
+#   reads the subscript as arithmetic.
+# attack-value: github.event.issue.title = "a[$(echo PWNED >/proc/$$/fd/1)]"
+# attack-run-behavior: echo prints an empty line, and nothing prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          KEY: ${{ github.event.issue.title }}
+        run: |
+          declare -A m=([k]=v)
+          echo "${m[$KEY]}"

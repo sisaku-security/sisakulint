@@ -1,0 +1,4 @@
+on: pull_request_target
+jobs:
+  call:
+    uses: o/r/.github/workflows/called.yml@main

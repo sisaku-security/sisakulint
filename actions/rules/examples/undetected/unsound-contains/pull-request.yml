@@ -1,0 +1,24 @@
+# situation: on pull_request, a step runs when github.actor is a part of a
+#   string of names, as in woodruffw/gha-hazmat's unsound-contains.yml
+#   (vulnerable-3, c34857d4ab14af4fdd4c492ba72b9eeb4844da77).
+# reason: when only the pull requests of the repository run the workflow, the
+#   author of the pull request can change the workflow itself and gets what the
+#   run has without the flaw, so the flaw adds nothing to what the author gets;
+#   when a ruleset of the organization or the enterprise runs the workflow on
+#   the pull requests of its other repositories, the author cannot change the
+#   workflow, and what the run of the ruleset has beyond the author's own
+#   pull_request workflow is not known. The workflow does not say which case
+#   holds.
+# cause: pull_request is none of the privileged events the rule reads the if
+#   on. The rule does not read whether a ruleset runs the workflow.
+# attack-value: github.actor = "longuser"
+# attack-run-behavior: a pull request from the fork of the account longuser
+#   runs pull_request with github.actor longuser, a part of longusername, so
+#   the step runs echo hello.
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains('longusername anotherlongusername', github.actor)
+        run: echo hello

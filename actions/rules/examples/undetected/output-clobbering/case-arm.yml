@@ -1,0 +1,23 @@
+# situation: on issues opened, a step writes body= and the issue's body to
+#   $GITHUB_OUTPUT inside an arm of a case that skips an empty value.
+# reason: a todo (the same file): the arm runs, and each later line of the
+#   body such as x=y is read as an output of its own beside body.
+# cause: the shell parser does not read the commands of a case.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value is not empty, so the case takes its
+#   second arm, and echo writes the lines body=x and PWNED=1 to
+#   $GITHUB_OUTPUT; the runner sets the outputs body (x) and PWNED (1).
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          case "$BODY" in
+            "") ;;
+            *) echo "body=$BODY" >> "$GITHUB_OUTPUT" ;;
+          esac

@@ -1,0 +1,16 @@
+# situation: the repository belongs to an organization of an enterprise of
+#   GitHub Enterprise Cloud, and the workflow uses example-sister-org/tools,
+#   an action of another organization of the same enterprise; the setting of
+#   allowed actions of GitHub has no pattern.
+# reason: the setting allows each action of the enterprise, so GitHub starts
+#   the run.
+# cause: the rule does not know which organizations are of the same
+#   enterprise.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-sister-org/tools@ed408507eac070d1f99cc633dbcf757c94c7933a

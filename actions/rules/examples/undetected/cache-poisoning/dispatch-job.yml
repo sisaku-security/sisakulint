@@ -1,0 +1,27 @@
+# situation: on workflow_dispatch, a job with no cache-mode checks out the
+#   ref of the run, runs npm ci, and actions/cache saves node_modules.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): the one who dispatches the workflow chooses as the ref
+#   only a branch or a tag of the repository, so the job builds and saves what
+#   those who can write to the repository pushed.
+# cause: the rule reads the jobs that an attacker's event runs, and of a job
+#   on workflow_dispatch only the values that an input of workflow_dispatch
+#   decides.
+# attack: the one who dispatches the workflow chooses a branch of the
+#   repository as the ref of the run.
+# attack-run-behavior: the REST API of GitHub refuses a dispatch with a
+#   commit SHA or refs/pull/1/head as the ref, with the status 422; with a
+#   branch of the repository, the checkout fetches that branch, npm ci runs
+#   its package.json, and actions/cache saves node_modules to the scope of
+#   that branch.
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: npm-${{ hashFiles('package-lock.json') }}
+      - run: npm ci

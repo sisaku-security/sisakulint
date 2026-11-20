@@ -1,0 +1,19 @@
+# situation: on issues of an activity type added_later, a run writes the
+#   issue's title to $GITHUB_ENV.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: on an issue of the type added_later, the script
+#   becomes echo "TITLE=x<line break>PWNED=1" >> "$GITHUB_ENV", which
+#   appends TITLE=x and PWNED=1; the runner sets TITLE to x and PWNED to 1.
+on:
+  issues:
+    types: [added_later]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TITLE=${{ github.event.issue.title }}" >> "$GITHUB_ENV"

@@ -1,0 +1,82 @@
+name: q1-log-output
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      j1: ${{ steps.s2.outputs.o1 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: s1
+        name: s1 the message in run
+        run: echo "${{ github.event.head_commit.message }}"
+      - id: s2
+        name: s2 the message through env
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: echo "$M"
+      - id: s3
+        name: s3 a file write of o1 before the print
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: |
+          echo "o1=fromfile" >> "$GITHUB_OUTPUT"
+          echo "$M"
+      - id: s4
+        name: s4 the message in env, not printed
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: "true"
+      - id: s5
+        name: s5 the print between stop-commands
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: |
+          T="$(uuidgen)"
+          echo "::stop-commands::$T"
+          echo "$M"
+          echo "::$T::"
+      - id: s6
+        name: s6 set -x
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: |
+          set -x
+          X="$M"
+      - id: s7
+        name: s7 the standard error
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: echo "$M" >&2
+      - name: s8 no id
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: echo "$M"
+      - id: c
+        name: c a composite action
+        uses: ./.github/actions/p
+        with:
+          m: ${{ github.event.head_commit.message }}
+      - name: read the outputs
+        env:
+          S1: ${{ toJSON(steps.s1.outputs) }}
+          S2: ${{ toJSON(steps.s2.outputs) }}
+          S3: ${{ toJSON(steps.s3.outputs) }}
+          S4: ${{ toJSON(steps.s4.outputs) }}
+          S5: ${{ toJSON(steps.s5.outputs) }}
+          S6: ${{ toJSON(steps.s6.outputs) }}
+          S7: ${{ toJSON(steps.s7.outputs) }}
+          C: ${{ toJSON(steps.c.outputs) }}
+        run: |
+          for v in S1 S2 S3 S4 S5 S6 S7 C; do printf 'Z %s=%s\n' "$v" "$(printf '%s' "${!v}" | tr -d '\n ')"; done
+      - name: an output in run
+        run: echo "Z code=${{ steps.s2.outputs.o3 }}"
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          J: ${{ needs.a.outputs.j1 }}
+        run: echo "Z j1=$J"

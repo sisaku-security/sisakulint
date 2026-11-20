@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job with no cache-mode checks out the
+#   head of the pull request, and actions/cache saves dist, a directory of
+#   the tree.
+# reason: no added gain: with no cache-mode GitHub gives the run read
+#   access only to the cache of the default branch's scope, and the save is
+#   denied without failing the step.
+# cause: the job writes no cache-mode, which the rule reads as no save on the
+#   attacker's events.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches the head, and the post step of
+#   actions/cache logs that saving is denied (token has no writable scopes).
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}

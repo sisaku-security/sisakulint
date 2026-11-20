@@ -1,0 +1,26 @@
+# situation: on issues opened, a step opens a descriptor on $GITHUB_ENV with
+#   exec {fd}, copies its number to b with [[ b=fd -gt 0 ]], opens a new
+#   descriptor for fd on /dev/null when QUIET is set, closes the descriptor
+#   whose number fd holds with exec {fd}>&-, and writes V= and the issue's
+#   body to the descriptor whose number b holds.
+# reason: QUIET is set in the step, so exec {fd}>&- closes the descriptor on
+#   /dev/null, b still holds the number of the descriptor on $GITHUB_ENV,
+#   and the body goes to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+          QUIET: "1"
+        run: |
+          exec {fd}>>"$GITHUB_ENV"
+          [[ b=fd -gt 0 ]]
+          if [ -n "$QUIET" ]; then exec {fd}>/dev/null; fi
+          exec {fd}>&-
+          echo "V=$V" >&$b

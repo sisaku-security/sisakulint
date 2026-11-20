@@ -1,0 +1,14 @@
+# situation: a step uses example-org/unlisted-tools with a path that goes
+#   with .. above the directory where the runner puts the actions of the
+#   job; the setting of allowed actions of GitHub is * and !example-org/*.
+# reason: GitHub may not allow the action that the path names.
+# cause: what the path names is decided when the job runs, and a path above
+#   the directory of actions names no action that the rule can compare.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-org/unlisted-tools/../../../../setup@v1

@@ -1,0 +1,10 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"example-creator/deploy-action","ref":"ed408507eac070d1f99cc633dbcf757c94c7933a"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"example-creator/deploy-action","ref":"ed408507eac070d1f99cc633dbcf757c94c7933a"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"verified-creator.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"example-creator/deploy-action","sha":"ed408507eac070d1f99cc633dbcf757c94c7933a"},"state":"absent"},
+{"query":{"kind":"package.advisories","package":"example-creator/deploy-action"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.allowed-actions"},"state":"found","value":{"allowed_actions":"selected","github_owned_allowed":false,"verified_allowed":true,"patterns_allowed":[],"sha_pinning_required":false}},
+{"query":{"kind":"repo.archived","repo":"example-creator/deploy-action"},"state":"found","value":false}
+]}

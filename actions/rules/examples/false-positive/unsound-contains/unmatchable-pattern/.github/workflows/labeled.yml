@@ -1,0 +1,25 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label test to a pull request that changes a file that is under site/ and
+#   not under site/, which no file is; labeled.yml runs on pull_request_target
+#   on labeled when contains('safe-to-test', github.event.label.name) is true,
+#   and the job checks out the head of the pull request and runs npm ci.
+# reason: no file matches both globs, so actions/labeler never adds the label,
+#   and only a person adds it.
+# cause: the rule reads each glob as one that a pull request can match.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; actions/labeler adds no label, and labeled.yml
+#   does not run until a person adds the label test.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

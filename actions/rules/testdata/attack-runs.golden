@@ -1,0 +1,455 @@
+actions/rules/examples/false-positive/code-injection/actions-not-allowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/actions-policy/.github/workflows/called.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/app-checks-unasked.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/associative-key-not-literal.yml	false-positive	no harm
+actions/rules/examples/false-positive/code-injection/callee.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/fork-flag-review.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/fork-pull-request.yml	false-positive	not run: no-attacker-event
+actions/rules/examples/false-positive/code-injection/git-config-value.yml	false-positive	no harm
+actions/rules/examples/false-positive/code-injection/if-unnarrowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/lastpipe-not-literal.yml	false-positive	no harm
+actions/rules/examples/false-positive/code-injection/name-not-literal.yml	false-positive	no harm
+actions/rules/examples/false-positive/code-injection/named-caller-events/.github/workflows/called.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/pull-request-target-blocked.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/repository-name.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/sha-suffix.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/wiki-closed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/code-injection/writer-string.yml	false-positive	harm shows
+actions/rules/examples/undetected/code-injection/action-input-docker.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/code-injection/action-input-local.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/code-injection/action-input-remote.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/code-injection/action-input-remote.ghsa-4xqx-pqpj-9fqw.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/code-injection/app-written.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/associative-scope.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/checked-out-local.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/code-injection/checked-out-local-moving.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/code-injection/compared.yml	undetected	not run: carrier-wrapped
+actions/rules/examples/undetected/code-injection/deployment-status.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/code-injection/dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/code-injection/dispatch-input-call/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/dispatch-relay/.github/workflows/receiver.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/env-value.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/env-variable-command-name.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/env-variable-coproc.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/env-variable-nested.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/env-variable-other-language.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/code-injection/env-variable-runs-argument.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/env-variable-sh.yml	undetected	not run: shell-not-bash
+actions/rules/examples/undetected/code-injection/env-variable-source.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/env-variable-structured.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/fixed.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/code-injection/fork-review.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/code-injection/if.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/code-injection/if-compared.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/insider-association.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/code-injection/login-startup-file.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/merged-pusher.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/new-activity-type.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/code-injection/not-attacker.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/code-injection/outside-caller/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/pull-request.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/code-injection/remote-callee.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/code-injection/remote-composite-steps.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/code-injection/repository-dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/code-injection/repository-program.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/script-var.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/tojson-heredoc.yml	undetected	not run: carrier-wrapped
+actions/rules/examples/undetected/code-injection/wiki-summary.yml	undetected	harm shows
+actions/rules/examples/undetected/code-injection/written-file.yml	undetected	no harm
+actions/rules/examples/undetected/code-injection/written-file.ghsa-9p44-j4g5-cfx5.yml	undetected	no harm
+actions/rules/examples/inconclusive/code-injection/call-body-unknown.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/env-dynamic.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/env-unset.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/env-unset.ghsl-2024-205.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/env-whole.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/inconclusive/code-injection/input-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/input-call.ghsa-rg3q-prf8-qxmp.action.yml	inconclusive	not run: other-expression
+actions/rules/examples/inconclusive/code-injection/input-dispatch.yml	inconclusive	not run: no-attacker-event
+actions/rules/examples/inconclusive/code-injection/job-output.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/job-output-local-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/job-output-remote-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/job-output.ghsa-f9qj-7gh3-mhj4.yml	inconclusive	not run: carrier-not-in-run
+actions/rules/examples/inconclusive/code-injection/matrix.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/remote-callee-unknown.yml	inconclusive	not run: carrier-absent
+actions/rules/examples/inconclusive/code-injection/step-output-docker.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-local-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-remote-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-remote-action.ghsa-mcph-m25j-8j63.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-remote-action.ghsl-2024-312.yml	inconclusive	not run: no-attacker-event
+actions/rules/examples/inconclusive/code-injection/step-output-remote-action.ghsl-2024-326.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-remote-action.ghsl-2025-087.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-run.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-run.ghsl-2024-281.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-run.ghsl-2024-321/.github/workflows/called.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/inconclusive/code-injection/step-output-run.ghsl-2024-327.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/code-injection/step-output-run.ghsl-2026-207.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/true-positive/code-injection/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.action-yaml/called/action.yaml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.caller/.github/workflows/called.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-6q4m-7476-932w.action.yml	true-positive	not run: carrier-wrapped
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-7x29-qqmq-v6qc.action.yml	true-positive	not run: other-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-8v8w-v8xg-79rf.action.yml	true-positive	not run: carrier-wrapped
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-9p44-j4g5-cfx5/called/action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-c3xh-98xp-6qhf.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-hw6r-g8gj-2987.action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-r4fj-r33x-8v88.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsa-vxmw-7h4f-hqxh.action.yml	true-positive	not run: carrier-wrapped
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2020-191.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-032/.github/workflows/called.yml	true-positive	not run: carrier-not-in-run
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-058.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-120.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-126.yml	true-positive	not run: carrier-not-in-run
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-209.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-267.yml	true-positive	not run: other-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-275.yml	true-positive	not run: carrier-wrapped
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-277/.github/workflows/called.yml	true-positive	not run: carrier-not-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-319.yml	true-positive	not run: other-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2024-320/.github/workflows/called.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-090.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-093/called/action.yml	true-positive	not run: other-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-099.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-101.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-102.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-103.yml	true-positive	not run: other-expression
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-104.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-105.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-106.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.ghsl-2025-111.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.lychee-action/called/action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.no-caller.action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.parallel.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.pinned-comment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.remote-callee.yml	true-positive	not run: carrier-absent
+actions/rules/examples/true-positive/code-injection/controlled.status-commit.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.substitution.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/controlled.workout-cool.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable-wiki.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.arithmetic.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.backquote-backslash.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.cluster-code.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.cluster-next-word.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.code-input.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.command-word.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.element-before-command.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.escape-decoded.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.for-arithmetic.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.for-words.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.jump-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.pipe-through-cat.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.prompt-expansion.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.reader-in-brace.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.runner-variable.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.skipped-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/env-variable.substitution.yml	true-positive	harm shows
+actions/rules/examples/true-positive/code-injection/wiki.yml	true-positive	harm shows
+actions/rules/examples/true-negative/code-injection/controlled.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/controlled.array-reference.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/controlled.association-part.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.falsy-operand.yml	true-negative	not run: carrier-wrapped
+actions/rules/examples/true-negative/code-injection/controlled.folded-false-if.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.if-equal.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.if-equal-step.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.if-guard.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.job-needs-result.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.needs-narrowed.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/code-injection/controlled.object-reference.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/controlled.pusher.yml	true-negative	not run: other-expression
+actions/rules/examples/true-negative/code-injection/controlled.review-diff.yml	true-negative	not run: other-expression
+actions/rules/examples/true-negative/code-injection/controlled.unlisted-activity-type.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/controlled.unnamed-format-argument.yml	true-negative	not run: carrier-wrapped
+actions/rules/examples/true-negative/code-injection/env-variable.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/env-variable-wiki.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/env-variable.pipe-to-file.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/env-variable.reader-stdin-redirected.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/wiki.yml	true-negative	no harm
+actions/rules/examples/false-positive/envpath-injection/actions-not-allowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/actions-policy.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/app-checks-unasked.yml	false-positive	no harm
+actions/rules/examples/false-positive/envpath-injection/background-write.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/branch-not-run.yml	false-positive	no harm
+actions/rules/examples/false-positive/envpath-injection/callee.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/fixed-parent.yml	false-positive	no harm
+actions/rules/examples/false-positive/envpath-injection/fork-flag-review.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/fork-pull-request.yml	false-positive	not run: no-attacker-event
+actions/rules/examples/false-positive/envpath-injection/if-unnarrowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/named-caller-events/.github/workflows/called.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/no-attacker-executable.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/nothing-after.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/pull-request-target-blocked.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/reassigned-variable.yml	false-positive	no harm
+actions/rules/examples/false-positive/envpath-injection/wiki-closed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envpath-injection/writer-string.yml	false-positive	harm shows
+actions/rules/examples/undetected/envpath-injection/action-input.yml	undetected	not run: carrier-not-in-run
+actions/rules/examples/undetected/envpath-injection/add-path-command.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/app-written.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/case-arm.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/compared.yml	undetected	not run: carrier-wrapped
+actions/rules/examples/undetected/envpath-injection/deployment-status.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envpath-injection/dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envpath-injection/dispatch-input-call/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/dispatch-relay/.github/workflows/receiver.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/file-content.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envpath-injection/fixed.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/envpath-injection/fork-review.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/envpath-injection/github-env.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/github-output.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/github-script.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envpath-injection/if-compared.yml	undetected	no harm
+actions/rules/examples/undetected/envpath-injection/insider-association.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/envpath-injection/lastpipe-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/merged-pusher.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/name-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/nested-shell.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/new-activity-type.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envpath-injection/not-attacker.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/envpath-injection/other-shell.yml	undetected	not run: shell-not-bash
+actions/rules/examples/undetected/envpath-injection/outside-caller/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/pull-request.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envpath-injection/recursive-unset-local.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/remote-callee.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/envpath-injection/repository-dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envpath-injection/script-var.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envpath-injection/split-env-name.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/unset-caller-local.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/wiki-summary.yml	undetected	harm shows
+actions/rules/examples/undetected/envpath-injection/wrapped-tee.yml	undetected	not run: absolute-path-command
+actions/rules/examples/inconclusive/envpath-injection/after-stop.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/call-body-unknown.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/env-dynamic.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/env-unset.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/env-whole.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/inconclusive/envpath-injection/exec-redirect.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/input-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/input-dispatch.yml	inconclusive	not run: no-attacker-event
+actions/rules/examples/inconclusive/envpath-injection/job-output.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/job-output-local-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/job-output-remote-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/matrix.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/remote-callee-unknown.yml	inconclusive	not run: carrier-absent
+actions/rules/examples/inconclusive/envpath-injection/step-output-docker.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/step-output-local-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/step-output-remote-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/step-output-run.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/subst-value.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envpath-injection/writer-unknown.yml	inconclusive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.default-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.descriptor-per-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.jump-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.no-caller.action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.post-step.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.remote-callee.yml	true-positive	not run: carrier-absent
+actions/rules/examples/true-positive/envpath-injection/controlled.skipped-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.status-commit.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/wiki.yml	true-positive	harm shows
+actions/rules/examples/true-negative/envpath-injection/controlled.yml	true-negative	not run: carrier-absent
+actions/rules/examples/true-negative/envpath-injection/controlled.background-exec.yml	true-negative	no harm
+actions/rules/examples/true-negative/envpath-injection/controlled.closed-on-each-path.yml	true-negative	no harm
+actions/rules/examples/true-negative/envpath-injection/controlled.if-guard.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/envpath-injection/controlled.reassigned-file-variable.yml	true-negative	no harm
+actions/rules/examples/true-negative/envpath-injection/controlled.subshell-assignment.yml	true-negative	no harm
+actions/rules/examples/true-negative/envpath-injection/wiki.yml	true-negative	no harm
+actions/rules/examples/false-positive/envvar-injection/actions-not-allowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/actions-policy.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/app-checks-unasked.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/background-write.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/branch-not-run.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/callee.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/fork-flag-review.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/fork-pull-request.yml	false-positive	not run: no-attacker-event
+actions/rules/examples/false-positive/envvar-injection/if-unnarrowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/named-caller-events/.github/workflows/called.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/own-random-delimiter.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/pull-request-target-blocked.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/reassigned-variable.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/tr-in-substitution.yml	false-positive	no harm
+actions/rules/examples/false-positive/envvar-injection/wiki-closed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/envvar-injection/writer-string.yml	false-positive	harm shows
+actions/rules/examples/undetected/envvar-injection/app-written.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/call-after-exec.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/case-arm.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/compared.yml	undetected	not run: carrier-wrapped
+actions/rules/examples/undetected/envvar-injection/deployment-status.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envvar-injection/dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envvar-injection/dispatch-input-call/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/dispatch-relay/.github/workflows/receiver.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/file-content.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envvar-injection/file-content.ghsl-2024-252.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envvar-injection/fork-review.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/envvar-injection/github-output.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/github-path.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/github-script.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envvar-injection/if-compared.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/insider-association.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/envvar-injection/lastpipe-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/line-free.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/merged-pusher.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/name-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/nested-shell.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/new-activity-type.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envvar-injection/no-line-break.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/not-attacker.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/envvar-injection/other-file.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/other-shell.yml	undetected	not run: shell-not-bash
+actions/rules/examples/undetected/envvar-injection/other-shell.pwsh-expression.yml	undetected	not run: shell-not-bash
+actions/rules/examples/undetected/envvar-injection/outside-caller/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/pull-request.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envvar-injection/random-delimiter.yml	undetected	no harm
+actions/rules/examples/undetected/envvar-injection/recursive-unset-local.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/remote-callee.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/envvar-injection/repository-dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/envvar-injection/script-var.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/envvar-injection/split-env-name.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/substitution-pipe-end.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/unset-caller-local.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/wiki-summary.yml	undetected	harm shows
+actions/rules/examples/undetected/envvar-injection/wrapped-tee.yml	undetected	not run: absolute-path-command
+actions/rules/examples/inconclusive/envvar-injection/after-stop.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/call-body-unknown.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/env-dynamic.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/env-unset.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/env-whole.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/inconclusive/envvar-injection/exec-redirect.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/exec-redirect.loop.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/input-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/input-dispatch.yml	inconclusive	not run: no-attacker-event
+actions/rules/examples/inconclusive/envvar-injection/job-output.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/job-output-local-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/job-output-remote-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/matrix.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/remote-callee-unknown.yml	inconclusive	not run: carrier-absent
+actions/rules/examples/inconclusive/envvar-injection/step-output-docker.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/step-output-local-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/step-output-remote-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/step-output-run.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/subst-value.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/envvar-injection/writer-unknown.yml	inconclusive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.custom-shell.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.default-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.default-word.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.descriptor-copied-before-close.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.descriptor-opened-before-call.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.descriptor-per-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.element-before-command.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.jump-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.no-caller.action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.remote-callee.yml	true-positive	not run: carrier-absent
+actions/rules/examples/true-positive/envvar-injection/controlled.skipped-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.standard-error-piped.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.standard-error-piped-redirect.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.status-commit.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/wiki.yml	true-positive	harm shows
+actions/rules/examples/true-negative/envvar-injection/controlled.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.alternate-value.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.array-env.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.assigned-after.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.assigned-in-background.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.background-exec.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.called-before-definition.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.closed-on-each-path.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.descriptor-closed-before-call.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.exec-in-compound.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.exec-in-compound-piped.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.fork.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.function-in-subshell.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.if-guard.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/envvar-injection/controlled.pipeline-exec.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.reassigned-file-variable.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.space-cut-expansion.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.subshell-assignment.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.transform-attributes.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/wiki.yml	true-negative	no harm
+actions/rules/examples/false-positive/output-clobbering/actions-not-allowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/actions-policy.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/app-checks-unasked.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/background-write.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/branch-not-run.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/callee.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/fork-flag-review.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/fork-pull-request.yml	false-positive	not run: no-attacker-event
+actions/rules/examples/false-positive/output-clobbering/if-unnarrowed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/named-caller-events/.github/workflows/called.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/own-random-delimiter.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/pull-request-target-blocked.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/reassigned-variable.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/tr-in-substitution.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/unread-outputs.yml	false-positive	no harm
+actions/rules/examples/false-positive/output-clobbering/wiki-closed.yml	false-positive	harm shows
+actions/rules/examples/false-positive/output-clobbering/writer-string.yml	false-positive	harm shows
+actions/rules/examples/undetected/output-clobbering/app-written.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/case-arm.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/compared.yml	undetected	not run: carrier-wrapped
+actions/rules/examples/undetected/output-clobbering/deployment-status.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/output-clobbering/dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/output-clobbering/dispatch-input-call/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/dispatch-relay/.github/workflows/receiver.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/file-content.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/output-clobbering/fork-review.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/output-clobbering/github-env.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/github-path.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/github-script.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/output-clobbering/if-compared.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/insider-association.yml	undetected	not run: skipped-by-if
+actions/rules/examples/undetected/output-clobbering/lastpipe-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/line-free.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/log-command.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/merged-pusher.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/name-not-literal.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/nested-shell.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/new-activity-type.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/output-clobbering/no-line-break.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/not-attacker.yml	undetected	not run: other-expression
+actions/rules/examples/undetected/output-clobbering/other-file.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/other-shell.yml	undetected	not run: shell-not-bash
+actions/rules/examples/undetected/output-clobbering/outside-caller/.github/workflows/called.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/pull-request.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/output-clobbering/random-delimiter.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/recursive-unset-local.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/remote-callee.yml	undetected	not run: carrier-absent
+actions/rules/examples/undetected/output-clobbering/repository-dispatch.yml	undetected	not run: no-attacker-event
+actions/rules/examples/undetected/output-clobbering/script-var.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/script-var.ghsl-2026-229.yml	undetected	not run: carrier-not-expression
+actions/rules/examples/undetected/output-clobbering/split-env-name.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/unset-caller-local.yml	undetected	no harm
+actions/rules/examples/undetected/output-clobbering/wiki-summary.yml	undetected	harm shows
+actions/rules/examples/undetected/output-clobbering/wrapped-tee.yml	undetected	not run: absolute-path-command
+actions/rules/examples/inconclusive/output-clobbering/after-stop.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/call-body-unknown.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/env-dynamic.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/env-unset.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/env-whole.yml	inconclusive	not run: carrier-not-expression
+actions/rules/examples/inconclusive/output-clobbering/exec-redirect.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/input-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/input-dispatch.yml	inconclusive	not run: no-attacker-event
+actions/rules/examples/inconclusive/output-clobbering/job-output.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/job-output-local-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/job-output-remote-call.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/matrix.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/remote-callee-unknown.yml	inconclusive	not run: carrier-absent
+actions/rules/examples/inconclusive/output-clobbering/step-output-docker.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/step-output-local-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/step-output-remote-action.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/step-output-run.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/subst-value.yml	inconclusive	harm shows
+actions/rules/examples/inconclusive/output-clobbering/writer-unknown.yml	inconclusive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.default-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.descriptor-per-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.exec-in-braces.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.jump-path.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.no-caller.action.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.remote-callee.yml	true-positive	not run: carrier-absent
+actions/rules/examples/true-positive/output-clobbering/controlled.skipped-assignment.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.status-commit.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/wiki.yml	true-positive	harm shows
+actions/rules/examples/true-negative/output-clobbering/controlled.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.background-exec.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.closed-on-each-path.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.fork.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.if-guard.yml	true-negative	not run: skipped-by-if
+actions/rules/examples/true-negative/output-clobbering/controlled.reassigned-file-variable.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.space-cut-expansion.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/controlled.subshell-assignment.yml	true-negative	no harm
+actions/rules/examples/true-negative/output-clobbering/wiki.yml	true-negative	no harm

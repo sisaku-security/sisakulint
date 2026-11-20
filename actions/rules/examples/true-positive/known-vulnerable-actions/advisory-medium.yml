@@ -1,0 +1,17 @@
+# situation: on pull_request_target, a step checks links with
+#   lycheeverse/lychee-action pinned to the commit of v2.0.1, its input
+#   lycheeVersion taken from the title of the pull request.
+# reason: GHSA-65rg-554r-9j5x, which GitHub rates medium, says the input
+#   lycheeVersion can be used to execute arbitrary code in the composite
+#   action of the versions before 2.0.2.
+# attack-value: the title of the pull request = "1$(echo${IFS}PWNED)"
+# attack-run-behavior: the composite action runs the command in the
+#   version, with the token and the secrets of the job.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: lycheeverse/lychee-action@2bb232618be239862e31382c5c0eaeba12e5e966 # v2.0.1
+        with:
+          lycheeVersion: ${{ github.event.pull_request.title }}

@@ -1,0 +1,36 @@
+# situation: on workflow_run, the job downloads the artifact documentation
+#   with dawidd6/action-download-artifact v3 from a run of the workflow that
+#   triggered the job, into documentation-temp, and runs the script
+#   sync-web-site.sh of the directory docs of the artifact. These are the steps of preview.yml
+#   of quarkusio/quarkus (commit ed77ee257d543167d3593870d85acd468056fd7c,
+#   lines 3-12 and 28-44).
+# reason: the release v3 of dawidd6/action-download-artifact looks for the
+#   artifact also in the runs of pull requests from forks, so the author of a
+#   pull request from a fork writes the script that the job runs.
+# attack-value: the file sync-web-site.sh in the directory docs of the artifact documentation = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the action writes the file of the run of the pull
+#   request under documentation-temp, and the step "Sync documentation" runs
+#   the file, which prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-124_GHSL-2024-125_quarkus/
+on:
+  workflow_run:
+    workflows: ["Quarkus Documentation CI"]
+    types:
+      - completed
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Download PR Artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          workflow_conclusion: success
+          name: documentation
+          path: documentation-temp
+      - name: Sync documentation
+        shell: bash
+        run: |
+          chmod 755 ./documentation-temp/docs/sync-web-site.sh
+          ./documentation-temp/docs/sync-web-site.sh main ../../

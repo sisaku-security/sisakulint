@@ -1,0 +1,8 @@
+name: w12
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "v=[${{ github.event.nope.* }}] w=[${{ github.event.nope.*.x }}]"

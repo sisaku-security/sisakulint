@@ -1,0 +1,21 @@
+# situation: on pull_request_target, the job checks out the pull request's
+#   head SHA and runs npm ci, only if the pull request's head repository is
+#   this repository.
+# reason: the if skips a pull request from a fork, whose head repository is
+#   the fork, so the head npm ci runs is a branch of this repository, which
+#   only those who may push to it write.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: for the fork's pull request, head.repo.full_name is
+#   the fork, not github.repository, so the if is false and the job is
+#   skipped: nothing is checked out, and npm ci does not run.
+on: pull_request_target
+jobs:
+  a:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

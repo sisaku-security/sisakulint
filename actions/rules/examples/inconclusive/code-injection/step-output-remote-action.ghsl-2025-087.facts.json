@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"juliangruber/read-file-action","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"juliangruber/read-file-action","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tj-actions/branch-names","ref":"dde14ac574a8b9b1cedc59a1cf312788af43d8d8"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"juliangruber/read-file-action","ref":"v1"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"tj-actions/branch-names","ref":"dde14ac574a8b9b1cedc59a1cf312788af43d8d8"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"step-output-remote-action.ghsl-2025-087.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"tj-actions/branch-names","sha":"dde14ac574a8b9b1cedc59a1cf312788af43d8d8"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"tj-actions/branch-names","sha":"dde14ac574a8b9b1cedc59a1cf312788af43d8d8"},"state":"found","value":[]},
+{"query":{"kind":"git.ref-commit","repo":"juliangruber/read-file-action","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"juliangruber/read-file-action"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"tj-actions/branch-names"},"state":"found","value":[{"first_patched_version":"9.0.0","ghsa_id":"GHSA-gq52-6phf-x2r6","severity":"critical","vulnerable_version_range":"<= 8.2.1"},{"first_patched_version":"7.0.7","ghsa_id":"GHSA-8v8w-v8xg-79rf","severity":"critical","vulnerable_version_range":"< 7.0.7"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"juliangruber/read-file-action"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"tj-actions/branch-names"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

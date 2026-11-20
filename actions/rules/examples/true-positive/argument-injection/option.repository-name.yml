@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a step prints a file with sed and
+#   passes the name of the repository of the pull request's head to sed
+#   after the file, through env and inside quotes.
+# reason: GNU sed reads a word that begins with - as an option even after
+#   its operands, and GitHub accepts the name of a repository that begins
+#   with - (a rename of a fork to -dash-probe was observed).
+#   The name of a repository holds only ASCII letters, digits, ., - and _,
+#   and those characters are enough for the short option -e of sed with
+#   its script in the same word: in the script 1eid, the sed command 1e
+#   runs the command id at line 1.
+# attack-value: github.event.pull_request.head.repo.name = "-e1eid"
+# attack-run-behavior: sed reads the word as -e with the script 1eid, runs
+#   the command id at line 1 of notes.txt, and prints the output of id in
+#   the step (on the runner, uid=1001(runner) ...).
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NAME: ${{ github.event.pull_request.head.repo.name }}
+        run: sed -n p notes.txt "$NAME"

@@ -1,0 +1,22 @@
+# situation: the step s writes the output o to $GITHUB_OUTPUT, and a step
+#   sends a request with curl and the secret DEPLOY_TOKEN to the host
+#   steps.s.outputs.o names.
+# reason: the output is what the script writes at run time, so whether an
+#   attacker controls it is not known.
+# cause: the rule does not yet follow what a script writes to
+#   $GITHUB_OUTPUT.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - id: s
+        run: echo "o=api.example.com" >> "$GITHUB_OUTPUT"
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ steps.s.outputs.o }}/status"

@@ -1,0 +1,17 @@
+# situation: on push, a step prints the base64 of the secret API_KEY, made
+#   without a line break and not folded.
+# reason: the runner registers the base64 of each secret it gets, so the
+#   base64 is printed as ***.
+# cause: the rule takes a value base64 makes as a value the runner does not
+#   mask, as the rule does not tell the forms the runner registers.
+# attack: one who may read the run's log opens the log to read the base64.
+# attack-run-behavior: the step prints "***".
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: echo "$(printf '%s' "$API_KEY" | base64 -w0)"

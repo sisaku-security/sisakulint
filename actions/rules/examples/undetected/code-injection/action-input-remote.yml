@@ -1,0 +1,25 @@
+# situation: on issues, a step gives the issue's title to an input of
+#   some/action, and the issue's body is the github-token of
+#   actions/github-script.
+# reason: a todo (a fact): what an action of another repository does with an
+#   input, other than the script of actions/github-script, is in its
+#   action.yml.
+# cause: the rule does not read that action.yml.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the value goes to the input text of some/action@v1;
+#   when that action's step writes inputs.text into its run by ${{ }} inside
+#   double quotes, as echo "${{ inputs.text }}", its script becomes echo "";
+#   echo PWNED; echo "", and bash runs the second echo as a command, which
+#   prints PWNED. No run step of this workflow has the value.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/action@v1
+        with:
+          text: ${{ github.event.issue.title }}
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.event.issue.body }}
+          script: console.log('hi')

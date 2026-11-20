@@ -1,0 +1,13 @@
+# situation: the step reads the list of test shards from the configuration
+#   variable TEST_SHARDS with fromJSON(), with the JSON array [] for the
+#   case that no level defines TEST_SHARDS.
+# reason: when TEST_SHARDS is missing, fromJSON() gets [] and gives the
+#   empty array, so the step runs the tests without shards.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./test.sh ${{ join(fromJSON(vars.TEST_SHARDS || '[]'), ' ') }}

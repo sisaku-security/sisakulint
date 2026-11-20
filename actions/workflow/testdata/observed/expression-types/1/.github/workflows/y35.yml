@@ -1,0 +1,8 @@
+name: y35
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ join(github.event, ',') }}"
+      - run: echo after

@@ -1,0 +1,10 @@
+# situation: a job builds on push and writes timeout-minutes: 30.
+# reason: GitHub cancels the job after the 30 minutes written, so a build
+#   that hangs does not hold the runner for 360 minutes.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - run: make

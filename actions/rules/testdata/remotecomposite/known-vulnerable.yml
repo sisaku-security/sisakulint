@@ -1,0 +1,17 @@
+# situation: a step runs example-org/vulnerable-composite@v1, a composite
+#   action of another repository, whose step downloads an artifact with
+#   actions/download-artifact pinned to the commit of v4.1.2.
+# reason: GHSA-cxww-7g56-2vh6, which GitHub rates high, says the versions
+#   before 4.1.3 write the files of a crafted artifact outside the path, by
+#   path traversal file names; action.definition answers the file of the
+#   composite action, as the archive the runner downloads has it.
+# attack: someone who makes the artifact the composite action downloads
+#   puts in it a file whose name climbs out of the path.
+# attack-run-behavior: v4.1.2, run inside the composite action, writes that
+#   file where its name points, over a file that a later step runs.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/vulnerable-composite@v1

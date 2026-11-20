@@ -1,0 +1,7 @@
+name: x06
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ GITHUB.SHA }} ${{ Github.Sha }}"

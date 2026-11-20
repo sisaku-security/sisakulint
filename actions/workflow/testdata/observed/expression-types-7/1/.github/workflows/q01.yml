@@ -1,0 +1,10 @@
+name: q01
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'json=${{ toJSON(vars.EXPR_TYPES_PROBE) }}'
+      - run: echo ok
+        timeout-minutes: ${{ vars.EXPR_TYPES_PROBE }}
+      - run: echo after

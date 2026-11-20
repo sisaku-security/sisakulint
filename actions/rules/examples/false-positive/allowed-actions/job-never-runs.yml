@@ -1,0 +1,18 @@
+# situation: the setting of allowed actions of GitHub allows all actions and
+#   requires a full commit SHA; a job whose if is false uses actions/cache by
+#   the tag v4.
+# reason: GitHub skips the job, so the step Set up job of the job does not
+#   run, and the job does not fail.
+# cause: the rule does not read the if of the job.
+on: push
+permissions: {}
+jobs:
+  build:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: cache-${{ github.sha }}

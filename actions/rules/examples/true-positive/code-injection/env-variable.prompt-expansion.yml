@@ -1,0 +1,20 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and prints the variable with the
+#   transformation ${ISSUE_TITLE@P}, inside quotes.
+# reason: ${ISSUE_TITLE@P} expands the value of the variable as a prompt
+#   string, and bash runs a command substitution such as $(...) in the
+#   value (the option promptvars, on by default), so the title chooses a
+#   command that runs.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: bash expands the value as a prompt string, runs echo
+#   PWNED in the command substitution and prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: echo "${ISSUE_TITLE@P}"

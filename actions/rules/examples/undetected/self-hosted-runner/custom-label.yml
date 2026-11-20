@@ -1,0 +1,22 @@
+# situation: on push, a job runs on labels of its own without self-hosted.
+# reason: a todo (a fact): a runner may be made without the default labels,
+#   so whether these name a self-hosted runner is not known. pytorch/pytorch
+#   c913f3857fb6a8ff8a32174db1da1b4f808f178f
+#   .github/workflows/generated-linux-binary-libtorch-cxx11-abi-nightly.yml:805
+#   ran on "runs-on: linux.rocm.gpu"; the runner the researchers took in
+#   2023 was "labeled jenkins-worker-rocm-amd-34" (John Stawinski, "Playing
+#   with Fire", 2024-01-11).
+# cause: the rule reports a runs-on with the label self-hosted only.
+# attack: as in pytorch-2023, the attacker becomes a contributor by a typo
+#   fix that is merged, then opens a pull request from a fork whose workflow
+#   runs a step of their own on runs-on: linux.rocm.gpu.
+# attack-run-behavior: where linux.rocm.gpu is a label of a self-hosted
+#   runner of the repository, that runner picks up the job of the pull
+#   request, and the step runs on its machine, where what it leaves stays
+#   for the jobs after it, the push's job a among them.
+on: push
+jobs:
+  a:
+    runs-on: linux.rocm.gpu
+    steps:
+      - run: echo

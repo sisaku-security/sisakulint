@@ -1,0 +1,23 @@
+# situation: on pull_request_target labeled, the job checks out
+#   refs/pull/<n>/head and runs npm ci.
+# reason: the label is the approval, but refs/pull/<n>/head names the pull
+#   request's head when the checkout fetches it, not the commit that was
+#   labelled, so a push between the label and the fetch is what npm ci runs.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: the labeled run checks out refs/pull/<n>/head, which
+#   GitHub has moved to the pushed commit, and npm ci runs its preinstall,
+#   with the base repository's GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

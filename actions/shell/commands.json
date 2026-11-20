@@ -1,0 +1,7625 @@
+{
+ "commands": [
+  {
+   "names": [
+    "eval"
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "code-arguments",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Concatenate the \\fIarg\\fPs together into a single command, separating",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "\\fBBash\\fP then reads and execute this command, and returns its exit status",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "value_reading": "code-argument"
+  },
+  {
+   "names": [
+    "trap"
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is a command that is read and executed when the shell receives",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "let"
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "\\fBlet\\fP \\fIarg\\fP [\\fIarg\\fP .\\|.\\|.]",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is evaluated as an arithmetic expression (see",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "value_reading": "arithmetic"
+  },
+  {
+   "names": [
+    "[["
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Evaluate the conditional expression \\fIexpression\\fP",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "When used with the \\fB[[\\fP command,",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "are evaluated as arithmetic expressions (see",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "declare"
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Declare variables and/or give them attributes.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "The variable is treated as an integer;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is evaluated as an arithmetic expression even if the",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "typeset"
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Declare variables and/or give them attributes.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "The variable is treated as an integer;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is evaluated as an arithmetic expression even if the",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "local"
+   ],
+   "traits": [
+    "code-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "The \\fIoption\\fP can be any of the options accepted by \\fBdeclare\\fP.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "The variable is treated as an integer;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "source"
+   ],
+   "traits": [
+    "code-arguments",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "command (\\fBsource\\fP) reads and execute commands from",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "\\fBsource\\fP [\\fB\\-p\\fP \\fIpath\\fP] \\fIfilename\\fP [\\fIarguments\\fP]",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "input_value_code": true
+  },
+  {
+   "names": [
+    "."
+   ],
+   "traits": [
+    "code-arguments",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "command (\\fBsource\\fP) reads and execute commands from",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "\\fBsource\\fP [\\fB\\-p\\fP \\fIpath\\fP] \\fIfilename\\fP [\\fIarguments\\fP]",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "input_value_code": true
+  },
+  {
+   "names": [
+    "read"
+   ],
+   "unsourced": "the options that take a value (-a -d -i -n -N -p -t -u) are from help read of GNU bash 5.3.15 (read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]), not from a pinned source; they keep the value of an option from being read as a name",
+   "traits": [
+    "variable-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "and assign the first word to the first",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "value_reading": "arithmetic",
+   "options": [
+    {
+     "spellings": [
+      "-a"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-d"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-i"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-n"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-N"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-p"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-t"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-u"
+     ],
+     "value": true,
+     "joined": true
+    }
+   ]
+  },
+  {
+   "names": [
+    "mapfile"
+   ],
+   "traits": [
+    "variable-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "into the indexed array variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "readarray"
+   ],
+   "traits": [
+    "variable-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "into the indexed array variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "getopts"
+   ],
+   "traits": [
+    "variable-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "places the next option in the shell variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "unset"
+   ],
+   "traits": [
+    "variable-arguments"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "remove the corresponding variable or function.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "printf"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-v"
+     ],
+     "value": true,
+     "reading": "code",
+     "value_reading": "arithmetic"
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "option assigns the output to the variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sudo"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-u",
+      "--user"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-g",
+      "--group"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-C",
+      "--close-from"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-D",
+      "--chdir"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-h",
+      "--host"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-p",
+      "--prompt"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-R",
+      "--chroot"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-r",
+      "--role"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-t",
+      "--type"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-T",
+      "--command-timeout"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-U",
+      "--other-user"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-a",
+      "--auth-type"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-c",
+      "--login-class"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "--preserve-env"
+     ],
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-A",
+      "-B",
+      "-b",
+      "-E",
+      "-H",
+      "-n",
+      "-P",
+      "-S",
+      "-k",
+      "-N"
+     ]
+    },
+    {
+     "spellings": [
+      "-i",
+      "--login",
+      "-s",
+      "--shell"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/sudo-project/sudo/172cbd968e6fe5f64d3384896a90c0a1aa73238d/docs/sudo.man.in",
+     "text": "allows a permitted user to execute a",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/sudo-project/sudo/172cbd968e6fe5f64d3384896a90c0a1aa73238d/docs/sudo.man.in",
+     "text": "as the superuser or another user, as specified by the security",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/sudo-project/sudo/172cbd968e6fe5f64d3384896a90c0a1aa73238d/docs/sudo.man.in",
+     "text": "is specified, it is passed to the shell as a simple command using the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "env"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-u",
+      "--unset"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-C",
+      "--chdir"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-a",
+      "--argv0"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-S",
+      "--split-string"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-i",
+      "-",
+      "--ignore-environment"
+     ]
+    },
+    {
+     "spellings": [
+      "-v",
+      "--debug"
+     ]
+    },
+    {
+     "spellings": [
+      "--default-signal",
+      "--ignore-signal",
+      "--block-signal"
+     ]
+    },
+    {
+     "spellings": [
+      "--list-signal-handling"
+     ]
+    }
+   ],
+   "assignments": true,
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "The first operand that does not contain the character @samp{=}",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "process and split @var{string} into separate arguments used to pass",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "Running @command{env -Sstring} splits the @var{string} into",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "command"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-p"
+     ]
+    },
+    {
+     "spellings": [
+      "-V"
+     ]
+    },
+    {
+     "spellings": [
+      "-v"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "suppressing the normal shell function lookup for \\fIcommand\\fP.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "exec"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-a"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-c"
+     ]
+    },
+    {
+     "spellings": [
+      "-l"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is specified, it replaces the shell without creating a new process.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "nohup"
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin",
+    "starts-detached"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{nohup} runs the given @var{command} with hangup signals ignored,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "so that the command can continue running in the background after you log",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "time"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-f",
+      "--format",
+      "-o",
+      "--output"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-a",
+      "--append",
+      "-p",
+      "--portability",
+      "-v",
+      "--verbose"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept as for the other wrappers: its standard input goes to the command it runs, which may read it as code; no source here says so for this command. The program time is what bash runs where time is not a reserved word (after coproc, quoted, or after command), as bash 5.3.15 does with coproc time echo hi",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/GitMirroring/time/d0a4b03f564a282da1efa981dc806b47c94871a2/doc/time.texi",
+     "text": "@code{time} runs the program @var{command}, with any given arguments",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/GitMirroring/time/d0a4b03f564a282da1efa981dc806b47c94871a2/doc/time.texi",
+     "text": "time @r{[}option@dots{}@r{]} @var{command} @r{[}@var{arg}@dots{}@r{]}",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "nice"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-n",
+      "--adjustment"
+     ],
+     "value": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "Otherwise, @command{nice} runs the given @var{command} with its",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@item -n @var{adjustment}",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "timeout"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-s",
+      "--signal"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-k",
+      "--kill-after"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-f",
+      "--foreground",
+      "-p",
+      "--preserve-status",
+      "-v",
+      "--verbose"
+     ]
+    }
+   ],
+   "operands": 1,
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{timeout} runs the given @var{command} and kills it if it is",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "timeout [@var{option}] @var{duration} @var{command} [@var{arg}]@dots{}",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "doas"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-a"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-C"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-u"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-L",
+      "-n",
+      "-s"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/openbsd/src/bb8fd646158186c0552f4313ad8e5d62928f9712/usr.bin/doas/doas.1",
+     "text": "utility executes the given command as another user.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "su"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c",
+      "--command"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-g",
+      "--group"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-G",
+      "--supp-group"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-s",
+      "--shell"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-w",
+      "--whitelist-environment"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-",
+      "-l",
+      "--login",
+      "-f",
+      "--fast",
+      "-m",
+      "-p",
+      "--preserve-environment",
+      "-P",
+      "--pty",
+      "-T",
+      "--no-pty"
+     ]
+    }
+   ],
+   "operands": 1,
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/caa26876bc75041833c9644491cc2670d623f750/login-utils/su.1.adoc",
+     "text": "Pass _command_ to the shell with the *-c* option.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/caa26876bc75041833c9644491cc2670d623f750/login-utils/su.1.adoc",
+     "text": "When _user_ is specified, additional __argument__s can be supplied, in which case they are passed to the shell.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "ssh"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-B"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-b"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-D"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-E"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-F"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-I"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-i"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-J"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-L"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-l"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-m"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-O"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-P"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-p"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-R"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-S"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-W"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-w"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-Q"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-4",
+      "-6",
+      "-A",
+      "-a",
+      "-C",
+      "-f",
+      "-G",
+      "-g",
+      "-K",
+      "-k",
+      "-M",
+      "-N",
+      "-n",
+      "-q",
+      "-s",
+      "-T",
+      "-t",
+      "-V",
+      "-v",
+      "-X",
+      "-x",
+      "-Y",
+      "-y"
+     ]
+    }
+   ],
+   "operands": 1,
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/openssh/openssh-portable/2593769fb291fe6c542173927698c69e9f9a08b9/ssh.1",
+     "text": "it will be executed on the remote host instead of a login shell.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/openssh/openssh-portable/2593769fb291fe6c542173927698c69e9f9a08b9/ssh.1",
+     "text": "spaces, before it is sent to the server to be executed.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "xargs"
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/xargs/xargs.1",
+     "text": "xargs \\- build and execute command lines from standard input",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/xargs/xargs.1",
+     "text": "reads items from the standard input, delimited by blanks (which can be",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sh"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true,
+     "attack": [
+      "two-words"
+     ],
+     "harmless": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "ends_options": true,
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "-c takes its code only from the first word after the options: on a runner (bash 5.2.21; sh was dash 0.5.12), a word that joins the code to -c (-cecho x, -cecho${IFS}x) did not run as code in bash, sh or dash, with or without blanks in the word; bash read the letters after -c as other options and refused the word, and dash refused the letters as illegal options; -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "option is present, then commands are read from the first non-option argument",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "processing, the shell reads commands from the standard input.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "input_value_code": true
+  },
+  {
+   "names": [
+    "bash"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true,
+     "attack": [
+      "two-words"
+     ],
+     "harmless": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "ends_options": true,
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "-O"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+O"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "-c takes its code only from the first word after the options: on a runner (bash 5.2.21; sh was dash 0.5.12), a word that joins the code to -c (-cecho x, -cecho${IFS}x) did not run as code in bash, sh or dash, with or without blanks in the word; bash read the letters after -c as other options and refused the word, and dash refused the letters as illegal options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "option is present, then commands are read from the first non-option argument",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "processing, the shell reads commands from the standard input.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "can be used as options when the shell is invoked.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "sets the value of that option;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ],
+   "input_value_code": true
+  },
+  {
+   "names": [
+    "dash"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true,
+     "attack": [
+      "two-words"
+     ],
+     "harmless": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "ends_options": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; -c takes its code only from the first word after the options: on a runner (bash 5.2.21; sh was dash 0.5.12), a word that joins the code to -c (-cecho x, -cecho${IFS}x) did not run as code in bash, sh or dash, with or without blanks in the word; bash read the letters after -c as other options and refused the word, and dash refused the letters as illegal options; -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://git.kernel.org/pub/scm/utils/dash/dash.git/plain/src/dash.1?id=4bbf8721a3ac6401ced6a0454956801f6ba37256",
+     "text": "Read commands from the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://git.kernel.org/pub/scm/utils/dash/dash.git/plain/src/dash.1?id=4bbf8721a3ac6401ced6a0454956801f6ba37256",
+     "text": "operand instead of from the standard input.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "option is present, then commands are read from the first non-option argument",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "zsh"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; -c takes its code only from the first word after the options: on a runner (zsh 5.9), zsh -cx CODE, zsh -c -x CODE, zsh -c -- CODE and zsh -cx -e CODE ran CODE, and a word that joins the code to -c (-c:>f) did not run as code, with or without blanks (zsh refused it as a bad option); -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/zsh-users/zsh/73d317384c9225e46d66444f93b46f0fbe7084ef/Doc/Zsh/invoke.yo",
+     "text": "Take the first argument as a command to execute, rather than reading commands",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "ksh"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; -c takes its code only from the first word after the options: on a runner (ksh 93u+m 1.0.10 and mksh 59c), ksh -cx CODE, ksh -c -x CODE, ksh -c -- CODE and ksh -cx -e CODE ran CODE, and a word that joins the code to -c (-c:>f) did not run as code, with or without blanks (ksh refused its letters as unknown options); -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/ksh93/ksh/f0999ab76dd2e0d977298348ec5c4535a360710d/src/cmd/ksh93/sh.1",
+     "text": "Read and execute a script from the first",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "ash"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the shells of the table before commands.json: no source pinned here says how ash reads its standard input; reading it as code only takes fixes away; -c takes its code only from the first word after the options: on a runner, busybox sh (the ash of busybox 1.37.0) ran CODE in sh -cx CODE, sh -c -x CODE, sh -c -- CODE and sh -cx -e CODE, and did not run a word that joins the code to -c (-c:>f) as code, with or without blanks; -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": []
+  },
+  {
+   "names": [
+    "busybox"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "+o"
+     ],
+     "value": true,
+     "cluster": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the shells of the table before commands.json: no source pinned here says how busybox reads its standard input; reading it as code only takes fixes away; -c takes its code only from the first word after the options: on a runner, busybox sh (busybox 1.37.0) ran CODE in sh -cx CODE, sh -c -x CODE, sh -c -- CODE and sh -cx -e CODE, and did not run a word that joins the code to -c (-c:>f) as code, with or without blanks; -o and +o take the next word as their value, as in the synopsis of POSIX sh (sh -c [-abCefhimnuvx] [-o option]... [+abCefhimnuvx] [+o option]... command_string), and the code of -c is the first word after the options",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": []
+  },
+  {
+   "names": [
+    "python"
+   ],
+   "name_pattern": "python[0-9.]*",
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true,
+     "joined": true,
+     "attack": [
+      "without-blanks",
+      "two-words"
+     ],
+     "ends_options": true,
+     "value_reading": "code-argument"
+    }
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Doc/using/cmdline.rst",
+     "text": "Execute the Python code in *command*.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Doc/using/cmdline.rst",
+     "text": "An interface option terminates the list of options consumed by the interpreter,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Doc/using/cmdline.rst",
+     "text": "When called with a file name argument or with a file as standard input, it",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Doc/using/cmdline.rst",
+     "text": "Read commands from standard input",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Python/getopt.c",
+     "text": "#define SHORT_OPTS L\"bBc:dEhiIm:OPqRsStuvVW:xX:?\"",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Python/getopt.c",
+     "text": "_PyOS_optarg  = opt_ptr;",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/python/cpython/f6650f9ad73359051f3e558c2431a109bc016664/Python/initconfig.c",
+     "text": "-c cmd : program passed in as string (terminates option list)\\n\\",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ],
+   "input_value_code": true
+  },
+  {
+   "names": [
+    "node",
+    "nodejs"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true,
+     "attack": [
+      "two-words"
+     ],
+     "harmless": [
+      "without-blanks"
+     ],
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "--eval"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true,
+     "attack": [
+      "without-blanks"
+     ],
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "-p"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--print"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "-e and -p joined to their code (-eCODE) are kept from the table before commands.json: node rejects them (only --eval=CODE is a joined form); reading more places as code only takes fixes away",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/doc/api/cli.md",
+     "text": "Evaluate the following argument as JavaScript.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/doc/api/cli.md",
+     "text": "Identical to `-e` but prints the result.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/doc/api/cli.md",
+     "text": "Alias for stdin. Analogous to the use of `-` in other command-line utilities,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node_options.cc",
+     "text": "AddAlias(\"-e\", \"--eval\");",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node_options.cc",
+     "text": "AddAlias(\"-p\", \"--print\");",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node_options.cc",
+     "text": "AddAlias(\"-pe\", { \"--print\", \"--eval\" });",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node_options-inl.h",
+     "text": "// Only allow --foo=bar notation for options starting with double dashes.",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node_options-inl.h",
+     "text": "(E.g. -e=a is not allowed as shorthand for --eval=a, which would",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node.cc",
+     "text": "if (env->options()->force_repl || uv_guess_handle(STDIN_FILENO) == UV_TTY) {",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/nodejs/node/31c6e70759bae3cb5d1af77a4dc1a3fd1726a244/src/node.cc",
+     "text": "return StartExecution(env, \"internal/main/eval_stdin\");",
+     "language": "cpp",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "perl"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true,
+     "cluster": true,
+     "attack": [
+      "with-blanks",
+      "two-words"
+     ],
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "-E"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true,
+     "cluster": true
+    }
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "As with all standard commands, a single-character switch may be",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "clustered with the following switch, if any.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "same as -s -p -i.orig",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "may be used to enter one line of program.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "behaves just like L<-e|/-e commandline>, except that it implicitly",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "causes Perl to assume the following loop around your program, which",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/pod/perlrun.pod",
+     "text": "Passed in implicitly via standard input.  This works only if there are",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/perl.c",
+     "text": "PL_minus_E = TRUE;",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/perl.c",
+     "text": "sv_catpv(PL_e_script, s);",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/Perl/perl5/5551b97c3be30b899397b99d57993a39d13294f1/perl.c",
+     "text": "croak(\"No code specified for -%c\", c);",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "ruby"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true,
+     "cluster": true,
+     "attack": [
+      "with-blanks"
+     ],
+     "value_reading": "code-argument"
+    }
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/doc/ruby/options.md",
+     "text": "Option `-e` requires an argument, which is Ruby code to be executed;",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/doc/ruby/options.md",
+     "text": "Whitespace between the option and its argument may be omitted.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/doc/ruby/options.md",
+     "text": "Option `-n` runs your program in a `Kernel#gets` loop:",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/man/ruby.1",
+     "text": "Specifies script from command-line while telling Ruby not to search",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/man/ruby.1",
+     "text": "as the separator.  Other switches may follow the digits.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/ruby.c",
+     "text": "rb_raise(rb_eRuntimeError, \"no code specified for -e\");",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/ruby.c",
+     "text": "/* no more args */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/ruby/ruby/7a5688e2a27668e48f8d6ff4af5b2208b98a2f5e/test/ruby/test_rubyoptions.rb",
+     "text": "assert_in_out_err(%w(-n -cw -e break), \"\", [\"Syntax OK\"], [])",
+     "language": "ruby",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "php"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-r"
+     ],
+     "value": true,
+     "reading": "code",
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--run"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php_cli.c",
+     "text": "  -r <code>        Run PHP <code> without using script tags <?..?>",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php_cli.c",
+     "text": "  -R <code>        Run PHP <code> for every input line",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php_cli.c",
+     "text": "  -B <begin_code>  Run PHP <begin_code> before processing input lines",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php_cli.c",
+     "text": "  -E <end_code>    Run PHP <end_code> after processing all input lines",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php_cli.c",
+     "text": "{'r', 1, \"run\"},",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/main/getopt.c",
+     "text": "is in the form -<arg> <val>, -<arg>=<varl> or -<arg><val> */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/main/getopt.c",
+     "text": "/* Check for <arg>=<val> */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/main/getopt.c",
+     "text": "/* multiple options specified as one (exclude long opts) */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/php/php-src/8bcf8ae1b31de9b8d832115d5a24fe1e5f0b500a/sapi/cli/php.1.in",
+     "text": "If no parameter is present then the standard input is read and",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "pwsh",
+    "powershell"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-command"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-Command"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; -command joined to its code is kept too: pwsh takes a prefix of -Command, not code joined to it",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "All parameters are case-insensitive.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "### -Command | -c",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "of **Command** is `-`, the command text is read from standard input.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "A string passed to **Command** is still executed as PowerShell code, so the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "for pwsh, because all arguments following it are interpreted as part of the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "### -CommandWithArgs | -cwa",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "### -EncodedCommand | -e | -ec",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+     "text": "This is the default parameter if no parameters are present but values are",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/5.1/Microsoft.PowerShell.Core/About/about_PowerShell_exe.md",
+     "text": "### -Command",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/MicrosoftDocs/PowerShell-Docs/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/5.1/Microsoft.PowerShell.Core/About/about_PowerShell_exe.md",
+     "text": "_only_ possible when running `powershell.exe` from another PowerShell host. The",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/PowerShell/PowerShell/b72c7ab1238c2d95b5c9004bca8399b8b3ca88ac/src/Microsoft.PowerShell.ConsoleHost/host/msh/CommandLineParameterParser.cs",
+     "text": "&& match.StartsWith(switchKey, StringComparison.OrdinalIgnoreCase));",
+     "language": "csharp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/PowerShell/PowerShell/b72c7ab1238c2d95b5c9004bca8399b8b3ca88ac/src/Microsoft.PowerShell.ConsoleHost/host/msh/CommandLineParameterParser.cs",
+     "text": "else if (MatchSwitch(switchKey, \"command\", \"c\"))",
+     "language": "csharp",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/PowerShell/PowerShell/b72c7ab1238c2d95b5c9004bca8399b8b3ca88ac/src/Microsoft.PowerShell.ConsoleHost/host/msh/CommandLineParameterParser.cs",
+     "text": "// chop off the second dash so we're agnostic wrt specifying - or --",
+     "language": "csharp",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "deno"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "eval"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; eval is the subcommand deno eval, kept as an option whose words after it are code",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/denoland/deno/6fbce91e40cc07fc6da74068e5cc56fdd40f7b4c/cli/args/flags.rs",
+     "text": "Evaluate JavaScript from the command line.",
+     "language": "rust",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/denoland/deno/6fbce91e40cc07fc6da74068e5cc56fdd40f7b4c/cli/args/flags.rs",
+     "text": ".help(\"Code to evaluate\")",
+     "language": "rust",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/denoland/deno/6fbce91e40cc07fc6da74068e5cc56fdd40f7b4c/cli/args/flags.rs",
+     "text": "let code = code_args.next().unwrap();",
+     "language": "rust",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/denoland/deno/6fbce91e40cc07fc6da74068e5cc56fdd40f7b4c/cli/args/flags.rs",
+     "text": "Specifying the filename '-' to read the file from stdin.",
+     "language": "rust",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "bun"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--eval"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/cli/Arguments.zig",
+     "text": "clap.parseParam(\"-e, --eval <STR>                  Evaluate argument as a script\") catch unreachable,",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/cli/Arguments.zig",
+     "text": "clap.parseParam(\"-p, --print <STR>                 Evaluate argument as a script and print the result\") catch unreachable,",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/deps/zig-clap/clap/streaming.zig",
+     "text": "const eql_index = mem.indexOfScalar(u8, arg, '=');",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/deps/zig-clap/clap/streaming.zig",
+     "text": "return Arg(Id){ .param = param, .value = arg[next_index + 1 ..] };",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/deps/zig-clap/clap/streaming.zig",
+     "text": "return Arg(Id){ .param = param, .value = arg[next_index..] };",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/src/deps/zig-clap/clap/streaming.zig",
+     "text": "\"-a\", \"-b\",    \"-ab\",  \"-ba\",",
+     "language": "zig",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/oven-sh/bun/cf1367137da5775dc23cb57f0e4071776e1ff90f/docs/cli/run.md",
+     "text": "`bun run -` lets you read JavaScript, TypeScript, TSX, or JSX from stdin and execute it without writing to a temporary file first.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "Rscript"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "code-stdin is kept from the table before commands.json (readsCode), which no source here supports for this command; reading more places as code only takes fixes away; -e joined to its code is kept too: Rscript takes -e alone",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/wch/r-source/1d95a4c60b0be6766490b1a621610b98a4bf5765/src/unix/Rscript.c",
+     "text": "or: Rscript [options] -e expr [-e expr2 ...] [args]",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/wch/r-source/1d95a4c60b0be6766490b1a621610b98a4bf5765/src/unix/Rscript.c",
+     "text": "Expressions (one or more '-e <expr>') may be used *instead* of 'file'.",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/wch/r-source/1d95a4c60b0be6766490b1a621610b98a4bf5765/src/unix/Rscript.c",
+     "text": "if(strcmp(argv[i], \"-e\") == 0) {",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/wch/r-source/1d95a4c60b0be6766490b1a621610b98a4bf5765/src/unix/Rscript.c",
+     "text": "start with \"--\"; it can start with \"-\", but the only short option is \"-e\"",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "lua"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://www.lua.org/manual/5.4/lua.html",
+     "text": "execute statement",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://www.lua.org/manual/5.4/lua.html",
+     "text": "if the standard input is a terminal,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/lua/lua/1ab3208a1fceb12fca8f24ba57d6e13c5bff15e3/lua.c",
+     "text": "if (argv[i][2] == '\\0') {  /* no concatenated argument? */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/lua/lua/1ab3208a1fceb12fca8f24ba57d6e13c5bff15e3/lua.c",
+     "text": "if (argv[i][2] != '\\0')  /* extra characters? */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/lua/lua/1ab3208a1fceb12fca8f24ba57d6e13c5bff15e3/lua.c",
+     "text": "else dofile(L, NULL);  /* executes stdin as a file */",
+     "language": "c",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "osascript"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "reading": "code",
+     "joined": true
+    }
+   ],
+   "unsourced": "kept from the interpreters of the table before commands.json: no source of osascript can be pinned to a version; reading -e and its standard input as code only takes fixes away",
+   "traits": [
+    "code-stdin"
+   ],
+   "sources": []
+  },
+  {
+   "names": [
+    "setsid"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-c",
+      "--ctty",
+      "-f",
+      "--fork",
+      "-w",
+      "--wait"
+     ]
+    }
+   ],
+   "unsourced": "code-stdin is kept as for the other wrappers: its standard input goes to the command it runs, which may read it as code; no source here says so for this command",
+   "traits": [
+    "runs-operand",
+    "code-stdin",
+    "starts-detached"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/caa26876bc75041833c9644491cc2670d623f750/sys-utils/setsid.1.adoc",
+     "text": "setsid - run a program in a new session",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/caa26876bc75041833c9644491cc2670d623f750/sys-utils/setsid.1.adoc",
+     "text": "*setsid* [options] _program_ [_arguments_]",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-C"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "reading": "program",
+     "value_reading": "code-argument"
+    },
+    {
+     "spellings": [
+      "--config-env"
+     ],
+     "value": true,
+     "joined": true,
+     "reading": "program"
+    },
+    {
+     "spellings": [
+      "--git-dir"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--work-tree"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--namespace"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--exec-path"
+     ],
+     "joined": true,
+     "reading": "program"
+    },
+    {
+     "spellings": [
+      "-v",
+      "--version",
+      "-h",
+      "--help",
+      "--html-path",
+      "--man-path",
+      "--info-path",
+      "-p",
+      "--paginate",
+      "-P",
+      "--no-pager",
+      "--no-replace-objects",
+      "--no-lazy-fetch",
+      "--no-optional-locks",
+      "--no-advice",
+      "--bare"
+     ]
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "[-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "[--work-tree=<path>] [--namespace=<name>] [--config-env=<name>=<envvar>]",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "[--no-optional-locks] [--no-advice] [--bare] [--git-dir=<path>]",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "Pass a configuration parameter to the command. The value",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "Path to wherever your core Git programs are installed.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/config/core.adoc",
+     "text": "Otherwise, this variable contains the pathname of the \"fsmonitor\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/config/core.adoc",
+     "text": "use the specified command instead of `ssh` when they need to",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/config/core.adoc",
+     "text": "is meant to be interpreted by the shell.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/config/alias.adoc",
+     "text": "it will be treated as a shell command.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc",
+     "text": "[-p | --paginate | -P | --no-pager] [--no-replace-objects] [--no-lazy-fetch]",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "commit"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-commit.adoc",
+     "text": "Create a new commit containing the current contents of the index and",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "This hook is invoked by linkgit:git-commit[1], and can be bypassed",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-commit.adoc",
+     "text": "Bypass the `pre-commit` and `commit-msg` hooks.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "By default the hooks directory is `$GIT_DIR/hooks`, but that can be",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitrepository-layout.adoc",
+     "text": "a `.git` directory at the root of the working tree;",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "push"
+   ],
+   "traits": [
+    "runs-workspace-code",
+    "sends-network",
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-push.adoc",
+     "text": "Updates remote refs using local refs, while sending objects",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "This hook is called by linkgit:git-push[1] and can be used to prevent",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "By default the hooks directory is `$GIT_DIR/hooks`, but that can be",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitrepository-layout.adoc",
+     "text": "a `.git` directory at the root of the working tree;",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/actions/checkout/08c6903cd8c0fde910a37f88322edcfb5dd907a8/README.md",
+     "text": "The auth token is persisted in the local git config. This enables your scripts to run authenticated git commands.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "checkout"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "This hook is invoked when a linkgit:git-checkout[1] or",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "By default the hooks directory is `$GIT_DIR/hooks`, but that can be",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "switch"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "linkgit:git-switch[1] is run after having updated the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/githooks.adoc",
+     "text": "By default the hooks directory is `$GIT_DIR/hooks`, but that can be",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "add"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-add.adoc",
+     "text": "This command updates the index using the current content found in",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "rm"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-rm.adoc",
+     "text": "Remove files matching pathspec from the index, or from the working tree",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "log"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-log.adoc",
+     "text": "Shows the commit logs.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitattributes.adoc",
+     "text": "only `git diff` and the `git log` family of commands (i.e.,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitattributes.adoc",
+     "text": "The `textconv` config option is used to define a program for",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "diff"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-diff.adoc",
+     "text": "Show changes between the working tree and the index or a tree, changes",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitattributes.adoc",
+     "text": "only `git diff` and the `git log` family of commands (i.e.,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitattributes.adoc",
+     "text": "The `textconv` config option is used to define a program for",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "status"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-status.adoc",
+     "text": "Displays paths that have differences between the index file and the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-status.adoc",
+     "text": "`core.fsmonitor=<hook-command-pathname>` (see",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/config/core.adoc",
+     "text": "can speed up Git commands that need to refresh the Git index",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "fetch"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--upload-pack"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "remote": true
+    },
+    {
+     "spellings": [
+      "--depth",
+      "--deepen",
+      "--shallow-since",
+      "--shallow-exclude",
+      "--refmap",
+      "--filter",
+      "--negotiation-tip",
+      "--jobs",
+      "--server-option"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-j",
+      "-o"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-q",
+      "--quiet",
+      "-v",
+      "--verbose",
+      "--all",
+      "-t",
+      "--tags",
+      "-n",
+      "--no-tags",
+      "-p",
+      "--prune",
+      "-P",
+      "--prune-tags",
+      "-f",
+      "--force",
+      "--unshallow",
+      "--update-shallow",
+      "--dry-run",
+      "--atomic",
+      "--progress",
+      "--no-progress",
+      "-4",
+      "-6",
+      "--ipv4",
+      "--ipv6",
+      "--no-recurse-submodules",
+      "--recurse-submodules"
+     ]
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/fetch-options.adoc",
+     "text": "When given, and the repository to fetch from is handled",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/fetch-options.adoc",
+     "text": "the command to specify non-default path for the command",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitcli.adoc",
+     "text": "accept dashed options after you have already given non-option",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "pull"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--upload-pack"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "remote": true
+    },
+    {
+     "spellings": [
+      "--depth",
+      "--deepen",
+      "--shallow-since",
+      "--shallow-exclude",
+      "--refmap",
+      "--filter",
+      "--negotiation-tip",
+      "--jobs",
+      "--server-option"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-j",
+      "-o"
+     ],
+     "value": true
+    },
+    {
+     "spellings": [
+      "-q",
+      "--quiet",
+      "-v",
+      "--verbose",
+      "--all",
+      "-t",
+      "--tags",
+      "-n",
+      "--no-tags",
+      "-p",
+      "--prune",
+      "-P",
+      "--prune-tags",
+      "-f",
+      "--force",
+      "--unshallow",
+      "--update-shallow",
+      "--dry-run",
+      "--atomic",
+      "--progress",
+      "--no-progress",
+      "-4",
+      "-6",
+      "--ipv4",
+      "--ipv6",
+      "--no-recurse-submodules",
+      "--recurse-submodules"
+     ]
+    },
+    {
+     "spellings": [
+      "-r",
+      "--rebase",
+      "--no-rebase",
+      "--ff",
+      "--no-ff",
+      "--ff-only",
+      "--squash",
+      "--no-squash",
+      "--autostash",
+      "--no-autostash"
+     ]
+    },
+    {
+     "spellings": [
+      "-s",
+      "--strategy",
+      "-X",
+      "--strategy-option"
+     ],
+     "value": true,
+     "joined": true
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/fetch-options.adoc",
+     "text": "When given, and the repository to fetch from is handled",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/fetch-options.adoc",
+     "text": "the command to specify non-default path for the command",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitcli.adoc",
+     "text": "accept dashed options after you have already given non-option",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "clone"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--upload-pack"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "remote": true
+    },
+    {
+     "spellings": [
+      "-u"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks"
+     ],
+     "remote": true
+    },
+    {
+     "spellings": [
+      "-b",
+      "--branch",
+      "-o",
+      "--origin",
+      "--depth",
+      "--filter",
+      "--template",
+      "--reference",
+      "--separate-git-dir",
+      "-j",
+      "--jobs",
+      "-c",
+      "--config",
+      "--shallow-since",
+      "--shallow-exclude"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-q",
+      "--quiet",
+      "-v",
+      "--verbose",
+      "-n",
+      "--no-checkout",
+      "--bare",
+      "--mirror",
+      "--single-branch",
+      "--no-single-branch",
+      "--recursive",
+      "--recurse-submodules",
+      "--shallow-submodules",
+      "--no-tags",
+      "--sparse",
+      "-l",
+      "--local",
+      "--no-hardlinks",
+      "-s",
+      "--shared",
+      "--progress",
+      "--dissociate"
+     ]
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-clone.adoc",
+     "text": "`--upload-pack` _<upload-pack>_::",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-clone.adoc",
+     "text": "via ssh, this specifies a non-default path for the command",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/gitcli.adoc",
+     "text": "accept dashed options after you have already given non-option",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "git"
+   ],
+   "subcommand": [
+    "ls-remote"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--upload-pack"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ],
+     "remote": true
+    },
+    {
+     "spellings": [
+      "--sort",
+      "-o",
+      "--server-option"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-b",
+      "--branches",
+      "-t",
+      "--tags",
+      "--heads",
+      "--refs",
+      "-q",
+      "--quiet",
+      "--exit-code",
+      "--get-url",
+      "--symref"
+     ]
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-ls-remote.adoc",
+     "text": "Specify the full path of 'git-upload-pack' on the remote",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/git/git/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-ls-remote.adoc",
+     "text": "host. This allows listing references from repositories accessed via",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/edit/edit.go",
+     "text": "\"edit {<numbers> | <urls>}\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "label"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/label/list.go",
+     "text": "\"List labels in a repository\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "pr"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/pr/merge/merge.go",
+     "text": "\"merge [<number> | <url> | <branch>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "release"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/release/create/create.go",
+     "text": "\"create [<tag>] [<filename>... | <pattern>...]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "repo"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/repo/edit/edit.go",
+     "text": "\"edit [<repository>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "search"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/search/issues/issues.go",
+     "text": "\"issues [<query>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "workflow"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/workflow/run/run.go",
+     "text": "\"run [<workflow-id> | <workflow-name>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "edit"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/edit/edit.go",
+     "text": "\"edit {<numbers> | <urls>}\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/edit/edit.go",
+     "text": "\"Edit issues\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "comment"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/comment/comment.go",
+     "text": "\"comment {<number> | <url>}\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/comment/comment.go",
+     "text": "\"Add a comment to an issue\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "create"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/create/create.go",
+     "text": "\"Create a new issue\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "close"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/close/close.go",
+     "text": "\"close {<number> | <url>}\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/close/close.go",
+     "text": "\"Close issue\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "view"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/view/view.go",
+     "text": "\"view {<number> | <url>}\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/view/view.go",
+     "text": "\"View an issue\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "issue",
+    "list"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/issue/list/list.go",
+     "text": "\"List issues in a repository\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "label",
+    "list"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/label/list.go",
+     "text": "\"List labels in a repository\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "label",
+    "create"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/label/create.go",
+     "text": "\"create <name>\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/label/create.go",
+     "text": "\"Create a new label\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "search",
+    "issues"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/search/issues/issues.go",
+     "text": "\"issues [<query>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/search/issues/issues.go",
+     "text": "\"Search for issues\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/search/issues/issues.go",
+     "text": "cmd.Flags().StringSliceVarP(&opts.Query.Qualifiers.Repo, \"repo\", \"R\", nil, \"Filter on repository\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "pr",
+    "merge"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/pr/merge/merge.go",
+     "text": "\"merge [<number> | <url> | <branch>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/pr/merge/merge.go",
+     "text": "\"Merge a pull request\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "pr",
+    "comment"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/pr/comment/comment.go",
+     "text": "\"comment [<number> | <url> | <branch>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/pr/comment/comment.go",
+     "text": "\"Add a comment to a pull request\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "release",
+    "create"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/release/create/create.go",
+     "text": "\"create [<tag>] [<filename>... | <pattern>...]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/release/create/create.go",
+     "text": "\"Create a new release\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "release",
+    "upload"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/release/upload/upload.go",
+     "text": "\"upload <tag> <files>...\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/release/upload/upload.go",
+     "text": "\"Upload assets to a release\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "workflow",
+    "run"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-R",
+      "--repo"
+     ],
+     "value": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/workflow/run/run.go",
+     "text": "\"run [<workflow-id> | <workflow-name>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/workflow/run/run.go",
+     "text": "\"Run a workflow by creating a workflow_dispatch event\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmdutil/repo_override.go",
+     "text": "cmd.PersistentFlags().StringP(\"repo\", \"R\", \"\", \"Select another repository using the `[HOST/]OWNER/REPO` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "repo",
+    "edit"
+   ],
+   "options": [],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/repo/edit/edit.go",
+     "text": "\"edit [<repository>]\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/repo/edit/edit.go",
+     "text": "\"Edit repository settings\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "gh"
+   ],
+   "subcommand": [
+    "api"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--hostname"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "hostname"
+    },
+    {
+     "spellings": [
+      "-X"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--method"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-F"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--field"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-f"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--raw-field"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-H"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--header"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-p"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--preview"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--input"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-t"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--template"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-q"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--jq"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cache"
+     ],
+     "value": true,
+     "joined": true
+    }
+   ],
+   "traits": [
+    "writes-with-token"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "\"api <endpoint>\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "\"Make an authenticated GitHub API request\"",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "cmd.Flags().StringVarP(&opts.RequestMethod, \"method\", \"X\", \"GET\", \"The HTTP method for the request\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "Note that adding request parameters will automatically switch the",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "cmd.Flags().StringArrayVarP(&opts.MagicFields, \"field\", \"F\", nil,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/api/api.go",
+     "text": "cmd.Flags().StringArrayVarP(&opts.RawFields, \"raw-field\", \"f\", nil, \"Add a string parameter in `key=value` format\")",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/b300f2ec7ec9dc9addc39b2ad88c54097ded7ca0/pkg/cmd/root/help_topic.go",
+     "text": "an authentication token that will be used when",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/fa92838bef95fe4a29c1587693885d5e9bdb6cf1/pkg/cmd/api/api.go",
+     "text": "cmd.Flags().StringVar(&opts.Hostname, \"hostname\", \"\", \"The GitHub hostname for the request (default \\\"github.com\\\")\")",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/fa92838bef95fe4a29c1587693885d5e9bdb6cf1/pkg/cmd/api/api.go",
+     "text": "cmd.Flags().StringArrayVarP(&opts.RequestHeaders, \"header\", \"H\", nil, \"Add a HTTP request header in `key:value` format\")",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/cli/cli/fa92838bef95fe4a29c1587693885d5e9bdb6cf1/pkg/cmd/api/http.go",
+     "text": "// Absolute URLs are used as-is; api_host is never applied to them.",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/spf13/pflag/c966cfef47379dcb01e7929504d66d94b540945b/README.md",
+     "text": "flags can be interspersed with arguments anywhere on the command line",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/spf13/pflag/c966cfef47379dcb01e7929504d66d94b540945b/README.md",
+     "text": "--flag=x",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    }
+   ],
+   "options_after_operands": true,
+   "value_options_complete": true,
+   "operand_request": "endpoint"
+  },
+  {
+   "names": [
+    "npm"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-test.md",
+     "text": "This runs a predefined command specified in the `\"test\"` property of a package's `\"scripts\"` object.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "npm"
+   ],
+   "subcommand": [
+    "test"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-test.md",
+     "text": "This runs a predefined command specified in the `\"test\"` property of a package's `\"scripts\"` object.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "npm"
+   ],
+   "subcommand": [
+    "run"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-run.md",
+     "text": "This runs an arbitrary command from a package's `\"scripts\"` object.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-run.md",
+     "text": "`run[-script]` is used by the test, start, restart, and stop commands",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "npm"
+   ],
+   "subcommand": [
+    "run-script"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-run.md",
+     "text": "This runs an arbitrary command from a package's `\"scripts\"` object.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/commands/npm-run.md",
+     "text": "`run[-script]` is used by the test, start, restart, and stop commands",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "npm"
+   ],
+   "subcommand": [
+    "install"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/using-npm/scripts.md",
+     "text": "These run on a bare `npm install` in a local project (no package arguments).",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/using-npm/scripts.md",
+     "text": "* `preinstall` (before dependencies are installed)",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/npm/cli/c276cadf785c1018d82dd287fe7742567055efb9/docs/lib/content/using-npm/scripts.md",
+     "text": "The `\"scripts\"` property of your `package.json` file supports a number of built-in scripts",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "yarn"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/yarnpkg/berry/e4e423a1eb117b5129f20ac626a03eb7a97aedff/packages/plugin-essentials/sources/commands/run.ts",
+     "text": "description: `run a script defined in the package.json`,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "yarn"
+   ],
+   "subcommand": [
+    "run"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/yarnpkg/berry/e4e423a1eb117b5129f20ac626a03eb7a97aedff/packages/plugin-essentials/sources/commands/run.ts",
+     "text": "description: `run a script defined in the package.json`,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "pnpm"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/pnpm/pnpm.io/72e3d7943cbc60d3f20bcfde38551c5ea45f5a64/docs/cli/run.md",
+     "text": "Runs a script defined in the package's manifest file.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "pnpm"
+   ],
+   "subcommand": [
+    "run"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/pnpm/pnpm.io/72e3d7943cbc60d3f20bcfde38551c5ea45f5a64/docs/cli/run.md",
+     "text": "Runs a script defined in the package's manifest file.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/pnpm/pnpm.io/72e3d7943cbc60d3f20bcfde38551c5ea45f5a64/docs/cli/run.md",
+     "text": "Aliases: `run-script`",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "go"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/golang/go/6e676ab2b809d46623acb5988248d95d1eb7939c/src/cmd/go/alldocs.go",
+     "text": "// 'Go test' recompiles each package along with any files with names matching",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "go"
+   ],
+   "subcommand": [
+    "test"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/golang/go/6e676ab2b809d46623acb5988248d95d1eb7939c/src/cmd/go/alldocs.go",
+     "text": "// 'Go test' recompiles each package along with any files with names matching",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/golang/go/6e676ab2b809d46623acb5988248d95d1eb7939c/src/cmd/go/alldocs.go",
+     "text": "// Each listed package causes the execution of a separate test binary.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "go"
+   ],
+   "subcommand": [
+    "generate"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/golang/go/6e676ab2b809d46623acb5988248d95d1eb7939c/src/cmd/go/alldocs.go",
+     "text": "// Generate runs commands described by directives within existing",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/golang/go/6e676ab2b809d46623acb5988248d95d1eb7939c/src/cmd/go/alldocs.go",
+     "text": "// files. Those commands can run any process but the intent is to",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "cargo"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/rust-lang/cargo/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/doc/src/reference/build-scripts.md",
+     "text": "file named `build.rs` in the root of a package will cause Cargo to compile",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "cargo"
+   ],
+   "subcommand": [
+    "build"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/rust-lang/cargo/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/doc/src/reference/build-scripts.md",
+     "text": "file named `build.rs` in the root of a package will cause Cargo to compile",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/rust-lang/cargo/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/doc/src/reference/build-scripts.md",
+     "text": "that script and execute it just before building the package.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "make"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--eval"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks"
+     ]
+    },
+    {
+     "spellings": [
+      "-f",
+      "--file",
+      "--makefile"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-C",
+      "--directory"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-k",
+      "-s",
+      "-n",
+      "-B",
+      "--keep-going",
+      "--silent",
+      "--quiet",
+      "--dry-run",
+      "--always-make"
+     ]
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "@code{make} reads the makefile in the current directory and begins by",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "following names, in order: @file{GNUmakefile}, @file{makefile}",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "executed by invoking a new sub-shell for each line of the recipe,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "Evaluate @var{string} as makefile syntax.  This is a command-line",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "@itemx --makefile=@var{file}",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/make/d66a65ad5a0e31b287f53930b0f09e31801f1613/doc/make.texi",
+     "text": "@itemx --directory=@var{dir}",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "tar"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--to-command"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ]
+    },
+    {
+     "spellings": [
+      "--use-compress-program"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks"
+     ]
+    },
+    {
+     "spellings": [
+      "-I"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "attack": [
+      "with-blanks"
+     ]
+    },
+    {
+     "spellings": [
+      "-f"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-C"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--directory"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-x",
+      "-c",
+      "-t",
+      "-z",
+      "-j",
+      "-J",
+      "-v",
+      "-p",
+      "-k"
+     ],
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "--extract",
+      "--get",
+      "--create",
+      "--list",
+      "--gzip",
+      "--gunzip",
+      "--bzip2",
+      "--xz",
+      "--verbose",
+      "--preserve-permissions",
+      "--keep-old-files",
+      "--overwrite"
+     ]
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "Pipe extracted files to \\fICOMMAND\\fR.  The argument is the pathname",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "of an external program, optionally with command line arguments.  The",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "\\fB\\-I\\fR, \\fB\\-\\-use\\-compress\\-program\\fI=\\fICOMMAND\\fR",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "Filter data through \\fICOMMAND\\fR.  It must accept the \\fB\\-d\\fR",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "\\fB\\-f\\fR, \\fB\\-\\-file\\fR=\\fIARCHIVE\\fR",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/tar/e545d446dfe6564265cdf4186641ee76f4acc7fa/doc/tar.1",
+     "text": "\\fB\\-C\\fR, \\fB\\-\\-directory\\fR=\\fIDIR\\fR",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/plain/man/man3/getopt.3?h=man-pages-6.9",
+     "text": "permutes the contents of \\fIargv\\fP as it",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sed"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--expression"
+     ],
+     "value": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks"
+     ]
+    },
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "attack": [
+      "with-blanks",
+      "without-blanks",
+      "name-characters"
+     ]
+    },
+    {
+     "spellings": [
+      "-f"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-i"
+     ],
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--in-place"
+     ],
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-n",
+      "-E",
+      "-r",
+      "-s",
+      "-u",
+      "-z"
+     ],
+     "cluster": true
+    },
+    {
+     "spellings": [
+      "--quiet",
+      "--silent",
+      "--regexp-extended",
+      "--separate",
+      "--unbuffered",
+      "--null-data",
+      "--posix",
+      "--debug",
+      "--sandbox"
+     ]
+    }
+   ],
+   "options_after_operands": true,
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "@itemx --expression=@var{script}",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "Add the commands in @var{script} to the set of commands to be",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "Executes @var{command} and sends its output to the output stream.",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "@item -i[@var{SUFFIX}]",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "@itemx --in-place[=@var{SUFFIX}]",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/plain/man/man3/getopt.3?h=man-pages-6.9",
+     "text": "permutes the contents of \\fIargv\\fP as it",
+     "language": "en",
+     "retrieved": "2026-10-15"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/sed/7e2e575a36bc88c0f3f3d6d8083c5f5b0ed44009/doc/sed.texi",
+     "text": "@command{sed} is a stream editor.",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "pytest"
+   ],
+   "traits": [
+    "runs-workspace-code"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/pytest-dev/pytest/cf470ec0bf7eb89cd97dd56df4859eae5db46447/doc/en/how-to/writing_plugins.rst",
+     "text": "6. by loading all \"initial\" :file:`conftest.py` files:",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/pytest-dev/pytest/cf470ec0bf7eb89cd97dd56df4859eae5db46447/doc/en/how-to/writing_plugins.rst",
+     "text": "- for each test path, load ``conftest.py`` and ``test*/conftest.py`` relative",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/pytest-dev/pytest/cf470ec0bf7eb89cd97dd56df4859eae5db46447/doc/en/how-to/writing_plugins.rst",
+     "text": "After a ``conftest.py`` file is loaded, recursively load all plugins specified",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "curl"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "--abstract-unix-socket"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--alt-svc"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--aws-sigv4"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cacert"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--capath"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-E"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cert"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cert-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ciphers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-K"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--config"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--connect-timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--connect-to"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-C"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--continue-at"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-b"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--cookie"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-c"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cookie-jar"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--create-file-mode"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--crlfile"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--curves"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-d"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--data"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--data-ascii"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--data-binary"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--data-raw"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--data-urlencode"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--delegation"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-interface"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-ipv4-addr"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-ipv6-addr"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-servers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--doh-url"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-D"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dump-header"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ech"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--egd-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--engine"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--etag-compare"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--etag-save"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--expect100-timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-F"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--form"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--form-string"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--ftp-account"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ftp-alternative-to-user"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ftp-method"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-P"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ftp-port"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ftp-ssl-ccc-mode"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--happy-eyeballs-timeout-ms"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--haproxy-clientip"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-H"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--header"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-h"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--help"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--hostpubmd5"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--hostpubsha256"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--hsts"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--httpsig-algo"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--httpsig-headers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--httpsig-key"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--httpsig-keyid"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--interface"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ip-tos"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ipfs-gateway"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--json"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--keepalive-cnt"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--keepalive-time"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--key"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--key-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--knownhosts"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--krb"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--libcurl"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--limit-rate"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--local-port"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--login-options"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--mail-auth"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--mail-from"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--mail-rcpt"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--max-filesize"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--max-redirs"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-m"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--max-time"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--netrc-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--noproxy"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--oauth2-bearer"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--output"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--output-dir"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--parallel-max"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--parallel-max-host"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--pass"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--pinnedpubkey"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--preproxy"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proto"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proto-default"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proto-redir"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-x"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-cacert"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-capath"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-cert"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-cert-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-ciphers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-crlfile"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-header"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-key"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-key-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-pass"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-pinnedpubkey"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-service-name"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-tls13-ciphers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-tlsauthtype"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-tlspassword"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-tlsuser"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-U"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-user"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy1.0"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--pubkey"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-Q"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--quote"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--random-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-r"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--range"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--rate"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--referer"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-X"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--request"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--request-target"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--resolve"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--retry"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--retry-delay"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--retry-max-time"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--sasl-authzid"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--service-name"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--sigalgs"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--socks4"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--socks4a"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--socks5"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--socks5-gssapi-service"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--socks5-hostname"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-Y"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--speed-limit"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-y"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--speed-time"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ssl-sessions"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--stderr"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-t"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--telnet-option"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tftp-blksize"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-z"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--time-cond"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tls-max"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tls13-ciphers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tlsauthtype"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tlspassword"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tlsuser"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--trace"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--trace-ascii"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--trace-config"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--unix-socket"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-T"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--upload-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--upload-flags"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--url"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "destination"
+    },
+    {
+     "spellings": [
+      "--url-query"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-u"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--user"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "-A"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--user-agent"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--variable"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--vlan-priority"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-w"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--write-out"
+     ],
+     "value": true,
+     "joined": true
+    }
+   ],
+   "traits": [
+    "sends-network"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/01346829096c61b372692f6dc43ffa778c6caccd/docs/cmdline-opts/data.md",
+     "text": "Send the specified data to a server.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/01346829096c61b372692f6dc43ffa778c6caccd/docs/cmdline-opts/data.md",
+     "text": "For HTTP(S), this is done with the POST method in the same way that a browser",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/01346829096c61b372692f6dc43ffa778c6caccd/docs/cmdline-opts/url.md",
+     "text": "Specify a URL to fetch or send data to.",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/_URL.md",
+     "text": "specify command line options and URLs mixed and in any order on the command",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/_OPTIONS.md",
+     "text": "The short \"single-dash\" form of the options, -d for example, may be used with",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/_OPTIONS.md",
+     "text": "If the long option name ends with an equals sign (`=`), the argument is the",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/header.md",
+     "text": "Arg: <header/@file>",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/header.md",
+     "text": "Extra header to include in information sent.",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/user.md",
+     "text": "Specify the username and password to use for server authentication.",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/oauth2-bearer.md",
+     "text": "Specify the Bearer Token for OAUTH 2.0 server authentication.",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/cookie.md",
+     "text": "pass the exact data to send to the HTTP server in the Cookie header.",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/form.md",
+     "text": "For the HTTP protocol family, emulate a filled-in form in which a user has",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/curl/curl/dc99e1274b2bb368dea509ac6694d34e93c50054/docs/cmdline-opts/_VARIABLES.md",
+     "text": "option name is prefixed with `--expand-`. This gets the contents of the",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    }
+   ],
+   "options_after_operands": true,
+   "value_options_complete": true,
+   "long_option_prefixes": [
+    "--expand-"
+   ],
+   "operand_request": "destination"
+  },
+  {
+   "names": [
+    "wget"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-e"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--execute"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-o"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--output-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-a"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--append-output"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--report-speed"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-i"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--input-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--input-metalink"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--metalink-index"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-B"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--base"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--config"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--rejected-log"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--bind-address"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--bind-dns-address"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-servers"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-t"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--tries"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-O"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--output-document"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--backups"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--start-pos"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--progress"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-T"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--dns-timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--connect-timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--read-timeout"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--limit-rate"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-w"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--wait"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--waitretry"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-Q"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--quota"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--restrict-file-names"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--prefer-family"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--user",
+      "--password"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--use-askpass"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--local-encoding"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--remote-encoding"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--cut-dirs"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-P"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--directory-prefix"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--default-page"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--http-user",
+      "--http-password"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--load-cookies"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--save-cookies"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--header"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--compression"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--max-redirect"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--proxy-user",
+      "--proxy-password"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--referer"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-U"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--user-agent"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--post-data"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--post-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--method"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--body-data"
+     ],
+     "value": true,
+     "joined": true,
+     "request": "credential"
+    },
+    {
+     "spellings": [
+      "--body-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--retry-on-http-error"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--secure-protocol"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--certificate"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--certificate-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--private-key"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--private-key-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ca-certificate"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ca-directory"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--crl-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--pinnedpubkey"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--random-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--egd-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--hsts-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--warc-file"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--warc-header"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--warc-max-size"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--warc-dedup"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--warc-tempdir"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ftp-user",
+      "--ftp-password"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-l"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--level"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-A",
+      "-R"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--accept",
+      "--reject"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--accept-regex",
+      "--reject-regex"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--regex-type"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-D"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--domains"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--exclude-domains"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--follow-tags"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--ignore-tags"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-I"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--include-directories"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "-X"
+     ],
+     "value": true,
+     "cluster": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--exclude-directories"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--include"
+     ],
+     "value": true,
+     "joined": true
+    },
+    {
+     "spellings": [
+      "--exclude"
+     ],
+     "value": true,
+     "joined": true
+    }
+   ],
+   "traits": [
+    "sends-network"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/dad28423c622b66994e871ea6bd17e8124a63962/doc/wget.texi",
+     "text": "@item --post-data=@var{string}",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/dad28423c622b66994e871ea6bd17e8124a63962/doc/wget.texi",
+     "text": "Use POST as the method for all HTTP requests and send the specified",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/a6d20d8ffa7926ac6e4ad1a1303886a6ace621b0/doc/wget.texi",
+     "text": "@item --header=@var{header-line}",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/a6d20d8ffa7926ac6e4ad1a1303886a6ace621b0/doc/wget.texi",
+     "text": "Send @var{header-line} along with the rest of the headers in each",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/a6d20d8ffa7926ac6e4ad1a1303886a6ace621b0/doc/wget.texi",
+     "text": "@item --http-user=@var{user}",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/a6d20d8ffa7926ac6e4ad1a1303886a6ace621b0/doc/wget.texi",
+     "text": "Specify the username @var{user} and password @var{password} on an",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/wget/a6d20d8ffa7926ac6e4ad1a1303886a6ace621b0/doc/wget.texi",
+     "text": "@item --body-data=@var{Data-String}",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/plain/man/man3/getopt.3?h=man-pages-6.9",
+     "text": "permutes the contents of \\fIargv\\fP as it",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    },
+    {
+     "citation": "https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/plain/man/man3/getopt.3?h=man-pages-6.9",
+     "text": ".B \\-\\-arg=param",
+     "language": "en",
+     "retrieved": "2026-10-19"
+    }
+   ],
+   "options_after_operands": true,
+   "value_options_complete": true,
+   "operand_request": "destination"
+  },
+  {
+   "names": [
+    "nc"
+   ],
+   "traits": [
+    "sends-network"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/openbsd/src/bb8fd646158186c0552f4313ad8e5d62928f9712/usr.bin/nc/nc.1",
+     "text": "It can open TCP connections, send UDP packets, listen on arbitrary",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/openbsd/src/bb8fd646158186c0552f4313ad8e5d62928f9712/usr.bin/nc/nc.1",
+     "text": "Any information input into one end of the connection will be output",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/openbsd/src/bb8fd646158186c0552f4313ad8e5d62928f9712/usr.bin/nc/nc.1",
+     "text": ".Dl $ nc -N host.example.com 1234 < filename.in",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "grep"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://salsa.debian.org/debian/grep/-/raw/b5016ade645d46db04c183d97851c139e250b5a3/doc/grep.texi",
+     "text": "Given one or more patterns, @command{grep} searches input files",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    },
+    {
+     "citation": "https://salsa.debian.org/debian/grep/-/raw/b5016ade645d46db04c183d97851c139e250b5a3/doc/grep.texi",
+     "text": "it copies the line to standard output (by default),",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "ls"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "The @command{ls} program lists information about files (of any type,",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "cat"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{cat} copies each @var{file} (@samp{-} means standard input), or",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "head"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{head} prints the first part (10 lines by default) of each",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "tail"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{tail} prints the last part (10 lines by default) of each",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "wc"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{wc} counts the number of bytes, characters, words, and newlines",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "find"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-exec"
+     ],
+     "value": true,
+     "reading": "program"
+    },
+    {
+     "spellings": [
+      "-execdir"
+     ],
+     "value": true,
+     "reading": "program"
+    },
+    {
+     "spellings": [
+      "-ok"
+     ],
+     "value": true,
+     "reading": "program"
+    },
+    {
+     "spellings": [
+      "-okdir"
+     ],
+     "value": true,
+     "reading": "program"
+    }
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/doc/find.texi",
+     "text": "Execute @var{command}; true if @var{command} returns zero.  @code{find}",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/doc/find.texi",
+     "text": "@deffn Action -exec command ;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/doc/find.texi",
+     "text": "@deffn Action -okdir command ;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/jamesyoungman/findutils/c67264238d9487d5313a131674cd7a01ca299927/doc/find.texi",
+     "text": "@deffn Action -ok command ;",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "echo"
+   ],
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{echo} writes each given @var{string} to standard output, with a",
+     "language": "en",
+     "retrieved": "2026-10-11"
+    }
+   ]
+  },
+  {
+   "names": [
+    "builtin"
+   ],
+   "unsourced": "code-stdin is kept as for the other wrappers: its standard input goes to the command it runs, which may read it as code; no source here says so for this command",
+   "traits": [
+    "runs-operand",
+    "code-stdin"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Execute the specified shell builtin \\fIshell\\-builtin\\fP, passing it",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "test"
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-v"
+     ],
+     "value": true,
+     "reading": "code",
+     "value_reading": "arithmetic"
+    }
+   ],
+   "operands_only": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Return a status of 0 (true) or 1 (false) depending on",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "True if the shell variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is set (has been assigned a value).",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "expressions using a set of rules based on the number of arguments.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "["
+   ],
+   "options": [
+    {
+     "spellings": [
+      "-v"
+     ],
+     "value": true,
+     "reading": "code",
+     "value_reading": "arithmetic"
+    }
+   ],
+   "operands_only": true,
+   "traits": [],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Return a status of 0 (true) or 1 (false) depending on",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "True if the shell variable",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is set (has been assigned a value).",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "Indexed arrays are referenced using arithmetic expressions",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "is treated as an arithmetic expression that must evaluate to a number",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    },
+    {
+     "citation": "https://raw.githubusercontent.com/mirror/bash/b8c60bc9ca365f8261fa97900b6fa939f6ebc303/doc/bash.1",
+     "text": "expressions using a set of rules based on the number of arguments.",
+     "language": "en",
+     "retrieved": "2026-11-16"
+    }
+   ]
+  },
+  {
+   "names": [
+    "jq"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/jqlang/jq/71c2ab509a8628dbbad4bc7b3f98a64aa90d3297/docs/content/manual/manual.yml",
+     "text": "A jq program is a \"filter\": it takes an input, and produces an",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "base64"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{base64} transforms data read from a file, or standard input,",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "rev"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/c1c1ab8b8e67e04ee293d4cf5679430a5b174bb8/text-utils/rev.1.adoc",
+     "text": "rev - reverse lines characterwise",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "xxd"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/vim/vim/b4ddc6c11e95cef4b372e239871fae1c8d4f72b6/runtime/doc/xxd.1",
+     "text": "creates a hex dump of a given file or standard input.",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "od"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{od} writes an unambiguous representation of each @var{file}",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "hexdump"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/util-linux/util-linux/c1c1ab8b8e67e04ee293d4cf5679430a5b174bb8/text-utils/hexdump.1.adoc",
+     "text": "The *hexdump* utility is a filter which displays the specified files, or standard input if no files are specified, in a user-specified format.",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "fold"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{fold} writes each @var{file} (@option{-} means standard input), or",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "cut"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{cut} writes to standard output selected parts of each line of each",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "tr"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{tr} copies standard input to standard output, performing",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sort"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{sort} sorts, merges, or compares all the lines from the given",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "uniq"
+   ],
+   "traits": [
+    "transforms-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{uniq} writes the unique lines in the given @file{input}, or",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sha1sum"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{sha1sum} computes a 160-bit checksum for each specified @var{file}.",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "sha224sum",
+    "sha256sum",
+    "sha384sum",
+    "sha512sum"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "The commands @command{sha224sum}, @command{sha256sum},",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "md5sum"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{md5sum} computes a 128-bit checksum (or @dfn{fingerprint} or",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "b2sum"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{b2sum} computes a 512-bit checksum for each specified",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  },
+  {
+   "names": [
+    "cksum"
+   ],
+   "traits": [
+    "digests-input"
+   ],
+   "sources": [
+    {
+     "citation": "https://raw.githubusercontent.com/coreutils/coreutils/8e075ff8ee11692c5504d8e82a48ed47a7f07ba9/doc/coreutils.texi",
+     "text": "@command{cksum} by default computes a 32-bit cyclic redundancy check (CRC)",
+     "language": "en",
+     "retrieved": "2026-10-20"
+    }
+   ]
+  }
+ ]
+}

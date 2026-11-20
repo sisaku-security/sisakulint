@@ -1,0 +1,17 @@
+# situation: on issues, a run of pwsh writes the issue's body to
+#   $GITHUB_ENV.
+# reason: a todo (the same file): reading pwsh would find it.
+# cause: the rule reads runs of bash and sh only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: pwsh's echo writes b=x, a line break and PWNED=1 to
+#   $GITHUB_ENV, appending the lines b=x and PWNED=1; the runner sets b to x
+#   and PWNED to 1.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh
+        env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$env:B" >> $env:GITHUB_ENV

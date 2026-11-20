@@ -1,0 +1,23 @@
+# situation: on pull_request_target, the checkout of the head of the pull
+#   request puts the tree in pr, and a step runs bash
+#   ${{ matrix.dir }}/build.sh, where the matrix gives dir the value pr.
+# reason: the ${{ }} at the head of the path decides the directory, which
+#   can be the directory of the tree, so bash runs build.sh of the pull
+#   request with the secrets of the repository.
+# attack-value: the file build.sh in the pull request's head = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the checkout puts the pull request's build.sh in pr,
+#   and bash pr/build.sh runs it, which prints PWNED, with the secrets of
+#   the repository.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: [pr]
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+      - run: bash ${{ matrix.dir }}/build.sh

@@ -1,0 +1,7 @@
+name: y17
+on: push
+jobs:
+  j:
+    runs-on: ${{ github.event }}
+    steps:
+      - run: echo ok

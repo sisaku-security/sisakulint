@@ -1,0 +1,28 @@
+# situation: on pull_request_target, actions/checkout checks out the pull
+#   request's branch name with the base repository, and npm ci runs.
+#   snapshot.yml of nuxt/create-nuxt-app (commit
+#   1aa53fd846e0d0390f0407653b624b1e46ef1d6e, GHSL-2020-276) and sync.yml of
+#   nuxt/modules (commit 2ae2a0c2fcb1869153b658522340d0b5b24b3376) check out
+#   github.head_ref the same way and run yarn; the page says the workflows
+#   check out "a branch from the base repository named as the branch from
+#   the PR".
+# reason: no added gain: from a fork the base has no such branch (the
+#   checkout fails); from the repository the author can write to it.
+# cause: the rule reads a branch's name as the pull request's code only with
+#   the fork as the repository.
+# attack-value: the file package.json on the pull request's branch = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches the branch github.head_ref names
+#   from the base repository: for a fork's branch the base has no such
+#   branch and the step fails, or has one of the same name, whose
+#   package.json is the base's; for a branch of the repository, npm ci runs
+#   the preinstall its author pushed.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-276-nuxt-create-nuxt-app-workflow/
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.head_ref }}
+      - run: npm ci

@@ -1,0 +1,22 @@
+# situation: on workflow_run, gh downloads the artifact of the run
+#   workflow_run follows, and ./out/run.sh runs.
+# reason: a todo (the same file): reading the command would find the
+#   download.
+# cause: the commands of a run are not read for a download.
+# attack-value: the file out/run.sh in the artifact out of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: gh run download, with the job's token, takes the
+#   artifact out of the fork's ci run into the workspace, and ./out/run.sh
+#   runs it, which prints PWNED, with the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh run download ${{ github.event.workflow_run.id }} -n out
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: ./out/run.sh

@@ -1,0 +1,7 @@
+name: v04
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/cin.yml
+    with:
+      b: ${{ github.run_attempt == '1' && 1 || 0 }}

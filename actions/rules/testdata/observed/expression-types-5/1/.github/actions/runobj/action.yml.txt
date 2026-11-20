@@ -1,0 +1,6 @@
+name: runobj
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: ${{ github.event }}

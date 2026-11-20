@@ -1,0 +1,24 @@
+# situation: on check_suite, which an app outside GitHub Actions starts when
+#   the app completes the checks of a commit, the job checks out the commit
+#   of the check suite (github.event.check_suite.head_sha) and runs npm ci.
+# reason: when an outside CI completes the checks of a commit of a pull
+#   request from a fork, the run of check_suite starts on the default branch
+#   with the SHA of that commit in the payload (seen on GitHub), and
+#   actions/checkout refuses the code of a fork only on pull_request_target
+#   and workflow_run, so the checkout brings the code of the pull request.
+# attack-value: the file package.json at the head of the pull request from a fork = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: an outside CI completes the checks of the commit of
+#   the pull request from a fork; the run of check_suite starts on the
+#   default branch, checks out that commit, and npm ci runs its preinstall,
+#   which prints PWNED.
+on:
+  check_suite:
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.check_suite.head_sha }}
+      - run: npm ci

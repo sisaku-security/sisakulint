@@ -1,0 +1,20 @@
+# situation: the job writes pull-requests: write and asks for the comment;
+#   the workflow runs on pull requests, and pull requests from forks are among
+#   them.
+# reason: GitHub can give the run of a pull request from a fork a token that
+#   cannot write the comment, whatever the permissions say; the behavior was
+#   not checked on GitHub.
+# cause: the rule reads the permissions written, not the token of a run from
+#   a fork.
+on: pull_request
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          comment-summary-in-pr: always

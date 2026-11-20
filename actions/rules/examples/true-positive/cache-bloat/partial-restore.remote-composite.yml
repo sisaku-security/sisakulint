@@ -1,0 +1,14 @@
+# situation: on push, a step runs example-org/bloat-composite@v1, a
+#   composite action of another repository whose step uses actions/cache
+#   under a key unique to the run, with restore-keys.
+# reason: no cache has the key of the run, so the step of the composite
+#   action restores the newest older cache by the prefix and saves its
+#   content under a new key at the end of the job; action.definition
+#   answers the file of the composite action.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: example-org/bloat-composite@v1

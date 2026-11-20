@@ -1,0 +1,6 @@
+name: a18
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "${{ withJson() }}"

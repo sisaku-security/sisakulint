@@ -1,0 +1,12 @@
+# situation: the job deploys to the URL of the configuration variable
+#   DEPLOY_URL, which the repository level defines.
+# reason: the step gets the value of DEPLOY_URL.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - run: ./deploy.sh "${{ vars.DEPLOY_URL }}"

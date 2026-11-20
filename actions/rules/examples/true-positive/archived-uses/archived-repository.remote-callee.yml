@@ -1,0 +1,19 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/archived-uses-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   archived-repository (archived-repository.remote-called-call.yml) of the
+#   rule, with on: workflow_call in place of the on of
+#   archived-repository.remote-called-call.yml. The job passes its secrets
+#   with secrets: inherit. In the true positive, a job calls
+#   example-org/nested-workflow/.github/workflows/build.yml@v1, a reusable
+#   workflow of another repository whose job calls a reusable workflow of
+#   actions/create-release, an archived repository.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   called workflow calls a workflow that no one maintains, whose flaws no
+#   one fixes; workflow.definition answers the file of the called workflow.
+on: push
+jobs:
+  c:
+    uses: example-org/archived-uses-remote/.github/workflows/w.yml@v1
+    secrets: inherit

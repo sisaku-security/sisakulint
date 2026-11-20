@@ -1,0 +1,8 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"job-output-remote-call.yml"},"state":"found","value":true},
+{"query":{"kind":"git.ref-commit","repo":"some/repo","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"some/repo"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"some/repo/.github/workflows/w.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"some/repo"},"state":"found","value":false}
+]}

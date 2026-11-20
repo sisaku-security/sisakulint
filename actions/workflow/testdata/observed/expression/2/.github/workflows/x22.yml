@@ -1,0 +1,7 @@
+name: x22
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ steps.nope.outputs.x }}"

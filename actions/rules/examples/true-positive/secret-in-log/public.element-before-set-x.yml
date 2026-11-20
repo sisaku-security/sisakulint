@@ -1,0 +1,22 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step runs set -x after an assignment of an element of an array before the
+#   command word (a[0]=x set -x), and then sets PRIVATE_KEY to the private key
+#   out of the secret GCP_SA_KEY.
+# reason: bash refuses the assignment of the element and runs set -x, so the
+#   trace prints the assignment of the private key, which the runner does not
+#   mask.
+# attack: anyone signed in to GitHub opens the run's log and reads the private
+#   key.
+# attack-run-behavior: the trace prints the assignment of PRIVATE_KEY with the
+#   private key.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          a[0]=x set -x
+          PRIVATE_KEY="$(echo "$GCP_SA_KEY" | jq -r '.private_key')"

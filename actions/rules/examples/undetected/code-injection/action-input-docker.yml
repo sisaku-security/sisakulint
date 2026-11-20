@@ -1,0 +1,18 @@
+# situation: on issues, a step runs docker://alpine:3 with the issue's title
+#   in args.
+# reason: a limitation (run time): the image reads the input when it runs.
+# cause: the rule reads a step's run and the script of
+#   actions/github-script, not an input of a Docker image.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: the runner puts the args input as it is after the
+#   image in its docker run command line, so the container runs echo PWNED
+#   in place of the image's command (/bin/sh), which prints PWNED. No run
+#   step has the value.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3
+        with:
+          args: ${{ github.event.issue.title }}

@@ -1,0 +1,12 @@
+name: z11
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - id: s
+        run: echo o=true >> "$GITHUB_OUTPUT"
+      - run: exit 1
+        continue-on-error: ${{ steps.s.outputs.o }}
+      - run: echo after

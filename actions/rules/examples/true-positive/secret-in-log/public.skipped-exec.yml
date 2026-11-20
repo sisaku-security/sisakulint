@@ -1,0 +1,24 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step runs a compound command that points the standard error to /dev/null
+#   with exec, with a redirect >&4 of the compound command, where the
+#   descriptor 4 is not open, goes on when the redirect fails (|| true), and
+#   prints the private key out of the secret GCP_SA_KEY to the standard
+#   error.
+# reason: the redirect of the compound command
+#   fails, so bash does not run the exec, the standard error is the log, and
+#   the runner does not mask the private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key on the
+#   standard error.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          { exec 2>/dev/null; } >&4 || true
+          echo "key: $(echo "$GCP_SA_KEY" | jq -r '.private_key')" >&2

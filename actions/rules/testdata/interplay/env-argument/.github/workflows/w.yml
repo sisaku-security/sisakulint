@@ -1,0 +1,13 @@
+# code-injection's fix moves the ${{ }} into the step's env; the word tar
+# gets still starts with the value, so argument-injection's findings stay
+# with the same fingerprints
+on: pull_request_target
+permissions: {}
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          tar -xf archive.tar notes.txt "${{ github.head_ref }}"
+          tar -xf archive.tar notes.txt ${{ github.event.pull_request.title }}
+          make all ${{ github.event.pull_request.title }}

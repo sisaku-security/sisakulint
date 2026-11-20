@@ -1,0 +1,23 @@
+# situation: on issue_comment, a job runs only when the comment's body is
+#   path, and the run: script of a step writes
+#   ${{ github.event.comment.body }} as the name of a variable in an
+#   assignment before a command (NAME=value command).
+# reason: the job's if lets the body be only the string path, ignoring the
+#   case of its letters, so the body has no character that the shell reads
+#   as code; the attacker still chooses the case, and PATH is another
+#   variable than path.
+# cause: the rule does not treat a value that the if of the job compares
+#   with such a string as written by the attacker.
+# attack-value: github.event.comment.body = "PATH"
+# attack-run-behavior: the if passes, and the script becomes
+#   PATH=/tmp/tools ./build.sh, so the shell looks for the commands of
+#   build.sh in /tmp/tools.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    if: github.event.comment.body == 'path'
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${{ github.event.comment.body }}=/tmp/tools ./build.sh

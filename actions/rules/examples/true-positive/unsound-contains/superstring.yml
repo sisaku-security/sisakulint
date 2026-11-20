@@ -1,0 +1,24 @@
+# situation: on issue_comment, the job runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains(the commenter's login, 'alice')
+#   holds. snapshot.yml of nuxt/create-nuxt-app (commit
+#   1aa53fd846e0d0390f0407653b624b1e46ef1d6e, GHSL-2020-276) runs its job on
+#   pull_request_target only if contains(github.actor, 'renovate') holds
+#   (line 8); the page says the check "is bypassable with a user name like
+#   renovate2, notrenovate".
+# reason: contains with the login as its first argument is true for any
+#   login that has alice as a part, such as alice-x, and anyone can
+#   register such a login and comment on an issue.
+# attack-value: github.event.comment.user.login = "alice-x"
+# attack-run-behavior: a comment by the account alice-x on any issue starts
+#   the job deploy on issue_comment; contains('alice-x', 'alice') is true,
+#   so ./deploy.sh runs with TOKEN set to DEPLOY_TOKEN's value.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-276-nuxt-create-nuxt-app-workflow/
+on: issue_comment
+jobs:
+  deploy:
+    if: contains(github.event.comment.user.login, 'alice')
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

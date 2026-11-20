@@ -1,0 +1,24 @@
+# situation: in a repository of the user account alice, the job calls
+#   deploy.yml of octo-org/shared-workflows, a repository of an
+#   organization, at @v1 with secrets: inherit.
+# reason: the call passes no secret of the repository: on 2026-10-22 a
+#   reusable workflow of an organization that a workflow of a repository of
+#   a user account called with secrets: inherit got only github_token,
+#   which a called workflow has without secrets: inherit too; secrets:
+#   inherit passes secrets within an organization, or across organizations
+#   of one enterprise
+#   (https://github.com/github/docs/blob/5815d11586b0796688963a98c889680e60d72dc4/content/actions/reference/workflows-and-actions/workflow-syntax.md).
+# cause: the rule reports a call of a reusable workflow of another
+#   repository (a uses that does not start with ./ and does not name the
+#   repository given to the linter) as .remote, and does not ask whether the
+#   owner of the calling repository is a user account or an organization.
+# attack: a maintainer of octo-org/shared-workflows moves the tag v1 to a
+#   commit whose deploy.yml has a step that sends toJSON(secrets) out.
+# attack-run-behavior: on the next push, the job deploy runs deploy.yml at
+#   the moved v1; toJSON(secrets) in the step expands to github_token
+#   alone, and no secret of the repository is sent.
+on: push
+jobs:
+  deploy:
+    uses: octo-org/shared-workflows/.github/workflows/deploy.yml@v1
+    secrets: inherit

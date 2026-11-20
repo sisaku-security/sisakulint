@@ -1,0 +1,23 @@
+# situation: the first step uses a composite action pinned to a full SHA,
+#   whose action.yml uses actions/github-script@v7; the second step uses $/
+#   with a path that goes with .. above the root of the repository, to
+#   actions/github-script/v7 in the directory where the runner puts the
+#   actions of the job.
+# reason: the second step runs actions/github-script at the tag v7, which
+#   can be moved.
+# cause: the rule reads the uses of other repositories, and a $/ uses names
+#   the repository of the workflow.
+# attack: the owner of actions/github-script, or whoever has taken over a
+#   token that pushes to it, moves the tag v7 to a commit of theirs.
+# attack-run-behavior: when the job runs, the runner downloads the commit
+#   that v7 names for the composite action's uses, and the second step runs
+#   that commit with the step's script.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/ci-tools/setup@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: $/../../../actions/github-script/v7
+        with:
+          script: console.log("second")

@@ -1,0 +1,22 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads, in a public repository (repo.public, assumed true); a step
+#   takes the token of the job without the prefix ghs_ with sed and prints the
+#   rest.
+# reason: the runner masks the whole token where the whole token is in the
+#   log, not the rest that sed leaves after sed removes ghs_, so the rest is
+#   in the log unmasked, and the prefix ghs_ is the same for every token.
+# attack: anyone signed in to GitHub opens the log of the run while the job
+#   runs, reads the rest and puts ghs_ before the rest.
+# attack-run-behavior: the step prints "token:" and the token without ghs_;
+#   ghs_ and the printed rest make the token, which works until the job ends.
+name: show token
+description: show the token
+runs:
+  using: composite
+  steps:
+    - env:
+        T: ${{ github.token }}
+      run: |
+        BODY=$(echo "$T" | sed 's/^ghs_//')
+        echo "token: $BODY"
+      shell: bash

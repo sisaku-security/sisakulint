@@ -1,0 +1,18 @@
+# situation: on push, a step takes the second field of the secret CREDS with
+#   awk and prints the field.
+# reason: a todo (the same file): awk writes the field of the secret, which
+#   the runner does not mask.
+# cause: the commands table does not declare awk to write a value made from
+#   its input, so the rule does not know what awk prints.
+# attack: one who may read the run's log opens the log and reads the field.
+# attack-run-behavior: the step prints the field of CREDS as it is.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CREDS: ${{ secrets.CREDS }}
+        run: |
+          echo "$CREDS" | awk -F: '{print $2}'

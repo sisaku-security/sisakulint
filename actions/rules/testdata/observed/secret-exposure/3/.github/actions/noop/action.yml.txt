@@ -1,0 +1,11 @@
+name: noop
+description: takes an input and does nothing with it
+inputs:
+  v:
+    description: any value
+    required: false
+runs:
+  using: composite
+  steps:
+    - run: echo noop
+      shell: bash

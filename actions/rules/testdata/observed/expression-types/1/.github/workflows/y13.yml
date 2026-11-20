@@ -1,0 +1,11 @@
+name: y13
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: ${{ github.event_name }}
+      matrix:
+        x: [a]
+    steps:
+      - run: echo ok

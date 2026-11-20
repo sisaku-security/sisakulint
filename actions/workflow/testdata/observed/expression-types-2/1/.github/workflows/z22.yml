@@ -1,0 +1,9 @@
+name: z22
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.event }}
+    steps:
+      - run: echo ok

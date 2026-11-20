@@ -1,0 +1,16 @@
+# situation: the steps print vars.GITHUB_X, vars.a-b and vars['1X'], and
+#   the job runs when vars.github_x is empty.
+# reason: GitHub lets no level define a name that starts with GITHUB_ (in
+#   upper case or in lower case), has a character other than ASCII letters,
+#   digits and _, or starts with a digit; in a run that the authors of the
+#   rule made on GitHub, each of the names was the empty string, and the if
+#   was true.
+on: push
+permissions: {contents: read}
+jobs:
+  print:
+    if: vars.github_x == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "[${{ vars.GITHUB_X }}] [${{ vars.a-b }}] [${{ vars['1X'] }}]"

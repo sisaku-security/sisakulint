@@ -1,0 +1,19 @@
+# situation: on pull_request_target, the step's env sets HEAD_REF to the
+#   name of the pull request's head branch, and its script sets HEAD_REF to
+#   main before it passes "$HEAD_REF" to tar after the file names.
+# reason: tar gets main, the value the script sets, not the branch's name.
+# cause: the rule reads $HEAD_REF as the value of env, and does not read the
+#   assignment in the script before tar.
+# attack-value: github.head_ref = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: HEAD_REF is main when tar runs, so tar takes it as a
+#   name of a file to extract and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          HEAD_REF=main
+          tar -xf archive.tar notes.txt "$HEAD_REF"

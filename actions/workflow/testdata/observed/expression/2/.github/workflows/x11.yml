@@ -1,0 +1,7 @@
+name: x11
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ toJSON() }}"

@@ -1,0 +1,38 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token, and the configuration is at the path that the
+#   variable LABELER_CONFIG names; labeled.yml runs on pull_request_target
+#   on opened and labeled; the job build checks out the head of the pull
+#   request and uploads dist, and the job deploy, which needs build and runs
+#   on labeled when the if github.event.label.name == 'safe-to-test' is
+#   true, downloads dist and runs ./dist/deploy.sh.
+# reason: which configuration actions/labeler reads, and so which labels the
+#   attacker gets, is in the variable, which the linter does not know.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: when the configuration adds the label safe-to-test to
+#   a pull request that changes a file under site/, the attacker opens a
+#   pull request from a fork that changes a file under site/ and the files
+#   of the attack; actions/labeler adds the label safe-to-test, which starts
+#   labeled.yml, and the job deploy downloads dist, which the job build
+#   uploaded from the head of the pull request, and runs ./dist/deploy.sh,
+#   which prints PWNED.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

@@ -1,0 +1,18 @@
+# situation: a step puts the body of the issue in the env B and writes
+#   "b=$(echo "$B" | sed 's/^ *//')" to $GITHUB_OUTPUT.
+# reason: the value written is the output of a $( ) with what an attacker
+#   may control in it, and whether its line breaks are taken out is not
+#   known to the rule.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: when the command in $( ) keeps line breaks, as sed
+#   here does, echo writes b=x and then the line PWNED=1 to $GITHUB_OUTPUT,
+#   and the runner sets the output b to x and an output PWNED to 1; a command
+#   that keeps the first line only (head -1) would write the one line b=x.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$(echo "$B" | sed 's/^ *//')" >> "$GITHUB_OUTPUT"

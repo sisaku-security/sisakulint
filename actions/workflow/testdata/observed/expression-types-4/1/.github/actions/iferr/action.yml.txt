@@ -1,0 +1,9 @@
+name: iferr
+runs:
+  using: composite
+  steps:
+    - if: ${{ case('x', true, false) }}
+      shell: bash
+      run: echo ran
+    - shell: bash
+      run: echo after-in-action

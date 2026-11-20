@@ -1,0 +1,22 @@
+# situation: the job writes no permissions and runs actions and npm.
+# reason: the repository's default token is read, so the token writes
+#   nothing.
+# cause: the rule takes the default token as one that may write unless a
+#   file of facts says it is read (repo.default-token-write is assumed true,
+#   the worst case).
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: actions/checkout writes the token into .git/config
+#   as an extraheader; npm ci runs the package's install script, which reads
+#   it there, but the token it sends has the repository's default, which is
+#   read (repo.default-token-write is false here), so GitHub refuses a write
+#   made with it.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci && npm test

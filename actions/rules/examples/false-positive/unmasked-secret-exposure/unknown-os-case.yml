@@ -1,0 +1,30 @@
+# situation: on push, the env of the workflow has the JSON secret DB under
+#   DB, a job runs on Windows by a matrix, the env of the job has a JSON
+#   literal under db, and a step takes the password out of env.DB with
+#   fromJSON into the env of the step.
+# reason: on Windows, the runner matches the names of the env context in
+#   any case, so db of the env of the job replaces DB of the env of the
+#   workflow, and env.DB is the JSON literal, which holds no secret.
+# cause: the runs-on of the job is a ${{ }} of the matrix, so the rule does
+#   not know that the job runs on Windows, and matches the names only in the
+#   same case.
+# attack: one who may read the log of the run opens the log to read the
+#   password.
+# attack-run-behavior: the header of the step prints PASSWORD with the
+#   value placeholder of the JSON literal.
+on: push
+permissions: {}
+env:
+  DB: ${{ secrets.DB }}
+jobs:
+  migrate:
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      db: '{"password": "placeholder"}'
+    steps:
+      - env:
+          PASSWORD: ${{ fromJSON(env.DB).password }}
+        run: ./migrate.ps1

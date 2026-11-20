@@ -1,0 +1,26 @@
+# situation: on workflow_dispatch, runs-on is ${{ inputs.runner }}.
+# reason: the one who dispatches the workflow chooses the value of the input
+#   runner, and the workflow does not tell who dispatches, so whether an
+#   attacker chooses the label is not known; nothing that the rule could
+#   read is expected to tell who dispatches.
+# attack: the attacker of this attack is the author of a pull request from a
+#   fork, not the one who dispatches the workflow. When a dispatch gives the
+#   input runner the label of a self-hosted runner of the repository, such
+#   as self-hosted, the attacker opens a pull request from a fork whose
+#   workflow runs a step of their own on runs-on: self-hosted.
+# attack-run-behavior: a dispatch with runner set to self-hosted runs the
+#   job a on that runner; the attacker's pull_request run, from the workflow
+#   their pull request writes, is picked up by a runner with that label too,
+#   and their step runs on that machine, where what it leaves stays for the
+#   jobs after it, such as this one when dispatched again. With a label of a
+#   runner GitHub hosts, such as ubuntu-latest, the job runs on a machine
+#   discarded after it.
+on:
+  workflow_dispatch:
+    inputs:
+      runner: {type: string}
+jobs:
+  a:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - run: echo

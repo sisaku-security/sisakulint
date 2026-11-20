@@ -1,0 +1,13 @@
+# situation: a pull request adds .github/dependabot.yml with an entry of
+#   package-ecosystem github-actions, and the linter runs on the branch of
+#   the pull request.
+# reason: until the pull request is merged, the default branch has no
+#   .github/dependabot.yml, so Dependabot updates nothing.
+# cause: the rule reads .github/dependabot.yml under --root, the files of
+#   the branch, not those of the default branch.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4

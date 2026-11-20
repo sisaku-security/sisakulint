@@ -1,0 +1,28 @@
+# situation: the workflow of the true positive unpinned (unpinned.yml) of
+#   the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, a step uses
+#   actions/checkout by the tag v4.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: the owner of actions/checkout, or whoever has taken over a token
+#   that pushes to it, moves the tag v4 to a commit of theirs, as the tags
+#   v1 to v45.0.7 of tj-actions/changed-files were moved in 2025 to a commit
+#   that prints secrets to the log.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

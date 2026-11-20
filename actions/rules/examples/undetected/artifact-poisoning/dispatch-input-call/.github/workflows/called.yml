@@ -1,0 +1,31 @@
+# situation: caller.yml runs on workflow_dispatch with the input x, and
+#   calls called.yml with the input x of the dispatch as the input x of
+#   called.yml; called.yml downloads the artifact out of the run that the
+#   input x names, and runs ./out/publish.sh.
+# reason: the one who dispatches caller.yml chooses the value:
+#   input-dispatch reports such a value where a workflow on workflow_dispatch
+#   refers to its input directly, but through the call the value is the input
+#   x of called.yml.
+# cause: the rule reads the events of a called workflow from the table of
+#   the callers, and does not follow the value of an input of
+#   workflow_dispatch that a caller gives in with.
+# attack-value: inputs.x = "1234"
+# attack-run-behavior: when the one who dispatches caller.yml gives the
+#   value as x, the download takes the artifact of the run 1234, a
+#   pull_request run of a pull request from a fork whose workflow uploads
+#   out/publish.sh that prints PWNED, and ./out/publish.sh runs the file,
+#   which prints PWNED, with the secrets of the repository.
+on:
+  workflow_call:
+    inputs:
+      x: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ inputs.x }}
+          name: out
+          path: out
+      - run: ./out/publish.sh

@@ -1,0 +1,19 @@
+# situation: on issues, a step passes secrets, variables, the runner, the
+#   outcome of a step and the result of a job to tar after the file names,
+#   by ${{ }} inside quotes.
+# reason: no added gain: no attacker writes them.
+# cause: the rule reads as what an attacker may write only references to
+#   github (through its table of contexts), env, the outputs of steps and of
+#   jobs needed, inputs and matrix; secrets, vars, runner, steps.<id>.outcome
+#   and needs.<id>.result are none of these, so it reads them as values no
+#   attacker writes.
+# attack-value: vars.NAME = "--to-command=echo PWNED"
+# attack-run-behavior: the variable NAME is set by one who may change the
+#   repository's settings; were it the value, tar would read the word as
+#   --to-command and run echo PWNED for notes.txt as it extracts it.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ secrets.TOKEN }}" "${{ vars.NAME }}" "${{ runner.os }}" "${{ steps.s.outcome }}" "${{ needs.a.result }}"

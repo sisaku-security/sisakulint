@@ -1,0 +1,39 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request with actions/checkout v4.2.2 and runs tmatens/compose-lint pinned
+#   to the commit of v0.30.0, in a step with the id lint, over the Compose file
+#   of the checkout. The advisory names no workflow; the step follows the
+#   configuration that GHSA-6f4g-xm8v-pgv6 describes: "Inside the compose-lint
+#   Action, a Compose file from a pull request" sets the text of the report. On
+#   pull_request, the author of a pull request from a fork can change the
+#   workflow and gets a GITHUB_TOKEN with read access only, so the example runs
+#   on pull_request_target. The rule also reports four advisories that GitHub
+#   rates low on the same step (GHSA-88f4-frh5-gmcr, GHSA-jf3h-8jvx-vcrg,
+#   GHSA-xcf7-88g6-7xr8 and GHSA-6wcv-rj3c-mhv3), whose example is
+#   advisory-low.ghsa-xcf7-88g6-7xr8. The fix of the rule upgrades the step
+#   to the commit of v0.33.0: the greatest first patched version of the five
+#   advisories is 0.32.0, which is in the range of GHSA-rm8w-w798-g545, so
+#   the fix moves on to the first patched version of GHSA-rm8w-w798-g545,
+#   0.33.0, which is in the range of no advisory of the package.
+# reason: GHSA-6f4g-xm8v-pgv6, which GitHub rates medium, says the text report
+#   of compose-lint up to 0.30.0 prints service names, environment keys and
+#   lines of the Compose file without neutralizing ##[, and that the Action
+#   up to 0.30.0 prints the report with the processing of workflow commands
+#   on. The code of the action, which the workflow does not show, prints the
+#   report.
+# attack: the author of a pull request from a fork names a service of the
+#   Compose file ##[set-output name=sarif-written;]true.
+# attack-run-behavior: the runner reads the line of the report that holds the
+#   name of the service as a set-output command, and sets the output
+#   sarif-written of the step of the action that runs compose-lint, which the
+#   action passes on as the output sarif-written of the step lint.
+# advisory: https://github.com/advisories/GHSA-6f4g-xm8v-pgv6
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: lint
+        uses: tmatens/compose-lint@adf00708734b772686337b69831c8e3912fa0ed4 # v0.30.0

@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE, and echo writes the variable to the
+#   file title.txt, in a pipeline whose last command is bash.
+# reason: the redirect of echo sends what echo writes to the file, not to
+#   the pipe, so the bash after the pipe reads nothing.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: echo writes the line echo PWNED to title.txt, and bash
+#   reads an empty input and runs nothing.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: echo "$ISSUE_TITLE" > title.txt | bash

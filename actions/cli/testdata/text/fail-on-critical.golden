@@ -1,0 +1,135 @@
+critical  code-injection.controlled  ×5
+  impact: the value becomes code
+  env.TITLE is written into the run script by ${{ }}, and an attacker controls it on issues  ×4
+    .github/workflows/env.yml:8:24
+    8 |       - run: echo "${{ env.TITLE }}"
+      |                        ^^^^^^^^^
+    .github/workflows/env.yml:6:14  env.TITLE gets its value here
+    6 |       TITLE: ${{ github.event.issue.title }}
+      |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    .github/workflows/env.yml:9:30
+    9 |       - run: echo "again ${{ env.TITLE }}"
+      |                              ^^^^^^^^^
+    .github/workflows/env.yml:6:14  env.TITLE gets its value here
+    6 |       TITLE: ${{ github.event.issue.title }}
+      |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    .github/workflows/env.yml:10:30
+    10 |       - run: echo "third ${{ env.TITLE }}"
+       |                              ^^^^^^^^^
+    .github/workflows/env.yml:6:14  env.TITLE gets its value here
+    6 |       TITLE: ${{ github.event.issue.title }}
+      |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    … 1 more (-v)
+  github.event.issue.title is written into the run script by ${{ }}, and an attacker controls it on issues
+    .github/workflows/issues.yml:11:21
+    11 |           echo "${{ github.event.issue.title }}"
+       |                     ^^^^^^^^^^^^^^^^^^^^^^^^
+  remedy: pass it through env and read the variable
+  fix (review): move the expressions into the env of the step, and read the variables where they were, quoted as the shell needs (bash and sh)  [--fix=review]
+    side effect: The value of the ${{ }} expression is no longer parsed by the program that reads the script (the shell, or the JavaScript runtime of actions/github-script) as part of the script text: characters of the value that the program interpreted before the fix (such as $, `, \, double quotes and line breaks) are taken as plain characters, and a workflow that relied on the program interpreting those characters runs differently.
+
+critical  code-injection.wiki  .github/workflows/wiki.yml:8:24
+  github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum
+  impact: the value becomes code
+    8 |       - run: echo "${{ github.event.pages[0].title }}"
+      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  remedy: pass it through env and read the variable
+  assumed: repo.wiki-open = true (--no-assumptions to drop)
+  fix (review): move the expressions into the env of the step, and read the variables where they were, quoted as the shell needs (bash and sh)  [--fix=review]
+    side effect: The value of the ${{ }} expression is no longer parsed by the program that reads the script (the shell, or the JavaScript runtime of actions/github-script) as part of the script text: characters of the value that the program interpreted before the fix (such as $, `, \, double quotes and line breaks) are taken as plain characters, and a workflow that relied on the program interpreting those characters runs differently.
+
+high  commit-sha.unpinned  ×7
+  impact: whoever can move the ref decides what runs here
+  actions/checkout@v4 is not pinned to a full commit SHA  ×4
+    .github/workflows/alias.yml:6:36 via alias at 10:15  (+3 more, -v)
+    6 |       - uses: &co actions/checkout@v4
+      |                                    ^^
+  actions/setup-node@v4 is not pinned to a full commit SHA  ×2
+    .github/workflows/pins.yml:6:34  (+1 more, -v)
+    6 |       - uses: actions/setup-node@v4
+      |                                  ^^
+  actions/setup-go@v5 is not pinned to a full commit SHA
+    .github/workflows/pins.yml:7:32
+    7 |       - uses: actions/setup-go@v5
+      |                                ^^
+  remedy: pin the uses to a full commit SHA
+  no fix: the commit of the ref is not known (offline: pass --facts or --online)
+
+conditional  2 findings hold only if what is not known here is so
+  impostor-commit.fork-commit (high)  2 findings, 1 unknown
+    git.commit-ref repo=actions/cache sha=668228422ae6a00e4ad889ee87cd7109ec5666a7  → 2 places
+  why: offline: pass --facts or --online
+
+inconclusive  10 findings: the rules could not decide whether the place of each finding has the problem that the rule of the finding looks for; a person decides
+  code-injection  step-output-run 1
+  known-vulnerable-actions  advisories-unknown 9
+
+critical  known-vulnerable-actions.advisories-unknown  .github/workflows/alias.yml:6:36  inconclusive
+  the advisories of actions/checkout are not known (offline: pass --facts or --online)
+  impact: a uses of another repository runs a version that an advisory of the GitHub Advisory Database says is vulnerable
+    6 |       - uses: &co actions/checkout@v4
+      |                                    ^^
+  remedy: the rule known-vulnerable-actions examined the place and could not decide whether the place has the problem that the rule looks for. A person decides: look at the place and at where the value at the place comes from. When the place does not have the problem, an entry for the place in a file of acceptances (--accept; the form of the file is schema/acceptances-v0.json) makes the place no longer add 8 to the exit code
+
+critical  known-vulnerable-actions.advisories-unknown  .github/workflows/alias.yml:6:36 via alias at 10:15  inconclusive
+  the advisories of actions/checkout are not known (offline: pass --facts or --online)
+  impact: a uses of another repository runs a version that an advisory of the GitHub Advisory Database says is vulnerable
+    6 |       - uses: &co actions/checkout@v4
+      |                                    ^^
+  remedy: the rule known-vulnerable-actions examined the place and could not decide whether the place has the problem that the rule looks for. A person decides: look at the place and at where the value at the place comes from. When the place does not have the problem, an entry for the place in a file of acceptances (--accept; the form of the file is schema/acceptances-v0.json) makes the place no longer add 8 to the exit code
+
+critical  known-vulnerable-actions.advisories-unknown  .github/workflows/issues.yml:6:32  inconclusive
+  the advisories of actions/checkout are not known (offline: pass --facts or --online)
+  impact: a uses of another repository runs a version that an advisory of the GitHub Advisory Database says is vulnerable
+    6 |       - uses: actions/checkout@v4
+      |                                ^^
+  remedy: the rule known-vulnerable-actions examined the place and could not decide whether the place has the problem that the rule looks for. A person decides: look at the place and at where the value at the place comes from. When the place does not have the problem, an entry for the place in a file of acceptances (--accept; the form of the file is schema/acceptances-v0.json) makes the place no longer add 8 to the exit code
+
+    … 7 more (-v)
+
+quality
+  missing-timeout-minutes.job  ×6
+    .github/workflows/alias.yml:3:3  the job a has no timeout-minutes
+    .github/workflows/alias.yml:7:3  the job b has no timeout-minutes
+    .github/workflows/env.yml:3:3  the job greet has no timeout-minutes
+    … 3 more (-v)
+  archived-uses.archived-repository  ×9
+    .github/workflows/alias.yml:6:36 via alias at 10:15  actions/checkout@v4 names actions/checkout, a repository that is archived [conditional]
+    .github/workflows/alias.yml:6:36  actions/checkout@v4 names actions/checkout, a repository that is archived [conditional]
+    .github/workflows/issues.yml:6:32  actions/checkout@v4 names actions/checkout, a repository that is archived [conditional]
+    … 6 more (-v)
+  dependabot-github-actions.no-update-tool  ×4
+    .github/workflows/alias.yml:6:36  no update tool updates actions/checkout@v4 and every other such uses of the same file, if there are any: no entry of .github/dependabot.yml with package-ecosystem github-actions lists /, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count), and no Renovate configuration in the repository updates the file [conditional]
+    .github/workflows/issues.yml:6:32  no update tool updates actions/checkout@v4 and every other such uses of the same file, if there are any: no entry of .github/dependabot.yml with package-ecosystem github-actions lists /, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count), and no Renovate configuration in the repository updates the file [conditional]
+    .github/workflows/pins.yml:6:34  no update tool updates actions/setup-node@v4 and every other such uses of the same file, if there are any: no entry of .github/dependabot.yml with package-ecosystem github-actions lists /, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count), and no Renovate configuration in the repository updates the file [conditional]
+    … 1 more (-v)
+  deprecated-node-runtime.used-action  ×9
+    .github/workflows/alias.yml:6:36  the action actions/checkout@v4 declares runs.using: node12, node16 or node20, an older Node.js version than node24 [conditional]
+    .github/workflows/alias.yml:6:36 via alias at 10:15  the action actions/checkout@v4 declares runs.using: node12, node16 or node20, an older Node.js version than node24 [conditional]
+    .github/workflows/issues.yml:6:32  the action actions/checkout@v4 declares runs.using: node12, node16 or node20, an older Node.js version than node24 [conditional]
+    … 6 more (-v)
+  dependabot-github-actions.unversioned-sha  ×2
+    .github/workflows/issues.yml:7:29  Renovate updates the file, but does not update actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 and every other uses of the same file that is pinned to a commit SHA without a version comment, if there are any; and no entry of .github/dependabot.yml with package-ecosystem github-actions lists /, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count) [conditional]
+    .github/workflows/wiki.yml:7:29  Renovate updates the file, but does not update actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 and every other uses of the same file that is pinned to a commit SHA without a version comment, if there are any; and no entry of .github/dependabot.yml with package-ecosystem github-actions lists /, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count) [conditional]
+
+inputs  5 read, 1 invalid  (every workflow and action.yml under --root)
+  invalid ×1: diagnostics
+    .github/workflows/bad.yml
+
+worst
+  critical  code-injection.controlled  ×4  .github/workflows/env.yml:8:24
+    env.TITLE is written into the run script by ${{ }}, and an attacker controls it on issues
+  critical  code-injection.controlled  .github/workflows/issues.yml:11:21
+    github.event.issue.title is written into the run script by ${{ }}, and an attacker controls it on issues
+  critical  code-injection.wiki  .github/workflows/wiki.yml:8:24
+    github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum
+  critical  known-vulnerable-actions.advisories-unknown  .github/workflows/alias.yml:6:36  inconclusive
+    the advisories of actions/checkout are not known (offline: pass --facts or --online)
+  critical  known-vulnerable-actions.advisories-unknown  .github/workflows/alias.yml:6:36 via alias at 10:15  inconclusive
+    the advisories of actions/checkout are not known (offline: pass --facts or --online)
+  … 8 more
+
+25 findings: 13 confirmed (critical 6, high 7), 2 conditional, 10 inconclusive
+30 quality findings: the bits do not count quality findings
+9 below --fail-on critical: they count for nothing in the bits
+bits 25 = 1 (confirmed findings) + 8 (inconclusive findings) + 16 (inputs not valid)

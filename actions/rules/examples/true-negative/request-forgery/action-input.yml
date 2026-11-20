@@ -1,0 +1,17 @@
+# situation: on issues, octokit/request-action gets a route of GitHub's API
+#   with the issue's title in the query, and GITHUB_TOKEN.
+# reason: the route starts with a path, so the action sends the request to
+#   GitHub's API, and the title cannot change the host.
+# attack: the attacker opens an issue titled x repo:attacker/repo.
+# attack-run-behavior: the action sends the search to GitHub's API with the
+#   title in the query; the token goes to GitHub only.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: octokit/request-action@v2.x
+        with:
+          route: GET /search/issues?q=${{ github.event.issue.title }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

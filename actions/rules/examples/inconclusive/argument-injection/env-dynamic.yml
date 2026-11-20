@@ -1,0 +1,15 @@
+# situation: the env of the job is the whole ${{ fromJSON(vars.E) }}, and a
+#   step passes env.X to tar after the file names, by ${{ }} inside quotes.
+# reason: which names that env sets, and their values, are known only at run
+#   time, so whether an attacker controls env.X is not known.
+# attack-value: env.X = "--to-command=echo PWNED"
+# attack-run-behavior: when the JSON in vars.E sets X to the value, tar
+#   reads the word as --to-command and runs echo PWNED for notes.txt as it
+#   extracts it, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.E) }}
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ env.X }}"

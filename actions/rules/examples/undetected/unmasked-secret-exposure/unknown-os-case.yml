@@ -1,0 +1,26 @@
+# situation: on push, a job runs on Linux and on Windows by a matrix, its
+#   env has the JSON secret DB under the name DB, and a step takes the
+#   password out of env.db with fromJSON into the env of the step.
+# reason: a todo (the same file): the runs-on of the job is a ${{ }} of the
+#   matrix, so the rule does not know that the job runs on Windows, and
+#   matches env.db with DB only in the same case.
+# cause: the runner matches the names of the env context in any case on
+#   Windows, so env.db is the secret DB in the run on Windows.
+# attack: one who may read the log of the run opens the log of the run on
+#   Windows to read the password.
+# attack-run-behavior: on Windows, the header of the step prints PASSWORD
+#   with the value that fromJSON took out, which the runner does not mask.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      DB: ${{ secrets.DB }}
+    steps:
+      - env:
+          PASSWORD: ${{ fromJSON(env.db).password }}
+        run: ./migrate.sh

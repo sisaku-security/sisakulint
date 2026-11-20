@@ -1,0 +1,33 @@
+# situation: the workflow of the true positive controlled (controlled.yml)
+#   of the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on issues, the
+#   step p, which has an id, prints the title of the issue, and the release
+#   step writes the output tag of the step p into its script.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

@@ -1,0 +1,15 @@
+# situation: on pull_request_target, a step passes $GITHUB_HEAD_REF, which
+#   the runner sets, to tar after the file names, inside quotes.
+# reason: GITHUB_HEAD_REF has the name of the pull request's head branch,
+#   which the author of the pull request chooses and which may begin with -;
+#   tar reads the value as an option.
+# attack-value: github.head_ref = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: GITHUB_HEAD_REF is the branch's name, and tar reads
+#   "$GITHUB_HEAD_REF" as --to-command and runs echo${IFS}PWNED through the
+#   shell for notes.txt as it extracts it, which prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt "$GITHUB_HEAD_REF"

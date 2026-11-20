@@ -1,0 +1,20 @@
+# situation: on push, a run of pwsh prints the first twelve characters of
+#   the secret TOKEN.
+# reason: a todo (the same file): Substring prints a part of the token,
+#   which the runner does not mask.
+# cause: the rule reads runs of bash and sh only.
+# attack: one who may read the run's log opens the log and reads the
+#   twelve characters.
+# attack-run-behavior: the step prints "token: " and twelve characters of
+#   the token.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: |
+          Write-Output "token: $($env:TOKEN.Substring(0, 12))"

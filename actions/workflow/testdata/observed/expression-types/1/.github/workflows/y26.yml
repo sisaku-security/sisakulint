@@ -1,0 +1,7 @@
+name: y26
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ vars.GITHUB_FOO }}|${{ vars['a b'] }}"

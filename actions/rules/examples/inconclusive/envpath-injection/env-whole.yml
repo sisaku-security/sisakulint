@@ -1,0 +1,17 @@
+# situation: a step writes toJSON(env) to $GITHUB_PATH by ${{ }}, the whole
+#   env.
+# reason: the whole env has what steps set at run time, so whether an
+#   attacker controls a part of it is not known.
+# attack-value: toJSON(env) = "{\n  \"B\": \"/tmp/PWNED\"\n}"
+# attack-run-behavior: when a step before sets B through $GITHUB_ENV to
+#   /tmp/PWNED, the script writes three lines to $GITHUB_PATH: v={, two
+#   spaces and the member of B, and }, three relative paths before the PATH
+#   of the steps after it. toJSON escapes a line break and a carriage return
+#   in a value, so no line is /tmp/PWNED; a later command finds the
+#   attacker's file only in a directory of one of those names where it runs.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ toJSON(env) }}" >> "$GITHUB_PATH"

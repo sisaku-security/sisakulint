@@ -1,0 +1,19 @@
+# situation: on issues opened, a step of a parallel group echoes the issue's
+#   title, written in by ${{ }}.
+# reason: the steps of a parallel group run as the job's steps, alongside
+#   each other, and ${{ }} puts the title into the script before the shell
+#   parses it, so a double quote in the title ends the echo's string and
+#   what follows runs as commands.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo ""; echo PWNED; echo "", and
+#   the shell runs the second echo as a command, which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - run: echo build
+          - run: echo "${{ github.event.issue.title }}"

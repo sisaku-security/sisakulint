@@ -1,0 +1,56 @@
+# situation: on issue_comment, when the comment is on a pull request and
+#   contains /update-vrt, a step uses gotson/pull-request-comment-branch,
+#   and actions/checkout checks out the repository and the ref that the
+#   outputs of the step comment-branch name; a later step uses the local
+#   action ./.github/actions/setup. This is update-vrt.yml of
+#   actualbudget/actual (commit c0f9073f35f8cfc3bf29810613ea889203672f0d,
+#   lines 1-33). The container of the job and the concurrency of the
+#   workflow are left out. sipify-bot.yml of qgis/QGIS (commit
+#   5166fc7a513634316408e9b29f68fd584e1524c0, GHSL-2024-171) has the same form
+#   with alessbell/pull-request-comment-branch v2.1.0 on a comment /sipify,
+#   and runs ./scripts/sipify_all.sh of the checkout. bloat.yml of
+#   linebender/druid (commit 1c0d227bba9c56221b255071d95396915bee1172,
+#   GHSL-2021-048, and the same file of linebender/norad and
+#   linebender/runebender) has the same form with cmyr/bloat-cmp/get-revs on a
+#   comment /bloat: actions/checkout checks out the output head of the action
+#   (line 58), and actions-rs/cargo builds the checkout.
+# reason: the outputs head_owner, head_repo and head_ref of the action name
+#   the head of the pull request, which the author of the pull request
+#   writes; the rule does not know what an output of an action of another
+#   repository holds.
+# cause: the rule does not yet ask for the action.yml of another repository
+#   as a fact.
+# attack: the author of a pull request from a fork writes
+#   .github/actions/setup/action.yml in the head commit and comments
+#   /update-vrt on the pull request; the if of the job reads only the body
+#   of the comment.
+# attack-run-behavior: the outputs of the action name the fork and the head
+#   branch, actions/checkout checks out the head branch (the refusal of
+#   actions/checkout covers pull_request_target and workflow_run, not
+#   issue_comment), and the step Set up environment runs the action.yml of
+#   the author with the token of contents: write.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-325_GHSL-2024-326_Actual/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-171_QGIS/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-048-linebender-druid-workflows/
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  pull-requests: write
+  contents: write
+jobs:
+  update-vrt:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/update-vrt')
+    steps:
+      - name: Get PR branch
+        uses: gotson/pull-request-comment-branch@head-repo-owner-dist
+        id: comment-branch
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.comment-branch.outputs.head_owner }}/${{ steps.comment-branch.outputs.head_repo }}
+          ref: ${{ steps.comment-branch.outputs.head_ref }}
+      - name: Set up environment
+        uses: ./.github/actions/setup

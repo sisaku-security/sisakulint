@@ -1,0 +1,13 @@
+# code-injection's fix moves the ${{ }} into the step's env; the step
+# still prints the title where ACTIONS_ALLOW_UNSECURE_COMMANDS is true, so
+# unsecure-commands' finding stays with the same fingerprint
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ github.event.issue.title }}"
+      - run: make

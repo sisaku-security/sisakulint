@@ -1,0 +1,2010 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The kinds of findings of the rules of sisakulint (sisakulint/findings/v0): what the args of a finding in a report are. Each member of $defs whose name has a dot is a kind, <rule>.<kind>: an object whose kind is the name and whose other properties are its arguments. x-detected is the text of what the finding says is detected: {name} stands for the argument name, an array is joined by a comma and a space, and any other brace is itself. x-consequence is why it is bad, and x-remedy what a person does about it: each the same text for every finding of the kind, with no argument. x-text on an enumeration is the text of each value in x-detected. The args of a finding are what to read; what is detected is made of them, for people. It refers to facts-v0.json, which is to be in the same directory.",
+  "$defs": {
+    "action-list.unlisted": {
+      "description": "A uses of an action or a reusable workflow of another repository that repo.action-list does not allow.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "action-list.unlisted"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses"
+      ],
+      "additionalProperties": false,
+      "x-detected": "{uses} is not allowed by repo.action-list: {uses}, read as GitHub reads a uses (with empty parts and . dropped, and .. resolved), matches no pattern of repo.action-list, or matches a pattern of repo.action-list that starts with !",
+      "x-consequence": "the maintainer of the action or of the reusable workflow decides the code that runs, though the repository did not list the action or the reusable workflow as one that the repository trusts: the code of an action runs in the job with the secrets and the GITHUB_TOKEN of the job, and the jobs of a reusable workflow run with the GITHUB_TOKEN of the run and the secrets that the calling job passes",
+      "x-remedy": "when the repository trusts the maintainer of the action or the reusable workflow, add a pattern that matches the uses to repo.action-list; otherwise, replace the uses with a uses of an action or a reusable workflow that repo.action-list allows"
+    },
+    "action-list.unlisted-image": {
+      "description": "A uses of a Docker image (docker://), or the image of the container of a job, that repo.action-list does not allow.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "action-list.unlisted-image"
+        },
+        "uses": {
+          "description": "docker:// and the image, as written in the uses or in the container of the job, or as the matrix gives the image.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses"
+      ],
+      "additionalProperties": false,
+      "x-detected": "{uses} (a docker:// uses, or docker:// followed by the image of the container of the job) is not allowed by repo.action-list: {uses}, compared as written, matches no pattern of repo.action-list, or matches a pattern of repo.action-list that starts with !",
+      "x-consequence": "the publisher of the image decides what the image holds, though the repository did not list the image as one that the repository trusts: a docker:// step runs the image with the workspace of the job and the environment variables and inputs that the step passes, and the steps of a job whose container is the image run in the image with the secrets and the GITHUB_TOKEN that the steps hold",
+      "x-remedy": "when the repository trusts the publisher of the image, add a pattern that matches the uses to repo.action-list; otherwise, replace the uses with a uses that repo.action-list allows"
+    },
+    "action-list.unlisted-service": {
+      "description": "The image of a service of a job that repo.action-list does not allow.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "action-list.unlisted-service"
+        },
+        "uses": {
+          "description": "docker:// and the image of the service, as written, or as the matrix gives the image.",
+          "type": "string",
+          "minLength": 1
+        },
+        "service": {
+          "description": "The name of the service.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses",
+        "service"
+      ],
+      "additionalProperties": false,
+      "x-detected": "{uses}, the image of the service {service}, is not allowed by repo.action-list: {uses}, compared as written, matches no pattern of repo.action-list, or matches a pattern of repo.action-list that starts with !",
+      "x-consequence": "the publisher of the image decides what the service runs, though the repository did not list the image as one that the repository trusts: the service reads the environment variables of the service and what the job sends to the service, and sends its responses to the job",
+      "x-remedy": "when the repository trusts the publisher of the image, add a pattern that matches docker:// and the image to repo.action-list; otherwise, replace the image with one that repo.action-list allows"
+    },
+    "agent-action": {
+      "description": "An action that runs an AI agent.",
+      "oneOf": [
+        {"const": "claude-code-action", "description": "anthropics/claude-code-action."},
+        {"const": "claude-code-base-action", "description": "anthropics/claude-code-action/base-action, or anthropics/claude-code-base-action, its mirror."},
+        {"const": "codex-action", "description": "openai/codex-action."},
+        {"const": "run-gemini-cli", "description": "google-github-actions/run-gemini-cli."},
+        {"const": "ai-inference", "description": "actions/ai-inference."}
+      ],
+      "x-text": {
+        "claude-code-action": "anthropics/claude-code-action",
+        "claude-code-base-action": "claude-code's base-action",
+        "codex-action": "openai/codex-action",
+        "run-gemini-cli": "google-github-actions/run-gemini-cli",
+        "ai-inference": "actions/ai-inference"
+      },
+      "x-go-type": "analysis.AgentAction"
+    },
+    "agent-input": {
+      "description": "An input of an agent action, by the name that the action.yml of the action gives the input.",
+      "oneOf": [
+        {"const": "allowed_non_write_users", "description": "claude-code-action's users without write access it lets in."},
+        {"const": "allowed_bots", "description": "claude-code-action's bots it lets in."},
+        {"const": "allow-users", "description": "codex-action's users it lets in."},
+        {"const": "claude_args", "description": "The flags claude-code-action and its base-action pass to the CLI."},
+        {"const": "settings", "description": "claude-code-action's and run-gemini-cli's settings."},
+        {"const": "safety-strategy", "description": "codex-action's privileges of the agent's process."},
+        {"const": "sandbox", "description": "codex-action's sandbox."},
+        {"const": "permission-profile", "description": "codex-action's profile of permissions."},
+        {"const": "codex-args", "description": "The flags codex-action passes to the CLI."},
+        {"const": "prompt", "description": "The prompt an agent action passes to the agent."},
+        {"const": "system-prompt", "description": "ai-inference's system prompt, put before the prompt."},
+        {"const": "input", "description": "ai-inference's values of the variables of a .prompt.yml."},
+        {"const": "copilot-allow-tools", "description": "ai-inference's tools the Copilot CLI may use."}
+      ],
+      "x-text": {"allowed_non_write_users": "allowed_non_write_users", "allowed_bots": "allowed_bots", "allow-users": "allow-users", "claude_args": "claude_args", "settings": "settings", "safety-strategy": "safety-strategy", "sandbox": "sandbox", "permission-profile": "permission-profile", "codex-args": "codex-args", "prompt": "prompt", "system-prompt": "system-prompt", "input": "input", "copilot-allow-tools": "copilot-allow-tools"},
+      "x-go-type": "analysis.AgentInput"
+    },
+    "ai-action-excessive-tools.auto-mode": {
+      "description": "A step of claude-code-action or its base-action whose agent starts in auto mode, or in plan mode, where a classifier, not the permissions, decides the commands it runs: by --permission-mode or defaultMode, or by a third-party provider or a variable of env that keeps Claude Code from fetching its feature flags.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-excessive-tools.auto-mode"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "source": {"description": "What decides the mode, as written: a flag, a key of the settings, an input or a variable of env.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "source"],
+      "additionalProperties": false,
+      "x-detected": "{source} starts the agent of {action} in a mode where a classifier, not its permissions, decides what runs",
+      "x-consequence": "an agent an attacker's text steers runs their commands unless the classifier stops them, with the run's token, the secrets in its env, the token actions/checkout leaves in .git/config and, with the sudo of GitHub-hosted runners, the job's secrets in the runner's memory, and sends them out",
+      "x-remedy": "start the agent in a mode that runs only what its permissions allow (--permission-mode dontAsk, which denies each tool call that the allowed tools do not allow, with the tools the task needs), or run it only on events whose payload holds only what those who can write wrote"
+    },
+    "ai-action-excessive-tools.run-code": {
+      "description": "A permission of a step of an agent action that lets the agent run any code it chooses: a shell, a command that runs another or reads code with arguments it chooses, or one that runs the workspace's code with an edit of the workspace.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-excessive-tools.run-code"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "tool": {"description": "The permission that allows the tool, as written in the workflow or in the action.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "tool"],
+      "additionalProperties": false,
+      "x-detected": "{tool} lets the agent of {action} run any code it chooses",
+      "x-consequence": "an agent an attacker's text steers runs their commands, with the run's token, the secrets in its env, the token actions/checkout leaves in .git/config and, with the sudo of GitHub-hosted runners, the job's secrets in the runner's memory, and sends them out",
+      "x-remedy": "allow only the commands the task needs, with their arguments fixed, and, when the agent has a tool that edits files, do not allow a shell, an interpreter or a build; or run the agent only on events whose payload holds only what those who can write wrote"
+    },
+    "ai-action-excessive-tools.send-network": {
+      "description": "A permission of a step of an agent action that lets the agent send to a host it chooses: a fetch of any URL, or a command with a * that sends.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-excessive-tools.send-network"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "tool": {"description": "The permission that allows the tool, as written in the workflow or in the action.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "tool"],
+      "additionalProperties": false,
+      "x-detected": "{tool} lets the agent of {action} send to a host it chooses",
+      "x-consequence": "an attacker's text makes the agent send what it reads, the files of the workspace and of the runner, to the attacker's host",
+      "x-remedy": "allow fetching only from fixed domains (WebFetch(domain:…)), or not at all"
+    },
+    "ai-action-excessive-tools.setting-value": {
+      "description": "A ${{ }} an attacker controls, in an input of an agent action that the action splits into flags or reads as JSON: claude_args, codex-args, settings, copilot-allow-tools.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-excessive-tools.setting-value"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "input": {"$ref": "#/$defs/agent-input"},
+        "expr_ref": {"description": "The ${{ }} as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "input", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} in {input} of {action} lets an attacker add flags or keys to the agent's settings",
+      "x-consequence": "closing the quote around the value, the attacker allows the agent any tool or takes its sandbox off, and the agent need not follow them",
+      "x-remedy": "keep what an attacker writes out of the setting inputs: give it to the agent as text, through the prompt or env, behind the action's check of the actor"
+    },
+    "ai-action-excessive-tools.write-token": {
+      "description": "A permission of a step of an agent action that lets the agent write with the token to a target it chooses: a command with a * that writes, a tool of github-mcp-server that writes, or claude-code-action's tag mode push.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-excessive-tools.write-token"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "tool": {"description": "The permission that allows the tool, as written in the workflow or in the action.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "tool"],
+      "additionalProperties": false,
+      "x-detected": "{tool} lets the agent of {action} write with the token where it chooses",
+      "x-consequence": "an attacker's text makes the agent comment, label, push or merge wherever the token can write, not only on what it works on",
+      "x-remedy": "fix the target in the permission (no *), use tools whose target the action fixes (claude-code-action's use_commit_signing), or give the step a token that writes only what the task needs"
+    },
+    "ai-action-execution-order.edited-code": {
+      "description": "A step of an agent action whose agent edits the workspace, followed in its job by a step that runs the workspace's code, or git when the agent may write .git.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-execution-order.edited-code"},
+        "action": {"$ref": "#/$defs/agent-action"}
+      },
+      "required": ["kind_id", "action"],
+      "additionalProperties": false,
+      "x-detected": "a step after {action} runs the code its agent can edit",
+      "x-consequence": "an agent an attacker's text steers edits a script, a build or a hook, and the later step runs it with what the job holds: its token, its secrets, the network and the runner's sudo",
+      "x-remedy": "run the agent as the last step of a job of its own, and pass its output to a new job; or check out the workspace again before a step runs its code"
+    },
+    "ai-action-execution-order.later-secrets": {
+      "description": "A step of an agent action whose agent runs any code without sudo, followed in its job by a step that holds secrets the agent does not, which what the agent leaves on the runner reaches.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-execution-order.later-secrets"},
+        "action": {"$ref": "#/$defs/agent-action"}
+      },
+      "required": ["kind_id", "action"],
+      "additionalProperties": false,
+      "x-detected": "a step after {action} holds secrets its agent does not",
+      "x-consequence": "an agent an attacker's text steers leaves a process, a BASH_ENV or a PATH in the environment files, or another action's source, and the later step runs it with its secrets",
+      "x-remedy": "run the agent as the last step of a job of its own, and pass its output to a new job; keep the secrets of the steps after it out of that job"
+    },
+    "ai-action-prompt-injection.env": {
+      "description": "A ${{ }} an attacker controls, in an env of a step of an agent action, which the agent reads through its tools.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-prompt-injection.env"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "env": {"description": "The env's name.", "type": "string", "minLength": 1},
+        "expr_ref": {"description": "The ${{ }} as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "env", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} in env {env} of {action} gives the agent what an attacker wrote",
+      "x-consequence": "the agent reads the env through its tools, as the workflow means it to, and the attacker's text in it steers the agent with the run's token and its API key",
+      "x-remedy": "keep what an attacker writes out of the agent: run it only on events whose payload holds only what those who can write wrote, and allow it only the tools the task needs"
+    },
+    "ai-action-prompt-injection.prompt": {
+      "description": "A ${{ }} an attacker controls, in an input an agent action writes into the agent's prompt.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-prompt-injection.prompt"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "input": {"$ref": "#/$defs/agent-input"},
+        "expr_ref": {"description": "The ${{ }} as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "input", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} in {input} of {action} puts what an attacker wrote into the agent's prompt",
+      "x-consequence": "the attacker's text steers the agent over the workflow's prompt: it runs what the step lets it run, with the run's token and the agent's API key, and writes what it is told to",
+      "x-remedy": "keep what an attacker writes out of the agent: run it only on events whose payload holds only what those who can write wrote, give it the number of the issue and not its text, and allow it only the tools the task needs; moving the value into env does not help, as the agent reads it there"
+    },
+    "ai-action-unrestricted-trigger.any-bot": {
+      "description": "A step of claude-code-action whose allowed_bots is '*' or the actor of a run the attacker triggers: a GitHub App anyone makes starts the agent.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unrestricted-trigger.any-bot"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "gate_value": {"description": "The value of allowed_bots as written: '*', or a ${{ }} that is the actor of a run the attacker triggers.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "gate_value"],
+      "additionalProperties": false,
+      "x-detected": "allowed_bots of {action} is '{gate_value}', which lets any bot start the agent",
+      "x-consequence": "a GitHub App anyone makes opens an issue or comments on a public repository, and its bot starts the agent with a prompt it writes, past the check of the actor",
+      "x-remedy": "list the bots you trust in allowed_bots, not '*' nor a value that is the run's actor, or leave it out"
+    },
+    "ai-action-unrestricted-trigger.any-user": {
+      "description": "A step of an agent action that lets any user start the agent: claude-code-action's allowed_non_write_users with a github_token, or codex-action's allow-users, that is '*' or the actor of a run the attacker triggers.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unrestricted-trigger.any-user"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "input": {"description": "The input of the action that decides who may start the agent.", "$ref": "#/$defs/agent-input"},
+        "gate_value": {"description": "The input's value as written: '*', or a ${{ }} that is the actor of a run the attacker triggers.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "input", "gate_value"],
+      "additionalProperties": false,
+      "x-detected": "{input} of {action} is '{gate_value}', which lets anyone start the agent",
+      "x-consequence": "anyone who opens an issue or comments starts the agent with the run's token and the agent's API key, and the prompt they write steers it",
+      "x-remedy": "list the users who may start the agent, not '*' nor a value that is the run's actor, or leave the input out so that only those who can write start it"
+    },
+    "ai-action-unrestricted-trigger.labeler-token-owner": {
+      "description": "A step of an agent action in a job on pull_request_target on labeled, where a workflow of the same repository adds the label that the job waits for to the pull request of an attacker, with actions/labeler and the token of an account: the actor of the labeled run is the account of the token, and the account has write access to the repository, so the action starts the agent.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unrestricted-trigger.labeler-token-owner"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "labeler": {"description": "The workflow that runs actions/labeler.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "labeler"],
+      "additionalProperties": false,
+      "x-detected": "the job of {action} runs on pull_request_target on labeled, and actions/labeler in {labeler} is configured to add the label that the job waits for to the pull request of an attacker, with the token of an account; the actor of the labeled run is the account of the token, and the account has write access to the repository, so {action} starts the agent for the run: {action} checks no actor, or {action} checks the actor and lets in an account that has write access",
+      "x-consequence": "an attacker who opens a pull request from a fork starts the agent with no person approving the run; the agent reads the pull request that the attacker wrote, and the agent has the GITHUB_TOKEN of the labeled run and the API key of the agent",
+      "x-remedy": "give actions/labeler the GITHUB_TOKEN, as a label that the GITHUB_TOKEN adds starts no workflow run; or start the agent only on a label that a person adds, a label that no workflow of the repository adds"
+    },
+    "ai-action-unrestricted-trigger.unchecked": {
+      "description": "A step of an agent action that checks no actor, on an event an outsider triggers.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unrestricted-trigger.unchecked"},
+        "action": {"$ref": "#/$defs/agent-action"}
+      },
+      "required": ["kind_id", "action"],
+      "additionalProperties": false,
+      "x-detected": "{action} checks no actor, and the step runs on an event an outsider triggers",
+      "x-consequence": "anyone who opens an issue or comments starts the agent with the run's token and its API key",
+      "x-remedy": "limit who starts the agent: run the agent only on events whose payload has nothing an attacker wrote, with a fixed prompt (workflow_dispatch, whose payload the one who dispatches the workflow writes only in the inputs, with a prompt that reads no input), on a label that a maintainer adds, check the actor in the job's if, or use claude-code-action, which checks the actor of the run. The check of the actor does not check the author of the text that the agent reads: the issue that a maintainer labels may still have text that the attacker wrote, so do not put such text in the prompt; ai-action-prompt-injection reports such text"
+    },
+    "ai-action-unsafe-sandbox.commands": {
+      "description": "A setting of an agent action that takes off the limits on the commands the agent runs: its sandbox or its checks of permissions.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unsafe-sandbox.commands"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "input": {"description": "The input.", "$ref": "#/$defs/agent-input"},
+        "value": {"description": "The word in the value of the input that lets the agent run any command.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "input", "value"],
+      "additionalProperties": false,
+      "x-detected": "{value} in {input} of {action} lets the agent run any command",
+      "x-consequence": "an agent that text an attacker wrote steers runs any command on the runner, with the network: it reads and sends out the token and the secrets of the step",
+      "x-remedy": "keep the sandbox (codex: workspace-write or read-only) and the checks of permissions (claude: allowedTools for what the task needs)"
+    },
+    "ai-action-unsafe-sandbox.privileges": {
+      "description": "A setting of an agent action that keeps the privileges of the agent's process: codex-action's safety-strategy unsafe.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "ai-action-unsafe-sandbox.privileges"},
+        "action": {"$ref": "#/$defs/agent-action"},
+        "input": {"description": "The input.", "$ref": "#/$defs/agent-input"},
+        "value": {"description": "The value of the input.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "action", "input", "value"],
+      "additionalProperties": false,
+      "x-detected": "{input} {value} of {action} leaves the agent its sudo",
+      "x-consequence": "an agent that text an attacker wrote steers reads the API key from memory with sudo and prints it, and the steps after it keep sudo",
+      "x-remedy": "use safety-strategy drop-sudo or unprivileged-user"
+    },
+    "allowed-actions.failed-job": {
+      "description": "A uses of a step of a composite action that the setting of allowed actions of GitHub (repo.allowed-actions) does not allow.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "allowed-actions.failed-job"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses"
+      ],
+      "additionalProperties": false,
+      "x-detected": "the setting of allowed actions of GitHub (repo.allowed-actions) does not allow {uses}, a uses of a step of a composite action, when {uses} is read as GitHub reads a uses (with empty parts and the path parts \".\" dropped, and the path parts \"..\" resolved, so that owner//repo/./path@v1 is read as owner/repo/path@v1)",
+      "x-consequence": "GitHub fails the job that runs the composite action in the step \"Set up job\", before any step of the job runs, and the job shows the error in its log; the jobs whose needs does not name the failed job still run",
+      "x-remedy": "ask an administrator of the repository, or of the organization that owns the repository, to allow the uses in the setting of allowed actions, or replace the uses with a uses that the setting allows"
+    },
+    "allowed-actions.unpinned-action": {
+      "description": "A uses of an action by a tag or a branch, where the setting of allowed actions of GitHub (repo.allowed-actions) requires a full commit SHA.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "allowed-actions.unpinned-action"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses"
+      ],
+      "additionalProperties": false,
+      "x-detected": "{uses} names an action by a tag or a branch, not by a full commit SHA, and the setting of allowed actions of GitHub (repo.allowed-actions) requires a full commit SHA for each action (sha_pinning_required). This kind does not apply to a uses of a reusable workflow or of a Docker image, which may name a tag under the setting",
+      "x-consequence": "GitHub fails the job of the uses in the step \"Set up job\", before any step of the job runs, and the job shows the error in its log; the jobs whose needs does not name the failed job still run",
+      "x-remedy": "name the action by the full commit SHA of the commit that the tag or the branch names, such as owner/repo@ followed by the 40 hexadecimal digits of the SHA"
+    },
+    "allowed-actions.unstarted-run": {
+      "description": "A uses of an action, of a reusable workflow or of a Docker image (docker://) that the setting of allowed actions of GitHub (repo.allowed-actions) does not allow, in a workflow or in a reusable workflow that a workflow calls.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "allowed-actions.unstarted-run"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses"
+      ],
+      "additionalProperties": false,
+      "x-detected": "the setting of allowed actions of GitHub (repo.allowed-actions) does not allow {uses}, when {uses} is read as GitHub reads a uses (with empty parts and the path parts \".\" dropped, and the path parts \"..\" resolved, so that owner//repo/./path@v1 is read as owner/repo/path@v1; a Docker image is compared as written)",
+      "x-consequence": "GitHub does not start the run of the workflow: no job of the run runs, even the jobs that do not use the action, the reusable workflow or the image, and only the page of the run shows the error. GitHub checks the uses before the run starts, so a step whose if is false does not avoid the error",
+      "x-remedy": "ask an administrator of the repository, or of the organization that owns the repository, to allow the uses in the setting of allowed actions, or replace the uses with a uses that the setting allows"
+    },
+    "approval": {
+      "description": "What makes a person approve a run before the run checks out the code of a pull request.",
+      "oneOf": [
+        {"const": "label", "description": "The job runs only when a label is added to the pull request: pull_request_target on labeled alone."},
+        {"const": "environment", "description": "The job has a deployment environment with required reviewers."}
+      ],
+      "x-text": {"label": "a label is added", "environment": "the environment's reviewers approve"}, "x-go-type": "analysis.Approval"
+    },
+    "archived-uses.archived-repository": {
+      "description": "A uses of an action or a reusable workflow of a repository that is archived.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "archived-uses.archived-repository"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        },
+        "repo": {
+          "$ref": "facts-v0.json#/$defs/repo"
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses",
+        "repo"
+      ],
+      "additionalProperties": false,
+      "x-detected": "{uses} names {repo}, a repository that is archived",
+      "x-consequence": "an archived repository is read-only and is no longer maintained: when an error or a vulnerability is found in the action or the reusable workflow, the repository gets no fixed version, and the runner still runs the version that the uses names (the rule known-vulnerable-actions of this linter reports an advisory of the GitHub Advisory Database about the action)",
+      "x-remedy": "replace the action or the reusable workflow with one that is maintained, or fork the repository, maintain the fork, and point the uses to the fork"
+    },
+    "args": {
+      "description": "The args of a finding: one of the kinds.",
+      "oneOf": [
+        {"$ref": "#/$defs/action-list.unlisted"},
+        {"$ref": "#/$defs/action-list.unlisted-image"},
+        {"$ref": "#/$defs/action-list.unlisted-service"},
+        {"$ref": "#/$defs/ai-action-excessive-tools.auto-mode"},
+        {"$ref": "#/$defs/ai-action-excessive-tools.run-code"},
+        {"$ref": "#/$defs/ai-action-excessive-tools.send-network"},
+        {"$ref": "#/$defs/ai-action-excessive-tools.setting-value"},
+        {"$ref": "#/$defs/ai-action-excessive-tools.write-token"},
+        {"$ref": "#/$defs/ai-action-execution-order.edited-code"},
+        {"$ref": "#/$defs/ai-action-execution-order.later-secrets"},
+        {"$ref": "#/$defs/ai-action-prompt-injection.env"},
+        {"$ref": "#/$defs/ai-action-prompt-injection.prompt"},
+        {"$ref": "#/$defs/ai-action-unrestricted-trigger.any-bot"},
+        {"$ref": "#/$defs/ai-action-unrestricted-trigger.any-user"},
+        {"$ref": "#/$defs/ai-action-unrestricted-trigger.labeler-token-owner"},
+        {"$ref": "#/$defs/ai-action-unrestricted-trigger.unchecked"},
+        {"$ref": "#/$defs/ai-action-unsafe-sandbox.commands"},
+        {"$ref": "#/$defs/ai-action-unsafe-sandbox.privileges"},
+        {"$ref": "#/$defs/allowed-actions.failed-job"},
+        {"$ref": "#/$defs/allowed-actions.unpinned-action"},
+        {"$ref": "#/$defs/allowed-actions.unstarted-run"},
+        {"$ref": "#/$defs/archived-uses.archived-repository"},
+        {"$ref": "#/$defs/argument-injection.option"},
+        {"$ref": "#/$defs/argument-injection.wiki"},
+        {"$ref": "#/$defs/artifact-poisoning.download"},
+        {"$ref": "#/$defs/artifact-poisoning.executed"},
+        {"$ref": "#/$defs/artipacked.github-token"},
+        {"$ref": "#/$defs/artipacked.token-input"},
+        {"$ref": "#/$defs/bot-conditions.dependabot"},
+        {"$ref": "#/$defs/cache-bloat.partial-restore"},
+        {"$ref": "#/$defs/cache-poisoning.attacker-key"},
+        {"$ref": "#/$defs/cache-poisoning.attacker-path"},
+        {"$ref": "#/$defs/cache-poisoning.saved-checkout"},
+        {"$ref": "#/$defs/cache-poisoning.writable-job"},
+        {"$ref": "#/$defs/code-injection.controlled"},
+        {"$ref": "#/$defs/code-injection.env-variable"},
+        {"$ref": "#/$defs/code-injection.env-variable-wiki"},
+        {"$ref": "#/$defs/code-injection.wiki"},
+        {"$ref": "#/$defs/commit-sha.unpinned"},
+        {"$ref": "#/$defs/commit-sha.unpinned-path-action"},
+        {"$ref": "#/$defs/cond.mixed-text"},
+        {"$ref": "#/$defs/credentials.private"},
+        {"$ref": "#/$defs/credentials.public"},
+        {"$ref": "#/$defs/dangerous-triggers.secrets"},
+        {"$ref": "#/$defs/dangerous-triggers.token-write"},
+        {"$ref": "#/$defs/dependabot-github-actions.no-update-tool"},
+        {"$ref": "#/$defs/dependabot-github-actions.unversioned-sha"},
+        {"$ref": "#/$defs/dependency-review-settings.comment-without-permission"},
+        {"$ref": "#/$defs/dependency-review-settings.license-policy-off"},
+        {"$ref": "#/$defs/dependency-review-settings.vulnerability-check-off"},
+        {"$ref": "#/$defs/dependency-review-settings.warn-only"},
+        {"$ref": "#/$defs/deprecated-commands.deprecated-command"},
+        {"$ref": "#/$defs/deprecated-commands.disabled-command"},
+        {"$ref": "#/$defs/deprecated-node-runtime.declared-runtime"},
+        {"$ref": "#/$defs/deprecated-node-runtime.eol-node-version"},
+        {"$ref": "#/$defs/deprecated-node-runtime.runtime-setting"},
+        {"$ref": "#/$defs/deprecated-node-runtime.used-action"},
+        {"$ref": "#/$defs/env-var.equals-sign"},
+        {"$ref": "#/$defs/env-var.runner-overwritten"},
+        {"$ref": "#/$defs/envpath-injection.controlled"},
+        {"$ref": "#/$defs/envpath-injection.wiki"},
+        {"$ref": "#/$defs/envvar-injection.controlled"},
+        {"$ref": "#/$defs/envvar-injection.wiki"},
+        {"$ref": "#/$defs/expression.embedded-object"},
+        {"$ref": "#/$defs/expression.failed-job"},
+        {"$ref": "#/$defs/expression.failed-step"},
+        {"$ref": "#/$defs/expression.ignored-setting"},
+        {"$ref": "#/$defs/expression.undefinable-configuration-variable"},
+        {"$ref": "#/$defs/expression.unstarted-caller"},
+        {"$ref": "#/$defs/expression.unstarted-job"},
+        {"$ref": "#/$defs/impostor-commit.fork-commit"},
+        {"$ref": "#/$defs/known-vulnerable-actions.advisory-critical"},
+        {"$ref": "#/$defs/known-vulnerable-actions.advisory-high"},
+        {"$ref": "#/$defs/known-vulnerable-actions.advisory-low"},
+        {"$ref": "#/$defs/known-vulnerable-actions.advisory-medium"},
+        {"$ref": "#/$defs/known-vulnerable-actions.advisory-unknown"},
+        {"$ref": "#/$defs/missing-timeout-minutes.job"},
+        {"$ref": "#/$defs/output-clobbering.controlled"},
+        {"$ref": "#/$defs/output-clobbering.wiki"},
+        {"$ref": "#/$defs/permissions.unwritten"},
+        {"$ref": "#/$defs/permissions.write-all"},
+        {"$ref": "#/$defs/request-forgery.action-input"},
+        {"$ref": "#/$defs/request-forgery.credential-host"},
+        {"$ref": "#/$defs/request-forgery.runner-network"},
+        {"$ref": "#/$defs/secret-exfiltration.untrusted-destination"},
+        {"$ref": "#/$defs/secret-exposure.all-secrets"},
+        {"$ref": "#/$defs/secret-in-log.private"},
+        {"$ref": "#/$defs/secret-in-log.public"},
+        {"$ref": "#/$defs/secrets-in-artifacts.job-scoped"},
+        {"$ref": "#/$defs/secrets-in-artifacts.lasting"},
+        {"$ref": "#/$defs/secrets-inherit.local"},
+        {"$ref": "#/$defs/secrets-inherit.remote"},
+        {"$ref": "#/$defs/self-hosted-runner.private"},
+        {"$ref": "#/$defs/self-hosted-runner.public"},
+        {"$ref": "#/$defs/set-output-injection.controlled"},
+        {"$ref": "#/$defs/unmasked-secret-exposure.private"},
+        {"$ref": "#/$defs/unmasked-secret-exposure.public"},
+        {"$ref": "#/$defs/unpinned-images.mutable"},
+        {"$ref": "#/$defs/unpinned-images.service"},
+        {"$ref": "#/$defs/unsecure-commands.controlled"},
+        {"$ref": "#/$defs/unsecure-commands.wiki"},
+        {"$ref": "#/$defs/unset-configuration-variable.empty-value"},
+        {"$ref": "#/$defs/unset-configuration-variable.failed-from-json"},
+        {"$ref": "#/$defs/unsound-contains.substring"},
+        {"$ref": "#/$defs/unsound-contains.superstring"},
+        {"$ref": "#/$defs/untrusted-checkout-toctou.mutable-ref"},
+        {"$ref": "#/$defs/untrusted-checkout.checkout"},
+        {"$ref": "#/$defs/untrusted-checkout.executed"},
+        {"$ref": "#/$defs/uses-path.outside-repository"},
+        {"$ref": "#/$defs/uses-path.outside-workspace"},
+        {"$ref": "#/$defs/uses-path.unnormalized-path"}
+      ]
+    },
+    "argument-injection.option": {
+      "description": "A value an attacker controls begins a word a command of a run gets, where the command reads a word that begins with - as an option, and the command has an option seen to run a program written in the attacker's spelling.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "argument-injection.option"},
+        "command": {"description": "The command and the subcommands of the command, such as tar or git fetch.", "type": "string", "minLength": 1},
+        "options": {"description": "The options of the command that run a program, as the attacker writes the options: for one word that holds both the option and the program, a long option with = (--to-command=) or a short option followed by the program in the same word (-e<script>); for two words, the option and then the program, a short option as a word by itself (-c).", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "expr_ref": {"description": "The reference whose value begins the word, such as github.event.pull_request.title.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the expression, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "command", "options", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{command} gets a word that starts with the value of {expr_ref}, or, when the value is outside quotes or is a ${{ }} that the runner writes into the script before the shell reads the script, a word that starts after a blank in the value; an attacker controls the value of {expr_ref} on {controlled_on}; the word is at a place in the order of the words of {command} where {command} reads a word that starts with - as an option (a place before a word such as -- that ends the options), and the attacker can write at that place an option in the list {options}, which makes {command} run a program or code that is written after the name of the option",
+      "x-consequence": "the attacker makes the attacker's value start with the name of one of the options that the finding names, followed by a program; the command reads the word as the option whose name starts the word, and runs the program in the step, with whatever the step can reach, such as the secrets and the token in its env, the credentials actions/checkout leaves in .git/config, the network, and sudo on a GitHub-hosted runner",
+      "x-remedy": "A variable of env and double quotes (\"$X\") stop the shell from running the value as code, but the variable and the quotes do not stop the command from reading the value as an option. In either fix below, keep the value in the variable of env, and pass the variable to the command inside double quotes. Then either put the word that ends the command's options (--; --end-of-options for git) after the last option the command needs and before the value, for example right before the value (tar -xf archive.tar notes.txt -- \"$X\"), so that the command reads every word after that word as a plain argument; or, before the command, end the step with an error when the value starts with -, such as [[ $X != -* ]] || exit 1 for the variable X that holds the value. The shell check [[ $X != -* ]] works only when the command gets the value inside double quotes: when the command gets the value outside quotes, a blank in the value starts a new word, and the new word can start with -. For make, -- is not enough: make reads a word of the form NAME=value as the assignment of a variable even after --, so for make end the step with an error when the value starts with - or contains =, such as [[ $X != -* && $X != *=* ]] || exit 1"
+    },
+    "argument-injection.wiki": {
+      "description": "A value an attacker controls on gollum alone begins a word a command of a run gets, where the command reads a word that begins with - as an option, and the command has an option seen to run a program written in the attacker's spelling: the finding holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "argument-injection.wiki"},
+        "command": {"description": "The command and the subcommands of the command, such as tar or git fetch.", "type": "string", "minLength": 1},
+        "options": {"description": "The options of the command that run a program, as the attacker writes the options: for one word that holds both the option and the program, a long option with = (--to-command=) or a short option followed by the program in the same word (-e<script>); for two words, the option and then the program, a short option as a word by itself (-c).", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "expr_ref": {"description": "The reference whose value begins the word, such as github.event.pull_request.title.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "command", "options", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{command} gets a word that starts with the value of {expr_ref}, and an attacker controls the value on gollum alone; for the name of a wiki page (page_name), GitHub makes the name from the title that the attacker writes and turns each +, < and > of the title into a -, and each blank of the title into a - after trimming the blanks at the head and the end of the title, so that a + at the head of the title makes a - at the head of the name; the word is at a place in the order of the words of {command} where {command} reads a word that starts with - as an option, and the attacker can write at that place an option in the list {options}, which makes {command} run a program or code that is written after the name of the option",
+      "x-consequence": "the attacker makes the attacker's value start with the name of one of the options that the finding names, followed by a program; the command reads the word as the option whose name starts the word, and runs the program in the step, with whatever the step can reach, such as the secrets and the token in its env, the credentials actions/checkout leaves in .git/config, the network, and sudo on a GitHub-hosted runner",
+      "x-remedy": "A variable of env and double quotes (\"$X\") stop the shell from running the value as code, but the variable and the quotes do not stop the command from reading the value as an option. In either fix below, keep the value in the variable of env, and pass the variable to the command inside double quotes. Then either put the word that ends the command's options (--; --end-of-options for git) after the last option the command needs and before the value, for example right before the value (tar -xf archive.tar notes.txt -- \"$X\"), so that the command reads every word after that word as a plain argument; or, before the command, end the step with an error when the value starts with -, such as [[ $X != -* ]] || exit 1 for the variable X that holds the value. The shell check [[ $X != -* ]] works only when the command gets the value inside double quotes: when the command gets the value outside quotes, a blank in the value starts a new word, and the new word can start with -. For make, -- is not enough: make reads a word of the form NAME=value as the assignment of a variable even after --, so for make end the step with an error when the value starts with - or contains =, such as [[ $X != -* && $X != *=* ]] || exit 1"
+    },
+    "artifact-poisoning.download": {
+      "description": "A download of the artifact of a run an attacker drives into the workspace of a job that no one approves and that has the repository's secrets or a token that may write, where no step after the download is seen to run the files of the artifact: the harm holds when a step after the download runs the files of the artifact, which the fact download.executed answers.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "artifact-poisoning.download"},
+        "uses": {"description": "The uses of the download, as written.", "type": "string", "minLength": 1},
+        "pr_run_ref": {"description": "What makes the download take the artifact of the attacker's run, as written: an expression such as github.event.workflow_run.id, the input allow_forks with the value true, or, when the step has no input run_id (or an input run_id whose ${{ }} is empty on the event of the job) and no input allow_forks with the value true, the value of the key uses of the step (dawidd6/action-download-artifact@<ref>), whose search of the runs of a workflow takes the attacker's run; or, for an artifact of the current run, jobs.<id> of the job that checks out the code of the pull request and uploads the artifact.", "type": "string", "minLength": 1},
+        "pr_code_on": {"description": "The events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "uses", "pr_run_ref", "pr_code_on"],
+      "additionalProperties": false,
+      "x-detected": "{uses} takes the artifact of {pr_run_ref} into the workspace on {pr_code_on}",
+      "x-consequence": "its files replace those of the workspace; a step that runs any of them (a build, a test, a script) runs the pull request's author's code with the job's secrets and its token",
+      "x-remedy": "download to ${{ runner.temp }}/artifacts, or say in a file of facts that the files are only read as data"
+    },
+    "artifact-poisoning.executed": {
+      "description": "A download of the artifact of a run an attacker drives, in a job that no one approves and that has the repository's secrets or a token that may write, whose files a step after the download runs.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "artifact-poisoning.executed"},
+        "uses": {"description": "The uses of the download, as written.", "type": "string", "minLength": 1},
+        "pr_run_ref": {"description": "What makes the download take the artifact of the attacker's run, as written: an expression such as github.event.workflow_run.id, the input allow_forks with the value true, or, when the step has no input run_id (or an input run_id whose ${{ }} is empty on the event of the job) and no input allow_forks with the value true, the value of the key uses of the step (dawidd6/action-download-artifact@<ref>), whose search of the runs of a workflow takes the attacker's run; or, for an artifact of the current run, jobs.<id> of the job that checks out the code of the pull request and uploads the artifact.", "type": "string", "minLength": 1},
+        "pr_code_on": {"description": "The events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}},
+        "runs": {"description": "The steps after the download that run the files of the artifact: for each step, the name of the step, or steps[<n>] when the step has no name, with n counted from 0 among all the steps of the job or of the action.", "type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "required": ["kind_id", "uses", "pr_run_ref", "pr_code_on", "runs"],
+      "additionalProperties": false,
+      "x-detected": "{uses} takes the artifact of {pr_run_ref} on {pr_code_on}, and {runs} runs it",
+      "x-consequence": "the author of a pull request from a fork makes the artifact, and runs their code with the job's secrets and its token",
+      "x-remedy": "download to ${{ runner.temp }}/artifacts and read the files as data only, or run the pull request's code in the pull_request workflow and pass only data"
+    },
+    "artipacked.github-token": {
+      "description": "A step leaves the job's GITHUB_TOKEN in a file (.git/config, or, for actions/checkout v6 and later, a file of RUNNER_TEMP), and an upload after the step puts that file in an artifact others can download while the job still runs.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "artipacked.github-token"},
+        "uses": {"description": "The uses of the step that leaves the token, as written.", "type": "string", "minLength": 1},
+        "upload": {"description": "The uses, as written, of one upload that runs after the step and puts the file of the token in an artifact: the first of those uploads that puts the file in an artifact on no condition, else the first of those uploads.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "upload"],
+      "additionalProperties": false,
+      "x-detected": "{uses} leaves the job's GITHUB_TOKEN in a file (.git/config, or, for actions/checkout v6 and later, a file of RUNNER_TEMP), and {upload} puts the file in an artifact while the job goes on",
+      "x-consequence": "anyone who can read the repository's artifacts takes the token and writes what the job may write until the job ends",
+      "x-remedy": "set persist-credentials: false on the checkout, or upload only the files the artifact needs"
+    },
+    "artipacked.token-input": {
+      "description": "A step leaves a token given to the step in a file (.git/config, or, for actions/checkout v6 and later, a file of RUNNER_TEMP), and an upload after the step puts that file in an artifact.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "artipacked.token-input"},
+        "uses": {"description": "The uses of the step that leaves the token, as written.", "type": "string", "minLength": 1},
+        "upload": {"description": "The uses, as written, of one upload that runs after the step and puts the file of the token in an artifact: the first of those uploads that puts the file in an artifact on no condition, else the first of those uploads.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "upload"],
+      "additionalProperties": false,
+      "x-detected": "{uses} leaves the token given to the step in a file (.git/config, or, for actions/checkout v6 and later, a file of RUNNER_TEMP), and {upload} puts the file in an artifact",
+      "x-consequence": "anyone who can read the repository's artifacts takes the token, which does not expire when the job ends",
+      "x-remedy": "set persist-credentials: false on the checkout, or upload only the files the artifact needs"
+    },
+    "authored-command-name": {
+      "description": "A workflow command that GitHub deprecated (set-output, save-state) or disabled (set-env, add-path).",
+      "oneOf": [
+        {"const": "set-output", "description": "set-output: sets an output of the step."},
+        {"const": "save-state", "description": "save-state: saves a value for the post step of the same action."},
+        {"const": "set-env", "description": "set-env: sets an environment variable of the later steps."},
+        {"const": "add-path", "description": "add-path: adds a directory to the PATH of the later steps."}
+      ],
+      "x-text": {"set-output": "set-output", "save-state": "save-state", "set-env": "set-env", "add-path": "add-path"}, "x-go-type": "analysis.AuthoredCommandName"
+    },
+    "bot-conditions.dependabot": {
+      "description": "A comparison of the actor in an if that a run of Dependabot passes: the attacker has Dependabot push to their pull request, and the actor is dependabot[bot].",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "bot-conditions.dependabot"},
+        "path": {"description": "The reference compared, as written, such as github.actor.", "type": "string", "minLength": 1},
+        "literal": {"description": "The string or the number that the path is compared with.", "type": "string", "minLength": 1},
+        "attacker_on": {"description": "The privileged events the if may run on, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "path", "literal", "attacker_on"],
+      "additionalProperties": false,
+      "x-detected": "{path} is compared with {literal} in an if on {attacker_on}, and a run of Dependabot's push to the attacker's pull request passes it",
+      "x-consequence": "an attacker has the job run on their pull request: they comment @dependabot recreate on Dependabot's pull request in their fork, whose branch their pull request is from, and Dependabot's push makes the actor dependabot[bot]",
+      "x-remedy": "compare the author of the pull request, github.event.pull_request.user.login, which Dependabot's push does not change"
+    },
+    "cache-bloat.partial-restore": {
+      "description": "A step that may save, under a new key, a cache restored from another key by restore-keys.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cache-bloat.partial-restore"},
+        "saves_on": {"description": "The events on which the restore and the save both run and the save may save, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "saves_on"],
+      "additionalProperties": false,
+      "x-detected": "the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: {saves_on}",
+      "x-consequence": "the content of the older caches stays in each new cache, so the new cache grows and takes longer to restore and to save; when the caches of the repository pass the cache limit, GitHub deletes the caches used least recently",
+      "x-remedy": "save the cache only in runs in which restore-keys restores no older cache (for example, a push run that builds without a restore), or remove restore-keys from the step"
+    },
+    "cache-poisoning.attacker-key": {
+      "description": "A step that saves to the cache of the default branch's scope under a key with a value an attacker writes, in a privileged job no one approves.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cache-poisoning.attacker-key"},
+        "uses": {"description": "The uses of the step, as written.", "type": "string", "minLength": 1},
+        "expression": {"description": "The reference in the key, as written.", "type": "string", "minLength": 1},
+        "cache_write_on": {"description": "The privileged events on which an attacker writes the value of the expression, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "uses", "expression", "cache_write_on"],
+      "additionalProperties": false,
+      "x-detected": "{uses} saves to the cache of the default branch's scope on {cache_write_on} under a key with {expression}, which an attacker writes",
+      "x-consequence": "the attacker chooses the key, and saves first under one that later runs of the repository look up",
+      "x-remedy": "make the key of values the attacker does not write, or make the cache-mode read or none"
+    },
+    "cache-poisoning.attacker-path": {
+      "description": "A step that saves to the cache of the default branch's scope a path with a value an attacker writes, in a privileged job no one approves.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cache-poisoning.attacker-path"},
+        "uses": {"description": "The uses of the step, as written.", "type": "string", "minLength": 1},
+        "expression": {"description": "The reference in the path, as written.", "type": "string", "minLength": 1},
+        "cache_write_on": {"description": "The privileged events on which an attacker writes the value of the expression, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "uses", "expression", "cache_write_on"],
+      "additionalProperties": false,
+      "x-detected": "{uses} saves to the cache of the default branch's scope on {cache_write_on} the path {expression}, which an attacker writes",
+      "x-consequence": "the attacker chooses the files saved, such as the credential a checkout leaves in .git, and anyone who can open a pull request reads the caches of the default branch",
+      "x-remedy": "make the path of values the attacker does not write, or make the cache-mode read or none"
+    },
+    "cache-poisoning.saved-checkout": {
+      "description": "A step that saves to the cache of the default branch's scope a path that has the code of a pull request a checkout brought, in a privileged job no one approves.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cache-poisoning.saved-checkout"},
+        "uses": {"description": "The uses of the checkout, as written.", "type": "string", "minLength": 1},
+        "checkout_ref": {"description": "The reference that names the pull request's code, as written.", "type": "string", "minLength": 1},
+        "save": {"description": "The step that saves the path to the cache: the name of the step, or steps[<n>] when the step has no name, with n counted from 0 among all the steps of the job or of the action. For a step of a composite action that a step of the job runs, the name of the step, then of, then the uses of the composite action as written.", "type": "string", "minLength": 1},
+        "path": {"description": "One line of the input path of the cache step (the input may have several lines), the line that names the checked out code, as written.", "type": "string", "minLength": 1},
+        "cache_write_on": {"description": "The privileged events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "uses", "checkout_ref", "save", "path", "cache_write_on"],
+      "additionalProperties": false,
+      "x-detected": "{uses} checks out {checkout_ref} on {cache_write_on}, and {save} saves {path} to the cache of the default branch's scope",
+      "x-consequence": "the pull request's author puts their files in a cache that later runs of the repository restore and run, with no code of theirs run in the job",
+      "x-remedy": "check out the base's code, save to the cache only what the job builds from it, or make the cache-mode read or none"
+    },
+    "cache-poisoning.writable-job": {
+      "description": "A job that a privileged event runs and no one approves, whose cache-mode lets it save to the cache of the default branch's scope.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cache-poisoning.writable-job"},
+        "cache_mode": {"description": "The cache-mode that lets the job save to the cache, as written.", "type": "string", "minLength": 1},
+        "cache_write_on": {"description": "The privileged events on which the job may save to the cache, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "cache_mode", "cache_write_on"],
+      "additionalProperties": false,
+      "x-detected": "the job runs on {cache_write_on}, which an attacker triggers, with no approval, and cache-mode {cache_mode} lets it save to the cache of the default branch's scope",
+      "x-consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, lets them save to the cache what later runs of the repository restore and run, a release among them",
+      "x-remedy": "make the cache-mode read or none, and save the cache from a workflow the attacker does not trigger, such as one on push"
+    },
+    "code-injection.controlled": {
+      "description": "A value an attacker controls, written into a script by ${{ }}.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "code-injection.controlled"},
+        "expr_ref": {"description": "The reference in the expression, such as github.event.issue.title.", "type": "string", "minLength": 1},
+        "sink_kind": {"$ref": "#/$defs/sink-kind"},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the expression, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "expr_ref", "sink_kind", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written into {sink_kind} by ${{ }}, and an attacker controls it on {controlled_on}",
+      "x-consequence": "the value becomes code",
+      "x-remedy": "pass it through env and read the variable"
+    },
+    "code-injection.env-variable": {
+      "description": "A variable of env whose value an attacker controls, which a run of bash reads as code.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "code-injection.env-variable"},
+        "variable": {"description": "The variable, written as in the run, such as $ISSUE_TITLE, or the bare name of a variable in an arithmetic expression, such as TITLE in $(( TITLE + 1 )).", "type": "string", "minLength": 1},
+        "expr_ref": {"description": "The reference that an attacker controls in the value of env, such as github.event.issue.title, or the value of the github context that the runner writes into the variable, such as github.head_ref for GITHUB_HEAD_REF.", "type": "string", "minLength": 1},
+        "code_reading": {"$ref": "#/$defs/code-reading"},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the variable, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "variable", "expr_ref", "code_reading", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "the script of the step (run:) passes the value of the variable {variable} to {code_reading}, and the value of the variable comes from {expr_ref}, which an attacker controls on {controlled_on}",
+      "x-consequence": "the value becomes code",
+      "x-remedy": "do not pass the variable to eval (eval \"...\"), to the code that a shell or an interpreter takes after -c (bash -c \"...\", python3 -c \"...\"), to the command name at the start of a command ($VAR arg), to the input of a shell (| bash) or to arithmetic ($(( ... )), [[ ... -eq ... ]]); pass the variable only as an argument of a command that reads the argument as data, such as printf '%s\\n' \"$VAR\". Keep the variable inside double quotes there: without the quotes the value stays data, but bash splits the value into words and expands * and ?"
+    },
+    "code-injection.env-variable-wiki": {
+      "description": "A variable of env whose value is controlled on gollum alone, which a run of bash reads as code: it holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "code-injection.env-variable-wiki"},
+        "variable": {"description": "The variable, written as in the run.", "type": "string", "minLength": 1},
+        "expr_ref": {"description": "The reference that an attacker controls in the value of env.", "type": "string", "minLength": 1},
+        "code_reading": {"$ref": "#/$defs/code-reading"}
+      },
+      "required": ["kind_id", "variable", "expr_ref", "code_reading"],
+      "additionalProperties": false,
+      "x-detected": "the script of the step (run:) passes the value of the variable {variable} to {code_reading}, and the value of the variable comes from {expr_ref}, which an attacker controls on gollum",
+      "x-consequence": "the value becomes code",
+      "x-remedy": "do not pass the variable to eval (eval \"...\"), to the code that a shell or an interpreter takes after -c (bash -c \"...\", python3 -c \"...\"), to the command name at the start of a command ($VAR arg), to the input of a shell (| bash) or to arithmetic ($(( ... )), [[ ... -eq ... ]]); pass the variable only as an argument of a command that reads the argument as data, such as printf '%s\\n' \"$VAR\". Keep the variable inside double quotes there: without the quotes the value stays data, but bash splits the value into words and expands * and ?"
+    },
+    "code-injection.wiki": {
+      "description": "A value controlled on gollum alone, written into a script by ${{ }}: it holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "code-injection.wiki"},
+        "expr_ref": {"description": "The reference in the expression.", "type": "string", "minLength": 1},
+        "sink_kind": {"$ref": "#/$defs/sink-kind"}
+      },
+      "required": ["kind_id", "expr_ref", "sink_kind"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written into {sink_kind} by ${{ }}, and an attacker controls it on gollum",
+      "x-consequence": "the value becomes code",
+      "x-remedy": "pass it through env and read the variable"
+    },
+    "code-reading": {
+      "description": "How bash, or a program that bash gives the value to, reads the value of a variable as code.",
+      "oneOf": [
+        {"const": "code-argument", "description": "An argument that the command reads as code: an operand of eval (eval \"...\"), the code that a shell or an interpreter takes after -c (bash -c \"...\", python3 -c \"...\"), or a program that git runs (git -c core.fsmonitor=\"...\")."},
+        {"const": "command-word", "description": "A variable outside quotes as the command name at the start of a command ($VAR arg): bash splits the value into words, and the first word names the program that runs, with the other words as its arguments."},
+        {"const": "code-input", "description": "The input of a command that runs the input as code: the body of a heredoc whose delimiter is not quoted, a here-string, or what echo, printf or cat writes right before a pipe (echo \"$VAR\" | bash)."},
+        {"const": "arithmetic", "description": "An arithmetic expression ($(( ... )), (( ... )), [[ ... -eq ... ]], an array subscript), or the name that read, printf -v or test -v takes: bash evaluates the value as arithmetic, and a value such as a[$(...)] holds an array subscript whose command substitution runs."},
+        {"const": "prompt-expansion", "description": "The transformation ${VAR@P}: bash expands the value of the variable as a prompt string, and runs a command substitution such as $(...) in the value."}
+      ],
+      "x-text": {"code-argument": "a command that reads the value as code (eval \"...\", the code that a shell or an interpreter takes after -c, such as bash -c \"...\" or python3 -c \"...\", git -c core.fsmonitor=\"...\")", "command-word": "the command name at the start of a command, outside quotes ($VAR arg), where bash splits the value into words and the first word names the program that runs", "code-input": "a command that runs its input as code (echo \"$VAR\" | bash, bash <<< \"$VAR\")", "arithmetic": "arithmetic ($(( ... )), (( ... )), [[ ... -eq ... ]]), where a value such as a[$(...)] holds an array subscript whose command substitution runs", "prompt-expansion": "the transformation ${VAR@P}, which expands the value of the variable as a prompt string and runs a command substitution such as $(...) in the value"}, "x-go-type": "analysis.CodeReading"
+    },
+    "commit-sha.unpinned": {
+      "description": "A remote uses whose ref is not a full commit SHA.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "commit-sha.unpinned"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "repo": {"description": "The repository, owner/name as written; not always a name GitHub can have.", "type": "string", "minLength": 1},
+        "ref": {"description": "The ref, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "repo", "ref"],
+      "additionalProperties": false,
+      "x-detected": "{uses} is not pinned to a full commit SHA",
+      "x-consequence": "whoever can move the ref decides what runs here",
+      "x-remedy": "pin the uses to a full commit SHA"
+    },
+    "commit-sha.unpinned-path-action": {
+      "description": "A uses of another repository whose path goes with .. above the root of the repository and names, in the directory where the runner puts the actions of the job, an action whose ref is not a full commit SHA.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "commit-sha.unpinned-path-action"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "action": {"description": "The action that runs, as owner/repo@ref: the repository and the ref that the path names after the .., read from _actions/<owner>/<repo>/<ref> on the runner.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "action"],
+      "additionalProperties": false,
+      "x-detected": "the path of {uses} goes with .. above the root of the repository and runs {action}, so the ref after @ does not decide the code that runs; {action} is not pinned to a full commit SHA",
+      "x-consequence": "whoever can move the ref of the action that runs decides what runs here",
+      "x-remedy": "write a uses of the action that runs, as owner/repo/path@ref without .., and pin that uses to a full commit SHA"
+    },
+    "cond.mixed-text": {
+      "description": "An if that GitHub reads as a string: text outside its ${{ }}, or more than one ${{ }}.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "cond.mixed-text"},
+        "condition": {"description": "The value of the if, as written.", "type": "string", "minLength": 1},
+        "status_functions": {"description": "The status functions that an expression in a ${{ }} of the if calls, once each; empty when the if calls none.", "type": "array", "items": {"$ref": "#/$defs/status-function"}}
+      },
+      "required": ["kind_id", "condition", "status_functions"],
+      "additionalProperties": false,
+      "x-detected": "the if {condition} has text outside its ${{ }} (in an action.yml, a space or a line break counts as text too), or more than one ${{ }}, so GitHub reads the if as a string",
+      "x-consequence": "GitHub joins the text and the values of the expressions into one string; the string is not empty, so the string is true whatever the expressions give. When no ${{ }} of the if calls a status function (always(), cancelled(), failure() or success()), GitHub adds success() && before the string, and the job or the step runs only when the jobs or the steps before the job or the step succeeded. When a ${{ }} calls a status function, even success(), GitHub adds nothing, the if is the string alone, and the job or the step runs after a failure too. When the if is written to keep an attacker from running the job or the step, the if does not stop the attacker: the rules of this linter that evaluate the if in the runs of an attacker read the if as true, as GitHub does, and read the job or the step as when the job or the step has no if: for example, dangerous-triggers reports a job that runs on an event of the attacker with secrets or a token that writes. What the attacker gets comes from what the job or the step does, not from the if alone",
+      "x-remedy": "write the whole condition in one ${{ }}, such as ${{ a && b }}, or write the condition without ${{ }}, such as a && b; both forms work in a workflow and in an action.yml. In an action.yml, write nothing around the ${{ }}: no space, and no block scalar (if: |), which keeps a line break after the ${{ }}"
+    },
+    "credentials.private": {
+      "description": "The password of a registry written in the workflow of a private repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "credentials.private"},
+        "container": {"description": "container, or services.<name>.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "container"],
+      "additionalProperties": false,
+      "x-detected": "the password of {container} is written in the workflow",
+      "x-consequence": "whoever reads the repository reads it, and its history keeps it if the repository is made public",
+      "x-remedy": "revoke the password, and pass a new one from a secret of the repository"
+    },
+    "credentials.public": {
+      "description": "The password of a registry written in the workflow of a public repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "credentials.public"},
+        "container": {"description": "container, or services.<name>.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "container"],
+      "additionalProperties": false,
+      "x-detected": "the password of {container} is written in the workflow",
+      "x-consequence": "anyone reads it in a public repository, and its history keeps it",
+      "x-remedy": "revoke the password, and pass a new one from a secret of the repository"
+    },
+    "dangerous-triggers.secrets": {
+      "description": "A job that a privileged event runs and no one approves, which reads secrets.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "dangerous-triggers.secrets"},
+        "privileged_on": {"description": "The privileged events that the job can run on, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}},
+        "secrets": {"description": "The names of the secrets that the job reads; for a job that calls a reusable workflow, the names of the secrets that GitHub passes to the runners of the jobs of the called workflow. The single value * when the job, or a job of the reusable workflow that the job calls with secrets: inherit, reads the secrets without naming the secrets, or when the job calls with secrets: inherit a reusable workflow whose contents the linter does not have. For a job that passes secrets one by one to a reusable workflow whose contents the linter does not have, every passed secret.", "type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "required": ["kind_id", "privileged_on", "secrets"],
+      "additionalProperties": false,
+      "x-detected": "the job runs on {privileged_on}, which an attacker triggers, with no approval, and reads the secrets {secrets}",
+      "x-consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them the secrets and what they open past the repository",
+      "x-remedy": "move the secrets to a job that the attacker's events do not run, or have a person approve it with an environment that has required reviewers"
+    },
+    "dangerous-triggers.token-write": {
+      "description": "A job that a privileged event runs and no one approves, whose GITHUB_TOKEN may write.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "dangerous-triggers.token-write"},
+        "privileged_on": {"description": "The privileged events that the job can run on, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "privileged_on"],
+      "additionalProperties": false,
+      "x-detected": "the job runs on {privileged_on}, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
+      "x-consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
+      "x-remedy": "write permissions on the job with only the scopes it needs, or have a person approve it with an environment that has required reviewers"
+    },
+    "dependabot-github-actions.no-update-tool": {
+      "description": "A file whose uses no update tool updates: no entry of Dependabot version updates reads the file, and Renovate does not update the file.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "dependabot-github-actions.no-update-tool"},
+        "uses": {"description": "The first uses of the file that no update tool updates, as written.", "type": "string", "minLength": 1},
+        "directory": {"description": "The directory that an entry of .github/dependabot.yml would have to list for Dependabot to read the file: / for a workflow right under .github/workflows and for the action.yml or action.yaml at the root of the repository (Dependabot reads those files for the directory /); else the directory of the file from the root, starting with /, such as /.github/actions/build.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "directory"],
+      "additionalProperties": false,
+      "x-detected": "no update tool updates {uses} and every other such uses of the same file, if there are any: no entry of .github/dependabot.yml with package-ecosystem github-actions lists {directory}, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count), and no Renovate configuration in the repository updates the file",
+      "x-consequence": "when a new version of an action or a reusable workflow is released, no pull request updates the uses; a uses pinned to a commit SHA never gets a Dependabot alert or a security update, whatever the configuration, so version updates are the only updates of such a uses, and without them the workflow keeps running the old commit until a person changes the uses",
+      "x-remedy": "create .github/dependabot.yml with version: 2 if the repository has none, and add to the updates of .github/dependabot.yml an entry with package-ecosystem: github-actions whose key directory: or key directories: lists the directory named in the finding; or configure Renovate to update the file"
+    },
+    "dependabot-github-actions.unversioned-sha": {
+      "description": "A file whose uses pinned to a commit SHA without a version comment Renovate does not update, and that no entry of Dependabot version updates reads.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "dependabot-github-actions.unversioned-sha"},
+        "uses": {"description": "The first uses of the file that is pinned to a commit SHA without a version comment, as written.", "type": "string", "minLength": 1},
+        "directory": {"description": "The directory that an entry of .github/dependabot.yml would have to list for Dependabot to read the file: / for a workflow right under .github/workflows and for the action.yml or action.yaml at the root of the repository (Dependabot reads those files for the directory /); else the directory of the file from the root, starting with /, such as /.github/actions/build.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "directory"],
+      "additionalProperties": false,
+      "x-detected": "Renovate updates the file, but does not update {uses} and every other uses of the same file that is pinned to a commit SHA without a version comment, if there are any; and no entry of .github/dependabot.yml with package-ecosystem github-actions lists {directory}, the directory that an entry would have to list for Dependabot to read the file, with version updates enabled (an entry whose open-pull-requests-limit is 0 does not count)",
+      "x-consequence": "Renovate skips a uses pinned to a commit SHA when the line of the uses has no comment that names a version; a uses pinned to a commit SHA never gets a Dependabot alert or a security update, whatever the configuration, so when a new version is released, no pull request updates the uses, and the workflow keeps running the old commit until a person changes the uses",
+      "x-remedy": "write the version of the commit as a comment at the end of the line of each such uses, such as # v4.1.0, so that Renovate updates the uses; or create .github/dependabot.yml with version: 2 if the repository has none, and add to the updates of .github/dependabot.yml an entry with package-ecosystem: github-actions whose key directory: or key directories: lists the directory named in the finding"
+    },
+    "dependency-review-settings.comment-without-permission": {
+      "description": "A step of actions/dependency-review-action that asks for a comment on the pull request in a job whose GITHUB_TOKEN is not given pull-requests: write.",
+      "type": "object",
+      "properties": {"kind_id": {"const": "dependency-review-settings.comment-without-permission"}},
+      "required": ["kind_id"],
+      "additionalProperties": false,
+      "x-detected": "the step asks to write the summary of the dependency review as a comment on the pull request, but the GITHUB_TOKEN of the job is not given pull-requests: write",
+      "x-consequence": "the comment is not written: the step warns and succeeds",
+      "x-remedy": "give the job pull-requests: write, or set comment-summary-in-pr to never"
+    },
+    "dependency-review-settings.license-policy-off": {
+      "description": "A step of actions/dependency-review-action with license-check false and a license policy written.",
+      "type": "object",
+      "properties": {"kind_id": {"const": "dependency-review-settings.license-policy-off"}},
+      "required": ["kind_id"],
+      "additionalProperties": false,
+      "x-detected": "license-check is false, so the license policy written is not checked",
+      "x-consequence": "dependencies with a denied license, or with a license that is not in the allowed list, pass the review",
+      "x-remedy": "remove license-check: false, or remove the license policy"
+    },
+    "dependency-review-settings.vulnerability-check-off": {
+      "description": "A step of actions/dependency-review-action with vulnerability-check false.",
+      "type": "object",
+      "properties": {"kind_id": {"const": "dependency-review-settings.vulnerability-check-off"}},
+      "required": ["kind_id"],
+      "additionalProperties": false,
+      "x-detected": "vulnerability-check is false",
+      "x-consequence": "dependencies with known vulnerabilities pass the review",
+      "x-remedy": "remove vulnerability-check: false"
+    },
+    "dependency-review-settings.warn-only": {
+      "description": "A step of actions/dependency-review-action with warn-only true.",
+      "type": "object",
+      "properties": {"kind_id": {"const": "dependency-review-settings.warn-only"}},
+      "required": ["kind_id"],
+      "additionalProperties": false,
+      "x-detected": "warn-only is true",
+      "x-consequence": "vulnerabilities and license violations only warn: the step succeeds, and a required check does not stop the pull request",
+      "x-remedy": "remove warn-only: true; fail-on-severity sets the lowest severity that fails the step"
+    },
+    "deprecated-commands.deprecated-command": {
+      "description": "A workflow command set-output or save-state that the run script of a step, in bash or sh, prints to the log of the step as ::name at the head of a line or ##[name anywhere in a line, with the name of the command in the text of the run script.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "deprecated-commands.deprecated-command"},
+        "command": {"description": "The command: set-output or save-state.", "$ref": "#/$defs/authored-command-name"}
+      },
+      "required": ["kind_id", "command"],
+      "additionalProperties": false,
+      "x-detected": "the run script of the step prints the workflow command {command}, which GitHub deprecated",
+      "x-consequence": "the runner adds a warning to each run of the workflow that runs the step. GitHub planned to disable both commands on 2023-05-31, and the notice of 2023-07-24 postponed the date without a new date. For set-output: once GitHub disables set-output, the step sets no output. For save-state: only the post step of the same action reads the state, and a run script has no post step, so no step reads the state that a run script saves",
+      "x-remedy": "for set-output, write name=value to the file $GITHUB_OUTPUT; for a value of many lines, write the line name<<DELIM, the lines of the value and the line DELIM, where DELIM is a random text that the value does not contain. For save-state, remove the command, because no step reads the state that a run script saves"
+    },
+    "deprecated-commands.disabled-command": {
+      "description": "A workflow command set-env or add-path that the run script of a step, in bash or sh, prints to the log of the step as ::name at the head of a line or ##[name anywhere in a line, with the name of the command in the text of the run script.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "deprecated-commands.disabled-command"},
+        "command": {"description": "The command: set-env or add-path.", "$ref": "#/$defs/authored-command-name"}
+      },
+      "required": ["kind_id", "command"],
+      "additionalProperties": false,
+      "x-detected": "the run script of the step prints the workflow command {command}, which GitHub disabled",
+      "x-consequence": "when ACTIONS_ALLOW_UNSECURE_COMMANDS is not true for the step, the runner fails the step. When ACTIONS_ALLOW_UNSECURE_COMMANDS is true, the command works, and each line that the step prints as a set-env or add-path command sets the environment variables or the PATH of the later steps; a value of an attacker that such a step prints is reported by the rule unsecure-commands",
+      "x-remedy": "write name=value to the file $GITHUB_ENV for set-env, or the directory to the file $GITHUB_PATH for add-path, and remove ACTIONS_ALLOW_UNSECURE_COMMANDS"
+    },
+    "deprecated-node-runtime.declared-runtime": {
+      "description": "An action.yml whose runs.using is node12, node16 or node20.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "deprecated-node-runtime.declared-runtime"
+        },
+        "runs_using": {
+          "description": "runs.using, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "runs_using"
+      ],
+      "additionalProperties": false,
+      "x-detected": "the action declares runs.using: {runs_using}, an older Node.js version than node24",
+      "x-consequence": "GitHub-hosted runners run the action on Node.js 24 (seen on 2026-10-20), not on the Node.js version that the action declares, and add a warning to every run of every job that uses the action; code of the action that depends on the declared Node.js version may behave differently on Node.js 24",
+      "x-remedy": "change runs.using to node24, and test the action on Node.js 24"
+    },
+    "deprecated-node-runtime.eol-node-version": {
+      "description": "A node-version of actions/setup-node that names a major version of Node.js whose support ended.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "deprecated-node-runtime.eol-node-version"
+        },
+        "node_version": {
+          "description": "node-version, as written.",
+          "type": "string",
+          "minLength": 1
+        },
+        "major": {
+          "description": "The major version of Node.js that node-version names, as the schedule of Node.js names the major version: 0.12 for a version before 4.",
+          "type": "string",
+          "pattern": "^(0\\.)?[0-9]+$"
+        },
+        "end_of_life": {
+          "description": "The day the support of the major version ended, as the schedule of Node.js gives the day.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        }
+      },
+      "required": [
+        "kind_id",
+        "node_version",
+        "major",
+        "end_of_life"
+      ],
+      "additionalProperties": false,
+      "x-detected": "node-version {node_version} names Node.js {major}, whose support ended on {end_of_life}",
+      "x-consequence": "the steps after actions/setup-node run their commands on a Node.js version that no longer gets security fixes",
+      "x-remedy": "set node-version to a Node.js version that is still supported"
+    },
+    "deprecated-node-runtime.runtime-setting": {
+      "description": "A key of env that names a setting of the Node.js version of actions: ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION or FORCE_JAVASCRIPT_ACTIONS_TO_NODE20.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "deprecated-node-runtime.runtime-setting"
+        },
+        "name": {
+          "description": "The key, as written.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "name"
+      ],
+      "additionalProperties": false,
+      "x-detected": "the env sets {name}, a setting of the Node.js version that runs actions; the setting is reported whatever its value",
+      "x-consequence": "GitHub-hosted runners do not obey the setting (seen on 2026-10-20) and run an action that declares node12, node16 or node20 on Node.js 24, so the setting does nothing there; on a runner that obeys ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION with the value true, the actions that declare node12, node16 or node20 run on Node.js 20, which no longer gets security fixes",
+      "x-remedy": "remove the setting; for an action that declares node12, node16 or node20, use a version of the action whose runs.using is node24"
+    },
+    "deprecated-node-runtime.used-action": {
+      "description": "A uses of an action of another repository whose action.yml declares runs.using: node12, node16 or node20.",
+      "type": "object",
+      "properties": {
+        "kind_id": {
+          "const": "deprecated-node-runtime.used-action"
+        },
+        "uses": {
+          "description": "The uses, as written.",
+          "type": "string",
+          "minLength": 1
+        },
+        "runs_using": {
+          "description": "The runs.using of the action, as the fact action.runs-using answers; node12, node16 or node20 when the fact has no answer, and the finding is then conditional.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind_id",
+        "uses",
+        "runs_using"
+      ],
+      "additionalProperties": false,
+      "x-detected": "the action {uses} declares runs.using: {runs_using}, an older Node.js version than node24",
+      "x-consequence": "GitHub-hosted runners run the action on Node.js 24 (seen on 2026-10-20), not on the Node.js version that the action declares, and add a warning to every run of every job that uses the action; code of the action that depends on the declared Node.js version may behave differently on Node.js 24",
+      "x-remedy": "use a version of the action whose runs.using is node24, ask the maintainer of the action for such a version, or replace the action with one that is maintained"
+    },
+    "env-var.equals-sign": {
+      "description": "A key of env with = in it, which no name of an environment variable can have.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "env-var.equals-sign"},
+        "name": {"description": "The key, as written.", "type": "string", "minLength": 1},
+        "variable": {"description": "The part of the key before the first = of the key: the name of the variable that the runner sets instead.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "name", "variable"],
+      "additionalProperties": false,
+      "x-detected": "the env key {name} has =, which no name of an environment variable can have, and the runner sets the variable {variable} instead, to a value made from the rest of the key and the value written",
+      "x-consequence": "no step gets a variable whose name is the key: the runner sets the variable named by the part of the key before its first = instead. For the key A=B with the value x, the value of A depends on where the key is written and where the step runs. For a key in the env of the workflow, a job or a step: a step on the runner gets A with the value B=x, and a step in the job's container gets A with the value B. For a key in container.env (the job's container) or in the env of a service container (services): the container gets A with the value B=x. For a key in runs.env of a Docker container action: the container of the action gets A with the value B",
+      "x-remedy": "rename the key to a name without =, the name that the step reads"
+    },
+    "env-var.runner-overwritten": {
+      "description": "A key of env with the name of a variable that the runner writes in each step, after the env of the step is set.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "env-var.runner-overwritten"},
+        "name": {"description": "The key, as written.", "type": "string", "minLength": 1},
+        "runner_value": {"description": "What the runner writes to the variable: the value of a context, written as ${{ github.sha }}, or the text true, for GITHUB_ACTIONS.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "name", "runner_value"],
+      "additionalProperties": false,
+      "x-detected": "the env key {name} names a variable that the runner writes in each step after the env of the step is set: the runner writes the value of {runner_value} over the value written",
+      "x-consequence": "each step gets the value that the runner writes, not the value written in env; the log of the step shows the written value under env:, so the written value seems to reach the step. On a Windows runner, whose variables have no case, the same holds for the name in another case, such as github_sha; the rule reports such a name only in a job whose runs-on names a Windows runner",
+      "x-remedy": "give the value a name that the runner does not write, and read that name in the step"
+    },
+    "envpath-injection.controlled": {
+      "description": "A value an attacker controls, written to $GITHUB_PATH.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "envpath-injection.controlled"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, such as github.event.issue.title, or a variable of env, such as $TITLE.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the expression, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_PATH, and an attacker who controls it on {controlled_on} chooses a directory of the PATH of the steps after it",
+      "x-consequence": "an executable of the attacker's in that directory runs for a command the steps after it call by name, and as the shell of their run steps",
+      "x-remedy": "write a fixed path, not one made of the value: no part of the line may be the attacker's"
+    },
+    "envpath-injection.wiki": {
+      "description": "A value an attacker controls on gollum alone, written to $GITHUB_PATH: it holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "envpath-injection.wiki"},
+        "expr_ref": {"description": "The reference as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_PATH, and an attacker who controls it on gollum chooses a directory of the PATH of the steps after it",
+      "x-consequence": "an executable of the attacker's in that directory runs for a command the steps after it call by name, and as the shell of their run steps",
+      "x-remedy": "write a fixed path, not one made of the value: no part of the line may be the attacker's"
+    },
+    "envvar-injection.controlled": {
+      "description": "A value an attacker controls, line breaks and all, written to $GITHUB_ENV.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "envvar-injection.controlled"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, such as github.event.issue.body, or a variable of env, such as $BODY.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the expression where the value can start a name (with line breaks after the =, with any value before the =), each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_ENV, and an attacker who controls it on {controlled_on} can start a name of their own",
+      "x-consequence": "a line break in the value, or a name before its =, sets other environment variables of the steps after it",
+      "x-remedy": "keep the value after the = and take its line breaks out, or write it as name<<DELIM with a random delimiter"
+    },
+    "envvar-injection.wiki": {
+      "description": "A value an attacker writes with line breaks on gollum alone, written to $GITHUB_ENV: it holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "envvar-injection.wiki"},
+        "expr_ref": {"description": "The reference as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_ENV, and an attacker who controls it on gollum can start a name of their own",
+      "x-consequence": "a line break in the value, or a name before its =, sets other environment variables of the steps after it",
+      "x-remedy": "keep the value after the = and take its line breaks out, or write it as name<<DELIM with a random delimiter"
+    },
+    "evaluation-error": {
+      "description": "Why a ${{ }} fails when GitHub or the runner evaluates it for its key.",
+      "oneOf": [
+        {"const": "value-type", "description": "The value has a type that the key does not take."},
+        {"const": "format-arguments", "description": "format() has a placeholder whose number is not less than the number of its other arguments."},
+        {"const": "case-predicate", "description": "case() has a predicate whose value is not a boolean."},
+        {"const": "fromjson-argument", "description": "fromJSON() gets an object or an array."}
+      ],
+      "x-text": {"value-type": "gives a value of a type that the place of the expression does not take", "format-arguments": "calls format() with a format string that refers to an argument that format() is not given", "case-predicate": "calls case() with a predicate whose value is not a boolean", "fromjson-argument": "calls fromJSON() with an object or an array, which fromJSON() reads as the text Object or Array"}, "x-go-type": "analysis.EvaluationError"
+    },
+    "event": {
+      "description": "The name of an event that runs a workflow, as on: writes it.",
+      "type": "string",
+      "minLength": 1,
+      "x-go-type": "workflow.EventName"
+    },
+    "expression-key": {
+      "description": "A key whose ${{ }} the quality rule expression reads.",
+      "oneOf": [
+        {"const": "job-name", "description": "The name of the job."},
+        {"const": "runs-on", "description": "Runs-on."},
+        {"const": "job-timeout-minutes", "description": "Timeout-minutes of the job."},
+        {"const": "job-cancel-timeout-minutes", "description": "Cancel-timeout-minutes of the job."},
+        {"const": "job-continue-on-error", "description": "Continue-on-error of the job."},
+        {"const": "environment", "description": "Environment of the job."},
+        {"const": "strategy-fail-fast", "description": "Strategy.fail-fast."},
+        {"const": "strategy-max-parallel", "description": "Strategy.max-parallel."},
+        {"const": "strategy-matrix", "description": "Strategy.matrix."},
+        {"const": "job-concurrency", "description": "Concurrency of the job."},
+        {"const": "job-if", "description": "If of the job."},
+        {"const": "call-with", "description": "With of a job that calls a reusable workflow."},
+        {"const": "run-name", "description": "Run-name."},
+        {"const": "workflow-concurrency", "description": "Concurrency of the workflow."},
+        {"const": "input-default", "description": "The default of an input of workflow_call."},
+        {"const": "workflow-env", "description": "Env of the workflow."},
+        {"const": "job-env", "description": "Env of the job."},
+        {"const": "container", "description": "Container of the job."},
+        {"const": "services", "description": "Services of the job."},
+        {"const": "defaults-run", "description": "Defaults.run of the job."},
+        {"const": "job-outputs", "description": "Outputs of the job."},
+        {"const": "environment-url", "description": "Environment.url of the job."},
+        {"const": "call-secrets", "description": "Secrets of a job that calls a reusable workflow."},
+        {"const": "workflow-call-outputs", "description": "The value of an output of workflow_call."},
+        {"const": "step-env", "description": "Env of a step."},
+        {"const": "step-with", "description": "With of a step."},
+        {"const": "step-run", "description": "Run of a step."},
+        {"const": "step-working-directory", "description": "Working-directory of a step."},
+        {"const": "step-if", "description": "If of a step."},
+        {"const": "action-outputs", "description": "The value of an output of an action.yml."},
+        {"const": "step-timeout-minutes", "description": "Timeout-minutes of a step."},
+        {"const": "step-continue-on-error", "description": "Continue-on-error of a step."}
+      ],
+      "x-text": {"job-name": "the key name of the job", "runs-on": "the key runs-on of the job", "job-timeout-minutes": "the key timeout-minutes of the job", "job-cancel-timeout-minutes": "the key cancel-timeout-minutes of the job", "job-continue-on-error": "the key continue-on-error of the job", "environment": "the key environment of the job", "strategy-fail-fast": "the key strategy.fail-fast of the job", "strategy-max-parallel": "the key strategy.max-parallel of the job", "strategy-matrix": "the key strategy.matrix of the job", "job-concurrency": "the key concurrency of the job", "job-if": "the key if of the job", "call-with": "the key with of the job that calls a reusable workflow, or an input under the key with", "run-name": "the key run-name of the workflow", "workflow-concurrency": "the key concurrency of the workflow", "input-default": "the key default of an input of workflow_call", "workflow-env": "the key env of the workflow, or a variable under the key env", "job-env": "the key env of the job, or a variable under the key env", "container": "the key container of the job", "services": "the key services of the job, or a service under the key services", "defaults-run": "the key defaults.run of the job", "job-outputs": "the key outputs of the job, or an output under the key outputs", "environment-url": "the key environment.url of the job", "call-secrets": "the key secrets of the job that calls a reusable workflow, or a secret under the key secrets", "workflow-call-outputs": "the key value of an output of workflow_call", "step-env": "the key env of the step, or a variable under the key env", "step-with": "the key with of the step, or an input under the key with", "step-run": "the key run of the step", "step-working-directory": "the key working-directory of the step", "step-if": "the key if of the step", "action-outputs": "the key value of an output of the action.yml", "step-timeout-minutes": "the key timeout-minutes of the step", "step-continue-on-error": "the key continue-on-error of the step"}, "x-go-type": "analysis.ExpressionKey"
+    },
+    "expression.embedded-object": {
+      "description": "A ${{ }} in a text, with text around the ${{ }} or another ${{ }}, whose value is an object or an array.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.embedded-object"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "value_types": {"description": "The types that the value of the ${{ }} may be: an object, an array, or both.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} is written in a text, with other text or another expression in the same value, and the expression gives an object or an array",
+      "x-consequence": "GitHub writes the text Object in place of an object and the text Array in place of an array, not the content of the value, so the text does not hold the value",
+      "x-remedy": "write the property of the object that holds the value, such as github.event.pull_request.number in place of github.event.pull_request; or toJSON(...) of the value, which gives the value as JSON; or join(...) of an array, such as join(github.event.pull_request.labels.*.name, ', '). In a run script, put such an expression in env of the step and read the variable in the script, since a value that ${{ }} writes into a script becomes part of the code of the script (the rule code-injection reports a value of an attacker there)"
+    },
+    "expression.failed-job": {
+      "description": "A ${{ }} that fails when the runner evaluates it for the job: the value has a type that the key does not take, or a call of format(), case() or fromJSON() fails.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.failed-job"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "key": {"description": "The key.", "$ref": "#/$defs/expression-key"},
+        "error": {"description": "Why the ${{ }} fails.", "$ref": "#/$defs/evaluation-error"},
+        "value_types": {"description": "The types that the value of the ${{ }} may be, for the error value-type; empty for the other errors.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "key", "error", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} of {key} {error}",
+      "x-consequence": "the jobs that need a failed job do not run, and the run fails. For env of the workflow, every job of the workflow fails before the first step of the job runs. For env, the container, the services and defaults.run of a job, that job fails before the first step of that job runs. For the secrets that a job gives a called workflow, the jobs of the called workflow fail before their first steps run. For the outputs and environment.url of a job, that job fails after the steps of that job ran. For the value of an output of workflow_call, the jobs of the called workflow succeed, and the jobs that need the job that calls the workflow do not run",
+      "x-remedy": "write the expression so that the expression gives a value of a type that the place of the expression takes, and so that each function gets arguments that the function can use: fromJSON(...) turns a string such as 'true' or '5' into a boolean or a number; a property of an object whose value is a string, or toJSON(...) of the object, gives a string; format() needs an argument for each placeholder of its format string; each predicate of case() needs to be a boolean, such as a comparison; fromJSON() needs a string, not an object or an array"
+    },
+    "expression.failed-step": {
+      "description": "A ${{ }} that fails when the runner evaluates it for a step: the value has a type that the key does not take, or a call of format(), case() or fromJSON() fails.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.failed-step"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "key": {"description": "The key.", "$ref": "#/$defs/expression-key"},
+        "error": {"description": "Why the ${{ }} fails.", "$ref": "#/$defs/evaluation-error"},
+        "value_types": {"description": "The types that the value of the ${{ }} may be, for the error value-type; empty for the other errors.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "key", "error", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} of {key} {error}",
+      "x-consequence": "the runner fails the step, also when the key is the if of the step; unless continue-on-error of the step is true, the job fails, and the later steps of the job do not run, except the steps whose if calls a status function such as always() or failure(). For the value of an output of an action.yml, the finding is at outputs.<id>.value of the action.yml, and the step of a workflow that runs the action fails",
+      "x-remedy": "write the expression so that the expression gives a value of a type that the place of the expression takes, and so that each function gets arguments that the function can use: fromJSON(...) turns a string such as 'true' or '5' into a boolean or a number; a property of an object whose value is a string, or toJSON(...) of the object, gives a string; format() needs an argument for each placeholder of its format string; each predicate of case() needs to be a boolean, such as a comparison; fromJSON() needs a string, not an object or an array"
+    },
+    "expression.ignored-setting": {
+      "description": "A ${{ }} of timeout-minutes or continue-on-error of a step that fails when the runner evaluates it: the value has a type that the key does not take, or a call of format(), case() or fromJSON() fails.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.ignored-setting"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "key": {"description": "The key.", "$ref": "#/$defs/expression-key"},
+        "error": {"description": "Why the ${{ }} fails.", "$ref": "#/$defs/evaluation-error"},
+        "value_types": {"description": "The types that the value of the ${{ }} may be, for the error value-type; empty for the other errors.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "key", "error", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} of {key} {error}",
+      "x-consequence": "the runner does not use the key. With timeout-minutes, the runner writes an error to the run when the step starts, and the step has no time limit of the step (the time limit of the job still holds). With continue-on-error, when the step fails, the runner writes an error to the run, and the failure of the step fails the job; when the step succeeds, nothing shows the error",
+      "x-remedy": "write the expression so that the expression gives a value of a type that the place of the expression takes, and so that each function gets arguments that the function can use: fromJSON(...) turns a string such as 'true' or '5' into a boolean or a number; a property of an object whose value is a string, or toJSON(...) of the object, gives a string; format() needs an argument for each placeholder of its format string; each predicate of case() needs to be a boolean, such as a comparison; fromJSON() needs a string, not an object or an array"
+    },
+    "expression.undefinable-configuration-variable": {
+      "description": "A reference to a configuration variable by a name that no level of GitHub can define.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.undefinable-configuration-variable"},
+        "name": {"description": "The name of the configuration variable, as written.", "type": "string", "minLength": 1},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "name", "expression"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} reads the configuration variable {name}, a name that no level of GitHub can define: the name of a configuration variable has only ASCII letters, digits and _, does not start with a digit, and does not start with GITHUB_ with any of its letters in upper case or lower case",
+      "x-consequence": "GitHub accepts the expression and gives the empty string for the reference in every workflow run, so the expression never gives the value of a configuration variable, and a comparison with the value of the reference gives the same result in every workflow run",
+      "x-remedy": "write the name of a configuration variable that a level defines; the name of a configuration variable must have only ASCII letters, digits and _, must not start with a digit, and must not start with GITHUB_ with any of its letters in upper case or lower case"
+    },
+    "expression.unstarted-caller": {
+      "description": "A default of an input of workflow_call written as one ${{ }} whose value has a type other than the type of the input.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.unstarted-caller"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "value_types": {"description": "The types that the value of the ${{ }} may be, for the error value-type; empty for the other errors.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} in the key default of an input of workflow_call gives a value of a type other than the type of the input",
+      "x-consequence": "GitHub does not start a job that calls the workflow: the calling job does not appear in its run, and the run fails. This holds also when the calling job gives the input a value under its key with, and when the input is required",
+      "x-remedy": "write a default of the type of the input: write fromJSON(...) to turn a string such as 'true' or '5' into a boolean or a number, or write a literal value of the type of the input, such as true or 5, without ${{ }}"
+    },
+    "expression.unstarted-job": {
+      "description": "A ${{ }} that fails when GitHub evaluates it to start a job or a run: the value has a type that the key does not take, or a call of format(), case() or fromJSON() fails.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "expression.unstarted-job"},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1},
+        "key": {"description": "The key.", "$ref": "#/$defs/expression-key"},
+        "error": {"description": "Why the ${{ }} fails.", "$ref": "#/$defs/evaluation-error"},
+        "value_types": {"description": "The types that the value of the ${{ }} may be, for the error value-type; empty for the other errors.", "type": "array", "items": {"$ref": "#/$defs/value-type"}}
+      },
+      "required": ["kind_id", "expression", "key", "error", "value_types"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} of {key} {error}",
+      "x-consequence": "GitHub does not run the job. For the if of the job, GitHub skips the job: the job appears in the run as skipped, and the run can succeed. For the other keys of the job, GitHub does not start the job: the job does not appear in the run, the run fails, the jobs that need the job do not run, and the other jobs of the run still run. For run-name and for concurrency of the workflow, GitHub runs no job of the run",
+      "x-remedy": "write the expression so that the expression gives a value of a type that the place of the expression takes, and so that each function gets arguments that the function can use: fromJSON(...) turns a string such as 'true' or '5' into a boolean or a number; a property of an object whose value is a string, or toJSON(...) of the object, gives a string; format() needs an argument for each placeholder of its format string; each predicate of case() needs to be a boolean, such as a comparison; fromJSON() needs a string, not an object or an array"
+    },
+    "flag-place": {
+      "description": "Where the ACTIONS_ALLOW_UNSECURE_COMMANDS a step reads is set.",
+      "oneOf": [
+        {"const": "workflow", "description": "The env of the workflow."},
+        {"const": "job", "description": "The env of the job."},
+        {"const": "step", "description": "The env of the step."},
+        {"const": "github-env", "description": "$GITHUB_ENV, written by a step before."}
+      ],
+      "x-text": {"workflow": "the env of the workflow", "job": "the env of the job", "step": "the env of the step", "github-env": "$GITHUB_ENV of a step before"}, "x-go-type": "analysis.FlagPlace"
+    },
+    "image-site-kind": {
+      "description": "Where an image to run is written.",
+      "oneOf": [
+        {"const": "container", "description": "The container of a job."},
+        {"const": "service", "description": "A service of a job."},
+        {"const": "step", "description": "The uses of a step: docker://."},
+        {"const": "action", "description": "The runs.image of an action.yml: docker://."}
+      ],
+      "x-text": {"container": "the job's container", "service": "a service of the job", "step": "the step", "action": "the action"}, "x-go-type": "analysis.ImageSiteKind"
+    },
+    "impostor-commit.fork-commit": {
+      "description": "A uses pinned to a commit that no branch and no tag of its repository has.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "impostor-commit.fork-commit"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "repo": {"description": "The repository, owner/name as written.", "type": "string", "minLength": 1},
+        "sha": {"$ref": "facts-v0.json#/$defs/sha"}
+      },
+      "required": ["kind_id", "uses", "repo", "sha"],
+      "additionalProperties": false,
+      "x-detected": "{uses} is pinned to a commit that no branch and no tag of {repo} has",
+      "x-consequence": "the commit is only in a fork, which anyone can push, or does not exist",
+      "x-remedy": "pin a commit of a branch or a tag of the repository"
+    },
+    "known-vulnerable-actions.advisory-critical": {
+      "description": "A uses whose version is in the range of an advisory of the GitHub Advisory Database that GitHub rates critical. GitHub's rating is its own; the severity of this kind is found by another table, so the two need not agree.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "known-vulnerable-actions.advisory-critical"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "package": {"$ref": "facts-v0.json#/$defs/package-name"},
+        "ghsa_id": {"$ref": "facts-v0.json#/$defs/ghsa-id"},
+        "version": {"$ref": "facts-v0.json#/$defs/package-version"},
+        "vulnerable_version_range": {"description": "The range of versions the advisory says the vulnerability affects, as GitHub writes the range.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "package", "ghsa_id", "version", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-detected": "{uses} runs {version} of {package}, which {ghsa_id} (rated critical by GitHub) says is vulnerable ({vulnerable_version_range})",
+      "x-consequence": "an attacker may use the vulnerability the advisory describes; GitHub's rating of the advisory is its own, and the severity of this finding is found by another table",
+      "x-remedy": "upgrade to a version the advisory says is fixed, or stop using the action"
+    },
+    "known-vulnerable-actions.advisory-high": {
+      "description": "A uses whose version is in the range of an advisory of the GitHub Advisory Database that GitHub rates high. GitHub's rating is its own; the severity of this kind is found by another table, so the two need not agree.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "known-vulnerable-actions.advisory-high"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "package": {"$ref": "facts-v0.json#/$defs/package-name"},
+        "ghsa_id": {"$ref": "facts-v0.json#/$defs/ghsa-id"},
+        "version": {"$ref": "facts-v0.json#/$defs/package-version"},
+        "vulnerable_version_range": {"description": "The range of versions the advisory says the vulnerability affects, as GitHub writes the range.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "package", "ghsa_id", "version", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-detected": "{uses} runs {version} of {package}, which {ghsa_id} (rated high by GitHub) says is vulnerable ({vulnerable_version_range})",
+      "x-consequence": "an attacker may use the vulnerability the advisory describes; GitHub's rating of the advisory is its own, and the severity of this finding is found by another table",
+      "x-remedy": "upgrade to a version the advisory says is fixed, or stop using the action"
+    },
+    "known-vulnerable-actions.advisory-low": {
+      "description": "A uses whose version is in the range of an advisory of the GitHub Advisory Database that GitHub rates low. GitHub's rating is its own; the severity of this kind is found by another table, so the two need not agree.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "known-vulnerable-actions.advisory-low"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "package": {"$ref": "facts-v0.json#/$defs/package-name"},
+        "ghsa_id": {"$ref": "facts-v0.json#/$defs/ghsa-id"},
+        "version": {"$ref": "facts-v0.json#/$defs/package-version"},
+        "vulnerable_version_range": {"description": "The range of versions the advisory says the vulnerability affects, as GitHub writes the range.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "package", "ghsa_id", "version", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-detected": "{uses} runs {version} of {package}, which {ghsa_id} (rated low by GitHub) says is vulnerable ({vulnerable_version_range})",
+      "x-consequence": "an attacker may use the vulnerability the advisory describes; GitHub's rating of the advisory is its own, and the severity of this finding is found by another table",
+      "x-remedy": "upgrade to a version the advisory says is fixed, or stop using the action"
+    },
+    "known-vulnerable-actions.advisory-medium": {
+      "description": "A uses whose version is in the range of an advisory of the GitHub Advisory Database that GitHub rates medium. GitHub's rating is its own; the severity of this kind is found by another table, so the two need not agree.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "known-vulnerable-actions.advisory-medium"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "package": {"$ref": "facts-v0.json#/$defs/package-name"},
+        "ghsa_id": {"$ref": "facts-v0.json#/$defs/ghsa-id"},
+        "version": {"$ref": "facts-v0.json#/$defs/package-version"},
+        "vulnerable_version_range": {"description": "The range of versions the advisory says the vulnerability affects, as GitHub writes the range.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "package", "ghsa_id", "version", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-detected": "{uses} runs {version} of {package}, which {ghsa_id} (rated medium by GitHub) says is vulnerable ({vulnerable_version_range})",
+      "x-consequence": "an attacker may use the vulnerability the advisory describes; GitHub's rating of the advisory is its own, and the severity of this finding is found by another table",
+      "x-remedy": "upgrade to a version the advisory says is fixed, or stop using the action"
+    },
+    "known-vulnerable-actions.advisory-unknown": {
+      "description": "A uses whose version is in the range of an advisory of the GitHub Advisory Database that GitHub has not rated. GitHub's rating is its own; the severity of this kind is found by another table, so the two need not agree.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "known-vulnerable-actions.advisory-unknown"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "package": {"$ref": "facts-v0.json#/$defs/package-name"},
+        "ghsa_id": {"$ref": "facts-v0.json#/$defs/ghsa-id"},
+        "version": {"$ref": "facts-v0.json#/$defs/package-version"},
+        "vulnerable_version_range": {"description": "The range of versions the advisory says the vulnerability affects, as GitHub writes the range.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "package", "ghsa_id", "version", "vulnerable_version_range"],
+      "additionalProperties": false,
+      "x-detected": "{uses} runs {version} of {package}, which {ghsa_id} (not rated by GitHub) says is vulnerable ({vulnerable_version_range})",
+      "x-consequence": "an attacker may use the vulnerability the advisory describes; GitHub's rating of the advisory is its own, and the severity of this finding is found by another table",
+      "x-remedy": "upgrade to a version the advisory says is fixed, or stop using the action"
+    },
+    "log-place": {
+      "description": "The place where the run prints the value: the output of the step, the job summary, the trace that set -x or the -x option in the shell: value of the step turns on, the env in the header of each later step ($GITHUB_ENV), or the header of the step. Those who can read the log of the run can read each of the places; the job summary is on the page of the run, apart from the log.",
+      "oneOf": [
+        {"const": "standard-output-or-error", "description": "What the script writes to the standard output or error it inherits."},
+        {"const": "job-summary", "description": "$GITHUB_STEP_SUMMARY, shown with the run."},
+        {"const": "xtrace", "description": "The trace that set -x or the -x option in the shell: value of the step turns on, on the standard error."},
+        {"const": "github-env", "description": "$GITHUB_ENV: the runner prints its variables in the env of the header of each step after the step that writes them."},
+        {"const": "step-header", "description": "The header of a step, which prints the run with each ${{ }} evaluated, the env and the with of the step."}
+      ],
+      "x-text": {"standard-output-or-error": "the output of the step", "job-summary": "the job summary", "xtrace": "the trace that set -x or the -x option in the shell: value of the step turns on", "github-env": "$GITHUB_ENV, whose variables the header of each step after prints", "step-header": "the header of a step"}, "x-go-type": "analysis.LogPlace"
+    },
+    "missing-timeout-minutes.job": {
+      "description": "A job that runs on a runner without timeout-minutes.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "missing-timeout-minutes.job"},
+        "job": {"description": "The job's ID.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "job"],
+      "additionalProperties": false,
+      "x-detected": "the job {job} has no timeout-minutes",
+      "x-consequence": "a job that stops making progress runs until GitHub cancels the job after 360 minutes, and the job uses the runner for the whole 360 minutes",
+      "x-remedy": "write timeout-minutes on the job, a little above the time that the job usually takes"
+    },
+    "output-clobbering.controlled": {
+      "description": "A value an attacker controls, line breaks and all, written to $GITHUB_OUTPUT.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "output-clobbering.controlled"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, or a variable of env.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value of the expression where the value can start a name (with line breaks after the =, with any value before the =), each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_OUTPUT, and an attacker who controls it on {controlled_on} can start a name of their own",
+      "x-consequence": "a line break in the value, or a name before its =, sets other outputs of the step",
+      "x-remedy": "keep the value after the = and take its line breaks out, or write it as name<<DELIM with a random delimiter"
+    },
+    "output-clobbering.wiki": {
+      "description": "A value an attacker writes with line breaks on gollum alone, written to $GITHUB_OUTPUT: it holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "output-clobbering.wiki"},
+        "expr_ref": {"description": "The reference as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "expr_ref"],
+      "additionalProperties": false,
+      "x-detected": "{expr_ref} is written to $GITHUB_OUTPUT, and an attacker who controls it on gollum can start a name of their own",
+      "x-consequence": "a line break in the value, or a name before its =, sets other outputs of the step",
+      "x-remedy": "keep the value after the = and take its line breaks out, or write it as name<<DELIM with a random delimiter"
+    },
+    "permissions.unwritten": {
+      "description": "A job that writes no permissions, in a workflow that writes none, whose GITHUB_TOKEN gets the repository's default.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "permissions.unwritten"}
+      },
+      "required": ["kind_id"],
+      "additionalProperties": false,
+      "x-detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
+      "x-consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
+      "x-remedy": "write permissions on the workflow or the job with only the scopes it needs, permissions: {} when it needs none"
+    },
+    "permissions.write-all": {
+      "description": "A job whose GITHUB_TOKEN has write-all.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "permissions.write-all"},
+        "write_all": {"$ref": "#/$defs/write-all"}
+      },
+      "required": ["kind_id", "write_all"],
+      "additionalProperties": false,
+      "x-detected": "the permissions of {write_all} are write-all: the job's GITHUB_TOKEN may write every scope",
+      "x-consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
+      "x-remedy": "write permissions on the job with only the scopes it needs"
+    },
+    "request-forgery.action-input": {
+      "description": "A value an attacker controls is in an input of an action that sends a credential where the input says: args of SonarSource's scanner actions, route or url of octokit/request-action.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "request-forgery.action-input"},
+        "action": {"description": "The action, as owner/repo.", "type": "string", "minLength": 1},
+        "input": {"description": "The input whose value decides where the action sends the credential.", "type": "string", "minLength": 1},
+        "secrets": {"description": "What the request carries: the names of the secrets as written, GITHUB_TOKEN for the job's token, * for the whole secrets context, or enterprise-token for the token gh api reads from GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN when no secret is known to be in that variable.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "expr_ref": {"description": "The reference whose value decides the host, such as github.event.issue.title.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "action", "input", "secrets", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{action} sends {secrets} to the server that its input {input} names, and the input {input} has the value of {expr_ref}, which an attacker controls on the events {controlled_on}",
+      "x-consequence": "the attacker writes the address of a server of the attacker's own into the value: in args of SonarSource's scanner, one more argument -Dsonar.host.url=<the server>; in route or url of octokit/request-action, a full URL; the action sends the credential to that server, and the attacker uses the credential as the job would",
+      "x-remedy": "keep a value an attacker controls out of the input: in args of SonarSource's scanner, pass only values written literally in the workflow file; in route or url of octokit/request-action, write the host in the workflow and put the attacker's value only in the path after the host, or in a parameter of the request"
+    },
+    "request-forgery.credential-host": {
+      "description": "A value an attacker controls decides the host of a request that a command of a run sends, and the request carries a secret or the job's token.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "request-forgery.credential-host"},
+        "command": {"description": "The command that sends the request: curl, wget or gh api.", "type": "string", "minLength": 1},
+        "secrets": {"description": "What the request carries: the names of the secrets as written, GITHUB_TOKEN for the job's token, * for the whole secrets context, or enterprise-token for the token gh api reads from GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN when no secret is known to be in that variable.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "expr_ref": {"description": "The reference whose value decides the host, such as github.event.issue.title.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "command", "secrets", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{command} sends a request whose host the value of {expr_ref} decides, and an attacker controls the value on the events {controlled_on}; the request carries {secrets}",
+      "x-consequence": "the attacker writes the host of a server of the attacker's own into the value; the command sends the request, with each secret the request carries, to that server, and the attacker uses each secret as the job would: reading what the secret gives access to, and, when the request carries the job's token (GITHUB_TOKEN) and the token can write, writing to the repository while the job runs",
+      "x-remedy": "do not let a value an attacker controls decide the host of a request that carries a credential: write the host in the workflow and put the attacker's value only after the / that ends the host (https://api.example.com/<the value>). A check in the script that ends the step with an error when the value is not one of the hosts the workflow expects also stops the attack, but the linter does not read such a check and keeps reporting the request"
+    },
+    "request-forgery.runner-network": {
+      "description": "A value an attacker controls decides the host of a request from a job on a self-hosted runner: the request reaches the network of the runner, which the attacker does not reach.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "request-forgery.runner-network"},
+        "command": {"description": "What sends the request: the command curl, wget or gh api, or an action and the input of the action, such as octokit/request-action route.", "type": "string", "minLength": 1},
+        "runner_labels": {"description": "The labels of the job's runs-on, as written.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "expr_ref": {"description": "The reference whose value decides the host, such as github.event.issue.title.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker controls the value, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "command", "runner_labels", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "{command} sends a request whose host the value of {expr_ref} decides, and an attacker controls the value on the events {controlled_on}; the job runs on a self-hosted runner ({runner_labels})",
+      "x-consequence": "the attacker writes the address of a service of the runner's network into the value, such as a service of an internal network or a cloud's metadata service; the request reaches that service from the runner, although the attacker cannot reach that service from outside, and the attacker can make the service act or, where the response comes back to the attacker, read the response",
+      "x-remedy": "either write the host of the request in the workflow, so that a value an attacker controls does not decide the host, or run the job on a GitHub-hosted runner, which does not reach the network of the self-hosted runner, when the job does not need that network; either one alone removes the finding. A check in the script that ends the step with an error when the value is not one of the hosts the workflow expects also stops the attack, but the linter does not read such a check and keeps reporting the request"
+    },
+    "secret-exfiltration.untrusted-destination": {
+      "description": "A request that a command of a run sends carries a secret or the job's token to a destination the workflow names, and no file of facts says to trust that destination with that secret (request.destination-trusted).",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secret-exfiltration.untrusted-destination"},
+        "command": {"description": "The command that sends the request: curl, wget or gh api.", "type": "string", "minLength": 1},
+        "secret": {"description": "The name of the secret the request carries, as the fact names the secret: in upper case, GITHUB_TOKEN for the job's token.", "type": "string", "minLength": 1},
+        "destination": {"description": "Where the request goes, as the fact names the destination: the host, or the origin of the value that names the host, such as ${{ secrets.UPLOAD_API }}.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "command", "secret", "destination"],
+      "additionalProperties": false,
+      "x-detected": "{command} sends {secret} to {destination}, and no file of facts says to trust {destination} with {secret}",
+      "x-consequence": "whoever runs the server of the destination, or takes the server over (a breached vendor, or whoever registers a lapsed domain), receives the secret or the job's token and can use the secret or the token as the job would",
+      "x-remedy": "if the destination is the service that the secret is for, answer true for the pair of the secret (GITHUB_TOKEN for the job's token) and the destination, with --fact 'request.destination-trusted[secret=API_KEY,destination=api.example.com]=true' or the same query in a file of facts given with --facts; if the destination is not, remove the secret from the request"
+    },
+    "secret-exposure.all-secrets": {
+      "description": "A reference in a ${{ }} that reads the secrets context and names no secret: toJSON(secrets), secrets[x] whose x is not a string literal, secrets.*.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secret-exposure.all-secrets"},
+        "reference": {"description": "The reference as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "reference"],
+      "additionalProperties": false,
+      "x-detected": "{reference} reads the secrets without naming one",
+      "x-consequence": "GitHub sends the job every secret of the repository, including the secrets that no expression of the job names, and also every secret of the environment of the job when the job references an environment. The memory of the runner holds every secret that GitHub sends the job, and code that runs in a step of the job can read every secret in the memory of the runner. The harm comes from two kinds of code: an action that turns malicious, and code that an attacker writes and that a flaw of the job runs. The harm is each secret that one of the two kinds of code can read now and could not read if each job of each workflow that can read the secret named only the secrets that the job needs. In the workflows that name only the needed secrets, GitHub sends each job only the secrets that the job names, and code that runs in a job can still read every secret that the job names. An action counts in every job, of any workflow, that runs the action; the code of an attacker counts only in the jobs whose flaw runs the code of the attacker",
+      "x-remedy": "name each secret the job needs, secrets.NAME, and pick one by an if for each value of the matrix rather than by a secrets[...] whose name is computed"
+    },
+    "secret-in-log.private": {
+      "description": "A value the shell made from a secret, which the runner does not mask, printed to the log of a run in a private repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secret-in-log.private"},
+        "secret": {"description": "The name of the secret, in upper case; GITHUB_TOKEN for the job's token.", "type": "string", "minLength": 1},
+        "place": {"$ref": "#/$defs/log-place"},
+        "transform": {"description": "How the shell made the value from the secret: the operator of a parameter expansion (substring, prefix-removal, suffix-removal, replacement, case-change, expansion), or the command (jq, base64 and the like).", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "secret", "place", "transform"],
+      "additionalProperties": false,
+      "x-detected": "{transform} makes a value from the secret {secret}, and the value is printed in {place}",
+      "x-consequence": "the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: whoever has read access to the repository reads the value in the log; the log of the run is kept for 90 days by default",
+      "x-remedy": "do not print the value; if the value must be printed, register each line of the value with ::add-mask:: before the value is printed; delete the logs of the runs that printed the value, and rotate the secret"
+    },
+    "secret-in-log.public": {
+      "description": "A value the shell made from a secret, which the runner does not mask, printed to the log of a run in a public repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secret-in-log.public"},
+        "secret": {"description": "The name of the secret, in upper case; GITHUB_TOKEN for the job's token.", "type": "string", "minLength": 1},
+        "place": {"$ref": "#/$defs/log-place"},
+        "transform": {"description": "How the shell made the value from the secret: the operator of a parameter expansion (substring, prefix-removal, suffix-removal, replacement, case-change, expansion), or the command (jq, base64 and the like).", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "secret", "place", "transform"],
+      "additionalProperties": false,
+      "x-detected": "{transform} makes a value from the secret {secret}, and the value is printed in {place}",
+      "x-consequence": "the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: anyone signed in to GitHub reads the value in the log; the log of the run is kept for 90 days by default",
+      "x-remedy": "do not print the value; if the value must be printed, register each line of the value with ::add-mask:: before the value is printed; delete the logs of the runs that printed the value, and rotate the secret"
+    },
+    "secrets-in-artifacts.job-scoped": {
+      "description": "A step leaves a credential that works while the job runs in a file of the workspace, and an upload after it puts the file in an artifact others can download while the job still runs.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secrets-in-artifacts.job-scoped"},
+        "uses": {"description": "The uses, as written, of one step that runs before the upload and leaves a credential that the upload takes: the first of those steps that leaves a credential on no condition, else the first of those steps.", "type": "string", "minLength": 1},
+        "upload": {"description": "The uses of the upload, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "upload"],
+      "additionalProperties": false,
+      "x-detected": "{uses} leaves a credential that works while the job runs in the workspace, and {upload} puts it in an artifact while the job goes on",
+      "x-consequence": "anyone who can read the repository's artifacts takes the credential and uses what it opens until the job ends",
+      "x-remedy": "leave the file out of the path (a line !gha-creds-*.json), or upload before the step that writes it"
+    },
+    "secrets-in-artifacts.lasting": {
+      "description": "A step leaves a credential that does not expire with the job in a file of the workspace, and an upload after it puts the file in an artifact.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secrets-in-artifacts.lasting"},
+        "uses": {"description": "The uses, as written, of one step that runs before the upload and leaves a credential that the upload takes: the first of those steps that leaves a credential on no condition, else the first of those steps.", "type": "string", "minLength": 1},
+        "upload": {"description": "The uses of the upload, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "upload"],
+      "additionalProperties": false,
+      "x-detected": "{uses} leaves a credential that does not expire in the workspace, and {upload} puts it in an artifact",
+      "x-consequence": "anyone who can read the repository's artifacts takes the credential and uses what it opens",
+      "x-remedy": "leave the file out of the path (a line !gha-creds-*.json), upload before the step that writes it, or have the step not write it (create_credentials_file: false)"
+    },
+    "secrets-inherit.local": {
+      "description": "A job that calls a reusable workflow of the same repository with secrets: inherit, which lets the called workflow reference every secret; reported when either a job of the called workflow reads the secrets without naming the secrets, or the linter does not have the contents of the called workflow.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secrets-inherit.local"},
+        "uses": {"description": "The uses of the job, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses"],
+      "additionalProperties": false,
+      "x-detected": "the job calls {uses} with secrets: inherit, and either a job of the called workflow reads the secrets without naming the secrets (toJSON(secrets), secrets[<an expression>], secrets.*), or the linter does not have the contents of the called workflow",
+      "x-consequence": "GitHub passes every secret of the organization and the repository that the job has to the runner of a job of the called workflow that reads the secrets without naming the secrets; a flaw that runs an attacker's code in that job, such as an injection, gives the attacker every one of those secrets, not only the secrets that the called workflow needs",
+      "x-remedy": "in the called workflow, read each secret by name in place of toJSON(secrets), secrets[<an expression>] or secrets.*; or declare in on.workflow_call.secrets of the called workflow the secrets that the called workflow reads, and pass those secrets one by one under secrets:"
+    },
+    "secrets-inherit.remote": {
+      "description": "A job that calls a reusable workflow of another repository with secrets: inherit, which lets the called workflow reference every secret.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "secrets-inherit.remote"},
+        "uses": {"description": "The uses of the job, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses"],
+      "additionalProperties": false,
+      "x-detected": "the job calls {uses}, a reusable workflow of another repository, with secrets: inherit, which lets the called workflow reference every secret that the job has",
+      "x-consequence": "whoever maintains that repository, or takes it over, reads every secret of the organization and the repository, not only those the workflow needs",
+      "x-remedy": "declare in on.workflow_call.secrets of the called workflow the secrets it reads, and pass those one by one under secrets:"
+    },
+    "self-hosted-runner.private": {
+      "description": "A job of a private or internal repository, whose readers may fork it and whose pull requests from forks run their workflows, that runs on a self-hosted runner.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "self-hosted-runner.private"},
+        "label": {"description": "The label that names the self-hosted runner, as written or as the matrix gives the label.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "label"],
+      "additionalProperties": false,
+      "x-detected": "the job runs on a self-hosted runner ({label}) of a private or internal repository that runs the workflows of pull requests from its forks",
+      "x-consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
+      "x-remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs."
+    },
+    "self-hosted-runner.public": {
+      "description": "A job of a public repository that runs on a self-hosted runner.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "self-hosted-runner.public"},
+        "label": {"description": "The label that names the self-hosted runner, as written or as the matrix gives the label.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "label"],
+      "additionalProperties": false,
+      "x-detected": "the job runs on a self-hosted runner ({label}) of a public repository",
+      "x-consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
+      "x-remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs."
+    },
+    "set-output-injection.controlled": {
+      "description": "A value an attacker controls, printed to the log of a step that has an id.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "set-output-injection.controlled"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, such as github.event.issue.title, or a variable of env, such as $TITLE.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker writes a workflow command in the value, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "expr_ref", "controlled_on"],
+      "additionalProperties": false,
+      "x-detected": "the value of {expr_ref} is printed to the log of a step, the step has an id, and an attacker who controls the value on {controlled_on} can write a set-output command in the value",
+      "x-consequence": "with or without ACTIONS_ALLOW_UNSECURE_COMMANDS, the runner reads a line that the step prints, when the line holds ##[set-output name=NAME;]value or starts with ::set-output, as a command that sets the output NAME of the step; the runner sets the outputs of a step only when the step has an id; the steps after the step, and the outputs of the job and of an action that name the output, get the value of the attacker as the output of the step, and a step that writes ${{ steps.<id>.outputs.NAME }} into its run script runs code of the attacker",
+      "x-remedy": "do not print the value to the log; if the value must be printed, print the value only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step: a known false positive, stopped-commands)"
+    },
+    "sink-kind": {
+      "description": "The kind of script in which a value is written as code: the run script of a step, or the script of actions/github-script.",
+      "oneOf": [
+        {"const": "run", "description": "The run script of a step."},
+        {"const": "github-script", "description": "The script of actions/github-script."}
+      ],
+      "x-text": {"run": "the run script", "github-script": "the script of actions/github-script"}, "x-go-type": "analysis.SinkKind"
+    },
+    "status-function": {
+      "description": "A function an if may call that reads the status of the jobs or the steps before.",
+      "oneOf": [
+        {"const": "always", "description": "always()."},
+        {"const": "cancelled", "description": "cancelled()."},
+        {"const": "failure", "description": "failure()."},
+        {"const": "success", "description": "success()."}
+      ],
+      "x-text": {"always": "always()", "cancelled": "cancelled()", "failure": "failure()", "success": "success()"}, "x-go-type": "analysis.StatusFunction"
+    },
+    "unmasked-secret-exposure.private": {
+      "description": "A ${{ }} whose value has a value taken out of a secret by fromJSON, where the runner prints it in the log, in a private repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unmasked-secret-exposure.private"},
+        "secrets": {"description": "The names of the secrets that the value is taken out of; * for a secret not named.", "type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "required": ["kind_id", "secrets"],
+      "additionalProperties": false,
+      "x-detected": "a value taken out of the secrets {secrets} is written where the runner prints it",
+      "x-consequence": "the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Whoever has read access to the repository reads the value in the log, which is kept for 90 days by default",
+      "x-remedy": "store each value in a secret of its own, secrets.NAME; delete the logs that have it and rotate it"
+    },
+    "unmasked-secret-exposure.public": {
+      "description": "A ${{ }} whose value has a value taken out of a secret by fromJSON, where the runner prints it in the log, in a public repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unmasked-secret-exposure.public"},
+        "secrets": {"description": "The names of the secrets that the value is taken out of; * for a secret not named.", "type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "required": ["kind_id", "secrets"],
+      "additionalProperties": false,
+      "x-detected": "a value taken out of the secrets {secrets} is written where the runner prints it",
+      "x-consequence": "the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Anyone signed in to GitHub reads the value in the log, which is kept for 90 days by default",
+      "x-remedy": "store each value in a secret of its own, secrets.NAME; delete the logs that have it and rotate it"
+    },
+    "unpinned-images.mutable": {
+      "description": "An image that the steps of a job run in (a job's container, a step's docker://, an action's runs.image), which no digest pins.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unpinned-images.mutable"},
+        "image": {"description": "The image as written, without docker://, or as the matrix gives the image.", "type": "string", "minLength": 1},
+        "tag": {"description": "The tag of the image; empty when the image has no tag, which means the tag latest.", "type": "string"},
+        "site": {"$ref": "#/$defs/image-site-kind"}
+      },
+      "required": ["kind_id", "image", "tag", "site"],
+      "additionalProperties": false,
+      "x-detected": "{image} of {site} is not pinned by a digest",
+      "x-consequence": "whoever can push the image's tag decides what the steps run in, with their secrets and token; no tag or latest, and a tag of a version series, also move on normal releases, unreviewed",
+      "x-remedy": "pin the image by its digest, as name@sha256:…"
+    },
+    "unpinned-images.service": {
+      "description": "The image of a service of a job, which no digest pins.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unpinned-images.service"},
+        "image": {"description": "The image as written, or as the matrix gives the image.", "type": "string", "minLength": 1},
+        "tag": {"description": "The tag of the image; empty when the image has no tag, which means the tag latest.", "type": "string"},
+        "service": {"description": "The name of the service.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "image", "tag", "service"],
+      "additionalProperties": false,
+      "x-detected": "{image} of the service {service} is not pinned by a digest",
+      "x-consequence": "whoever can push the image's tag decides what runs beside the job: it reads the service's env and what the job sends it, and answers the job; no tag or latest, and a tag of a version series, also move on normal releases, unreviewed",
+      "x-remedy": "pin the image by its digest, as name@sha256:…"
+    },
+    "unsecure-commands.controlled": {
+      "description": "A value an attacker controls, printed to the log of a step where ACTIONS_ALLOW_UNSECURE_COMMANDS is true.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unsecure-commands.controlled"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, such as github.event.issue.title, or a variable of env, such as $TITLE.", "type": "string", "minLength": 1},
+        "controlled_on": {"description": "The events on which an attacker writes a workflow command in the value, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}},
+        "flag": {"$ref": "#/$defs/flag-place"}
+      },
+      "required": ["kind_id", "expr_ref", "controlled_on", "flag"],
+      "additionalProperties": false,
+      "x-detected": "the value of {expr_ref} is printed to the log of a step where ACTIONS_ALLOW_UNSECURE_COMMANDS is true, as set in {flag}, and an attacker who controls the value on {controlled_on} can write a set-env or add-path command in the value",
+      "x-consequence": "the runner reads a line of the output that holds ##[set-env name=NAME;]value, or starts with ::set-env, as a command that sets the environment variable NAME of the steps after the step; a set-env of BASH_ENV makes the bash of each step after the step run code of the attacker, and an add-path puts a directory of the attacker before the PATH of the steps after the step",
+      "x-remedy": "rewrite the steps that print set-env or add-path commands to write $GITHUB_ENV and $GITHUB_PATH instead, then remove ACTIONS_ALLOW_UNSECURE_COMMANDS; if the flag must stay, print values an attacker controls only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step)"
+    },
+    "unsecure-commands.wiki": {
+      "description": "A value an attacker controls on gollum alone, printed to the log of a step where ACTIONS_ALLOW_UNSECURE_COMMANDS is true: the finding holds if anyone may edit the wiki.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unsecure-commands.wiki"},
+        "expr_ref": {"description": "The reference as written: a context in ${{ }}, such as github.event.issue.title, or a variable of env, such as $TITLE.", "type": "string", "minLength": 1},
+        "flag": {"$ref": "#/$defs/flag-place"}
+      },
+      "required": ["kind_id", "expr_ref", "flag"],
+      "additionalProperties": false,
+      "x-detected": "the value of {expr_ref} is printed to the log of a step where ACTIONS_ALLOW_UNSECURE_COMMANDS is true, as set in {flag}, and an attacker who controls the value on gollum alone can make the value hold an add-path command; for the name of a wiki page (page_name), the attacker does so through the title of the page: GitHub makes the name of the page from the title that the attacker writes, turns each blank of the title into a - after trimming the blanks at the head and the end of the title, and turns each - that the attacker writes in the title into the character U+2010, so that the attacker writes a blank where the command needs a -: the title ::add path::DIR makes the name ::add-path::DIR, and the title ##[add path]DIR makes the name ##[add-path]DIR",
+      "x-consequence": "the runner reads a line of the output that holds ##[add-path]DIR anywhere in the line, or that starts with ::add-path::DIR, as a command that puts the directory DIR before the PATH of the steps after the step, so that an executable of the attacker in DIR runs in place of the program that a step after the step calls by name; the title ##[add path]DIR of a wiki page makes the name ##[add-path]DIR, and the title ::add path::DIR makes the name ::add-path::DIR",
+      "x-remedy": "rewrite the steps that print set-env or add-path commands to write $GITHUB_ENV and $GITHUB_PATH instead, then remove ACTIONS_ALLOW_UNSECURE_COMMANDS; if the flag must stay, print values an attacker controls only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step)"
+    },
+    "unset-configuration-variable.empty-value": {
+      "description": "A reference to a configuration variable whose name no level defines, where the empty string becomes the value of the ${{ }}.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unset-configuration-variable.empty-value"},
+        "name": {"description": "The name of the configuration variable, as written.", "type": "string", "minLength": 1},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "name", "expression"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} reads the configuration variable {name} as a value, and no list of defined names that this run of the linter has (repo.configuration-variables, and repo.environment-configuration-variables of each environment whose configuration variables the place of the expression reads) has the name {name}",
+      "x-consequence": "GitHub gives the empty string for a configuration variable that no level (repository, organization, environment) defines, and GitHub reports no error, so the expression gives the empty string where the workflow expects the value of the configuration variable. A misspelled name shows only in what the workflow run does, such as an empty argument of a step",
+      "x-remedy": "define the configuration variable at the repository, organization or environment level, or correct the name in the expression; when the workflow reads a missing configuration variable on purpose as meaning that the setting is not given, write the default value after ||, such as vars.NAME || 'default'"
+    },
+    "unset-configuration-variable.failed-from-json": {
+      "description": "A reference to a configuration variable whose name no level defines, as the argument of fromJSON().",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unset-configuration-variable.failed-from-json"},
+        "name": {"description": "The name of the configuration variable, as written.", "type": "string", "minLength": 1},
+        "expression": {"description": "The ${{ }}, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "name", "expression"],
+      "additionalProperties": false,
+      "x-detected": "the expression {expression} gives the configuration variable {name} to fromJSON(), and no list of defined names that this run of the linter has (repo.configuration-variables, and repo.environment-configuration-variables of each environment whose configuration variables the place of the expression reads) has the name {name}",
+      "x-consequence": "GitHub gives the empty string for a configuration variable that no level defines, and fromJSON() of the empty string fails, so the evaluation of the expression fails: when the expression is in a key of a step, the step fails; when the expression is in a key of a job, the job fails or does not start",
+      "x-remedy": "define the configuration variable with a JSON value, or correct the name in the expression; when the workflow reads a missing configuration variable on purpose, give fromJSON() a JSON value for the missing case, such as fromJSON(vars.NAME || '[]')"
+    },
+    "unsound-contains.substring": {
+      "description": "A call of contains, startsWith or endsWith of a string in an if that a part of the string passes, where comparing whole values would keep the attacker out.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unsound-contains.substring"},
+        "func": {"description": "The function, as written.", "type": "string", "minLength": 1},
+        "literal": {"description": "The string.", "type": "string"},
+        "path": {"description": "The reference, as written.", "type": "string", "minLength": 1},
+        "attacker_on": {"description": "The privileged events the if may run on, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "func", "literal", "path", "attacker_on"],
+      "additionalProperties": false,
+      "x-detected": "{func} of '{literal}' and {path} in an if on {attacker_on} lets a part of the string through",
+      "x-consequence": "an attacker passes the if with a value that is only a part of one in the string, such as a login that is part of a name",
+      "x-remedy": "compare whole values: contains(fromJSON('[...]'), the reference)"
+    },
+    "unsound-contains.superstring": {
+      "description": "A call of contains, startsWith or endsWith of a reference and a string in an if that a value with the string as a part passes, where comparing the whole value would keep the attacker out.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "unsound-contains.superstring"},
+        "func": {"description": "The function, as written.", "type": "string", "minLength": 1},
+        "literal": {"description": "The string.", "type": "string"},
+        "path": {"description": "The reference, as written.", "type": "string", "minLength": 1},
+        "attacker_on": {"description": "The privileged events the if may run on, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "func", "literal", "path", "attacker_on"],
+      "additionalProperties": false,
+      "x-detected": "{func}({path}, '{literal}') in an if on {attacker_on} is true for values other than '{literal}'",
+      "x-consequence": "an attacker passes the if with a value that the attacker chooses and that has the string at the place that the function checks: for the string alice, the login alice-x passes contains and startsWith, and the login x-alice passes contains and endsWith",
+      "x-remedy": "compare the whole value: the reference == 'the string'"
+    },
+    "untrusted-checkout-toctou.mutable-ref": {
+      "description": "A checkout of the code of a pull request by what its author can move (a branch, refs/pull/<n>/head or merge), in a privileged job that a person approves: the author can push after the approval.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "untrusted-checkout-toctou.mutable-ref"},
+        "uses": {"description": "The uses of the checkout, as written.", "type": "string", "minLength": 1},
+        "checkout_ref": {"description": "The reference that names what can move, as written: a branch's name with the fork as the repository, refs/pull/<n>/head, or the fork itself.", "type": "string", "minLength": 1},
+        "pr_code_on": {"description": "The privileged events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}},
+        "approval": {"$ref": "#/$defs/approval"}
+      },
+      "required": ["kind_id", "uses", "checkout_ref", "pr_code_on", "approval"],
+      "additionalProperties": false,
+      "x-detected": "{uses} checks out {checkout_ref} on {pr_code_on} after {approval}, and {checkout_ref} can move",
+      "x-consequence": "the author pushes after the approval, and the job runs code no one approved with its secrets and its token",
+      "x-remedy": "check out the commit the approval saw: github.event.pull_request.head.sha"
+    },
+    "untrusted-checkout.checkout": {
+      "description": "A checkout of the code of a pull request, in a privileged job no one approves, which no step after it is seen to run: it holds if a step does (checkout.executed).",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "untrusted-checkout.checkout"},
+        "uses": {"description": "The uses of the checkout, as written.", "type": "string", "minLength": 1},
+        "checkout_ref": {"description": "The reference that names the pull request's code, as written.", "type": "string", "minLength": 1},
+        "pr_code_on": {"description": "The privileged events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}}
+      },
+      "required": ["kind_id", "uses", "checkout_ref", "pr_code_on"],
+      "additionalProperties": false,
+      "x-detected": "{uses} checks out {checkout_ref} on {pr_code_on}",
+      "x-consequence": "a step that runs any of it (a build, a test, a script) runs the pull request's author's code with the job's secrets and its token",
+      "x-remedy": "check out the base's code, or say in a file of facts that the checkout is only read as data"
+    },
+    "untrusted-checkout.executed": {
+      "description": "A checkout of the code of a pull request, in a privileged job no one approves, which a step after it runs.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "untrusted-checkout.executed"},
+        "uses": {"description": "The uses of the checkout, as written.", "type": "string", "minLength": 1},
+        "checkout_ref": {"description": "The reference that names the pull request's code, as written: a context, such as github.event.pull_request.head.sha, or refs/pull/<n>/merge.", "type": "string", "minLength": 1},
+        "pr_code_on": {"description": "The privileged events on which the finding holds, each event named once.", "type": "array", "items": {"$ref": "#/$defs/event"}},
+        "runs": {"description": "The steps after the checkout that run the checked out code: for each step, the name of the step, or steps[<n>] when the step has no name, with n counted from 0 among all the steps of the job or of the action.", "type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "required": ["kind_id", "uses", "checkout_ref", "pr_code_on", "runs"],
+      "additionalProperties": false,
+      "x-detected": "{uses} checks out {checkout_ref} on {pr_code_on}, and {runs} runs it",
+      "x-consequence": "the pull request's author runs their code with the job's secrets and its token",
+      "x-remedy": "check out the base's code, or run the pull request's code in a pull_request workflow and pass only data to a privileged one"
+    },
+    "uses-path.outside-repository": {
+      "description": "A uses of another repository, or a $/ uses, whose path goes with .. above the root of the repository.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "uses-path.outside-repository"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses"],
+      "additionalProperties": false,
+      "x-detected": "the path of the uses {uses} goes with .. above the root of the repository that the uses names",
+      "x-consequence": "the runner puts each action that the job downloads in _actions/<owner>/<repo>/<ref> on the runner, and runs the action of the directory that the path names, outside the repository that the uses names. When another uses of the job, or of a composite action that the job uses, downloads an action into that directory, the step runs that action; when no uses does, the job fails before the steps of the job run. The ref after @ does not decide the code that runs. For a uses of another repository whose path stays in _actions, commit-sha reports, on this step, the ref of the action that runs when that ref is not a full commit SHA",
+      "x-remedy": "write a uses of the action that is meant to run, as owner/repo/path@ref of that action (/path only when the action is in a directory of the repository), without .."
+    },
+    "uses-path.outside-workspace": {
+      "description": "A ./ uses whose path goes with .. above the root of the workspace.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "uses-path.outside-workspace"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses"],
+      "additionalProperties": false,
+      "x-detected": "the path of the uses {uses} goes with .. above the root of the workspace",
+      "x-consequence": "the runner resolves the path from the workspace of the job; a ./ uses of an action.yml is resolved from the workspace of the job that runs the action, too. The .. takes the path to a directory of the runner above the workspace, so the step runs an action of the checked-out repository only when the path comes back into the workspace through the name of the directory of the workspace; otherwise the step runs what earlier steps and the runner put in another directory of the runner",
+      "x-remedy": "write ./ and the path of the action from the root of the workspace, without .."
+    },
+    "uses-path.unnormalized-path": {
+      "description": "A uses whose owner, repository or path has parts that GitHub drops or resolves: empty parts (such as // or a / before @), a part that is . or .., or, in a uses of another repository, a backslash.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "uses-path.unnormalized-path"},
+        "uses": {"description": "The uses, as written.", "type": "string", "minLength": 1},
+        "normalized": {"description": "The uses as GitHub reads the uses: empty parts dropped, . and .. resolved, a backslash read as /.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "uses", "normalized"],
+      "additionalProperties": false,
+      "x-detected": "the uses {uses} has parts that GitHub drops or resolves, and GitHub reads the uses as {normalized}",
+      "x-consequence": "GitHub runs the action of the uses as GitHub reads the uses, not as the uses is written; a person or a tool that reads the uses as written may take the uses for a different action",
+      "x-remedy": "write the uses as GitHub reads the uses: no empty part, no part that is . or .. (the ./ at the start of a local action stays), and / between the parts"
+    },
+    "value-type": {
+      "description": "A type of the value of a ${{ }} when the workflow runs.",
+      "oneOf": [
+        {"const": "null", "description": "Null."},
+        {"const": "boolean", "description": "A boolean."},
+        {"const": "number", "description": "A number."},
+        {"const": "string", "description": "A string."},
+        {"const": "object", "description": "An object."},
+        {"const": "array", "description": "An array."}
+      ],
+      "x-text": {"null": "null", "boolean": "a boolean", "number": "a number", "string": "a string", "object": "an object", "array": "an array"}, "x-go-type": "expr.ValueType"
+    },
+    "write-all": {
+      "description": "Where write-all holds for a job's GITHUB_TOKEN.",
+      "oneOf": [
+        {"const": "job", "description": "The job's permissions are write-all."},
+        {"const": "workflow", "description": "The job writes no permissions, and the workflow's are write-all."}
+      ],
+      "x-text": {"job": "the job", "workflow": "the workflow"}, "x-go-type": "analysis.WriteAll"
+    }
+  }
+}

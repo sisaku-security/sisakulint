@@ -1,0 +1,7 @@
+name: v03
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/cin.yml
+    with:
+      n: ${{ github.ref_protected }}

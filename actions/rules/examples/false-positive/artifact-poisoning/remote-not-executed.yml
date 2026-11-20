@@ -1,0 +1,21 @@
+# situation: the job on workflow_run calls the reusable workflow w.yml of
+#   the repository example-org/remote-download-workflow, whose job downloads
+#   the artifact of the run before it and only counts the lines of what it
+#   downloaded.
+# reason: the job of the reusable workflow runs none of what it downloaded.
+# cause: when no step is seen to run the download, the rule takes it as run;
+#   the fact download.executed names a step of the input, and has no form for
+#   a step of a reusable workflow of another repository, so a file of facts
+#   cannot remove the finding.
+# attack-value: the file build.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts the artifact's files in the
+#   workspace, and the job of the reusable workflow only runs wc -l
+#   report.txt, which counts lines; build.sh does not run.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  c:
+    uses: example-org/remote-download-workflow/.github/workflows/w.yml@v1

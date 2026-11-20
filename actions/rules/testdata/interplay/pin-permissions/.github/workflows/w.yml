@@ -1,0 +1,13 @@
+# commit-sha pins the uses of a job that writes no permissions, and of a
+# job that calls a reusable workflow with secrets: inherit; permissions
+# and secrets-inherit report the same after the fixes.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+  call:
+    permissions: {}
+    uses: actions/checkout/.github/workflows/check-dist.yml@v4
+    secrets: inherit

@@ -1,0 +1,17 @@
+# The matrix of fixes (interplay_test.go of actions/rules): commit-sha pins
+# actions/checkout@v4 to the commit facts.json answers, which releaseCommits of
+# actions/prcode does not list (a release after the table; the SHA is made up),
+# so the rules of checkouts of a pull request need git.commit-contains to tell
+# the guard that the version of the tag told.
+# No step is seen to run the tree (untrusted-checkout.checkout).
+on: pull_request_target
+permissions: {}
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+      - run: echo checked out

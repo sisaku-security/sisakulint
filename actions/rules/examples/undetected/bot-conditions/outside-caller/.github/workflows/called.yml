@@ -1,0 +1,36 @@
+# situation: the workflow is called; a job merges when github.actor is
+#   dependabot[bot]. Its one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and a push needs write access to the repository, so no run of
+#   the workflow has a value that an attacker wrote: a rerun, which a
+#   credential whose only write access is to the permission Actions can start,
+#   keeps the actor and the payload of the run. Another repository may call
+#   the workflow on an event whose payload has what an attacker wrote, but
+#   that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: ci.yml calls this workflow on push only, so
+#   Dependabot's push to the branch in the fork does not start it; a caller
+#   of another repository on pull_request_target would pass the if on that
+#   push (github.actor dependabot[bot]) and merge with that caller's
+#   token.
+on:
+  workflow_call:
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

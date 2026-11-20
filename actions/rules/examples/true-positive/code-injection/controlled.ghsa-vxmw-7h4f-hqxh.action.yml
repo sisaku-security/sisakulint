@@ -1,0 +1,56 @@
+# situation: a composite action with no caller among the files that the linter
+#   reads, whose steps write the name of a branch into run by ${{ }}, in the
+#   ways of two advisories. The step pypi is the step Set repo and ref from
+#   which to run Docker container action of action.yml of
+#   pypa/gh-action-pypi-publish (commit
+#   db8f07d3871a0a180efa06b95d467625c19d5d5f, lines 114-132): REF=${{
+#   env.ACTION_REF || env.PR_REF || github.ref_name }}, with PR_REF set to the
+#   head ref of the pull request in the env of the step. The comments, the lines
+#   for the repository (lines 117-119, 121-122 and 124-125) and the env
+#   ACTION_REPO, PR_REPO and PR_REPO_ID (lines 129 and 131-132) are left out.
+#   The step ozi is the step Create pull request of action.yml of
+#   OZI-Project/publish (1.13.5, commit
+#   2db0b4c8cd2073e42b9aa5f399020b78cfee31e0, lines 35-40): ${{ github.head_ref
+#   || github.ref_name }} as an argument of gh pr create; the step that gives
+#   the base branch (lines 29-33), the option -B, the part of the title after
+#   the head ref, the option --body and the if of the step are left out, and
+#   GITHUB_TOKEN takes github.token in place of the input github-token.
+# reason: with no caller among the files that the linter reads, the rule reads
+#   the action on every event an attacker triggers, pull_request_target among
+#   the events. On pull_request_target, the author of a pull request names its
+#   head branch, which github.head_ref and github.event.pull_request.head.ref
+#   give, and the runner puts the name into the script before bash reads the
+#   script, so a $( ) in the name runs as a command. For pypi, the rule reports
+#   env.PR_REF, the head ref; the advisory names github.ref_name, which the
+#   expression gives when env.ACTION_REF and env.PR_REF are both empty
+#   (actions/runner#2473), and the advisory says that the action is not
+#   vulnerable on pull_request.
+# attack-value: github.head_ref = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: the author of a pull request from a fork names its head
+#   branch a$(echo${IFS}PWNED) (a name of a branch has no space, and ${IFS}
+#   stands for one). The step ozi runs gh pr create -H a$(echo${IFS}PWNED)
+#   --title 'Merge …', and bash runs the command substitution in the name of the
+#   branch before gh starts, which prints PWNED, with the token of the job in
+#   GITHUB_TOKEN. The step pypi runs the same substitution in REF= when
+#   env.ACTION_REF is empty.
+# advisory: https://github.com/advisories/GHSA-vxmw-7h4f-hqxh
+# advisory: https://github.com/advisories/GHSA-2487-9f55-2vg9
+name: publish
+description: two steps that write the name of a branch into run
+runs:
+  using: composite
+  steps:
+    - name: Set repo and ref from which to run Docker container action
+      id: set-repo-and-ref
+      run: |
+        REF=${{ env.ACTION_REF || env.PR_REF || github.ref_name }}
+        echo "ref=$REF" >>"$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+        PR_REF: ${{ github.event.pull_request.head.ref }}
+    - name: Create pull request
+      run: gh pr create -H ${{ github.head_ref || github.ref_name }} --title 'Merge ${{ github.head_ref || github.ref_name }}'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      shell: bash

@@ -1,0 +1,20 @@
+# situation: a step uploads a SARIF file another tool made, with
+#   github/codeql-action/upload-sarif pinned to the commit of v3.28.2.
+# reason: GHSA-vqf5-2xx6-9wfm, of the package github/codeql-action, exposes
+#   the environment only when "The workflow run fails before the CodeQL
+#   database is finalized within the github/codeql-action/analyze step"
+#   (its text). upload-sarif makes no database.
+# cause: the rule reads an advisory of owner/repo as one of every action of
+#   the repository.
+# attack: someone who can read the artifacts of the repository downloads
+#   the debug artifact of a failed analysis.
+# attack-run-behavior: this job uploads a SARIF file and makes no debug
+#   artifact of a database.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: github/codeql-action/upload-sarif@d68b2d4edb4189fd2a5366ac14e72027bd4b37dd # v3.28.2
+        with:
+          sarif_file: results.sarif

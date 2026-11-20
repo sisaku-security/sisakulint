@@ -1,0 +1,47 @@
+# situation: a composite action with no caller among the files that the linter
+#   reads, whose input title takes the title of the pull request as its
+#   default, and whose step writes the input into run by ${{ }}. The action is
+#   action.yml of embano1/wip (commit e83c03c8f4696b0cef273d83115521b26ebb8bec,
+#   the parent of the fix c25450f77ed02c20d00b76ee3b33ff43838739a2, lines
+#   6-35); the branding and the comments are left out.
+#   action.yml of fish-shop/syntax-check (commit
+#   c7ed2fdeaee680fed281d7e86fb76c8c6e53734e, the parent of the fix
+#   91e6817c48ad475542fe4e78139029b036a53b03, GHSA-xj87-mqvh-88w2) writes its
+#   input pattern into the run of a composite step the same way (for file in
+#   ${{ inputs.pattern }}, line 20).
+# reason: the rule does not read the default of an input, so it does not know
+#   that inputs.title is the title of the pull request when the caller passes
+#   no title, and the caller is not among the files that the linter reads.
+#   The advisory is the form where the caller passes no title, and the author
+#   of a pull request writes its title.
+# attack-value: inputs.title = "x' == x ]]; echo PWNED; [[ 'x"
+# attack-run-behavior: the runner puts the title into the script before bash
+#   reads the script; the quote in the title ends the string, and bash runs
+#   echo PWNED in the step, with the token of the job.
+# advisory: https://github.com/advisories/GHSA-rg3q-prf8-qxmp
+# advisory: https://github.com/advisories/GHSA-xj87-mqvh-88w2
+name: Check WIP
+description: Checks for WIP patterns in Titles
+inputs:
+  title:
+    description: Text to perform pattern match against
+    required: true
+    default: "${{ github.event.pull_request.title }}"
+  regex:
+    description: Regex pattern to match in title
+    required: true
+    default: "^[[:space:]]*(WIP)+(:)*"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -ex
+        shopt -s nocasematch
+        if [[ '${{ inputs.title }}' =~ ${{ inputs.regex }} ]]; then
+          echo "::error::Title marked as work in progress"
+          exit 1
+        else
+          echo "::debug::Title not marked as work in progress"
+        fi
+        shopt -u nocasematch

@@ -1,0 +1,17 @@
+# situation: the setting of allowed actions of GitHub allows all actions and
+#   requires a full commit SHA for each action; a step uses actions/cache by
+#   the tag v4.
+# reason: GitHub fails the job in the step Set up job (in runs that the
+#   authors of the rule made on GitHub, the job failed with the error "all
+#   actions must be pinned to a full-length commit SHA").
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: cache-${{ github.sha }}

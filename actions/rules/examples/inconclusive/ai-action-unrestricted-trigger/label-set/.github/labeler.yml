@@ -1,0 +1,5 @@
+safe-to-test:
+  - changed-files:
+      - any-glob-to-any-file: 'site/**'
+docs:
+  - head-branch: '^pages/'

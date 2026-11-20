@@ -1,0 +1,22 @@
+# situation: the composite action sends a request with curl, without a
+#   credential, to the host the body of a comment names; ci.yml calls the
+#   action on issue_comment in a job on a runner labelled self-hosted and
+#   linux.
+# reason: a todo (a file of the repository): anyone who can comment writes
+#   the body, so the attacker names a host of the network of the runner,
+#   and the request reaches the host from the runner.
+# cause: the rule reads runs-on only of the job of the step, and an action
+#   has no runs-on; the runs-on of the job of the caller decides the
+#   runner.
+# attack: the attacker comments 10.0.0.5:8500/v1/agent/self#, the address
+#   of a service of the internal network.
+# attack-run-behavior: curl on the self-hosted runner sends GET to
+#   10.0.0.5:8500, a host the attacker does not reach from outside.
+name: probe
+description: probe the host
+runs:
+  using: composite
+  steps:
+    - run: |
+        curl -fsS "http://${{ github.event.comment.body }}/healthz"
+      shell: bash

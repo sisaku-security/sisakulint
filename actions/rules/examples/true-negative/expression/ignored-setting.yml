@@ -1,0 +1,14 @@
+# situation: a step sets continue-on-error to a comparison of an output of
+#   an earlier step with 'true'.
+# reason: the comparison gives a boolean, which continue-on-error takes.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: flaky
+        run: echo "allow=true" >> "$GITHUB_OUTPUT"
+      - run: make flaky-test
+        continue-on-error: ${{ steps.flaky.outputs.allow == 'true' }}

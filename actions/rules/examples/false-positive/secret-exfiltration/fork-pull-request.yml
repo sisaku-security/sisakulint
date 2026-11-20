@@ -1,0 +1,27 @@
+# situation: on pull_request, a job that runs only when the head repository
+#   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN
+#   with curl to a host that the variable DEPLOY_HOST names.
+# reason: in a base repository that is not a fork, the job runs only for a pull
+#   request from a fork, and such a workflow run has no secret except
+#   GITHUB_TOKEN, unless the settings of a private repository send secrets
+#   to the workflow runs for pull requests from forks (the fact
+#   repo.fork-pr-secrets); DEPLOY_TOKEN is empty, so the HTTP request that
+#   the job sends carries no secret to the host.
+# cause: the rule reads every workflow run of the event pull_request, and
+#   does not distinguish a workflow run for a pull request from a fork from
+#   a workflow run for a pull request from a branch of the repository.
+# attack: an attacker who operates the host that DEPLOY_HOST names reads
+#   the Authorization header of the HTTP request.
+# attack-run-behavior: a pull request from a branch of the repository does
+#   not start the job; a pull request from a fork starts the job, and curl
+#   sends Authorization: Bearer with an empty value.
+on: pull_request
+jobs:
+  j:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ vars.DEPLOY_HOST }}/status"

@@ -1,0 +1,15 @@
+# situation: a composite action of the repository uses
+#   gradle/actions/setup-gradle, which the setting of allowed actions of
+#   GitHub of the repository blocks; only the workflows of other
+#   repositories, whose settings allow gradle/actions/setup-gradle, use the
+#   composite action.
+# reason: GitHub compares the steps of the composite action with the setting
+#   of the repository of the workflow that runs the action, so the jobs run.
+# cause: the rule compares an action metadata file of the repository with
+#   the setting of the repository.
+name: setup
+description: set up Gradle
+runs:
+  using: composite
+  steps:
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4

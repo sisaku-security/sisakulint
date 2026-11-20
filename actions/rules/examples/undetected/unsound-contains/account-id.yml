@@ -1,0 +1,30 @@
+# situation: on issue_comment, the job deploy runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains(the commenter's ID, '4969') holds,
+#   and the job allowed only if contains('4969 1234', the commenter's ID)
+#   holds.
+# reason: contains with the ID as its first argument is true for any ID
+#   that has 4969 as a part, and with the string first for any ID that is a
+#   part of the string, such as 96; GitHub numbers accounts, so whether an
+#   attacker can get such an ID is not known.
+# cause: the rule does not report a comparison whose reference is the ID of
+#   an account, in either order of the arguments.
+# attack-value: github.event.comment.user.id = "1249690"
+# attack-run-behavior: a comment by an account whose ID is 1249690 starts
+#   the job deploy; contains('1249690', '4969') is true, so ./deploy.sh
+#   runs with TOKEN set to DEPLOY_TOKEN's value.
+on: issue_comment
+jobs:
+  deploy:
+    if: contains(github.event.comment.user.id, '4969')
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+  allowed:
+    if: contains('4969 1234', github.event.comment.user.id)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

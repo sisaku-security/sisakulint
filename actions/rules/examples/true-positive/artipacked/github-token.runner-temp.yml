@@ -1,0 +1,33 @@
+# situation: actions/checkout v6 leaves the job's token in a file of
+#   RUNNER_TEMP, actions/upload-artifact uploads ${{ runner.temp }}, and a
+#   step runs after it.
+# reason: the path ${{ runner.temp }} puts git-credentials-<uuid>.config,
+#   with the token, in the artifact, before the post step of the checkout
+#   removes the file at the end of the job, and v4 lets anyone who can read
+#   the artifacts download the artifact as soon as the upload ends, while the
+#   step after the upload keeps the job, and the token, which may write
+#   contents, alive.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line of
+#   git-credentials-<uuid>.config that holds the header AUTHORIZATION: basic,
+#   the base64 of x-access-token:<token>.
+# attack-run-behavior: the checkout writes the job's GITHUB_TOKEN, which may
+#   write contents, into git-credentials-<uuid>.config of RUNNER_TEMP; the
+#   upload puts the file in the artifact, which can be downloaded once the
+#   upload ends, and while echo after the upload and the post steps run, the
+#   attacker pushes to the repository with the token.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - run: make
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tmp
+          path: ${{ runner.temp }}
+      - run: echo after the upload

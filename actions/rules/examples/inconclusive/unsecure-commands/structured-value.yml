@@ -1,0 +1,28 @@
+# situation: on fork, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints the description of the fork that the fork event is
+#   about.
+# reason: the account that makes the fork writes the description of the
+#   fork, and whether GitHub takes ##[ and ] in the description of a fork
+#   was not checked; GitHub refused a line break in the description of a
+#   fork.
+# cause: the table of what an attacker controls reads the description of
+#   a fork as structured, and the characters that GitHub takes in the
+#   description of a fork were not checked on GitHub.
+# attack: an attacker forks the repository and writes ##[set-env
+#   name=BASH_ENV;]$(id) as the description of the fork, if GitHub takes
+#   the description.
+# attack-run-behavior: the step prints the description of the fork; were
+#   the description the attacker's ##[set-env name=BASH_ENV;]$(id), the
+#   runner would set BASH_ENV, and the bash of the next step would run id.
+on: fork
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          DESCRIPTION: ${{ github.event.forkee.description }}
+        run: echo "forked as $DESCRIPTION"
+      - run: echo next

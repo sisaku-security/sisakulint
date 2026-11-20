@@ -1,0 +1,22 @@
+# situation: the workflow is called; a run writes github.event.issue.title.
+#   Its one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: ci.yml calls it on push, whose payload has no issue,
+#   so there the expression is empty; when a workflow of another repository
+#   calls it on issues, the script becomes echo ""; echo PWNED; echo "" in
+#   that run, and bash runs the second echo as a command, which prints
+#   PWNED.
+on:
+  workflow_call:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

@@ -1,0 +1,26 @@
+# situation: on push, the env of the job has the JSON secret DB under DB and
+#   a JSON literal under N, and a step takes pass out of env[matrix.key]
+#   with fromJSON, where matrix.key is N in every run.
+# reason: env[matrix.key] is the JSON literal N in every run, which holds no
+#   secret, so the header of the step prints a value without a secret.
+# cause: the rule reads env[matrix.key] as any variable of the env, the
+#   secret DB among them.
+# attack: one who may read the log of the run opens the log to read the
+#   value of pass.
+# attack-run-behavior: the header of the step prints PASS with the value x
+#   of the JSON literal.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        key: [N]
+    env:
+      DB: ${{ secrets.DB }}
+      N: '{"pass": "x"}'
+    steps:
+      - env:
+          PASS: ${{ fromJSON(env[matrix.key]).pass }}
+        run: ./migrate.sh

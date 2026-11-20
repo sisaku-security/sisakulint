@@ -1,0 +1,23 @@
+# situation: on push, a step uses the composite action
+#   example-org/unpinned-step-composite at a full commit SHA, and a step of
+#   that composite action uses actions/setup-go@v5, by a tag. The fact
+#   action.definition gives the action.yml of the composite action.
+# reason: a todo (a fact): the answer of action.definition gives the steps
+#   of the composite action, and the rule could read the uses of those
+#   steps.
+# cause: the rule does not read the steps of a composite action of another
+#   repository.
+# attack: the owner of actions/setup-go, or whoever has taken over a token
+#   that pushes to it, moves the tag v5 to a commit of theirs, as the tags
+#   v1 to v45.0.7 of tj-actions/changed-files were moved in 2025 to a commit
+#   that prints secrets to the log.
+# attack-run-behavior: when the composite action runs, the runner resolves
+#   @v5 to that commit, downloads it and runs its action as a step of the
+#   composite action, in the job's workspace and environment.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/unpinned-step-composite@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

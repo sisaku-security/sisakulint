@@ -1,0 +1,17 @@
+# situation: the workflow runs on push; the job deploy has the if false,
+#   writes no permissions, and runs the action some/action.
+# reason: the if of the job deploy is false in every run, so GitHub never
+#   runs the job deploy.
+# cause: the rule reports every job that writes no permissions, and does
+#   not read whether GitHub runs the job.
+# attack: the attacker publishes the code of the action some/action, which
+#   the job deploy runs.
+# attack-run-behavior: GitHub never runs the job deploy, so no code runs with
+#   the GITHUB_TOKEN of the job deploy.
+on: push
+jobs:
+  deploy:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/action@0123456789abcdef0123456789abcdef01234567

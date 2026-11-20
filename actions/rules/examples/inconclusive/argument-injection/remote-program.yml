@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a step fetches and passes the name of
+#   the pull request's head branch to git fetch, through env and inside
+#   quotes, without naming a repository.
+# reason: git fetch reads the word as an option, and the option
+#   --upload-pack names the program that runs on the side of the repository
+#   that git fetches from: on the runner for a repository on a local path,
+#   on the remote host for an SSH remote, and nowhere for an HTTPS remote.
+#   The command names no repository, so git fetch reads the remote origin
+#   from the settings of the repository at run time, and whether the
+#   program runs on the runner is decided at run time.
+# attack-value: github.head_ref = "--upload-pack=echo${IFS}PWNED>&2;false"
+# attack-run-behavior: git fetch reads the word as --upload-pack and fetches
+#   from origin. When origin is the HTTPS URL that actions/checkout sets,
+#   git does not use the program, and nothing is printed; when origin is a
+#   local path, git runs the program on the runner and the shell prints
+#   PWNED.
+on: pull_request_target
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: git fetch "$HEAD_REF"

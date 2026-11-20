@@ -1,0 +1,8 @@
+name: x25
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - if: hashFiles('x') == ''
+        run: echo ok

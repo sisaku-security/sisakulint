@@ -1,0 +1,8 @@
+name: y11
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ github.event_name }}
+    steps:
+      - run: echo ok

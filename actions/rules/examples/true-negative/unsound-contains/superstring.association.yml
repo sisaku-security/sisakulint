@@ -1,0 +1,20 @@
+# situation: on issue_comment, the job runs ./deploy.sh with the secret
+#   DEPLOY_TOKEN only if contains(the commenter's author_association,
+#   'MEMBER') holds.
+# reason: the author_association of a comment by someone outside the
+#   repository is NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR,
+#   and no such value has MEMBER as a part; so an outsider cannot pass the
+#   if, although contains is true for a part of the value.
+# attack-value: github.event.comment.author_association = "CONTRIBUTOR"
+# attack-run-behavior: a comment by an outsider on any issue runs the if;
+#   contains('CONTRIBUTOR', 'MEMBER') is false, so the job deploy is
+#   skipped.
+on: issue_comment
+jobs:
+  deploy:
+    if: contains(github.event.comment.author_association, 'MEMBER')
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

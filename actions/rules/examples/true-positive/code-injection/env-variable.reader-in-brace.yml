@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE, and echo writes the variable into a
+#   pipe to a group of commands in braces that runs bash.
+# reason: the bash in the braces reads the pipe, so the title is code to
+#   the bash in the braces.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: the bash in the braces runs the line echo PWNED,
+#   which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: echo "$ISSUE_TITLE" | { bash; }

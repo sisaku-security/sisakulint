@@ -1,0 +1,13 @@
+# situation: a composite action of the repository makes a GitHub release
+#   with actions/create-release@v1, whose repository GitHub archived.
+# reason: an archived repository is read-only: an error or a vulnerability
+#   found in the action is never fixed in that repository, and the runner
+#   still runs v1 in every job that uses the composite action.
+name: release
+description: makes a release of the build
+runs:
+  using: composite
+  steps:
+    - uses: actions/create-release@v1
+      with:
+        tag_name: v1.0.0

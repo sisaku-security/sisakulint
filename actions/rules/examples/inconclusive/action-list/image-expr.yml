@@ -1,0 +1,20 @@
+# situation: a reusable workflow runs its job in the container that the
+#   input image of workflow_call names.
+# reason: the caller decides the image, and the rule does not know whether
+#   repo.action-list allows the image.
+# attack: a caller passes an image that the repository did not list, whose
+#   publisher pushes an image that reads the secrets of CI.
+# attack-run-behavior: the runner pulls the image that the input names and
+#   runs the steps of the job in the container of the image.
+on:
+  workflow_call:
+    inputs:
+      image:
+        type: string
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ${{ inputs.image }}
+    steps:
+      - run: make

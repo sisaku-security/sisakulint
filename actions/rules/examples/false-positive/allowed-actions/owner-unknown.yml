@@ -1,0 +1,15 @@
+# situation: the workflow of the repository example-org/app uses
+#   example-org/shared-actions/setup, an action of the same owner; the
+#   setting of allowed actions of GitHub has no pattern, and the run has no
+#   --repo.
+# reason: the setting allows each action of the owner of the repository, so
+#   GitHub starts the run.
+# cause: without --repo the rule does not know the owner of the repository.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-org/shared-actions/setup@ed408507eac070d1f99cc633dbcf757c94c7933a

@@ -1,0 +1,8 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'pages/**/*.md'
+          - 'pages/**/*.mdx'
+      - all-globs-to-all-files:
+          - 'pages/**/*.md'
+          - 'pages/**/*.mdx'

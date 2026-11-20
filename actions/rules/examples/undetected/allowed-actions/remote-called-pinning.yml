@@ -1,0 +1,15 @@
+# situation: the setting of allowed actions of GitHub allows all actions and
+#   requires a full commit SHA; a job calls the reusable workflow
+#   .github/workflows/w.yml of example-org/allowed-actions-remote, whose step
+#   uses actions/cache by the tag v4.
+# reason: if GitHub requires the pin of a step of a called workflow by the
+#   setting of the repository of the caller, GitHub fails the job of the
+#   called workflow.
+# cause: the authors of the rule did not try which repository's setting
+#   GitHub applies to the pin of a step of a called workflow of another
+#   repository, so the rule does not report the step as unpinned.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/allowed-actions-remote/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

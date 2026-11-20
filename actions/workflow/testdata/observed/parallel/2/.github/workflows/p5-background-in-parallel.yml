@@ -1,0 +1,11 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: c
+            run: sleep 3; echo in-group-background
+            background: true
+          - run: echo sibling
+      - run: echo after-group

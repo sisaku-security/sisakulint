@@ -1,0 +1,13 @@
+# situation: a workflow runs example-org/node-composite@v1, a composite
+#   action of another repository, whose step uses actions/create-release@v1;
+#   actions/create-release is archived.
+# reason: an archived repository is read-only: its maintainers fix nothing
+#   in it; action.definition answers the file of the composite action, as
+#   the archive the runner downloads has it.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/node-composite@v1

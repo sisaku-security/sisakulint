@@ -1,0 +1,29 @@
+# situation: on push, in a public repository or in a private one, the env
+#   of the job `read` has the whole secret TOKEN, and an output of the job
+#   `read` has env.TOKEN and the password of the JSON secret DB; the later
+#   job `print` prints the output.
+# reason: env.TOKEN is the value of the secret TOKEN, which the runner
+#   masks, and the runner drops an output whose value contains a value that
+#   the runner masks, so the job `print` gets an empty value.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` to read the password.
+# attack-run-behavior: the job `read` warns that it skips the output
+#   credential since the output may contain a secret; the header of the
+#   step of the job `print` shows the run: script of the step with an empty
+#   value.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+    outputs:
+      credential: ${{ env.TOKEN }}-${{ fromJSON(secrets.DB).pass }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.credential }}"

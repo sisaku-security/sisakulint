@@ -1,0 +1,10 @@
+# situation: a job calls example-org/release-workflow/.github/workflows/release.yml@v1,
+#   a reusable workflow of another repository whose step uses
+#   actions/create-release@v1, which declares node12.
+# reason: the runner runs the action on a newer Node than it declares, or
+#   fails the step when that Node is gone; workflow.definition answers the
+#   file of the called workflow.
+on: push
+jobs:
+  release:
+    uses: example-org/release-workflow/.github/workflows/release.yml@v1

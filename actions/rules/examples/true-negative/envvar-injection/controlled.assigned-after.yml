@@ -1,0 +1,21 @@
+# situation: on issues opened, a step writes V= and the issue's body to "$out",
+#   and goes on when the write fails (|| true), and then sets out to
+#   $GITHUB_ENV.
+# reason: out is empty when echo runs, so the body does not go to
+#   $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: bash cannot open the file of the empty name and writes
+#   nothing, || true keeps the step going, and the runner sets no
+#   environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          echo "V=$V" >> "$out" || true
+          out=$GITHUB_ENV

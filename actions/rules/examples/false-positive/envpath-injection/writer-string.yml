@@ -1,0 +1,16 @@
+# situation: on issues labeled, a run writes the label's name to
+#   $GITHUB_PATH.
+# reason: only those who can write to the repository create a label, so its
+#   name is no attacker's.
+# cause: the webhook schema gives the name no enum, and the table reads a
+#   free string as arbitrary.
+# attack-value: github.event.label.name = "/tmp/PWNED"
+# attack-run-behavior: no attacker can name a label; were the name the
+#   value, the line /tmp/PWNED would go to $GITHUB_PATH, and the steps after
+#   it would get /tmp/PWNED first in PATH.
+on: {issues: {types: [labeled]}}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.label.name }}" >> "$GITHUB_PATH"

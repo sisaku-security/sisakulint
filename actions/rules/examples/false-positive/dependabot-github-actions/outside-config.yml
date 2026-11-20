@@ -1,0 +1,14 @@
+# situation: the repository has no .github/dependabot.yml and no
+#   configuration file of Renovate, and a self-hosted Renovate updates the
+#   repository by its global configuration (requireConfig optional).
+# reason: Renovate opens a pull request when a new version of the action is
+#   released, so the uses is kept current.
+# cause: a global configuration or an inherited configuration of Renovate is
+#   not in the repository, and the rule reads the files of the repository
+#   only.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4

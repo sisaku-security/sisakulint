@@ -1,0 +1,12 @@
+# situation: the step uses example-org/example-action pinned to the commit
+#   of v1.0.1 (made up, as the true positive).
+# reason: the advisory says 1.0.1 fixes it; GitHub gives no advisory for
+#   1.0.1.
+# attack: someone uses the vulnerability the advisory describes.
+# attack-run-behavior: v1.0.1 runs the fixed code.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/example-action@2222222222222222222222222222222222222222 # v1.0.1

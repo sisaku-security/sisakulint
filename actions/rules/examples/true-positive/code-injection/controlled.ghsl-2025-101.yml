@@ -1,0 +1,30 @@
+# situation: on issues opened, a step compares the body of the issue with a
+#   pattern in [[ ]], with the body written into the script by ${{ }}. This
+#   is issues.yml of jurajnyiri/homeassistant-tapo-control (commit
+#   e66f4a3579e4facf13d1d6421f7a1cf887b79d83, lines 2-4 and 15-27).
+#   The job autoclose and the elif part of the script (lines 23-24) are left
+#   out.
+# reason: anyone who opens an issue writes its body, and the runner puts the
+#   body into the script before bash reads the script, so a double quote and
+#   ]] in the body end the string and the test of [[ ]], and the commands
+#   after a semicolon run.
+# attack-value: github.event.issue.body = "x\" ]]; echo PWNED; [[ \"x"
+# attack-run-behavior: the first line of the script becomes
+#   if [[ "x" ]]; echo PWNED; [[ "x" == *"Invalid cloud password"* ]]; then,
+#   and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-101_homeassistant-tapo-control/
+on:
+  issues:
+    types: [opened]
+jobs:
+  autoclose-cloud-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check issue description for invalid string
+        id: check_body
+        run: |
+          if [[ "${{ github.event.issue.body }}" == *"Invalid cloud password"* ]]; then
+            echo "contains_invalid_string=true" >> $GITHUB_ENV
+          else
+            echo "contains_invalid_string=false" >> $GITHUB_ENV
+          fi

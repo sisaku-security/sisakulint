@@ -1,0 +1,25 @@
+# situation: after a checkout of the pull request's head, a job with
+#   cache-mode: write runs a composite action of another repository whose
+#   step saves dist to the cache; the run has no answer of
+#   action.definition for the action, and no one was asked (no --online,
+#   no answer in --facts).
+# reason: the step of the composite action saves the pull request's dist
+#   to the default branch's scope, as in the true positive
+#   saved-checkout.remote-composite.
+# cause: the rule reads the steps of an action of another repository only
+#   from the answer of action.definition, which the run does not have. On
+#   the job the rule reports writable-job, whose condition is a flaw that
+#   runs the attacker's code; the step saves the tree with no such flaw.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the step of example-org/unasked-composite saves dist,
+#   with the attacker's index.js, to the default branch's scope.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: example-org/unasked-composite@v1

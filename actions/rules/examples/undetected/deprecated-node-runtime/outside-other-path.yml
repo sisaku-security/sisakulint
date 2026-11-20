@@ -1,0 +1,21 @@
+# situation: the first step uses actions/cache/restore at the tag v3; the
+#   second step names actions/cache/restore by a full SHA, but its path goes
+#   with .. above the root of the repository, into the directory where the
+#   runner puts actions/cache at v3, and names the path save there.
+# reason: the second step runs actions/cache/save at v3, whose runs.using
+#   decides the Node.js version that the step asks for.
+# cause: for the second step, the rule reads the action of the first step
+#   (restore), not the action at the path of the second step (save).
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/restore@v3
+        with:
+          path: build
+          key: build
+      - uses: actions/cache/restore/../../v3/save@0123456789012345678901234567890123456789
+        with:
+          path: build
+          key: build

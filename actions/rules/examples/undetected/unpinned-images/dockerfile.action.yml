@@ -1,0 +1,23 @@
+# situation: an action runs using: docker with image: Dockerfile.
+# reason: a todo (a file of the repository): the FROM of the Dockerfile is
+#   the image this action runs. Checkmarx/kics-github-action
+#   4063ea7186bec9fed1bf055e095a4658693f9998 action.yml:111-112 ran "using:
+#   docker" with "image: Dockerfile", whose first line was "FROM
+#   checkmarx/kics:v2.1.20 as kics-env"; on 2026-04-22 "attackers appear to
+#   have overwritten existing tags, including v2.1.20 and alpine"
+#   (https://socket.dev/blog/checkmarx-supply-chain-compromise).
+# cause: the Dockerfile is another file of the repository, which the rule
+#   does not read; a path to a Dockerfile is not an image.
+# attack: whoever can push to checkmarx/kics on Docker Hub overwrites the
+#   tag the FROM of the Dockerfile names with an image of theirs, as
+#   v2.1.20, alpine and latest were overwritten on 2026-04-22 with an image
+#   that sends the scan's report out.
+# attack-run-behavior: when a step uses the action, the runner builds the
+#   Dockerfile, pulling the overwritten image as its base, and runs the
+#   action in the built container with the workspace and the step's inputs;
+#   in the incident the image sent the scan's report out.
+name: KICS Github Action
+description: x
+runs:
+  using: "docker"
+  image: Dockerfile

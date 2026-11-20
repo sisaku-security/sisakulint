@@ -1,0 +1,31 @@
+# situation: sender.yml runs on issues opened, and with the GITHUB_TOKEN
+#   sends a repository_dispatch of the type relay whose client_payload has the
+#   title of the issue as the value title; receiver.yml runs on that
+#   repository_dispatch, and the step p prints the value title of the
+#   client_payload, and the release step writes the output tag of the step p
+#   into its script.
+# reason: the author of the issue writes the value, and sender.yml relays
+#   the value to receiver.yml in a repository_dispatch that a run of the
+#   repository sends with a token of the repository; GitHub creates a workflow
+#   run for a repository_dispatch sent with the GITHUB_TOKEN, as an exception
+#   to the rule that an event that the GITHUB_TOKEN triggers creates no
+#   workflow run.
+# cause: the rule reads the events of each workflow alone, and does not read
+#   what a workflow sends to another workflow as the client_payload of a
+#   repository_dispatch.
+# attack-value: github.event.issue.title = "x ##[set-output name=tag;]$(id)"
+# attack-run-behavior: the attacker opens an issue whose title is the value;
+#   sender.yml sends the value, and in the run of receiver.yml the step p
+#   prints the value, the runner sets the output tag of the step p to $(id),
+#   and the release step writes the output into its script and runs id.
+on:
+  repository_dispatch:
+    types: [relay]
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ github.event.client_payload.title }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

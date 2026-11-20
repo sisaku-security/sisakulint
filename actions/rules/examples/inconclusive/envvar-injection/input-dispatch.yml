@@ -1,0 +1,19 @@
+# situation: the workflow runs on workflow_dispatch with the input x, and a
+#   step writes inputs.x and github.event.inputs.x to $GITHUB_ENV by ${{ }}.
+# reason: whoever dispatches the workflow chooses the value, and the
+#   workflow does not tell who that is, so whether an attacker controls it
+#   is not known; nothing the rule could read is expected to tell it.
+# attack-value: inputs.x = "x\nPWNED=1"
+# attack-run-behavior: when the one who dispatches the workflow is an
+#   attacker and gives x this value, both ${{ }} hold it, so echo appends
+#   v=x, PWNED=1 x and PWNED=1 to $GITHUB_ENV; the runner sets v to x and
+#   PWNED to 1 x and then to 1.
+on:
+  workflow_dispatch:
+    inputs:
+      x: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ inputs.x }} ${{ github.event.inputs.x }}" >> "$GITHUB_ENV"

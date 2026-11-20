@@ -1,0 +1,16 @@
+# situation: on gollum, a job with write-all runs.
+# reason: a todo (a fact): an edit of the wiki triggers it, only where
+#   anyone may edit it.
+# cause: gollum is not among the privileged events the rule
+#   reads.
+# attack: where anyone may edit the wiki, the attacker edits a page of it.
+# attack-run-behavior: the edit starts the job a on gollum with a token
+#   that writes every scope; the job runs echo only, and a flaw in its steps
+#   would run the editor's code with that token.
+on: gollum
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo

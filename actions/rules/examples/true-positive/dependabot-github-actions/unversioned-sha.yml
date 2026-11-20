@@ -1,0 +1,13 @@
+# situation: the repository has a configuration file of Renovate and no
+#   .github/dependabot.yml, and a workflow pins actions/checkout to a commit
+#   SHA with no comment on the line.
+# reason: Renovate does not update a uses pinned to a SHA without a comment
+#   that names the version (unversioned-reference), and Dependabot does not
+#   read the file, so no pull request moves the SHA.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@v4

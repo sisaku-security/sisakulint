@@ -1,0 +1,23 @@
+# situation: on comments on the diff, a step writes the comment's body to
+#   $GITHUB_ENV, in a job that runs only for a pull request from a fork.
+# reason: a todo (a fact): the job runs only for a pull request from a
+#   fork. Where a private repository gives secrets or a token that writes
+#   to the runs of pull requests from forks, the run of a review that the
+#   attacker writes on the pull request of another person from a fork has
+#   those secrets or that token, and the job runs for the attacker.
+# cause: the rule does not read the settings of a private repository for
+#   the runs of pull requests from forks, and does not count the run of a
+#   review of a pull request from a fork as a run of the attacker.
+# attack-value: github.event.comment.body = "x\nNODE_OPTIONS=--require=/tmp/PWNED.js"
+# attack-run-behavior: the comment of the attacker on the diff of the pull
+#   request of another person from a fork starts the job a; the line after
+#   the line break sets NODE_OPTIONS for the later steps of the job.
+on: pull_request_review_comment
+jobs:
+  a:
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.comment.body }}
+        run: echo "body=$B" >> "$GITHUB_ENV"

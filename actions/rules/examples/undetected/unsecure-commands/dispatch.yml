@@ -1,0 +1,26 @@
+# situation: on workflow_dispatch, a job sets
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS to true, and a step prints the title of
+#   the issue. If the workflow also ran on issues, the rule would report the
+#   same steps.
+# reason: no added gain: on workflow_dispatch the event has no issue object,
+#   so the expression of the title gives an empty string; whoever dispatches
+#   the workflow chooses the ref and the inputs of the dispatch, and the steps
+#   read no input.
+# cause: the table of the attacker's events that the rule reads does not
+#   have workflow_dispatch; the rule reports an input of a dispatch with the
+#   inconclusive kind input-dispatch.
+# attack-value: github.event.issue.title = "##[set-env name=BASH_ENV;]$(id)"
+# attack-run-behavior: with the value put in, the runner sets BASH_ENV, and
+#   the next step runs id. On workflow_dispatch the event has no issue
+#   object, though: the expression gives an empty string, and the step
+#   prints an empty line.
+on: workflow_dispatch
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ github.event.issue.title }}"
+      - run: echo next

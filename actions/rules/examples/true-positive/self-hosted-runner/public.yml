@@ -1,0 +1,25 @@
+# situation: on pull_request, a job runs make on a runner labelled
+#   self-hosted and linux, in a public repository (repo.public, assumed
+#   true).
+# reason: on pull_request, GitHub runs the workflow file as the pull request
+#   has it, so the author of a pull request from a fork can rewrite the
+#   steps, and runs-on: [self-hosted, linux] sends them to the repository's
+#   own runner, not a fresh GitHub-hosted one; whether the run waits for
+#   approval depends on the author and the repository's setting.
+# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
+#   that was merged), then opens a pull request from a fork whose copy of
+#   this workflow runs a step of their own in place of make.
+# attack-run-behavior: pull_request runs the workflow as the pull request
+#   has it, so the job a runs the attacker's step; runs-on: [self-hosted,
+#   linux] sends it to a runner of the repository with both labels, and the
+#   step runs on that machine, where what it leaves stays for the jobs that
+#   run there after it. If the repository's setting makes the run wait for
+#   approval, the run starts once someone approves the run: a maintainer, or
+#   the attacker with a credential whose only write access is to the
+#   permission Actions.
+on: pull_request
+jobs:
+  a:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make

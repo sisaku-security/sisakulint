@@ -1,0 +1,21 @@
+# situation: on an opened issue, a step writes the issue's title to
+#   $GITHUB_OUTPUT; the step's if lets it run only when the issue's
+#   author_association is OWNER.
+# reason: the if skips the step for an issue an outsider opens, whose
+#   author_association is not OWNER, so only a title the owner wrote is
+#   written to $GITHUB_OUTPUT.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: for an issue whose author_association is not OWNER, the
+#   if is false and the step is skipped: nothing is written to $GITHUB_OUTPUT,
+#   and no PWNED is set.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event.issue.author_association == 'OWNER'
+        env:
+          V: ${{ github.event.issue.title }}
+        run: echo "v=$V" >> "$GITHUB_OUTPUT"

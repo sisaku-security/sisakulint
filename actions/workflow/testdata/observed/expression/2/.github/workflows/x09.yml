@@ -1,0 +1,7 @@
+name: x09
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ case(true, 'a') }}"

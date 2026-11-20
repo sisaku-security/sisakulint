@@ -1,0 +1,48 @@
+# situation: on pull_request_target, actions/checkout@v4 checks out the head
+#   branch of the pull request from the head repository, and pip installs the
+#   checked-out tree. This is benchmarks.yml of projectmesa/mesa (commit
+#   cfb19251ab720497a4ba5093160958c2621adbf4, lines 3-21 and 50-60). The steps
+#   before the checkout, which run the benchmarks of the main branch, and the
+#   steps after pip install are left out. GHSL-2025-006 has the same form: the
+#   job visualize of validate-lut-files.yml of
+#   bramstroker/homeassistant-powercalc (commit
+#   e5195a551b8b15944cecd8d0a587a5ce4d852f16, lines 3-7 and 25-37) checks out
+#   github.event.pull_request.head.sha with actions/checkout@v4 and uses the
+#   composite action ./.github/workflows/poetry-composite-action of the
+#   checkout.
+# reason: a major tag of actions/checkout moves to the latest release of the
+#   major version, and the tag v4 now names a release (v4.4.0 or later; the tags
+#   v2 and v3 name v2.8.0 and v3.7.0, which also refuse) that refuses the code
+#   of a fork on pull_request_target, so the checkout fails before pip runs.
+#   When GitHub Security Lab reported the workflow (2025-01-13), the tag v4
+#   named a release without the refusal, and the workflow of that time ran the
+#   code of the fork.
+# cause: the rule reads each major tag of actions/checkout from v2 to v4 as
+#   the release that the tag names now, which refuses the code of a fork; the
+#   rule does not read the release that the tag named in the past.
+# attack-value: the file setup.py in the pull request's head = "print(\"PWNED\")\n"
+# attack-run-behavior: actions/checkout@v4 sees that the head repository is a
+#   fork and the event is pull_request_target; the checkout without the input
+#   allow-unsafe-pr-checkout fails, and pip install does not run.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-009_Mesa/
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-006_homeassistant-powercalc/
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, labeled]
+    branches:
+      - main
+permissions:
+  issues: write
+  pull-requests: write
+jobs:
+  run-benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+      - name: Install Mesa of the PR branch
+        run: pip install --no-deps .
