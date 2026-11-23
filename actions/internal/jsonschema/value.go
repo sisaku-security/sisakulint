@@ -138,9 +138,9 @@ func integer(num string) (int64, bool) {
 	if digits == "" {
 		return 0, true
 	}
-	e := 0
+	var e int64
 	if hasExp {
-		n, err := strconv.Atoi(exp)
+		n, err := strconv.ParseInt(exp, 10, 64)
 		if err != nil || n > 1<<40 || n < -(1<<40) {
 			// past this, a value with a digit other than 0 is below 1 or
 			// far above 2^53, whatever its digits
@@ -148,14 +148,14 @@ func integer(num string) (int64, bool) {
 		}
 		e = n
 	}
-	e -= len(frac)
+	e -= int64(len(frac))
 	t := len(digits) - len(strings.TrimRight(digits, "0"))
-	digits, e = digits[:len(digits)-t], e+t
+	digits, e = digits[:len(digits)-t], e+int64(t)
 	// 2^53 has 16 digits
-	if e < 0 || len(digits)+e > 16 {
+	if e < 0 || int64(len(digits))+e > 16 {
 		return 0, false
 	}
-	n, err := strconv.ParseInt(digits+strings.Repeat("0", e), 10, 64)
+	n, err := strconv.ParseInt(digits+strings.Repeat("0", int(e)), 10, 64)
 	if err != nil || n > maxSafeInteger {
 		return 0, false
 	}
