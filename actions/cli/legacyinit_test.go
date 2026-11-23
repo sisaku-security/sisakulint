@@ -131,7 +131,7 @@ func TestInitLegacyConfiguration(t *testing.T) {
 // action-list of sisakulint 0.x, and gets the two uses that sisakulint 0.x
 // reports with the same list.
 func TestInitLegacyConfigurationUpstreamInput(t *testing.T) {
-	// https://github.com/sisaku-security/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/script/actions/test-actionlist.yaml
+	// https://github.com/gh-intel/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/script/actions/test-actionlist.yaml
 	const upstream = `name: Test ActionList Feature
 on: [push]
 

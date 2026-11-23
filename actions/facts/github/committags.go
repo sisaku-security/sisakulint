@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // maxTagPages is how many pages of tags, 100 a page, are read of a

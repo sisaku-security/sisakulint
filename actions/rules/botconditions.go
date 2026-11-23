@@ -3,9 +3,9 @@ package rules
 import (
 	"context"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // BotConditions is the rule bot-conditions: an if that compares the actor

@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/remote"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/remote"
 )
 
 // makeSnapshotDir makes dir (--write-snapshot), before the run asks GitHub

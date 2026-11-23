@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // fileCommand is a rule of a value an attacker writes to a file command of

@@ -10,7 +10,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // sarifRead is what the tests read of a SARIF log of sarifLog.

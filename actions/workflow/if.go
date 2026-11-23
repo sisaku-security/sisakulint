@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // IfForm is how an if is written (WorkflowTemplateConverter.ConvertToIfCondition).

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 var qualityKind = MustFindingKindID("test.slow")

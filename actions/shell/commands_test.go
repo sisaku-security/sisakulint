@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/enumtest"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
-	"github.com/sisaku-security/sisakulint/actions/internal/releasetable"
+	"github.com/gh-intel/sisakulint/actions/internal/enumtest"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/releasetable"
 )
 
 func commandsSchema(t *testing.T) *jsonschema.Set {

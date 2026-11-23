@@ -5,11 +5,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/attacker"
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Callers reads the events and the inputs of a called workflow or a

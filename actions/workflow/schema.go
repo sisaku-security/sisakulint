@@ -1,6 +1,6 @@
 package workflow
 
-import "github.com/sisaku-security/sisakulint/actions/expr"
+import "github.com/gh-intel/sisakulint/actions/expr"
 
 //go:generate go run ./internal/schemagen
 

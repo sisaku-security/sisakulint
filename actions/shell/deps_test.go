@@ -12,7 +12,7 @@ func TestDependencies(t *testing.T) {
 		t.Skipf("go list: %v", err)
 	}
 	for _, dep := range strings.Fields(string(out)) {
-		if strings.HasPrefix(dep, "github.com/sisaku-security/sisakulint/") && dep != "github.com/sisaku-security/sisakulint/actions/shell" {
+		if strings.HasPrefix(dep, "github.com/gh-intel/sisakulint/") && dep != "github.com/gh-intel/sisakulint/actions/shell" {
 			t.Errorf("actions/shell depends on %s", dep)
 		}
 	}

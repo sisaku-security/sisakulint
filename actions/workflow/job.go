@@ -3,8 +3,8 @@ package workflow
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // JobKind is what a job is, by the definition of job its keys chose.

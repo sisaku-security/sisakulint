@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/job"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/job"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // TestTermsGolden keeps the terms in testdata/terms.golden.md, to be read
@@ -219,7 +219,7 @@ func TestTextTermPrivilegedEvents(t *testing.T) {
 // TestTextTermsCiteFixedCommits: a word in the texts cites only https URLs
 // of a fixed commit, and no path of this repository.
 func TestTextTermsCiteFixedCommits(t *testing.T) {
-	notPublic := regexp.MustCompile(`sisaku-security/`)
+	notPublic := regexp.MustCompile(`(?:sisaku-security|gh-intel)/`)
 	url := regexp.MustCompile(`https?://[^ ,;()]+`)
 	fixed := regexp.MustCompile(`^https://(github\.com/[^/]+/[^/]+/blob/[0-9a-f]{40}/|raw\.githubusercontent\.com/[^/]+/[^/]+/[0-9a-f]{40}/)`)
 	for _, w := range textTerms {

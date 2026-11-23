@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // jobsOK is a jobs section GitHub accepts, for inputs about other keys.

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // commitContains answers git.commit-contains by the compare API:

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // importedFact is the answer of a fact that --init writes from the legacy

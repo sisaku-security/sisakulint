@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // DefaultRun is whether a rule runs in a run that does not name the rule

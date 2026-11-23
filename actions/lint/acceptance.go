@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 // AcceptancesSchema is the value of schema in the JSON of a file of

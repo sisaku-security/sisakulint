@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestUnmaskedSecretExposure: the kinds by repo.public, and the observed

@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Quote is a text, word for word, of a file of GitHub's documents or data,

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // allowedActions answers repo.allowed-actions: the setting of allowed

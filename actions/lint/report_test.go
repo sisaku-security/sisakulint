@@ -5,16 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/ir"
 	"os"
 	"regexp"
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 var update = flag.Bool("update", false, "write the golden files of testdata")

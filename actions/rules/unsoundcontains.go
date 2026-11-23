@@ -3,8 +3,8 @@ package rules
 import (
 	"context"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // UnsoundContains is the rule unsound-contains: contains, startsWith or

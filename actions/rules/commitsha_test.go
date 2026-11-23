@@ -3,16 +3,16 @@ package rules
 import (
 	"context"
 	"encoding/json"
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/ir"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 const (

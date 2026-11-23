@@ -3,10 +3,10 @@ package ir
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // TestCacheWriteOfCaller: a called workflow's job saves to the cache on

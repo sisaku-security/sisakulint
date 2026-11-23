@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/webhook"
+	"github.com/gh-intel/sisakulint/actions/internal/webhook"
 )
 
 func TestUpToDate(t *testing.T) {

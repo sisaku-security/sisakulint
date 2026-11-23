@@ -3,7 +3,7 @@ package calls
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 func TestNodeEquality(t *testing.T) {

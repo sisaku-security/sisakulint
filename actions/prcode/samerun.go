@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/attacker"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // SameRunUpload is an upload of actions/upload-artifact in a job of the

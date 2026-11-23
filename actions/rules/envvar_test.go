@@ -135,7 +135,7 @@ jobs:
 }
 
 // TestEnvVarUpstream runs the example workflow of
-// https://github.com/sisaku-security/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/environmentvariablerule.md:
+// https://github.com/gh-intel/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/environmentvariablerule.md:
 // the name with = has a finding, as upstream sisakulint reports. The
 // names with a space or & have no finding, though upstream sisakulint
 // reports the names: GitHub accepts each such name as an environment

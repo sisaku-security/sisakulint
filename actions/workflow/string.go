@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // String is a scalar's value with the ${{ }} in it.

@@ -1,9 +1,9 @@
 package ir
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/composite"
-	"github.com/sisaku-security/sisakulint/actions/job"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/job"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 	"strings"
 )
 

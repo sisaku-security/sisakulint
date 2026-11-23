@@ -1,14 +1,14 @@
 package job
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 func parse(t *testing.T, src string) *workflow.Workflow {

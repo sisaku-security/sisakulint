@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // target is the first word of a scalar's value in a tree.

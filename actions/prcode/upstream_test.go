@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/releasetable"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/releasetable"
 )
 
 func inAny(sets ...map[string]bool) func(facts.SHA) bool {

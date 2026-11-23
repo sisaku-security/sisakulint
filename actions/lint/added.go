@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // AddedAttacker is an attacker that the rules do not count in a run by

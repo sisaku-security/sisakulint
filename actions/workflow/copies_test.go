@@ -3,7 +3,7 @@ package workflow
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/internal/copytest"
+	"github.com/gh-intel/sisakulint/internal/copytest"
 )
 
 // TestThirdPartyCopies keeps the copies of the test data of other projects

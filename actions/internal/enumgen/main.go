@@ -49,9 +49,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/enumsrc"
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/enumsrc"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 type paths []string

@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // TestNewEventActivity: a pair is made only of an event and one of its

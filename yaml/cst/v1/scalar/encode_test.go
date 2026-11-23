@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 var allStyles = []cst.ScalarStyle{cst.Plain, cst.SingleQuoted, cst.DoubleQuoted, cst.Literal, cst.Folded}

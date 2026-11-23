@@ -2,7 +2,7 @@
 
 package taint
 
-import "github.com/sisaku-security/sisakulint/actions/workflow"
+import "github.com/gh-intel/sisakulint/actions/workflow"
 
 // events are the events an attacker triggers, and what they control in the payload of each.
 var events = map[workflow.EventName]eventTable{

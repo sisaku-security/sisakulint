@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/job"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/job"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // itemName is a name --explain writes before a colon and what the name

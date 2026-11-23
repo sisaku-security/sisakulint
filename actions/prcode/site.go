@@ -3,13 +3,13 @@ package prcode
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/attacker"
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/shell"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // CodeRunStep is a step after a checkout that runs what it brings.

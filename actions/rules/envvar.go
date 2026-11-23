@@ -3,8 +3,8 @@ package rules
 import (
 	"context"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // EnvVarRule is the quality rule env-var: a key of env that does not set

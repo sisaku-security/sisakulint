@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 func TestMayBeV1(t *testing.T) {

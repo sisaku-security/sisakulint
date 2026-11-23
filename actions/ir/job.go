@@ -3,9 +3,9 @@ package ir
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/job"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/job"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 func (x *IR) allJobs() []*Job {

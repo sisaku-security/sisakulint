@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/internal/corpus"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/internal/corpus"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // TestCorpus runs Analyze on the workflows and action.yml files of

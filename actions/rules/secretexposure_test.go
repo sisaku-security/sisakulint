@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // referencesOf are the references of the findings of secret-exposure, and

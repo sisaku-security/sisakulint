@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
 )
 
 // filesOf are the files under dir, as a commit of githubtest.Git has

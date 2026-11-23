@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // TestBotConditions: the conditions on a bot's name that an attacker

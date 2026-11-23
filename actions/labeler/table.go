@@ -1,11 +1,11 @@
 package labeler
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"io/fs"
 
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // Table are the steps of the workflows of a repository that run

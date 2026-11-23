@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestAdvisoryExampleResults: what the rule of each example of an advisory

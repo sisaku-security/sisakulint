@@ -1,6 +1,6 @@
 package rules
 
-import "github.com/sisaku-security/sisakulint/actions/lint"
+import "github.com/gh-intel/sisakulint/actions/lint"
 
 // The forms of an if that the attacker run reads as keeping an attacker
 // out, which those it does not count as attackers pass: the rules whose

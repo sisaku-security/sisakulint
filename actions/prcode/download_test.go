@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 )
 
 // oneDownload is the one download of a job on on, with jobExtra, whose

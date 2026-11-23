@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // SettingValue is a value of an input of a step of an agent action whose

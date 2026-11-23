@@ -1,6 +1,6 @@
 package lint
 
-import "github.com/sisaku-security/sisakulint/actions/facts"
+import "github.com/gh-intel/sisakulint/actions/facts"
 
 // Definition is a name and what it means, as the terms say: an item name,
 // a word in the texts, or a value of an enumeration. Text is not escaped

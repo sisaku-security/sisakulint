@@ -34,8 +34,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 func main() {
@@ -67,10 +67,10 @@ const (
 
 // packages are the Go packages the types of the arguments are in.
 var packages = map[string]string{
-	"analysis": "github.com/sisaku-security/sisakulint/actions/analysis",
-	"expr":     "github.com/sisaku-security/sisakulint/actions/expr",
-	"facts":    "github.com/sisaku-security/sisakulint/actions/facts",
-	"workflow": "github.com/sisaku-security/sisakulint/actions/workflow",
+	"analysis": "github.com/gh-intel/sisakulint/actions/analysis",
+	"expr":     "github.com/gh-intel/sisakulint/actions/expr",
+	"facts":    "github.com/gh-intel/sisakulint/actions/facts",
+	"workflow": "github.com/gh-intel/sisakulint/actions/workflow",
 }
 
 // goTypes are the x-go-type a member of $defs may name: of this schema, a
@@ -330,7 +330,7 @@ func typeOf(s *jsonschema.Schema, enums map[*jsonschema.Schema]enum, orArray boo
 func write(kinds []kind, enums map[*jsonschema.Schema]enum) ([]byte, error) {
 	var b bytes.Buffer
 	p := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
-	imports := map[string]bool{"github.com/sisaku-security/sisakulint/actions/lint": true}
+	imports := map[string]bool{"github.com/gh-intel/sisakulint/actions/lint": true}
 	for _, e := range enums {
 		if e.pkg != "" {
 			imports["encoding/json"] = true

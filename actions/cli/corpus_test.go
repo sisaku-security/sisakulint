@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/internal/corpus"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/internal/corpus"
 )
 
 var findingsLine = regexp.MustCompile(`(?m)^(\d+) findings?`)

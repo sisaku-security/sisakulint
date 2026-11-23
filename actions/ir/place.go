@@ -1,12 +1,12 @@
 package ir
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/agent"
-	"github.com/sisaku-security/sisakulint/actions/composite"
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/agent"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // place makes the handles on the elements of one file: of the input of x,

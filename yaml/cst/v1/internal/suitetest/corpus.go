@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/internal/corpus"
+	"github.com/gh-intel/sisakulint/internal/corpus"
 )
 
 // CorpusRoot is the directory of the files of the corpus: files under

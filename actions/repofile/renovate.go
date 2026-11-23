@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // renovateFiles are the configuration files of Renovate on GitHub, in the

@@ -23,8 +23,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 func main() {

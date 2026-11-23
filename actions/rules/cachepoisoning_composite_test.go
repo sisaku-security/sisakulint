@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestCachePoisoningComposite: a step of a composite action of another

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/callerstest"
-	"github.com/sisaku-security/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
+	"github.com/gh-intel/sisakulint/actions/taint"
 )
 
 func callersOf(t *testing.T, files ...[2]string) *taint.Callers {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 func paths(ps ...string) []facts.InputPath {

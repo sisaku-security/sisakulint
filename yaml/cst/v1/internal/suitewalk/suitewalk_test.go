@@ -3,7 +3,7 @@ package suitewalk
 import (
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 func TestNodes(t *testing.T) {

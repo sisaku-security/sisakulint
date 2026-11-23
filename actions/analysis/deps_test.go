@@ -17,12 +17,12 @@ func TestDependencies(t *testing.T) {
 		}
 		return strings.Fields(string(out))
 	}
-	allowed := map[string]bool{"github.com/sisaku-security/sisakulint/actions/analysis": true}
-	for _, d := range deps("github.com/sisaku-security/sisakulint/actions/workflow") {
+	allowed := map[string]bool{"github.com/gh-intel/sisakulint/actions/analysis": true}
+	for _, d := range deps("github.com/gh-intel/sisakulint/actions/workflow") {
 		allowed[d] = true
 	}
 	for _, d := range deps(".") {
-		if strings.HasPrefix(d, "github.com/sisaku-security/sisakulint/") && !allowed[d] {
+		if strings.HasPrefix(d, "github.com/gh-intel/sisakulint/") && !allowed[d] {
 			t.Errorf("actions/analysis depends on %s", d)
 		}
 	}

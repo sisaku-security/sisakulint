@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 )
 
 // nameForm is the form of a name an attacker has or gives.

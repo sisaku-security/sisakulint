@@ -3,7 +3,7 @@ package scalar
 import (
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Tag is a tag after expansion, such as "tag:yaml.org,2002:str", a local

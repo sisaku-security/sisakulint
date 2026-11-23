@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Editor makes the structural edits and the comments (Insert, InsertItem,

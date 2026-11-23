@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/cvss4"
+	"github.com/gh-intel/sisakulint/actions/cvss4"
 )
 
 // Metric is the value of one CVSS metric of a kind of finding, and why it

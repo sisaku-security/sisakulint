@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 func benchInputs(b *testing.B, inputs [][]byte) { benchInputsMode(b, inputs, ModeSpec) }

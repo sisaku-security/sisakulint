@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // gapMeta is the Meta of a rule that declares the kind kindG.

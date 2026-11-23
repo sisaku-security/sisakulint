@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // leaves of the three truths, for the tables of Kleene's logic.

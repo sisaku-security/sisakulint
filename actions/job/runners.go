@@ -3,9 +3,9 @@ package job
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // RunnerLabel is a label of runs-on: as written, or a value of the matrix that

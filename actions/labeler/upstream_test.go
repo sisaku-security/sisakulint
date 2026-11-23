@@ -3,8 +3,8 @@ package labeler
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/releasetable"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/releasetable"
 )
 
 // TestUpstreamTables: each release of actions/labeler published after the

@@ -1,8 +1,8 @@
 package rules
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // fixOf is the fix of o, or its reason for none; both nil when o has

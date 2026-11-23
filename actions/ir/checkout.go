@@ -3,10 +3,10 @@ package ir
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/attacker"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/taint"
 )
 
 // GuardCommits are the commits of actions/checkout that have the guard

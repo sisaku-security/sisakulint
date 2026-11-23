@@ -3,8 +3,8 @@ package reportview
 import (
 	"strconv"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // place is the job and the step a location is in, by the IDs and names a

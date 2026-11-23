@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 func at(src, sub string) cst.Span {

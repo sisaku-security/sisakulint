@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"reflect"
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/cvss4"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/cvss4"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/ir"
 )
 
 // Meta is the description of a rule in the registry of rules: the only

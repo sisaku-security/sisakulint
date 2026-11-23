@@ -3,7 +3,7 @@ package rules
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // The setting of allowed actions of GitHub can stop a run before any job

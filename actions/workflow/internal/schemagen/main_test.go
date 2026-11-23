@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/webhook"
+	"github.com/gh-intel/sisakulint/actions/internal/webhook"
 )
 
 // TestUpToDate checks that schema_gen.go is what the schemas give; run go

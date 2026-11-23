@@ -3,7 +3,7 @@ package rules
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestArtifactIncidents holds the workflows of the projects the ArtiPACKED

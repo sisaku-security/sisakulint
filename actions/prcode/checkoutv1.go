@@ -1,8 +1,8 @@
 package prcode
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // v1Refs are the refs of actions/checkout that run v1, the checkout

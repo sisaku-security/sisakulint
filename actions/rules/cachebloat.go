@@ -3,8 +3,8 @@ package rules
 import (
 	"context"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // CacheBloat is the quality rule cache-bloat: a save that may carry the

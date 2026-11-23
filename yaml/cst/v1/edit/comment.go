@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // LineComment makes the edit that sets the comment at the end of the line

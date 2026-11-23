@@ -16,7 +16,7 @@ func TestDependencies(t *testing.T) {
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		switch dep {
-		case "github.com/sisaku-security/sisakulint/actions/lint", "github.com/sisaku-security/sisakulint/actions/rules":
+		case "github.com/gh-intel/sisakulint/actions/lint", "github.com/gh-intel/sisakulint/actions/rules":
 			t.Errorf("actions/taint depends on %s", dep)
 		}
 	}

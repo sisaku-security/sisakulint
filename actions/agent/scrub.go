@@ -3,8 +3,8 @@ package agent
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // scrubVar is the variable of Claude Code's subprocess env scrub

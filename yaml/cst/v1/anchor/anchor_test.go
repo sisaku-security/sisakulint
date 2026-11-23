@@ -3,8 +3,8 @@ package anchor
 import (
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitewalk"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitewalk"
 )
 
 // resolveAll resolves every Alias of src in order, giving the referred

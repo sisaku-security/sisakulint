@@ -1,15 +1,15 @@
 package taint
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/shell"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // EnvironmentFileWrite is a reference an attacker may control, written to a file

@@ -17,15 +17,15 @@ import (
 // forbidden are the packages whose values a rule does not handle: the
 // model, the tree and the shared analyses, which package ir reads for it.
 var forbidden = map[string]bool{
-	"github.com/sisaku-security/sisakulint/actions/workflow":   true,
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1":        true,
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit":   true,
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar": true,
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/anchor": true,
-	"github.com/sisaku-security/sisakulint/actions/taint":      true,
-	"github.com/sisaku-security/sisakulint/actions/prcode":     true,
-	"github.com/sisaku-security/sisakulint/actions/shell":      true,
-	"github.com/sisaku-security/sisakulint/actions/expr":       true,
+	"github.com/gh-intel/sisakulint/actions/workflow":   true,
+	"github.com/gh-intel/sisakulint/yaml/cst/v1":        true,
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit":   true,
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar": true,
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/anchor": true,
+	"github.com/gh-intel/sisakulint/actions/taint":      true,
+	"github.com/gh-intel/sisakulint/actions/prcode":     true,
+	"github.com/gh-intel/sisakulint/actions/shell":      true,
+	"github.com/gh-intel/sisakulint/actions/expr":       true,
 }
 
 // allowed are the types of those packages a rule may handle: an edit a
@@ -34,12 +34,12 @@ var forbidden = map[string]bool{
 // of an env and of an input of an action, which a summary of the IR holds
 // (a string that is no node of the tree).
 var allowed = map[string]bool{
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit.Edit":            true,
-	"github.com/sisaku-security/sisakulint/actions/workflow.EventName":       true,
-	"github.com/sisaku-security/sisakulint/actions/workflow.RunnerLabelName": true,
-	"github.com/sisaku-security/sisakulint/actions/workflow.EnvName":         true,
-	"github.com/sisaku-security/sisakulint/actions/workflow.InputName":       true,
-	"github.com/sisaku-security/sisakulint/actions/expr.ValueType":           true,
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit.Edit":            true,
+	"github.com/gh-intel/sisakulint/actions/workflow.EventName":       true,
+	"github.com/gh-intel/sisakulint/actions/workflow.RunnerLabelName": true,
+	"github.com/gh-intel/sisakulint/actions/workflow.EnvName":         true,
+	"github.com/gh-intel/sisakulint/actions/workflow.InputName":       true,
+	"github.com/gh-intel/sisakulint/actions/expr.ValueType":           true,
 }
 
 // TestRulesTouchNoModel: the code of the rules handles no value of the

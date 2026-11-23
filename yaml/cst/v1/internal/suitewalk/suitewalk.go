@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"iter"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 // Nodes yields the nodes that make a +MAP, +SEQ, =VAL or =ALI event, in

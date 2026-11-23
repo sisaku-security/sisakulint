@@ -92,7 +92,7 @@
 //	              keeps it up to date)
 package rules
 
-import "github.com/sisaku-security/sisakulint/actions/lint"
+import "github.com/gh-intel/sisakulint/actions/lint"
 
 //go:generate go run ./internal/findingsgen
 

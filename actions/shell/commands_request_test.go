@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/enumtest"
+	"github.com/gh-intel/sisakulint/actions/internal/enumtest"
 )
 
 // TestRequestReading: the values of RequestReading, by enumtest.Check.

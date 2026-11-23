@@ -1,6 +1,6 @@
 package shell
 
-//go:generate go run github.com/sisaku-security/sisakulint/actions/internal/enumgen -pkg shell -out enum_gen.go schema/commands.json
+//go:generate go run github.com/gh-intel/sisakulint/actions/internal/enumgen -pkg shell -out enum_gen.go schema/commands.json
 //go:generate go run ./internal/commandgen
 
 import (

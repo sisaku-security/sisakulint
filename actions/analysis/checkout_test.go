@@ -3,7 +3,7 @@ package analysis
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // TestGuarded: the guard of actions/checkout covers pull_request_target

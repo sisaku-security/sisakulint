@@ -1,12 +1,12 @@
 package rules
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // OutputClobbering is the rule output-clobbering: a value an attacker

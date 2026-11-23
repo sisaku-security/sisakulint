@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 )
 
 // TestCacheSaves: the steps that save the tree a checkout brings to the

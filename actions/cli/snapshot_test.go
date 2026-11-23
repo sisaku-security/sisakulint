@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
 )
 
 func gitHash(b []byte) string {

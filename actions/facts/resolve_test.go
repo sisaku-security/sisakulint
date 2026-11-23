@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 func TestFirst(t *testing.T) {

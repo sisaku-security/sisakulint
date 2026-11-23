@@ -3,8 +3,8 @@ package attackrun
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // example is a workflow example whose notes put value into carrier.

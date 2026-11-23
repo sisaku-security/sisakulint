@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 )
 
 // identifier is a name the shell may read as a variable: those of a script

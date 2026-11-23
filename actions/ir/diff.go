@@ -3,7 +3,7 @@ package ir
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // ChangedSummary is a summary that differs between the IRs of an input before and

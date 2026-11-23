@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 // Condition is when a finding holds: a tree of all (and), any (or) and leaves

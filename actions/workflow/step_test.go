@@ -3,9 +3,9 @@ package workflow
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/anchor"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/anchor"
 )
 
 // readSteps reads the steps: of src, a mapping, without a job around it.

@@ -3,10 +3,10 @@
 package bad
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 func touch(v ir.UntrustedCheckoutReader) {

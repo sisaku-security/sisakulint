@@ -3,7 +3,7 @@ package workflow
 import (
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // ActionMetadata is an action.yml (action:action-root). The runner reads it, not

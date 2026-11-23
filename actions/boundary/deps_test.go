@@ -15,7 +15,7 @@ func TestDependencies(t *testing.T) {
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		switch dep {
-		case "github.com/sisaku-security/sisakulint/actions/rules", "github.com/sisaku-security/sisakulint/actions/cli", "github.com/sisaku-security/sisakulint/actions/reportview":
+		case "github.com/gh-intel/sisakulint/actions/rules", "github.com/gh-intel/sisakulint/actions/cli", "github.com/gh-intel/sisakulint/actions/reportview":
 			t.Errorf("actions/boundary depends on %s", dep)
 		}
 	}

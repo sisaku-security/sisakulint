@@ -3,7 +3,7 @@ package calls
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // found is a call and the path it names, relative to the repository; repo

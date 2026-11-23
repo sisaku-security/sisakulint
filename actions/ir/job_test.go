@@ -3,11 +3,11 @@ package ir
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/callerstest"
-	"github.com/sisaku-security/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
+	"github.com/gh-intel/sisakulint/actions/taint"
 )
 
 const jobWF = "on: issues\njobs:\n  deploy:\n    runs-on: [self-hosted, linux]\n    environment: production\n    steps:\n      - run: ./deploy\n        env: {K: '${{ secrets.DEPLOY_KEY }}'}\n  other:\n    runs-on: ${{ inputs.r }}\n    permissions: {}\n    steps:\n      - run: echo\n"

@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/fs"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // maxFileSize is how much of a configuration file is read: one larger is

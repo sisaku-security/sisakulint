@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // applied applies edit to tr and checks that its inverse gives tr back.

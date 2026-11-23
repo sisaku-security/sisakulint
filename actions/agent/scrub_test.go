@@ -3,9 +3,9 @@ package agent
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 func TestScrubOf(t *testing.T) {

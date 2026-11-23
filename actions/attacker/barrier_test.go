@@ -3,8 +3,8 @@ package attacker
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 func passing(bs ...analysis.Barrier) Table { return TableOf(analysis.BarrierPasses{}.With(bs...)) }

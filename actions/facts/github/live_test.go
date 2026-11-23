@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // TestLive asks the real API, only with ACTIONS_GITHUB_API=1. A token in

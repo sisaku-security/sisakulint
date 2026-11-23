@@ -1,6 +1,6 @@
 package rules
 
-import "github.com/sisaku-security/sisakulint/actions/lint"
+import "github.com/gh-intel/sisakulint/actions/lint"
 
 // The forms of the table of tools (prcode's) that the rules reading the
 // steps that run the code of a checkout, of a download or of an agent

@@ -3,10 +3,10 @@ package ir
 import (
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/job"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/job"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // skippedJobs are where the jobs of the workflow of an IR are, and whether

@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/shell"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // CapabilityGrant is a capability a permission of a step of an agent

@@ -1,9 +1,9 @@
 package calls
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/composite"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Node is a file of the call graph: an input of the run, or a remote

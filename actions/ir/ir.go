@@ -4,20 +4,20 @@ package ir
 
 import (
 	"context"
-	"github.com/sisaku-security/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/composite"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/labeler"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/shell"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/labeler"
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // IR is what the rules of one input read. The summaries of a type are

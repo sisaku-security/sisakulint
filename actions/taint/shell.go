@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Shell is the shell a step's run runs in, as far as the rules need it.

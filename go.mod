@@ -1,3 +1,3 @@
-module github.com/sisaku-security/sisakulint
+module github.com/gh-intel/sisakulint
 
 go 1.26.11

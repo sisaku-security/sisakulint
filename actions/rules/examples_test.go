@@ -16,9 +16,9 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // limitFacts answers git.ref-commit with a commit, so that commit-sha's

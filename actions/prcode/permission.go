@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/shell"
 )
 
 // PermissionRunsTree is whether the command of words, an agent's

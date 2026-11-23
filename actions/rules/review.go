@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/attackrun"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/internal/attackrun"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // ReviewDocument is a Markdown file a person reads to approve a rule: the

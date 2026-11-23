@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Edit replaces the range Span of a tree's bytes with New. When Old is not

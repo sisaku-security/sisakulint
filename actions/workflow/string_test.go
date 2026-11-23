@@ -3,7 +3,7 @@ package workflow
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 )
 
 // exprSources returns the input bytes each expression part of run-name

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 const calledRequired = "on:\n  workflow_call:\n    inputs:\n      t: {type: string, required: true}\njobs:\n  j:\n    runs-on: x\n    steps: [{run: y}]\n"

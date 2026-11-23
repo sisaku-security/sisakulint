@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/ir"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // ReportSchema is the value of schema in the JSON of a report.

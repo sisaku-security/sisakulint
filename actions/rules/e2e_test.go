@@ -13,12 +13,12 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 var update = flag.Bool("update", false, "write testdata/e2e.golden.json, testdata/registry.golden.json, testdata/explain.golden.md, testdata/attack-runs.golden and testdata/advisory-examples.golden")

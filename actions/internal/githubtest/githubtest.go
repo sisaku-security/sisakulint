@@ -27,8 +27,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/facts/github"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts/github"
 )
 
 // Server is the fake. Refs maps an escaped path, such as

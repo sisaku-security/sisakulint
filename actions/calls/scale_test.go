@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/callerstest"
+	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
 )
 
 // TestScaleLocalCalls: a job of n checkouts, each followed by a call of a

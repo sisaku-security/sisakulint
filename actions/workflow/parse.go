@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/anchor"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/anchor"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // Status is what became of a value.

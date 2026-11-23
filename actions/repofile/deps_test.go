@@ -14,7 +14,7 @@ func TestDependencies(t *testing.T) {
 		t.Skipf("go list: %v", err)
 	}
 	for _, dep := range strings.Fields(string(out)) {
-		for _, bad := range []string{"github.com/sisaku-security/sisakulint/actions/workflow", "github.com/sisaku-security/sisakulint/actions/lint", "github.com/sisaku-security/sisakulint/actions/rules", "github.com/sisaku-security/sisakulint/actions/cli"} {
+		for _, bad := range []string{"github.com/gh-intel/sisakulint/actions/workflow", "github.com/gh-intel/sisakulint/actions/lint", "github.com/gh-intel/sisakulint/actions/rules", "github.com/gh-intel/sisakulint/actions/cli"} {
 			if dep == bad {
 				t.Errorf("actions/repofile depends on %s", dep)
 			}

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // commitRef answers git.commit-ref: a branch or a tag of the repository

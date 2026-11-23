@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Control is what an attacker controls of a context.

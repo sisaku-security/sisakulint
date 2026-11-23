@@ -4,11 +4,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	jobs "github.com/sisaku-security/sisakulint/actions/job" // the test helper job takes the name
-	"github.com/sisaku-security/sisakulint/actions/prcode"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	jobs "github.com/gh-intel/sisakulint/actions/job" // the test helper job takes the name
+	"github.com/gh-intel/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // LeftCredential is a credential a step before an upload left in a file

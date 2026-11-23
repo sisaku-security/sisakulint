@@ -3,7 +3,7 @@ package workflow
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 )
 
 // ImageReference is a Docker image as written: name[:tag][@digest]. A :

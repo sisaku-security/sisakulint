@@ -9,10 +9,10 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/githubapi"
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/githubapi"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 const okWorkflow = "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"

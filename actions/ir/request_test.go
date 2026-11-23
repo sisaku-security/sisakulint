@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 )
 
 // TestIRRequests: a run's requests carry what taint reads of them and what

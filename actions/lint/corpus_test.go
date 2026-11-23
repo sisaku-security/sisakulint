@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/internal/corpus"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/internal/corpus"
 )
 
 // TestCorpus enumerates each repository of yaml/corpus (real-world, org,

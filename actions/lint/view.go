@@ -2,9 +2,9 @@ package lint
 
 import (
 	"context"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/ir"
 )
 
 // newIR makes the IR of an input; the tests replace it to see the IRs a

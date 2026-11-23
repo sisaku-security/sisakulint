@@ -3,10 +3,10 @@ package calls_test
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/calls"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/callerstest"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 const required = "on:\n  workflow_call:\n    inputs:\n      t: {type: string, required: true}\njobs:\n  j:\n    runs-on: x\n    steps: [{run: y}]\n"

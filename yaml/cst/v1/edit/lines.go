@@ -3,8 +3,8 @@ package edit
 import (
 	"bytes"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // owned is the range of lines a block element (a BlockMappingEntry or a

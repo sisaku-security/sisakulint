@@ -16,7 +16,7 @@ them.
 Please do not disclose suspected vulnerabilities in a public issue or pull
 request. Use GitHub's private vulnerability reporting form for this repository:
 
-https://github.com/sisaku-security/sisakulint/security/advisories/new
+https://github.com/gh-intel/sisakulint/security/advisories/new
 
 Include the affected version or commit, reproduction steps, expected impact,
 and any suggested mitigation. Reports about bypasses that can cause sisakulint

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // orgRepoBody is GET /repos/{owner}/{repo} of a repository of an

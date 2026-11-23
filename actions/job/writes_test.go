@@ -3,7 +3,7 @@ package job
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 )
 
 // TestActionsReadOf: the scope actions, read-all and write-all read the

@@ -1,6 +1,6 @@
 package ir
 
-import "github.com/sisaku-security/sisakulint/actions/analysis"
+import "github.com/gh-intel/sisakulint/actions/analysis"
 
 // RuleAccess is what the engine makes of an IR for one rule: its reader reads
 // the IR through it. A rule never gets one.
