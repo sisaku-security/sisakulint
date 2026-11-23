@@ -8,6 +8,9 @@ import (
 )
 
 func TestExamplesHTML(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	a, b := filepath.Join(t.TempDir(), "a.html"), filepath.Join(t.TempDir(), "b.html")
 	for _, p := range []string{a, b} {
 		if got := run(t, raw("--examples", "--html", p)); got.code != 0 {

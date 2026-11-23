@@ -47,6 +47,9 @@ func TestExplainGolden(t *testing.T) {
 // 0.31.2, GFM or GitHub would read as markup, a URL GFM would link with any
 // of that in it, and the spaces and tabs a string starts with.
 func TestExplainCoversRegistry(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(All(), Quality()...)
 	if err != nil {
 		t.Fatal(err)

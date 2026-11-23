@@ -74,6 +74,9 @@ func TestExplainQuality(t *testing.T) {
 // TestExamplesQuality: --examples=<quality rule> writes the catalog of the
 // quality rule alone, as --examples=<rule> does of a rule.
 func TestExamplesQuality(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	p := t.TempDir() + "/c.html"
 	got := run(t, raw("--examples=missing-timeout-minutes", "--html", p))
 	if got.code != 0 {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"testing"
 
@@ -14,6 +15,9 @@ import (
 )
 
 func TestCatalog(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(rules.All(), rules.Quality()...)
 	if err != nil {
 		t.Fatal(err)
@@ -135,6 +139,9 @@ func TestCatalogOneRule(t *testing.T) {
 // with its facts, and both pages have every file of the example; on the undetected form no-line-break of envvar-injection,
 // that page has the finding of code-injection the page of the rule has not.
 func TestCatalogAllRules(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(rules.All())
 	if err != nil {
 		t.Fatal(err)
@@ -293,6 +300,9 @@ func TestCatalogTerms(t *testing.T) {
 // TestCatalogArguments: a rule of the catalog has the arguments of each of
 // its kinds, which the JSON of the registry does not have.
 func TestCatalogArguments(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(rules.All(), rules.Quality()...)
 	if err != nil {
 		t.Fatal(err)
@@ -329,6 +339,9 @@ func TestCatalogArguments(t *testing.T) {
 // argument-injection, the rule asks none and another rule asks
 // repo.default-token-write.
 func TestCatalogRunFactLines(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(rules.All())
 	if err != nil {
 		t.Fatal(err)

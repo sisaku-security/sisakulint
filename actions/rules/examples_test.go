@@ -485,6 +485,9 @@ func (s swapped) Meta() lint.Meta { return s.m }
 // TestCheckExamplesFails: a true negative on which the rule reports does
 // not hold, and says why.
 func TestCheckExamplesFails(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	rule := ruleOf(t, CommitSHAID)
 	m := exampledMeta(rule)
 	m.FindingKinds = slices.Clone(m.FindingKinds)
@@ -515,6 +518,9 @@ func TestCheckExamplesFails(t *testing.T) {
 // example, and what the rule of the declaration gives there is what it
 // gives alone (the example catalog shows both).
 func TestRunExample(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(All(), Quality()...)
 	if err != nil {
 		t.Fatal(err)
