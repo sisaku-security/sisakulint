@@ -130,7 +130,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 	if w != nil {
 		evs := c.EventsOr(name, prCodeEvents, true, func() []analysis.EventActivity { return taint.EventsOf(w, prCodeEvents) })
 		all := taint.EventsOf(w, onNames(w))
-		ups := sameRunUploads(c, w, AnalyzeIn(c, name, w, nil, m))
+		ups, unknown := sameRunUploadsIn(c, name, w, m, 0)
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
 		}
@@ -157,7 +157,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 				}
 				site.CallFromPR = callFromPR(w, site.DispatchInput, site.PRCodeOn)
 				site.read(job.ActionsReadOf(j.Permissions, w.Permissions))
-				site.sameRun(w, ups)
+				site.sameRun(w, ups, unknown)
 				site.DispatchInput = site.dispatchRead // the inputs the release reads, of the run it takes
 				site.CallFromPR = site.CallFromPR && site.DispatchInput
 				site.Approval, site.Environment = job.ApprovalOf(site.PRCodeOn, site.Job)

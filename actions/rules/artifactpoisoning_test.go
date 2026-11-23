@@ -305,16 +305,37 @@ func TestArtifactPoisoningSameRunGuard(t *testing.T) {
 }
 
 // TestArtifactPoisoningSameRunComposite: an upload inside a composite
-// action is one that the rule does not read as an upload of the current
-// run (the undetected form same-run-pr-code, whose Example is another of
-// its forms).
+// action of the inputs, an upload of a reusable workflow of the inputs that
+// a needed job calls, and actions/upload-artifact/merge of such an upload
+// are uploads of the current run; a ./ action the inputs do not have is
+// inconclusive.
 func TestArtifactPoisoningSameRunComposite(t *testing.T) {
-	files := map[string]string{
-		".github/workflows/w.yml":       "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n      - uses: ./.github/actions/up\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    permissions: {contents: write}\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n",
+	deploy := "  deploy:\n    needs: NEEDS\n    runs-on: ubuntu-latest\n    permissions: {contents: write}\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n"
+	checkout := "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n"
+	composite := map[string]string{
+		".github/workflows/w.yml":       "on: pull_request_target\njobs:\n  build:\n" + checkout + "      - uses: ./.github/actions/up\n" + strings.ReplaceAll(deploy, "NEEDS", "build"),
 		".github/actions/up/action.yml": "name: up\ndescription: up\nruns:\n  using: composite\n  steps:\n    - uses: actions/upload-artifact@v4\n      with: {name: out, path: out}\n",
 	}
-	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files, facts.Assume(downloadFacts{}))
-	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
-		t.Errorf("composite: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+	called := map[string]string{
+		".github/workflows/w.yml": "on: pull_request_target\njobs:\n  build: {uses: ./.github/workflows/b.yml}\n" + strings.ReplaceAll(deploy, "NEEDS", "build"),
+		".github/workflows/b.yml": "on: workflow_call\njobs:\n  build:\n" + checkout + "      - uses: actions/upload-artifact@v4\n        with: {name: out, path: out}\n",
+	}
+	merge := map[string]string{
+		".github/workflows/w.yml": "on: pull_request_target\njobs:\n  build:\n" + checkout + "      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: out}\n  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: out, pattern: part-*}\n" + strings.ReplaceAll(deploy, "NEEDS", "merge"),
+	}
+	for name, files := range map[string]map[string]string{"composite": composite, "called": called, "merge": merge} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files, facts.Assume(downloadFacts{}))
+		if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
+			t.Errorf("%s: %+v", name, rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+		}
+	}
+	unmerged := map[string]string{".github/workflows/w.yml": strings.Replace(merge[".github/workflows/w.yml"], "pattern: part-*", "pattern: other-*", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, unmerged, facts.Assume(downloadFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
+		t.Errorf("merge of other artifacts: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+	}
+	missing := map[string]string{".github/workflows/w.yml": composite[".github/workflows/w.yml"]}
+	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, missing, facts.Assume(downloadFacts{}))
+	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 1 {
+		t.Errorf("missing action: %+v", rep.Findings)
 	}
 }
