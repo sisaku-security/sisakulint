@@ -6,7 +6,7 @@ sisakulint is a static analysis tool for GitHub Actions workflow files and actio
 
 ```bash
 go build ./cmd/sisakulint
-go test ./...                           # the default tests; CI runs go test -race -timeout 30m ./...
+go test ./...                           # the default tests; CI runs go test -timeout 30m ./...
 gofmt -l .                              # CI fails when gofmt lists a file
 go run ./cmd/sisakulint --help          # the flags
 go run ./cmd/sisakulint --explain all   # every rule, as Markdown
