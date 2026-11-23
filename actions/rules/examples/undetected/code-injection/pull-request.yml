@@ -1,0 +1,36 @@
+# situation: on pull_request, a run writes the pull request's title and
+#   github.head_ref. pr_title.yml of aws/aws-sam-cli (commit
+#   8435b574aa0c30abb68730575463693c2361b783, GHSL-2020-230), wipcheck.yml of
+#   the repositories of graphql-dotnet (for example graphql-dotnet/server,
+#   commit 31d3858bb57f7b67beebcfdae4eeab9f8805811d, GHSL-2020-231) and
+#   test_build_deploy.yml of wireapp/wire-webapp (commit
+#   5bdd49291b278d6d3d5fe89f1e656a556bd6db8e, GHSL-2020-232) write the title
+#   of the pull request into a run on pull_request.
+# reason: when only the pull requests of the repository run the workflow, the
+#   author of the pull request can change the workflow itself and gets what the
+#   run has without the flaw, so the flaw adds nothing to what the author gets;
+#   when a ruleset of the organization or the enterprise runs the workflow on
+#   the pull requests of its other repositories, the author cannot change the
+#   workflow, and what the run of the ruleset has beyond the author's own
+#   pull_request workflow is not known. The workflow does not say which case
+#   holds.
+# cause: pull_request is none of the attacker's events the rule reads. The
+#   rule does not read whether a ruleset runs the workflow.
+# attack-value: github.head_ref = "\";echo${IFS}PWNED;#"
+# attack-run-behavior: the branch name of the pull request is the value, so
+#   the script becomes echo "<title> ";echo${IFS}PWNED;#": the double quote ends
+#   echo's string, bash splits echo${IFS}PWNED into echo PWNED and runs it,
+#   which prints PWNED, and # makes the rest a comment. When a ruleset of the
+#   organization runs the workflow on a pull request of another repository, the
+#   same steps run in the run of the ruleset; what the run of the ruleset has
+#   was not observed, so whether the steps do harm in the run of the ruleset is
+#   not known.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-230-aws-aws-sam-cli-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-231-graphql-dotnet-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-232-wireapp-wire-webapp-workflow/
+on: pull_request
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.title }} ${{ github.head_ref }}"

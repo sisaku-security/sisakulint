@@ -1,0 +1,19 @@
+# situation: the directory of a composite action has action.yml as a
+#   directory and action.yaml as a file; a workflow on issues calls the
+#   action, whose run step echoes the title of the issue, written in by ${{
+#   }}.
+# reason: the runner reads action.yml only when it is a file, and reads
+#   action.yaml when action.yml is a directory, so action.yaml runs. Anyone
+#   who opens an issue writes its title, and ${{ }} puts the title into the
+#   script before the shell parses the script, so a double quote in the
+#   title ends the echo's string and what follows runs as commands.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo ""; echo PWNED; echo "", and
+#   the shell runs the second echo as a command, which prints PWNED.
+name: echo title
+description: echo the title of the issue
+runs:
+  using: composite
+  steps:
+    - run: echo "${{ github.event.issue.title }}"
+      shell: bash

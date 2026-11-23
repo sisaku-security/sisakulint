@@ -1,0 +1,93 @@
+# situation: on pull_request_target, a step writes the title of the pull
+#   request into its run by ${{ }}, inside double quotes in a command
+#   substitution, with a token that writes. This is the step backport assign
+#   of pr-checker.yml of StarRocks/starrocks 2.5.20 (commit
+#   74821e99502f49c07bc7762fb189d5a24d8ecf56, lines 1-4 and 33-60); the
+#   branches and the types of the event, the concurrency, the if of the job, the outputs and the first step are left
+#   out, and the permissions, which list every scope as write, are written as
+#   write-all. ci-merged.yml of the same commit (GHSL-2024-059) writes the title the
+#   same way (line 196).
+#   pull_request_merged.yml of infinispan/infinispan 15.0.0.Final (commit
+#   04d26b0400783838b1673bb24161a7ce89ca83a0, GHSL-2024-057) writes the title
+#   the same way, inside $( ), when a pull request is merged (line 20).
+#   pull_request_open.yml of the same commit (GHSL-2024-048) writes it the
+#   same way when a pull request is opened (line 22), and
+#   request_codeowners_review.yml of lf-edge/eve (commit
+#   e4f2710a1e15e1753bfd6a70d264cf0ed005f247, GHSL-2024-049) writes
+#   github.event.pull_request.head.ref, which the author also names, into git
+#   fetch and git checkout (lines 22-23).
+#   pr-triage.yml of discordjs/discord.js (commit
+#   6142394a43b1ee51c14f54601527e568e81b0e98, GHSL-2024-145) writes the title
+#   into its run on pull_request_target too (line 27).
+#   update-javascript-on-main.yml of hedyorg/hedy (commit
+#   af093f0af02d02592cd265b3102237e59a6e0b45, GHSL-2024-053) and storybook.yml
+#   of misskey-dev/misskey (commit f4a57404120be713d5fec4fc8e882b09927deca2,
+#   GHSL-2024-051) write github.event.pull_request.head.ref into runs on
+#   pull_request_target (lines 45 and 90-92).
+#   pull-request-check.yml of apecloud/kubeblocks (commit
+#   fe22d6b5c2878512e311d1bcff0f2fe763f4e0b7, GHSL-2024-041_GHSL-2024-042)
+#   writes the title as an argument of a script (line 35).
+#   sonar-pr-from-fork.yml of apache/ignite (commit
+#   476a65809077bdc95f01cfdef03f4409e1a54244, GHSL-2023-100) writes
+#   github.head_ref as an argument of ./mvnw (line 73).
+#   openapi.yml of jellyfin/jellyfin (commit
+#   92a0d26f31743ca0015fcc3e0a4fe094792ac63c, GHSL-2023-107) writes
+#   github.head_ref into git merge-base (line 51).
+#   Thirteen more advisories from 2020 to 2023, listed below after
+#   GHSL-2023-107, write the head ref, the head branch, or the name or a URL of
+#   the head repository of the pull request into a run on pull_request_target
+#   the same way.
+# reason: the author of a pull request, from a fork too, writes its title, and
+#   the runner puts the title into the script before bash reads the script;
+#   the if of the step reads the head branch, which the author also names.
+# attack-value: github.event.pull_request.title = "x\"; echo PWNED>/proc/$$/fd/1; echo \""
+# attack-run-behavior: the author of a pull request from a fork whose head
+#   branch starts with mergify/bp/ titles it with the value; the script
+#   becomes ORI_PR=$(echo "x"; echo PWNED>/proc/$$/fd/1; echo "" | …), and
+#   bash runs the second echo as a command, which prints PWNED to the log of
+#   the step, with the token of the job.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-058_GHSL-2024-059_starrocks/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-057_infinispan/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-048_infinispan/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-049_EVE/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-145_Discord_js/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-053_Hedy/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-051_Misskey/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-041_GHSL-2024-042_KubeBlocks/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-100_Apache_Ignite/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-107_Jellyfin/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-240-scikit-learn-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-242-telegramdesktop-tdesktop-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-244-nonebot-nonebot2-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-007-dmlc-gluon-nlp-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-015-a2o-snoopy-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-017-teal-language-tl-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-016-Tautulli-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-027_Engine_for_Cocos_Creator/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-022_Cloudstack/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-099_Design_patterns_implemented_in_Java/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-101_Zcash/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-104_CDK_for_Terraform/
+# advisory: https://securitylab.github.com/advisories/GHSL-2023-110_Wing_Language/
+on:
+  pull_request_target:
+permissions: write-all
+jobs:
+  sync-checker:
+    runs-on: ubuntu-latest
+    name: SYNC CHECKER
+    steps:
+      - name: backport assign
+        id: backport_assign
+        if: startsWith(github.head_ref, 'mergify/bp/') && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          ORI_PR=$(echo "${{ github.event.pull_request.title }}" | grep -oP '\(backport #\K\d+' | tail -n 1)
+          author=$(gh pr view ${ORI_PR} -R ${REPO} --json author -q '.author.login')
+          if [[ ! "${author}" =~ "mergify" ]]; then
+            gh pr edit ${PR_NUMBER} -R ${REPO} --add-assignee ${author} || true
+            echo "ORI_PR=${ORI_PR}" >> $GITHUB_OUTPUT
+          fi

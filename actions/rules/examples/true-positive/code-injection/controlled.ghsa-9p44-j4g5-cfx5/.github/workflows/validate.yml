@@ -1,0 +1,24 @@
+# The caller: on pull_request_target, the caller gives the body of the pull
+# request to each input of the composite action that the action writes into
+# run. The input pr_body and this form are taken from
+# validate_pr_description.yml of
+# ydb-platform/ydb (commit dd07662a0e0b98b6bbd07da00386bb889c683c27, lines
+# 3-7 and 13-27; the branches, the self-hosted runner and the input ref: main
+# of the checkout are left out). In the other three advisories, a with of the
+# caller gives the inputs; here the body of the pull request gives the
+# inputs.
+on:
+  pull_request_target:
+    types: [opened, edited]
+jobs:
+  validate-pr-description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use custom PR validation action
+        uses: ./called
+        with:
+          pr_body: "${{ github.event.pull_request.body }}"
+          prek-version: "${{ github.event.pull_request.body }}"
+          args: "${{ github.event.pull_request.body }}"
+          output: "${{ github.event.pull_request.body }}"

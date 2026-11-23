@@ -1,0 +1,7 @@
+name: x06
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c06.yml
+    with:
+      b: true

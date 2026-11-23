@@ -1,0 +1,22 @@
+# situation: on push, the whole env of a job is the JSON secret ENV read by
+#   fromJSON, and a step takes the password out of env.DB, a JSON value of
+#   ENV, with fromJSON into the env of the step.
+# reason: a todo (the same file): the rule skips an env written as one
+#   ${{ }} and reads env.DB from the env of the workflow, where no env has
+#   DB.
+# cause: the rule does not read the names of an env written as one ${{ }}.
+# attack: one who may read the log of the run opens the log to read the
+#   password.
+# attack-run-behavior: if GitHub takes such an env, the header of the step
+#   prints PASSWORD with the value that fromJSON took out, which the runner
+#   does not mask.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(secrets.ENV) }}
+    steps:
+      - env:
+          PASSWORD: ${{ fromJSON(env.DB).password }}
+        run: ./migrate.sh

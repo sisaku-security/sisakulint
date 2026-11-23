@@ -1,0 +1,40 @@
+# situation: a.yml of the repository o/r runs on push alone and calls b.yml by
+#   the name o/r/.github/workflows/b.yml@main, not by the path
+#   ./.github/workflows/b.yml; b.yml calls this reusable workflow by the path
+#   ./.github/workflows/called.yml. No other workflow calls b.yml or this
+#   reusable workflow.
+# reason: when the run of the linter names the repository (--repo o/r), the
+#   only workflow that runs this reusable workflow is a.yml, through b.yml,
+#   and a.yml runs on push alone. A push of Dependabot to the branch of a
+#   pull request from a fork goes to the fork, so the push of Dependabot
+#   starts no run of a.yml. A run without --repo reads the call by the name
+#   o/r/.github/workflows/b.yml@main as a call that may name a file of the
+#   repository, because the run does not know which repository the inputs
+#   are; the rule does not resolve the call to b.yml, so the rule reads
+#   b.yml, and this reusable workflow through b.yml, on every event and
+#   reports the same finding.
+# cause: the rule does not resolve the call by the name of the repository to
+#   b.yml, so the rule does not know all of the callers of b.yml, and reads
+#   b.yml, and this reusable workflow through b.yml, on every event.
+# attack: the attacker opens a pull request to this repository from the
+#   branch of a pull request that Dependabot opened in the fork of the
+#   attacker, then comments @dependabot recreate on the pull request of
+#   Dependabot in the fork, so that Dependabot pushes to the branch.
+# attack-run-behavior: the push of Dependabot goes to the branch in the fork
+#   and starts no run of a.yml. A run of a.yml starts only on a push to the
+#   repository o/r. So the job merge of this reusable workflow never runs
+#   with github.actor dependabot[bot] for the pull request of the attacker.
+on:
+  workflow_call:
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

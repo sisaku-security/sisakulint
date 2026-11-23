@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job checks out the base
+#   repository into the workspace and the head of the pull request into the
+#   directory pr, and runs pytest tests in the root of the workspace.
+# reason: a todo (the same file): pytest collects the tests of tests, a
+#   directory of the base repository, and loads no conftest.py of pr, so
+#   pytest runs no code of the pull request.
+# cause: the rule reads the directory that pytest runs in, and every
+#   directory under it, as directories whose tests pytest collects, so the
+#   rule reports untrusted-checkout.executed.
+# attack-value: the file conftest.py in the pull request = "import os; os.system('echo PWNED')"
+# attack-run-behavior: pytest tests does not import pr/conftest.py, so
+#   PWNED is not printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: pytest tests

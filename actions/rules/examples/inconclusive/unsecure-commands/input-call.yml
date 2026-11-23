@@ -1,0 +1,26 @@
+# situation: the workflow is called, and a step prints inputs.x; no
+#   caller of the workflow is among the inputs. The job sets
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS to true, and a step comes after.
+# reason: the caller decides inputs.x. Whether an attacker controls the
+#   printed value is not known.
+# cause: no caller is in the inputs, so the rule does not know what the
+#   caller passes.
+# attack: an attacker who controls the value writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on:
+  workflow_call:
+    inputs:
+      x:
+        type: string
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ inputs.x }}"
+      - run: echo next

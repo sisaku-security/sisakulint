@@ -1,0 +1,20 @@
+# A reusable workflow. The step seen echoes the dummy values without the
+# secrets context: *** means the runner of this job got that secret.
+on:
+  workflow_call:
+    secrets:
+      PROBE_A:
+        required: false
+permissions: {}
+jobs:
+  called:
+    runs-on: ubuntu-latest
+    steps:
+      - name: seen
+        run: |
+          echo "A=probe-a-canary-65a3a91b0584"
+          echo "B=probe-b-canary-65a3a91b0584"
+          echo 'whole={"user":"probe-user-65a3a91b0584","pass":"probe-pass-65a3a91b0584"}'
+      - env:
+          X: ${{ secrets.PROBE_A }}
+        run: "true"

@@ -1,0 +1,23 @@
+# situation: the step s runs a script that writes the output o, the step
+#   p prints steps.s.outputs.o, and the release step writes the output
+#   tag of the step p into its script.
+# reason: the output o is what the script writes at run time, so whether
+#   an attacker controls the printed value is not known.
+# cause: the rule does not yet follow what a script writes to
+#   $GITHUB_OUTPUT.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        run: echo "o=x" >> "$GITHUB_OUTPUT"
+      - id: p
+        run: echo "${{ steps.s.outputs.o }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

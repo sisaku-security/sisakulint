@@ -1,0 +1,20 @@
+# situation: on an opened issue, a step puts the issue's title into a run by
+#   ${{ }}; the step's if lets it run only when the issue's
+#   author_association is OWNER.
+# reason: the if skips the step for an issue an outsider opens, whose
+#   author_association is not OWNER, so only a title the owner wrote reaches
+#   the shell.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the step's if is false for an issue whose
+#   author_association is not OWNER, and the runner skips the step, so no
+#   script runs; when the owner opens the issue, the script becomes echo "";
+#   echo PWNED; echo "".
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event.issue.author_association == 'OWNER'
+        run: echo "${{ github.event.issue.title }}"

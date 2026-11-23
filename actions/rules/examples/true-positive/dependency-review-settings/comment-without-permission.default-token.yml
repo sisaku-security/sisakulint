@@ -1,0 +1,15 @@
+# situation: a pull request runs actions/dependency-review-action with
+#   comment-summary-in-pr: on-failure, and neither the workflow nor the job
+#   writes permissions; the repository's default token is read-only
+#   (repo.default-token-write is false).
+# reason: the GITHUB_TOKEN may not write pull-requests, so the comment is
+#   refused when the review fails.
+on: pull_request
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          comment-summary-in-pr: on-failure

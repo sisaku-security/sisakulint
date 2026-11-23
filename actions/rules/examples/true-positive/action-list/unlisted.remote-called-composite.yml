@@ -1,0 +1,18 @@
+# situation: a job calls
+#   example-org/composite-workflow/.github/workflows/build.yml@v1, a reusable
+#   workflow of another repository; repo.action-list is * and patterns that
+#   start with !, so the pattern * allows the reusable workflow; a step of
+#   that workflow runs example-org/composite-in-workflow@v1, a composite
+#   action whose step uses example-org/unlisted-step@v1, which the pattern
+#   !example-org/unlisted-* of repo.action-list blocks.
+# reason: the code of example-org/unlisted-step runs in the job of the
+#   reusable workflow, which runs on the events of the calling job.
+# attack: the maintainer of example-org/unlisted-step writes code that reads
+#   the secrets of the job into the commit that v1 names.
+# attack-run-behavior: the runner runs the composite action as a step of the
+#   job of the reusable workflow, and the composite action runs
+#   example-org/unlisted-step.
+on: push
+jobs:
+  build:
+    uses: example-org/composite-workflow/.github/workflows/build.yml@v1

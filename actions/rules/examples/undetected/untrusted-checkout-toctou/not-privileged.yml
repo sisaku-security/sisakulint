@@ -1,0 +1,25 @@
+# situation: on push and pull_request_review, the pull request's head SHA is
+#   checked out, and npm ci runs.
+# reason: only those who can write to the repository push, and the code of
+#   the attacker reaches the checkout only in the run of a review of the pull
+#   request of the attacker, which runs the workflow of the merge commit of
+#   the pull request, a workflow that the attacker can change in the pull
+#   request.
+# cause: the rule reads checkouts on pull_request_target, workflow_run and
+#   issue_comment only.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: on pull_request_review of the fork's pull request,
+#   the checkout fetches head.sha and npm ci runs the preinstall, in the run
+#   of the workflow of the merge commit, which the attacker could change in
+#   the pull request to run the same code without the checkout; on push
+#   the event has no pull_request, so the ref is empty and the checkout
+#   fetches the pushed commit.
+on: [push, pull_request_review]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

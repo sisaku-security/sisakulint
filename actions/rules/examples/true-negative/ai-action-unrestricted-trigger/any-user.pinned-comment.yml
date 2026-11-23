@@ -1,0 +1,24 @@
+# situation: on issue_comment with the activity type pinned,
+#   claude-code-action lets the actor of the run start the agent even
+#   when the actor has no write access.
+# reason: the actor of a run of issue_comment with the activity type
+#   pinned is the account that pins the comment. GitHub did not let an
+#   account with no role in the repository pin a comment, even on an issue
+#   that the account opened, so the actor of the run is an account that
+#   GitHub lets pin a comment, such as the owner, not an account with no
+#   role, and the action starts the agent for that account only.
+# attack: an attacker opens an issue, comments on the issue, and tries to
+#   pin the comment.
+# attack-run-behavior: GitHub does not let the attacker pin the comment,
+#   and no run of issue_comment with the activity type pinned starts for the
+#   attacker; a run that starts when the owner pins a comment has the owner
+#   as the actor.
+on: {issue_comment: {types: [pinned]}}
+jobs:
+  respond:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: ${{ github.actor }}

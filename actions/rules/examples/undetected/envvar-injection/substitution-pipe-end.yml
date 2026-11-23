@@ -1,0 +1,23 @@
+# situation: on issues opened, a step closes the standard error, and inside
+#   a $( ) appends V= and the issue's body to $GITHUB_ENV with a redirect
+#   that duplicates descriptor 2 to descriptor 3.
+# reason: a todo (the same file): bash opens the pipe of the $( ) on the
+#   lowest closed descriptors, so descriptor 2 inside the $( ) is the end of
+#   the pipe that reads; the duplicate does not fail, and the body goes to
+#   $GITHUB_ENV.
+# cause: the rule reads descriptor 2 inside the $( ) as closed, and reads
+#   the echo as a command that bash does not run.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          exec 2>&-
+          echo "$( echo "V=$V" >>"$GITHUB_ENV" 3>&2 )"

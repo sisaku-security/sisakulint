@@ -1,0 +1,8 @@
+name: z29
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    name: ${{ format('{0} {1}', 'a') }}
+    steps:
+      - run: echo ok

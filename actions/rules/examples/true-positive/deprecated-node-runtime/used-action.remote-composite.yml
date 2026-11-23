@@ -1,0 +1,13 @@
+# situation: a workflow runs example-org/node-composite@v1, a composite
+#   action of another repository, and a step of that composite action uses
+#   actions/create-release@v1, whose action.yml declares runs.using: node12.
+# reason: the runner runs the inner action on Node.js 24, not on Node.js
+#   12, and adds a warning to the job; action.definition answers the file
+#   of the composite action, as the archive the runner downloads has it.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/node-composite@v1

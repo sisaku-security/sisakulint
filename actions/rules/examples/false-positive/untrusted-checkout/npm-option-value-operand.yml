@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request and runs npm version --preid beta.
+# reason: a todo (the same file): npm version with no operand prints the
+#   version of the package.json and runs no script of the pull request; beta is the
+#   value of the option --preid.
+# cause: the rule reads beta as an operand of npm version, so the rule
+#   reports untrusted-checkout.executed.
+# attack-value: the file package.json in the pull request = "{\"scripts\":{\"preversion\":\"echo PWNED\"}}"
+# attack-run-behavior: npm version --preid beta prints the version and does
+#   not run the script preversion, so PWNED is not printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm version --preid beta

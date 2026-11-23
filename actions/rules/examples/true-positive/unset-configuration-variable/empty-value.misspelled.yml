@@ -1,0 +1,14 @@
+# situation: the job deploys to the URL of the configuration variable
+#   DEPLOY_URL, but the step writes vars.DEPLOY_ULR.
+# reason: no level defines DEPLOY_ULR (the repository level defines
+#   DEPLOY_URL and NODE_VERSION, and the environment production defines
+#   PRODUCTION_KEY_ID), so the script gets the empty string as the URL.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - run: ./deploy.sh "${{ vars.DEPLOY_ULR }}"

@@ -1,0 +1,9 @@
+# situation: the only job calls a reusable workflow of the repository.
+# reason: a job that calls a reusable workflow cannot write timeout-minutes
+#   (the workflow-job of the schema has no such key); the jobs of the called
+#   workflow write timeout-minutes, and the rule reads those jobs in the file
+#   of the called workflow.
+on: push
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml

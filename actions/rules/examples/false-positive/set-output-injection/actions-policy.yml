@@ -1,0 +1,32 @@
+# situation: on pull_request_target, the step p, which has an id, prints the
+#   title of the pull request, and the release step writes the output tag of
+#   the step p into its script.
+# reason: an actor rule of the Actions policies of the repository allows
+#   only the repository roles with write access to trigger the workflow, so a
+#   run that a pull request from an account without write access triggers
+#   fails. GitHub's documents say that GitHub evaluates the policies before a
+#   run, and that a run that a policy does not allow fails with an error; the
+#   documents do not say whether a job of such a run starts before the run
+#   fails, and the rule assumes that no job starts.
+# cause: the rule does not take the actor rules of the Actions policies into
+#   account: repo.pull-request-target-allowed is one value for all the runs of
+#   the workflow file on pull_request_target, and an actor rule blocks a run
+#   by the account that starts the run.
+# attack: the author of a pull request from a fork titles the pull request x
+#   ##[set-output name=tag;]$(id).
+# attack-run-behavior: the account of the attacker is not an allowed actor,
+#   so the run on pull_request_target fails with an error, and no job of the
+#   run starts (the assumption of the reason), so the title is never printed.
+name: policy
+on: pull_request_target
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "pull request: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

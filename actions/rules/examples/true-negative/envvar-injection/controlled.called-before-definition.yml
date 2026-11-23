@@ -1,0 +1,20 @@
+# situation: on issues opened, a step calls f before the function f is
+#   defined, and the body of f writes V= and the issue's body to
+#   $GITHUB_ENV; the call goes on when it fails (|| true).
+# reason: bash finds no function f where f is called, so the body does not
+#   run.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: bash reports that the command f is not found, || true
+#   keeps the step going, and the runner sets no environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          f || true
+          f() { echo "V=$V" >> "$GITHUB_ENV"; }

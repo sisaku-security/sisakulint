@@ -1,0 +1,34 @@
+# situation: on push, the job whose id is disabled has if: false, and the job
+#   whose id is on-failure needs the job build and has if: needs.build.result
+#   == 'failure'; each of the two jobs uses actions/checkout pinned to
+#   70379aad1a8b40919ce8b382d3cd7d0315cde1d0, a commit that only a fork of
+#   actions/checkout has.
+# reason: GitHub skips the job disabled because the if of the job disabled is
+#   false. The if of the job on-failure calls no status function, so GitHub
+#   evaluates the if of the job on-failure only when the job build succeeded;
+#   needs.build.result is then success, and the if is false. When the job
+#   build fails or is skipped, GitHub skips the job on-failure without
+#   evaluating the if. So neither job runs
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md).
+# attack: an attacker pushes a commit to a fork of actions/checkout that the
+#   attacker owns, and the SHA of the commit is written in this workflow.
+# attack-run-behavior: GitHub skips the job disabled and the job on-failure,
+#   so the runner does not fetch the commit 70379aad, and the code of the
+#   commit does not run.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo built
+  disabled:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0
+  on-failure:
+    needs: build
+    if: needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0

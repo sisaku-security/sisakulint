@@ -1,0 +1,23 @@
+# situation: on push, caller.yml calls the reusable workflow called.yml, whose
+#   step sets the env EVENT_COMMITS to toJson of the message of the first
+#   commit of the push and puts ${{env.EVENT_COMMITS}} into the test of an if
+#   of its script. This is ci-test-limited.yml of appsmithorg/appsmith (commit
+#   b447e6a82913ab7188642310d2f83fcb0049bc85, lines 265-268); its caller at
+#   the commit runs on repository_dispatch, and the advisory names no event,
+#   so the caller.yml of this example runs on push.
+# reason: the runner puts the message into the script before bash reads the
+#   script, so the author of the commit writes code that the step runs.
+# attack-value: the message of the first commit of the push = "' ]]; echo PWNED; [[ '"
+# attack-run-behavior: toJson writes the message in double quotes, the
+#   condition of the if becomes [[ '"' ]]; echo PWNED; [[ '"' == 'null' ]],
+#   and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-277_Appsmith/
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          EVENT_COMMITS: ${{ toJson(github.event.commits[0].message) }}
+        run: |
+          if [[ '${{env.EVENT_COMMITS}}' == 'null' ]]; then echo x; fi

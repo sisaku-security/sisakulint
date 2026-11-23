@@ -1,0 +1,26 @@
+# situation: the workflow ci.yml sets ACTIONS_ALLOW_UNSECURE_COMMANDS to
+#   true in the env of its job and calls this composite action on issues
+#   with the title of the issue; the action prints the input in one step
+#   and has a step after.
+# reason: a todo (a file of the repository): the runner reads the flag in
+#   the env context of each step; whether the steps of a composite action
+#   get the flag of the job of the caller was not checked.
+# cause: the rule reads the flag in the env of the steps of the action and
+#   in $GITHUB_ENV, not in the env of the caller.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: not checked: if the steps of the action get the
+#   flag, the runner sets BASH_ENV, and the bash of the step after runs id.
+name: print
+description: prints its input
+inputs:
+  text:
+    description: the text
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        TEXT: ${{ inputs.text }}
+      run: echo "$TEXT"
+    - shell: bash
+      run: echo next

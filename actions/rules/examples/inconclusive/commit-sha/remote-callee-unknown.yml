@@ -1,0 +1,24 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/commit-sha-unknown, whose content is the
+#   workflow of the true positive unpinned (unpinned.yml) of the rule, with
+#   on: workflow_call in place of the on of unpinned.yml. The linter asked
+#   the fact workflow.definition for the reusable workflow and got no
+#   answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack: the owner of actions/checkout, or whoever has taken over a token
+#   that pushes to it, moves the tag v4 to a commit of theirs, as the tags
+#   v1 to v45.0.7 of tj-actions/changed-files were moved in 2025 to a commit
+#   that prints secrets to the log.
+# attack-run-behavior: when the job runs, the runner resolves @v4 to that
+#   commit instead of 11d5960a, downloads it and runs its action as the
+#   step, in the job's workspace and environment, with the GITHUB_TOKEN
+#   actions/checkout takes by default; the moved commit of
+#   tj-actions/changed-files printed the job's secrets to the log.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/commit-sha-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

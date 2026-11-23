@@ -1,0 +1,9 @@
+name: z09
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "withJson()"
+      run: echo ran
+    - shell: bash
+      run: echo after

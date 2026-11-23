@@ -1,0 +1,12 @@
+on:
+  schedule:
+    - cron: '0 * * * *'
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr list --repo "$REPO" --search '[site] in:title' --json number -q '.[].number' | xargs -I{} gh pr edit {} --repo "$REPO" --add-label safe-to-test
+        env:
+          GH_TOKEN: ${{ secrets.LABELER_PAT }}
+          REPO: ${{ github.repository }}

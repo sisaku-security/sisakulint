@@ -1,0 +1,38 @@
+# situation: on pull_request_target, actions/checkout checks out the merge
+#   commit of the pull request into the root of the workspace, and
+#   check-spelling v0.0.18 (before v0.0.19) reads the files of the checkout.
+#   The job is .github/workflows/spelling.yml of check-spelling/check-spelling
+#   v0.0.18 (commit 08f08a6ff6b9ebae06cb8fe463374a8a5a37e03c, lines 1-21 and
+#   27-30), with uses: ./ (the action of its own repository) written as the
+#   action of the repository check-spelling/check-spelling at the same commit;
+#   the events push and issue_comment, the if of the checkout and the second
+#   checkout are left out.
+# reason: pull_request_target runs the job with the base repository's token,
+#   while the merge commit holds the files the author of the pull request, from
+#   a fork too, pushed, so the files that check-spelling reads are the author's.
+#   GHSA-g86g-chm8-7r2p says that "an attacker can send a crafted Pull Request
+#   that causes a GITHUB_TOKEN to be exposed" through a symlink. The finding
+#   does not say what runs after the checkout: the linter assumes that a step
+#   after the checkout runs the files of the checkout unless a file of facts
+#   answers otherwise (the fact checkout.executed).
+# attack: the author of a pull request from a fork commits a symbolic link to a
+#   file of the runner that holds the token, and opens the pull request.
+# attack-run-behavior: check-spelling reads the file that the link names as a
+#   file of the pull request and puts its words, the token among them, in its
+#   report, which anyone who reads the log or the comment reads; with the token
+#   the attacker pushes to the base repository.
+# advisory: https://github.com/advisories/GHSA-g86g-chm8-7r2p
+on: pull_request_target
+jobs:
+  build:
+    name: Spell checker
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout-merge
+        uses: actions/checkout@v2.0.0
+        with:
+          ref: refs/pull/${{github.event.pull_request.number}}/merge
+      - name: check-spelling
+        uses: check-spelling/check-spelling@08f08a6ff6b9ebae06cb8fe463374a8a5a37e03c # v0.0.18
+        with:
+          experimental_apply_changes_via_bot: 1

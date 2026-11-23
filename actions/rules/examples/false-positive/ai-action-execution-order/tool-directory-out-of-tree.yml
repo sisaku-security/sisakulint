@@ -1,0 +1,28 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the workspace, and a later step runs npm ci with the
+#   working-directory ${{ runner.temp }}.
+# reason: a todo (the same file): npm ci runs in runner.temp, out of
+#   the workspace that the agent may edit, and reads the package.json of runner.temp, so npm runs no
+#   code of the workspace that the agent may edit.
+# cause: the rule also reads a tool whose directory is out of the tree as
+#   a tool that may run in the root of the workspace, so the rule reports
+#   ai-action-execution-order.edited-code.
+# attack-value: the file package.json in the workspace that the agent may edit = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm ci in runner.temp finds no package.json of the
+#   attacker and does not run the script preinstall, so PWNED is not
+#   printed.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+      - run: npm ci
+        working-directory: ${{ runner.temp }}

@@ -1,0 +1,9 @@
+high      commit-sha.unpinned              ×22 (14 messages)  .github/workflows/all-rules.yml:10:32
+high      impostor-commit.fork-commit      ×1  .github/workflows/all-rules.yml:13:32
+high      commit-sha.unpinned-path-action  ×1  .github/workflows/quality.yml:62:34
+
+inputs        24 read  (every workflow and action.yml under --root)
+
+rules  2 of 47 ran: commit-sha, impostor-commit
+24 findings: 24 confirmed (high 24), 0 conditional, 0 inconclusive
+bits 1 = 1 (confirmed findings)

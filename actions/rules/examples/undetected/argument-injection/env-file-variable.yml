@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step writes the name of the pull
+#   request's head branch to $GITHUB_ENV as BRANCH, and the next step passes
+#   $BRANCH to tar after the file names, inside quotes.
+# reason: a todo (the same file): BRANCH holds the branch's name in the
+#   steps after the first, and reading what a step writes to $GITHUB_ENV
+#   would find it.
+# cause: the rule reads the variables of the workflow's env (workflow, job
+#   and step); BRANCH is set by a step at run time.
+# attack-value: github.head_ref = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: the runner sets BRANCH to the value in the second
+#   step, and tar reads "$BRANCH" as --to-command and runs echo${IFS}PWNED
+#   through the shell for notes.txt as it extracts it, which prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: echo "BRANCH=$HEAD_REF" >> "$GITHUB_ENV"
+      - run: tar -xf archive.tar notes.txt "$BRANCH"

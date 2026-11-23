@@ -1,0 +1,26 @@
+# situation: on issue_comment, the job runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains('alice bob', the commenter's
+#   login) holds. draft-new-release.yml of
+#   thomaseizinger/github-action-gitflow-release-workflow (commit
+#   4eec5c972a744f1da50b9fc9485f39d12f95d400, GHSL-2020-186) runs its job on
+#   issues only if contains('thomaseizinger,yourusername',
+#   github.event.issue.user.login) holds (line 14).
+# reason: contains with a string as its first argument looks for a
+#   substring, not a member of a list, so any login that is a part of
+#   'alice bob', such as ali, passes the if, and anyone with such a login can
+#   comment on an issue.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: a comment by the account ali on any issue starts the
+#   job deploy on issue_comment; contains('alice bob', 'ali') is true, as
+#   ali is a part of alice, so ./deploy.sh runs with TOKEN set to
+#   DEPLOY_TOKEN's value.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-186-thomaseizinger-gitflow-workflow/
+on: issue_comment
+jobs:
+  deploy:
+    if: contains('alice bob', github.event.comment.user.login)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

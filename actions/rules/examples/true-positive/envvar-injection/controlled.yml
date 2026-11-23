@@ -1,0 +1,22 @@
+# situation: on issues opened, a step writes body= and the issue's body to
+#   $GITHUB_ENV.
+# reason: anyone who opens an issue writes its body, and the runner reads
+#   $GITHUB_ENV one line at a time as NAME=value, so a line of the body such
+#   as LD_PRELOAD=... or BASH_ENV=... becomes a variable of its own, which
+#   changes what the programs of the later steps load.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds x, a line break and PWNED=1, so echo
+#   appends the two lines body=x and PWNED=1 to $GITHUB_ENV; the runner
+#   reads each line as NAME=value and sets body to x and PWNED to 1 for the
+#   steps after it. A line BASH_ENV=$(...) or LD_PRELOAD=<path> in place of
+#   PWNED=1 is set the same way.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$BODY" >> "$GITHUB_ENV"

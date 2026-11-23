@@ -1,0 +1,35 @@
+# situation: labeler.yml runs, on pull_request_target, actions/checkout of
+#   the head of the pull request into the workspace, then npm --cache view
+#   ci, then actions/labeler with if: failure() and a personal access token;
+#   the configuration .github/labeler.yml adds the label test to a pull
+#   request that changes a file under site/; labeled.yml runs on
+#   pull_request_target on labeled when contains('safe-to-test',
+#   github.event.label.name) is true, which the label test makes true.
+# reason: a limitation (run time): npm reads view as the value of the
+#   option --cache, which takes a value, and runs npm ci, which runs the
+#   script preinstall of the package.json of the pull request, which can
+#   fail the step, so that actions/labeler adds the label test; which
+#   options take a value is in the definitions of the npm release that the
+#   job uses, which is known when the job runs.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command as the npm command, so the rule reads npm --cache view ci as
+#   npm view, a step that runs no code of the pull request and that the
+#   attacker cannot make fail, and reads the label as one that a person
+#   adds.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"exit 1\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; npm --cache view ci runs the script
+#   preinstall, which fails the step, actions/labeler adds the label test,
+#   and labeled.yml starts for the pull request with no person approving it.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

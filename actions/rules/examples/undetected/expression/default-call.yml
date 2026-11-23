@@ -1,0 +1,19 @@
+# situation: the boolean input dry-run of a reusable workflow has a default
+#   that calls format() with a placeholder and no argument for it.
+# reason: format() fails when GitHub evaluates the default, so GitHub likely
+#   does not start a job that calls the workflow.
+# cause: the rule reads the default of an input for its type only, since
+#   what GitHub does with such a call in a default was not tried.
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        type: boolean
+        default: ${{ format('{0}{1}', 'a') == 'a' }}
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh

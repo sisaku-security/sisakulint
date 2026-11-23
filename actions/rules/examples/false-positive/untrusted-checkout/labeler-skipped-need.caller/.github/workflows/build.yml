@@ -1,0 +1,10 @@
+on: workflow_call
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

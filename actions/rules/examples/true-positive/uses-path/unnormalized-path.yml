@@ -1,0 +1,15 @@
+# situation: a step uses actions/cache/restore/../save, pinned to a full
+#   SHA, after a build.
+# reason: the runner resolves .. as text, so the step runs
+#   actions/cache/save; a person or a tool that reads the path as written
+#   may take the step for actions/cache/restore.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+      - uses: actions/cache/restore/../save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: build
+          key: build-${{ github.sha }}

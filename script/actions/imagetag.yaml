@@ -1,6 +1,0 @@
-on: [push, pull_request]
-jobs:
-  container-test-job:
-    runs-on: ubuntu-latest
-    container:
-      image: node:latest

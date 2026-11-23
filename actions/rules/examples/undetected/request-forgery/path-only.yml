@@ -1,0 +1,19 @@
+# situation: on issues, a step sends a request with curl and the secret
+#   DEPLOY_TOKEN to api.example.com, with the issue's title in the path.
+# reason: a todo (a fact): the title can name another endpoint of the same
+#   host, and what the secret does there depends on the endpoints of
+#   api.example.com.
+# cause: the rule reports a value that decides the host only.
+# attack: the attacker opens an issue titled ../admin/users, a path of
+#   another endpoint of api.example.com.
+# attack-run-behavior: curl sends the request with the secret to that other
+#   endpoint of api.example.com.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://api.example.com/v1/${{ github.event.issue.title }}"

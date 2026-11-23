@@ -1,0 +1,12 @@
+name: z13
+inputs:
+  i:
+    description: i
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "always('x')"
+      run: echo ran
+    - shell: bash
+      run: echo after

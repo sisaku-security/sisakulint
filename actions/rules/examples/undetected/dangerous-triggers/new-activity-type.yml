@@ -1,0 +1,22 @@
+# situation: on issues of an activity type added_later, a job with issues
+#   write runs.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack: the attacker does on an issue the act whose activity type GitHub
+#   names added_later.
+# attack-run-behavior: where GitHub has that activity type, the act starts
+#   the job j on issues with issues: write; the job runs echo hi, and a flaw
+#   in its steps would run the attacker's code with that token.
+on:
+  issues:
+    types: [added_later]
+permissions:
+  issues: write
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi

@@ -1,0 +1,34 @@
+# situation: on push, the env of the workflow has the whole secret TOKEN
+#   under TOKEN, the whole env of the job `read` is the configuration
+#   variable JOB_ENV read by fromJSON, which has no TOKEN, and an output of
+#   the job `read` is env.TOKEN and the password of the JSON secret DB; the
+#   later job `print` prints the output.
+# reason: if GitHub takes such an env, env.TOKEN is the whole secret TOKEN
+#   of the env of the workflow, which the runner masks; the runner drops the
+#   output, and the job `print` gets an empty value.
+# cause: the rule reads env.TOKEN as a variable that the env written as one
+#   ${{ }} may replace, so the rule reads the output as an output that the
+#   runner may keep.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` to read the password.
+# attack-run-behavior: if GitHub takes such an env, the job `read` warns
+#   that it skips the output credential since the output may contain a
+#   secret; the header of the step of the job `print` shows the run: script
+#   of the step with an empty value.
+on: push
+permissions: {}
+env:
+  TOKEN: ${{ secrets.TOKEN }}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.JOB_ENV) }}
+    outputs:
+      credential: ${{ env.TOKEN }}-${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.credential }}"

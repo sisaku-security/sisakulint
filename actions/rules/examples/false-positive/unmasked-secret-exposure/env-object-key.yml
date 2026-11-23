@@ -1,0 +1,22 @@
+# situation: on push, the env of the job has the whole secret TOKEN under
+#   TOKEN, and a step reads TOKEN back out of the JSON of the whole env with
+#   fromJSON(toJSON(env)).TOKEN in its env.
+# reason: fromJSON(toJSON(env)).TOKEN is the whole secret TOKEN, which the
+#   runner masks, so the header of the step prints TOKEN as ***.
+# cause: the rule reads the JSON of the whole env as a JSON secret, and a
+#   value that fromJSON reads out of the JSON of the whole env as a value
+#   taken out of a secret.
+# attack: one who may read the log of the run opens the log to read the
+#   secret TOKEN.
+# attack-run-behavior: the header of the step prints TOKEN as ***.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+    steps:
+      - env:
+          TOKEN_AGAIN: ${{ fromJSON(toJSON(env)).TOKEN }}
+        run: ./deploy.sh

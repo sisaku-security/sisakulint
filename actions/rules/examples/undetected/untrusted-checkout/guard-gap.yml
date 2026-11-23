@@ -1,0 +1,22 @@
+# situation: on pull_request_target, actions/checkout@v4 checks out the pull
+#   request's head SHA, and npm ci runs.
+# reason: a limitation (run time): the guard checks a fork by the id of the
+#   head repository in the event (actions/checkout v7.0.1
+#   src/unsafe-pr-checkout-helper.ts:53); a fork deleted since the pull
+#   request has none, and the checkout is let through at run time.
+# cause: the rule takes @v4 as refusing, and reports nothing.
+# attack: the author opens the pull request from a fork whose package.json
+#   has a preinstall that prints PWNED, and deletes the fork before the run.
+# attack-run-behavior: the event then has no id of the head repository, so
+#   the guard of actions/checkout lets the checkout through; it fetches
+#   head.sha, which refs/pull/<n>/head keeps, and npm ci runs the preinstall
+#   with the base repository's GITHUB_TOKEN in .git/config and its secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

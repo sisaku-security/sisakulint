@@ -1,0 +1,19 @@
+# situation: on issues opened, a step prints V= and the issue's body to the
+#   standard error of a group, and pipes the standard output and the
+#   standard error of the group with |& to tee, which appends them to
+#   $GITHUB_ENV.
+# reason: the |& points the standard error of the group to the pipe, so the
+#   body goes to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          { echo "V=$V" >&2; } |& tee -a "$GITHUB_ENV" >/dev/null

@@ -1,0 +1,8 @@
+name: u01
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ fromJSON(github.event.commits.*.id) }}"
+      - run: echo after

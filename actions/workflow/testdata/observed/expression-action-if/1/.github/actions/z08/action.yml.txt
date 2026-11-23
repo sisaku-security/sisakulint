@@ -1,0 +1,9 @@
+name: z08
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "${{ vars.FOO == '' }}"
+      run: echo ran
+    - shell: bash
+      run: echo after

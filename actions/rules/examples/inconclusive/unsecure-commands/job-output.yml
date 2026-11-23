@@ -1,0 +1,30 @@
+# situation: on issues, a job b prints the output o of the job a it needs,
+#   which a step of a writes. The job b sets ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   to true, and a step comes after.
+# reason: the output is known at run time only, so whether an attacker
+#   controls it is not known.
+# cause: the rule does not yet follow what a script writes to
+#   $GITHUB_OUTPUT.
+# attack: an attacker who controls the output writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs.o }}
+    steps:
+      - id: s
+        run: echo "o=x" >> "$GITHUB_OUTPUT"
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ needs.a.outputs.o }}"
+      - run: echo next

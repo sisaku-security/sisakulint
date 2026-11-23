@@ -1,0 +1,16 @@
+# situation: a workflow makes a GitHub release with
+#   actions/create-release@v1, whose repository GitHub archived.
+# reason: an archived repository is read-only: an error or a vulnerability
+#   found in the action is never fixed in that repository, and the runner
+#   still downloads and runs v1.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-release@v1
+        with:
+          tag_name: v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

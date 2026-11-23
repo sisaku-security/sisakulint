@@ -1,0 +1,1 @@
+{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v4"},"state":"found","value":{"ref":"refs/tags/v4","sha":"1111111111111111111111111111111111111111"}}]}

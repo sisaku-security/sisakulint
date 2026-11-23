@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step whose env sets POSIXLY_CORRECT
+#   prints a file with sed -n p, passing the pull request's title after the
+#   script p, through env and inside quotes.
+# reason: with POSIXLY_CORRECT in the environment, GNU sed stops reading
+#   options at its first operand, the script p, so it reads the title as a
+#   name of a file and runs nothing (tar and make still read options there).
+# cause: the rule reads sed as a command that reads options after its
+#   operands, whatever its environment.
+# attack-value: github.event.pull_request.title = "--expression=1e echo PWNED"
+# attack-run-behavior: sed takes the word as a file to read, fails to open
+#   it, and prints notes.txt; without POSIXLY_CORRECT it would read the word
+#   as --expression and run echo PWNED.
+on: pull_request_target
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          POSIXLY_CORRECT: "1"
+          TITLE: ${{ github.event.pull_request.title }}
+        run: sed -n p "$TITLE" notes.txt

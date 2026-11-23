@@ -1,0 +1,23 @@
+# situation: on push, the env of the job has the JSON secret DB under DB,
+#   the whole env of a step is the configuration variable STEP_ENV read by
+#   fromJSON, which has a JSON literal under DB, and the run of the step
+#   takes the password out of env.DB with fromJSON.
+# reason: if GitHub takes such an env, DB of the env of the step replaces
+#   DB of the env of the job, so env.DB is the JSON literal, which holds no
+#   secret.
+# cause: the rule skips an env written as one ${{ }} and reads env.DB from
+#   the env of the job.
+# attack: one who may read the log of the run opens the log to read the
+#   password.
+# attack-run-behavior: if GitHub takes such an env, the header of the step
+#   prints the run with the value of the JSON literal.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      DB: ${{ secrets.DB }}
+    steps:
+      - env: ${{ fromJSON(vars.STEP_ENV) }}
+        run: ./migrate.sh "${{ fromJSON(env.DB).password }}"

@@ -1,0 +1,24 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step runs in the background (&), with no wait, a subshell that sleeps 5
+#   seconds and then writes P= and the secret DEPLOY_TOKEN without the first
+#   character of the secret to $GITHUB_ENV; the shell of the script ends
+#   before the write; a later step runs.
+# reason: a write that the background command makes after the shell of the
+#   script ends does not reach the steps after the step (seen on the runner
+#   on 2026-11-17), so the header of the later step prints no P.
+# cause: the rule reads the write in the background as a write that reaches
+#   $GITHUB_ENV, and does not read when the background command writes.
+# attack: anyone who can read the run opens the log of the run and reads
+#   the secret.
+# attack-run-behavior: the header of the later step has no P in its env.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          (sleep 5; echo "P=${DEPLOY_TOKEN:1}" >> "$GITHUB_ENV") &
+      - run: echo done

@@ -1,0 +1,26 @@
+# situation: google-github-actions/auth leaves a Workload Identity
+#   Federation file, and actions/upload-artifact@v3.1.3 uploads the
+#   workspace.
+# reason: no added gain: the file works while the job runs, and the artifact
+#   of v3 is there only after the run.
+# cause: the rule leaves out a credential of the job whose upload cannot be
+#   downloaded during the run (actions/upload-artifact before v4).
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes from gha-creds-*.json its credential_source: the URL of
+#   the OIDC token request and the bearer token of its Authorization header.
+# attack-run-behavior: google-github-actions/auth writes
+#   gha-creds-<hex>.json with the OIDC request URL and token, and
+#   actions/upload-artifact@v3.1.3 puts it in an artifact that can be
+#   downloaded only after the run ends; by then the request token gets no
+#   OIDC token, and the reader cannot use it.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with: {workload_identity_provider: projects/1/locations/global/workloadIdentityPools/p/providers/g}
+      - uses: actions/upload-artifact@v3.1.3
+        with: {path: .}
+      - run: echo after

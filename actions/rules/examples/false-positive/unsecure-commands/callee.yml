@@ -1,0 +1,20 @@
+# situation: a reusable workflow that sets ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   to true and prints the title of an issue, and that only the
+#   repository's own workflows call, all of them on push.
+# reason: the issue the workflow reads is never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack: an outsider cannot start a caller on issues.
+# attack-run-behavior: called on push, the event has no issue, so the step
+#   prints an empty line and nothing is set.
+on: workflow_call
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: echo "$V"
+      - run: echo next

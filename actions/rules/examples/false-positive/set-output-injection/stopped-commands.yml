@@ -1,0 +1,24 @@
+# situation: on issues, the step p prints the title of the issue between
+#   ::stop-commands::stop-6a1f2c and ::stop-6a1f2c::, and the release
+#   step writes the output tag of the step p into its script.
+# reason: the runner reads no command between ::stop-commands::TOKEN and
+#   ::TOKEN::, so the title sets no output.
+# cause: the rule does not read stop-commands.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the runner prints the title as text, the output
+#   tag stays empty, and the release step runs with an empty tag.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "::stop-commands::stop-6a1f2c"
+          echo "$TITLE"
+          echo "::stop-6a1f2c::"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

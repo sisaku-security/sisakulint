@@ -1,0 +1,17 @@
+# situation: a workflow builds and tests a project on Node.js 22, which is
+#   supported until 2027-04-30.
+# reason: from 2027-05-01, the build runs on a Node.js version that no
+#   longer gets security fixes.
+# cause: the rule has the table of the major versions whose support had
+#   ended on 2026-10-20, the day the table was written; Node.js 22 was
+#   still supported on that day, so Node.js 22 is not in the table.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm test

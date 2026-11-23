@@ -1,0 +1,22 @@
+# situation: on issues opened, a step calls in ( ... ) a function that sets out
+#   to $GITHUB_ENV, and after the ( ... ) writes V= and the issue's body to
+#   "$out", and goes on when the write fails (|| true).
+# reason: the function runs in the subshell, so after the subshell out is
+#   empty, and the body does not go to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: out is empty when echo runs, so bash cannot open the
+#   file and writes nothing, || true keeps the step going, and the runner
+#   sets no environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          f() { out=$GITHUB_ENV; }
+          ( f )
+          echo "V=$V" >> "$out" || true

@@ -1,0 +1,15 @@
+# situation: a workflow sets up the Node.js version that the file .nvmrc of
+#   the repository names, and .nvmrc says 18.
+# reason: the support of Node.js 18 ended on 2025-04-30, so the build runs
+#   on a Node.js version that no longer gets security fixes.
+# cause: the rule does not read the file that node-version-file names.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - run: npm test

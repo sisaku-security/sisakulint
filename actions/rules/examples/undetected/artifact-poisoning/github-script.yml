@@ -1,0 +1,35 @@
+# situation: on workflow_run, actions/github-script lists the artifacts of
+#   the run workflow_run follows, downloads the first as out.zip, and a run
+#   unzips it and runs ./run.sh. GHSL-2025-087 has the same download:
+#   docs_pr_comment.yml of PX4/PX4-Autopilot (commit
+#   8c6337e94eccfdd4dc8bce3df10b644ed16d72ba, lines 14-36) downloads the
+#   artifact pr_number of the run of docs_flaw_checker.yml on
+#   pull_request_target with github-script and unzips it; there the files
+#   are read with juliangruber/read-file-action and written into a run by
+#   ${{ }} (line 59), not run as a script.
+# reason: a todo (the same file): the script downloads the artifact; reading
+#   the script would find it.
+# cause: scripts are not read for a download: the rule reads
+#   actions/download-artifact and dawidd6/action-download-artifact.
+# attack-value: the file run.sh in the first artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the script downloads the first artifact of the run
+#   workflow_run follows, the fork's ci run, as out.zip with the job's
+#   token; unzip puts run.sh in the workspace, and ./run.sh runs it, which
+#   prints PWNED, with the base repository's secrets.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-087_PX4_PX4-Autopilot/
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const all = await github.rest.actions.listWorkflowRunArtifacts({owner: context.repo.owner, repo: context.repo.repo, run_id: context.payload.workflow_run.id});
+            const d = await github.rest.actions.downloadArtifact({owner: context.repo.owner, repo: context.repo.repo, artifact_id: all.data.artifacts[0].id, archive_format: 'zip'});
+            require('fs').writeFileSync('out.zip', Buffer.from(d.data));
+      - run: unzip out.zip && ./run.sh

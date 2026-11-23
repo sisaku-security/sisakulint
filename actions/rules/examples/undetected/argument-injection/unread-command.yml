@@ -1,0 +1,23 @@
+# situation: on pull_request_target, a step extracts an archive inside a
+#   clause of case and passes the pull request's title to tar after the
+#   file names, through env and inside quotes.
+# reason: a todo (the same file): the tar in the clause runs as any other
+#   command does, and walking the commands of each clause of case would
+#   find the tar.
+# cause: the parser of the script finds the case statement but does not
+#   read the commands in the clauses of the case statement.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: the clause a) runs, and tar reads the title as
+#   --to-command and runs echo PWNED for notes.txt as tar extracts it,
+#   which prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          case a in
+            a) tar -xf archive.tar notes.txt "$TITLE" ;;
+          esac

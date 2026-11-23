@@ -1,0 +1,25 @@
+# situation: the workflow is a reusable workflow (workflow_call) with the
+#   input x, and a step writes inputs.x to $GITHUB_ENV by ${{ }}.
+# reason: the value of inputs.x is what the caller gives, and no file read
+#   here calls this workflow, so whether an attacker controls it is not
+#   known.
+# cause: the rule reads what each caller among the files read gives
+#   inputs.x, and decides only when those are every caller: the files read
+#   are the whole repository and every call to this workflow is resolved.
+#   Here no file read calls it; a caller in another repository is never
+#   read.
+# attack-value: inputs.x = "x\nPWNED=1"
+# attack-run-behavior: when a caller gives x an attacker's text such as this
+#   value (a caller on issues passing the issue's body), the script becomes
+#   echo "v=x<line break>PWNED=1" >> "$GITHUB_ENV", which appends v=x and
+#   PWNED=1; the runner sets v to x and PWNED to 1.
+on:
+  workflow_call:
+    inputs:
+      x:
+        type: string
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ inputs.x }}" >> "$GITHUB_ENV"

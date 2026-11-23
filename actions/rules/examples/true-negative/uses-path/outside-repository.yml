@@ -1,0 +1,9 @@
+# situation: a step uses example-org/ci-tools/lint by a full SHA.
+# reason: the path stays in the repository, so the full SHA decides the
+#   code that runs.
+on: push
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/ci-tools/lint@11bd71901bbe5b1630ceea73d27597364c9af683

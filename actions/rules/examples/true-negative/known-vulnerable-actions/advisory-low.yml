@@ -1,0 +1,18 @@
+# situation: the same job with Azure/setup-kubectl pinned to the commit of
+#   v3.2.
+# reason: GHSA-p756-rfxh-x63h says v3 and later use 755 permissions; GitHub
+#   gives no advisory for 3.2.
+# attack: an install script of a dependency, or any other process on the
+#   runner, writes a kubectl of its own over the binary.
+# attack-run-behavior: the binary is not writable by others, so the write
+#   fails and the later step runs the kubectl the action installed.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Azure/setup-kubectl@901a10e89ea615cf61f57ac05cecdf23e7de06d8 # v3.2
+      - run: npm ci && npm test
+      - run: kubectl apply -f deploy.yaml
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}

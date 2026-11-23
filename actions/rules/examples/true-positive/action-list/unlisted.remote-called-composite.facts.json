@@ -1,0 +1,20 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"example-org/composite-in-workflow","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: composite\n  steps:\n    - uses: example-org/unlisted-step@v1\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"example-org/unlisted-step","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"example-org/composite-in-workflow","ref":"v1"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"example-org/unlisted-step","ref":"v1"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"unlisted.remote-called-composite.yml"},"state":"found","value":true},
+{"query":{"kind":"git.ref-commit","repo":"example-org/composite-in-workflow","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"git.ref-commit","repo":"example-org/composite-workflow","ref":"v1"},"state":"found","value":{"ref":"refs/tags/v1","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"example-org/composite-in-workflow"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/composite-workflow"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/composite-workflow/.github/workflows/build.yml"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/unlisted-step"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"example-org/composite-in-workflow"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"example-org/composite-workflow"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"example-org/unlisted-step"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"workflow.definition","repo":"example-org/composite-workflow","path":".github/workflows/build.yml","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"on: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: example-org/composite-in-workflow@v1\n"}},
+{"query":{"kind":"workflow.definition","repo":"example-org/composite-workflow","path":".github/workflows/build.yml","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"on: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: example-org/composite-in-workflow@v1\n"}}
+]}

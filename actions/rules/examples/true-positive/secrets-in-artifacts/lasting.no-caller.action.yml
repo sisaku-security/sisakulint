@@ -1,0 +1,29 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; google-github-actions/auth writes the service account key of
+#   inputs.credentials_json to gha-creds-*.json in the workspace, and
+#   actions/upload-artifact uploads the workspace.
+# reason: path: . puts gha-creds-*.json in the artifact, and a service
+#   account key works until someone deletes the key in Google Cloud, not only
+#   while the job runs.
+# attack: a reader of the artifacts of the repository (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the service
+#   account key from gha-creds-*.json.
+# attack-run-behavior: google-github-actions/auth writes the service account
+#   key the caller gives as credentials_json to gha-creds-<hex>.json at the
+#   top of the workspace, and the upload of path . puts the file in the
+#   artifact; the key keeps working after the run until someone deletes the
+#   key in Google Cloud.
+name: build
+description: authenticate and upload the workspace
+inputs:
+  credentials_json:
+    description: the key of the service account
+runs:
+  using: composite
+  steps:
+    - uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ inputs.credentials_json }}
+    - uses: actions/upload-artifact@v4
+      with:
+        path: .

@@ -1,0 +1,23 @@
+# situation: a step that uses untrusted/pre-action@v1 has if: false;
+#   repo.action-list is * and patterns that start with !, among them
+#   !untrusted/*; the action.yml of untrusted/pre-action has pre: pre.js.
+# reason: the runner prepares the action of every step of the job when the job
+#   starts, regardless of the if of each step, and runs the pre of an action
+#   whose pre-if is not set, because pre-if is always() when the action.yml
+#   does not set pre-if; so the code of pre.js runs in the job although the
+#   step does not run
+#   (https://github.com/actions/runner/blob/7e211dc69c347b78fc398e630e74facb11a13235/src/Runner.Worker/JobExtension.cs,
+#   https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/metadata-syntax.md).
+# attack: the maintainer of untrusted/pre-action writes code that reads the
+#   secrets of the job into the pre.js of the commit that v1 names.
+# attack-run-behavior: when the job starts, the runner downloads
+#   untrusted/pre-action at v1 and runs pre.js with the secrets and the
+#   GITHUB_TOKEN of the job, then skips the step.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+      - if: false
+        uses: untrusted/pre-action@v1

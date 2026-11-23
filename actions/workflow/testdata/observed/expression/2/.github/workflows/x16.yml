@@ -1,0 +1,12 @@
+name: x16
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        x: [probe-image]
+    snapshot:
+      image-name: ${{ matrix.x }}
+    steps:
+      - run: echo ok

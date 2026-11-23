@@ -1,0 +1,11 @@
+critical  code-injection.controlled  ×5 (2 messages)  .github/workflows/env.yml:8:24
+critical  code-injection.wiki        ×1  .github/workflows/wiki.yml:8:24
+high      commit-sha.unpinned        ×7 (3 messages)  .github/workflows/alias.yml:6:36 via alias at 10:15
+
+conditional   impostor-commit.fork-commit  ×2, 1 unknown  (offline: pass --facts or --online)
+inconclusive  10 findings (code-injection, known-vulnerable-actions)
+inputs        5 read, 1 invalid  (every workflow and action.yml under --root)
+
+25 findings: 13 confirmed (critical 6, high 7), 2 conditional, 10 inconclusive
+30 quality findings: the bits do not count quality findings
+bits 27 = 1 (confirmed findings) + 2 (conditional findings) + 8 (inconclusive findings) + 16 (inputs not valid)

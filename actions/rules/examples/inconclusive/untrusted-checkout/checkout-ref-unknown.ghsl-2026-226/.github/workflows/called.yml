@@ -1,0 +1,27 @@
+# situation: on issue_comment, the job create-test-release of caller.yml
+#   checks out the commit of the output head_sha of its step pr and uploads
+#   frontend/ as an artifact, and the job publish calls the reusable workflow
+#   called.yml, which downloads the artifact and runs npm publish with
+#   id-token: write. This is marimo-bot.yml of marimo-team/marimo (commit
+#   b4181abaf6bd896b6b0dac5490c9cf08269b590c, line 68) and publish-npm.yml.
+# reason: the ref of the checkout is an output of a step, and the rule does
+#   not read the script that writes the output (the head commit of the pull
+#   request in marimo-bot.yml).
+# attack: the author of a pull request writes the build scripts of the
+#   frontend in the head commit, and a comment starts the run.
+# attack-run-behavior: the job checks out the head commit, the scripts of
+#   the author make frontend/, and the job publish publishes that package
+#   with the provenance of the repository.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-226_marimo-team_marimo_repository/
+on:
+  workflow_call:
+    inputs:
+      package-artifact-name: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.package-artifact-name }}
+      - run: npm publish --provenance

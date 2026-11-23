@@ -1,0 +1,16 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_ENV.
+# reason: another rule's: envvar-injection reports a value written to
+#   $GITHUB_ENV.
+# cause: the rule reads writes to $GITHUB_OUTPUT only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo writes the lines b=x and PWNED=1 to $GITHUB_ENV,
+#   and the runner sets the env b and PWNED of the later steps; nothing is
+#   written to $GITHUB_OUTPUT.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$B" >> "$GITHUB_ENV"

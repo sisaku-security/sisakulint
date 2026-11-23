@@ -1,0 +1,19 @@
+# situation: on issues opened, a step writes V= and the issue's body to
+#   $GITHUB_ENV with echo, after an assignment of an element of an array
+#   before the command word (a[0]=x echo ...).
+# reason: bash refuses the assignment of the element before the command word
+#   and runs echo, so a line break in the body adds another environment
+#   variable.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the runner sets PWNED=1 as an environment variable of
+#   the steps after.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: a[0]=x echo "V=$V" >> "$GITHUB_ENV"

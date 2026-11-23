@@ -1,0 +1,15 @@
+# situation: on issues labeled, a run writes the label's name by ${{ }}.
+# reason: only those who can write to the repository create a label, so its
+#   name is no attacker's.
+# cause: the webhook schema gives the name no enum, and the table reads a
+#   free string as arbitrary.
+# attack-value: github.event.label.name = "\"; echo PWNED; echo \""
+# attack-run-behavior: no attacker can name a label; were the name the
+#   value, the script would become echo ""; echo PWNED; echo "", and bash
+#   would run the second echo as a command.
+on: {issues: {types: [labeled]}}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.label.name }}"

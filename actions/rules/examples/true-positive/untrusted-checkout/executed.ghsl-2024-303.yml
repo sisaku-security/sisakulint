@@ -1,0 +1,45 @@
+# situation: on issue_comment, when the comment is on a pull request and starts
+#   with validate, actions/checkout checks out refs/pull/<number>/head and a
+#   step runs python -m pip install -r requirements.txt over the checkout. This
+#   is the job pr_commented of pr-comment-validate.yml of Tribler/tribler
+#   (commit 55b1e30288ed85bbe660ef8c59d1544c3116283a, lines 1-10, 17-21 and
+#   32); the needs, the matrix of the job, the setup of Python, the cache, the
+#   steps that run the tests and the other jobs are left out.
+#   marimo-bot.yml of marimo-team/marimo (commit
+#   0a45dced1a3b0c5d65a2cdd758f97baf30fcb9d8, GHSL-2024-313) has the same form:
+#   on a comment with /marimo create-test-release, it checks out
+#   refs/pull/<number>/head and runs make fe over the checkout; trivy.yaml of
+#   k3s-io/k3s (commit 61c7011cab263efb3a836e6b2738fb93f581c5ef, GHSL-2024-207)
+#   does the same on a comment with /trivy and runs make local, and
+#   benchmark.yml of withastro/astro (commit
+#   75d118bf7f06f11df05b2337bf615e83c3681d0e, GHSL-2024-149) on a comment with
+#   !bench and runs pnpm install.
+# reason: issue_comment runs the job with the base repository's token, which
+#   the advisory says writes ("As the runner has full write permission"), and
+#   anyone who may comment on the pull request starts it, while
+#   refs/pull/<number>/head is the head the author of the pull request, from a
+#   fork too, pushed; pip installs what requirements.txt of the checkout
+#   names.
+# attack: the author of a pull request from a fork writes in requirements.txt
+#   a package of theirs whose setup runs their code, and comments validate on
+#   the pull request.
+# attack-run-behavior: pip installs the package, which runs the author's code
+#   with the base repository's token, which the checkout left in .git/config.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-303_Tribler/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-313_Marimo/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-207_k3s/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-148_GHSL-2024-149_Astro/
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  pr_commented:
+    name: Validate PR
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, 'validate') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          submodules: 'true'
+      - run: python -m pip install -r requirements.txt

@@ -1,0 +1,74 @@
+# situation: on issue_comment, three jobs write the body of the comment into a
+#   script by ${{ }}, in the ways of three advisories. The job wenxian is
+#   comment.yaml of njzjz/wenxian (commit
+#   a1f211613dbf281d4589794db57c31c1da34beb0, the last commit of the file before
+#   the fix d338e31210d878975564186277d46945c749b25a, lines 1-16): the body in
+#   double quotes inside $( ), whose output goes to $GITHUB_OUTPUT. The checkout
+#   and the steps after line 16 are left out. The job cromwell is
+#   scalafmt-fix.yml of broadinstitute/cromwell (commit
+#   8f96cfa5d4536d1dfe45cebd6858fd5bfe1ffbe3, the parent of the fix
+#   dc2c26abd31149e296f73ce4e43a36c0c0317b0d, lines 9-12 and 22-46): the body in
+#   double quotes inside [[ ]]. The triggers workflow_dispatch and
+#   pull_request_target, the step Determine Target Branch (lines 27-37), the
+#   steps after line 46 are left out, and the ${{ github.event_name }} of line
+#   41 is written with the value issue_comment, so that the script has the body
+#   as its only ${{ }}. The job pymapdl is migrator.yml of ansys/pymapdl (commit
+#   c1ac82c9d8f8c2ea5cc93c8074dfa8a83e00b3ca, lines 28-30, 56-57, 61-75, 79, 93
+#   and 98): the body in a template literal of the script of
+#   actions/github-script. The if of the job (lines 62-66), the input
+#   github-token (line 74), the other lines of the script, and the steps after
+#   the step are left out, and line 79 declares only commentBody.
+# reason: anyone who comments on an issue writes the body, and the runner puts
+#   the body into each script before bash or node reads the script, so a $( ) in
+#   the body runs as a command inside the double quotes of bash, and in the
+#   template literal of JavaScript, a backquote in the body ends the literal and
+#   ${ } in the body runs as code.
+# attack-value: github.event.comment.body = "@njzjz-bot $(echo PWNED > /proc/$$/fd/1) scalafmt"
+# attack-run-behavior: in the bash scripts of the jobs wenxian and cromwell,
+#   bash runs the command substitution of the body while it reads the line; $$
+#   inside the substitution is the process ID of the shell of the script, so
+#   echo writes PWNED to the standard output of the script, and the line PWNED
+#   appears in the log of each step. The attack-run test runs only the bash
+#   scripts of run steps; the script of actions/github-script is not run in the
+#   test.
+# advisory: https://github.com/advisories/GHSA-r4fj-r33x-8v88
+# advisory: https://github.com/advisories/GHSA-phf6-hm3h-x8qp
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-050_Cromwell/
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-091_ansys_pymapdl/
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  issues: write
+jobs:
+  wenxian:
+    runs-on: ubuntu-latest
+    if: contains(github.event.comment.body, '@njzjz-bot')
+    steps:
+      - name: Extract identifiers
+        id: extract-identifiers
+        run: |
+          echo identifiers=$(echo "${{ github.event.comment.body }}" | grep -oE '@njzjz-bot .*' | head -n1 | cut -c12- | xargs) >> $GITHUB_OUTPUT
+  cromwell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for ScalaFmt Comment
+        id: check-comment
+        run: |
+          if [[ "issue_comment" == "issue_comment" && "${{ github.event.comment.body }}" == *"scalafmt"* ]]; then
+            echo "::set-output name=comment-triggered::true"
+          else
+            echo "::set-output name=comment-triggered::false"
+          fi
+        shell: bash
+  pymapdl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup the configuration
+        id: pr_number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let commentBody;
+            commentBody = `${{ github.event.comment.body }}`;
+            core.debug(`Comment body: ${commentBody}`);

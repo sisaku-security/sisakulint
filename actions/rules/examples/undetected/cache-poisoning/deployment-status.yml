@@ -1,0 +1,26 @@
+# situation: on deployment_status, which an app outside GitHub Actions
+#   starts when the app makes a status of a deployment, the job writes the
+#   description of the deployment (github.event.deployment.description)
+#   where the rule reads it.
+# reason: a todo (a fact): no run of deployment_status started when a GitHub
+#   App made a deployment and a status of the deployment for a commit of a
+#   pull request from a fork (seen on GitHub), and why the run did not start
+#   was not found.
+# cause: the table of the attacker's events that the rule reads does not
+#   have deployment_status.
+# attack-value: github.event.deployment.description = "main"
+# attack-run-behavior: an outside app makes a deployment for the commit of
+#   the pull request from a fork with a description that the pull request
+#   gives; if a run of deployment_status starts on the default branch, the
+#   job saves the cache under the key build-main, which a job on the default
+#   branch restores.
+on: deployment_status
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ github.event.deployment.description }}

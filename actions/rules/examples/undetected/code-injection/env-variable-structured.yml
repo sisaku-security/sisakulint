@@ -1,0 +1,19 @@
+# situation: on pull_request_target, a step passes github.head_ref in the
+#   environment variable HEAD and runs the variable, outside quotes, as the
+#   command word.
+# reason: as the command word the value runs only when the value splits
+#   into a program and its arguments at a blank; Git does not allow a space
+#   in the name of a branch.
+# cause: the rule reads a structured value as the command word or in
+#   arithmetic only where the value can hold a blank or a [.
+# attack-value: github.head_ref = "$(echo${IFS}PWNED)"
+# attack-run-behavior: bash looks for a program named $(echo${IFS}PWNED),
+#   finds none and fails; nothing runs the command substitution.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD: ${{ github.head_ref }}
+        run: $HEAD

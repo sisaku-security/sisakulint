@@ -1,0 +1,8 @@
+name: x02
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.FOO != '' }}
+    steps:
+      - run: echo ok

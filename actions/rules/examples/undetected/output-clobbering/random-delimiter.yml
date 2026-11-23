@@ -1,0 +1,19 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_OUTPUT in
+#   b<<DELIM, whose delimiter is ghadelimiter_ and 16 random bytes in hex.
+# reason: no added gain: the attacker cannot write the delimiter.
+# cause: the rule reads the delimiter of its own fix's form as random.
+# attack-value: github.event.issue.body = "x\nghadelimiter_00000000000000000000000000000000\nPWNED=1"
+# attack-run-behavior: the step writes b<<$GHA_DELIM, the three lines of the
+#   body and $GHA_DELIM, where $GHA_DELIM is ghadelimiter_ and 32 hex digits
+#   read from /dev/urandom in the run; the guessed line is not $GHA_DELIM, so
+#   the runner reads all three lines as the value of b, closes it at
+#   $GHA_DELIM, and sets no PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: |
+          GHA_DELIM="ghadelimiter_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"; { echo "b<<${GHA_DELIM}"; echo "$B"; echo "${GHA_DELIM}"; } >> "$GITHUB_OUTPUT"

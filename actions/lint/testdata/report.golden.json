@@ -1,0 +1,331 @@
+{
+  "schema": "sisakulint/report/v0",
+  "inputs": [
+    {
+      "name": ".github/workflows/a.yml",
+      "input_kind": "workflow",
+      "state": "read",
+      "diagnostics": []
+    },
+    {
+      "name": ".github/workflows/bad.yml",
+      "input_kind": "workflow",
+      "state": "invalid",
+      "diagnostics": [
+        {
+          "code": "MissingKey",
+          "message": "\"jobs\" is required",
+          "start": 0,
+          "end": 8,
+          "line": 1,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "name": ".github/workflows/latin.yml",
+      "input_kind": "workflow",
+      "state": "unreadable",
+      "reason": "not UTF-8",
+      "diagnostics": []
+    },
+    {
+      "name": "action.yml",
+      "input_kind": "action-metadata",
+      "state": "read",
+      "diagnostics": []
+    }
+  ],
+  "complete": true,
+  "excluded": [],
+  "reported_inputs": [
+    ".github/workflows/a.yml",
+    ".github/workflows/bad.yml",
+    ".github/workflows/latin.yml",
+    "action.yml"
+  ],
+  "rules": [
+    {
+      "id": "fails",
+      "severity": "high"
+    },
+    {
+      "id": "pin-step",
+      "severity": "high"
+    }
+  ],
+  "skipped_rules": [],
+  "findings": [
+    {
+      "rule": "pin-step",
+      "severity": "high",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/a.yml"
+        },
+        "start": 70,
+        "end": 134,
+        "line": 6,
+        "column": 9,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "test.said",
+        "text": "a step of .github/workflows/a.yml"
+      },
+      "detected": "a step of .github/workflows/a.yml",
+      "consequence": "it was said",
+      "remedy": "say it not",
+      "related": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/a.yml"
+            },
+            "start": 0,
+            "end": 245,
+            "line": 1,
+            "column": 1,
+            "exact": true,
+            "via": []
+          },
+          "note": "the workflow"
+        }
+      ],
+      "evidence": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/a.yml"
+            },
+            "start": 115,
+            "end": 134,
+            "line": 8,
+            "column": 15,
+            "exact": true,
+            "via": []
+          },
+          "note": "uses"
+        }
+      ],
+      "fix": {
+        "kind_id": "same",
+        "title": "mark it",
+        "side_effects": [
+          "unquoted-one-word"
+        ],
+        "edits": [
+          {
+            "start": 79,
+            "end": 79,
+            "old": "",
+            "new": " # same"
+          }
+        ]
+      },
+      "key_path": "jobs.build.steps[checkout]",
+      "span_text": "\u0026checkout\n  id: checkout\n  uses: actions/checkout@v4",
+      "span_lines": "- \u0026checkout\n  id: checkout\n  uses: actions/checkout@v4",
+      "fingerprint": "4e88ef252a4ffcee7e210e70170afbfa17188f63cb8ca4d177cc4bdf7e36b08d"
+    },
+    {
+      "rule": "pin-step",
+      "severity": "high",
+      "certainty": "conditional",
+      "location": {
+        "file": {
+          "input": ".github/workflows/a.yml"
+        },
+        "start": 143,
+        "end": 180,
+        "line": 9,
+        "column": 9,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "test.said",
+        "text": "a step of .github/workflows/a.yml"
+      },
+      "detected": "a step of .github/workflows/a.yml",
+      "consequence": "it was said",
+      "remedy": "say it not",
+      "related": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/a.yml"
+            },
+            "start": 0,
+            "end": 245,
+            "line": 1,
+            "column": 1,
+            "exact": true,
+            "via": []
+          },
+          "note": "the workflow"
+        }
+      ],
+      "evidence": [],
+      "condition": {
+        "any": [
+          {
+            "query": {
+              "kind": "test.text",
+              "name": "mode"
+            },
+            "eq": "strict"
+          },
+          {
+            "query": {
+              "kind": "test.flag",
+              "name": "gone"
+            },
+            "absent": true
+          },
+          {
+            "input": ".github/workflows/other.yml",
+            "present": true
+          }
+        ]
+      },
+      "no_fix": {
+        "reason": "fact",
+        "queries": [
+          {
+            "kind": "test.flag",
+            "name": "gone"
+          }
+        ],
+        "note": "set it by hand"
+      },
+      "key_path": "jobs.build.steps[1]",
+      "span_text": "name: \"\u003cscript\u003e\"\n  run: echo hi",
+      "span_lines": "- name: \"\u003cscript\u003e\"\n  run: echo hi",
+      "fingerprint": "e56b8715bec944aaebb2a55d19954b6d891e98be966cd5cdd759d9066336a0e7"
+    },
+    {
+      "rule": "pin-step",
+      "severity": "high",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/a.yml"
+        },
+        "start": 236,
+        "end": 245,
+        "line": 14,
+        "column": 9,
+        "exact": true,
+        "via": [
+          {
+            "start": 236,
+            "end": 245,
+            "line": 14,
+            "column": 9
+          }
+        ]
+      },
+      "args": {
+        "kind_id": "test.said",
+        "text": "a step of .github/workflows/a.yml"
+      },
+      "detected": "a step of .github/workflows/a.yml",
+      "consequence": "it was said",
+      "remedy": "say it not",
+      "related": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/a.yml"
+            },
+            "start": 0,
+            "end": 245,
+            "line": 1,
+            "column": 1,
+            "exact": true,
+            "via": []
+          },
+          "note": "the workflow"
+        }
+      ],
+      "evidence": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/a.yml"
+            },
+            "start": 236,
+            "end": 245,
+            "line": 14,
+            "column": 9,
+            "exact": true,
+            "via": [
+              {
+                "start": 236,
+                "end": 245,
+                "line": 14,
+                "column": 9
+              }
+            ]
+          },
+          "note": "uses"
+        }
+      ],
+      "fix": {
+        "kind_id": "same",
+        "title": "mark it",
+        "side_effects": [
+          "unquoted-one-word"
+        ],
+        "edits": [
+          {
+            "start": 79,
+            "end": 79,
+            "old": "",
+            "new": " # same"
+          }
+        ]
+      },
+      "key_path": "jobs.again.steps[0]",
+      "span_text": "\u0026checkout\n  id: checkout\n  uses: actions/checkout@v4",
+      "span_lines": "- \u0026checkout\n  id: checkout\n  uses: actions/checkout@v4",
+      "fingerprint": "fd3b43c38f610a3a44e2456f209d2648e032f0e74aa6cd344447dbfa5a6e0e93"
+    }
+  ],
+  "quality_rules": [],
+  "quality_findings": [],
+  "facts": [
+    {
+      "query": {
+        "kind": "test.flag",
+        "name": "gone"
+      },
+      "state": "found",
+      "value": true
+    },
+    {
+      "query": {
+        "kind": "test.text",
+        "name": "mode"
+      },
+      "state": "unknown",
+      "reason": "no token"
+    }
+  ],
+  "errors": [
+    {
+      "rule": "fails",
+      "input": ".github/workflows/a.yml",
+      "message": "panic: boom"
+    },
+    {
+      "rule": "fails",
+      "input": ".github/workflows/bad.yml",
+      "message": "panic: boom"
+    }
+  ],
+  "remote_revision": null
+}

@@ -1,0 +1,75 @@
+# situation: on issue_comment, a step uses actions/github-script to get the
+#   pull request of the comment from the API and returns pr.data, a step
+#   writes fromJSON of that output's head.sha to its output sha, and
+#   actions/checkout checks out that sha; a later step runs
+#   ./scripts/build_docker.py of the checkout, and a step after it gives the
+#   AWS secrets to aws-actions/configure-aws-credentials. This is the job
+#   ephemeral-docker-build of ephemeral-env.yml of apache/superset (commit
+#   c5594f29792c7f83fde9320097b8a0e6323417e5, lines 1-5 and 85-135). The jobs
+#   before it, whose gate the advisory bypasses with a comment that is not
+#   /testenv, the concurrency, the steps for QEMU and Buildx and the
+#   arguments of build_docker.py are left out. push-chart-ci.yaml of
+#   cilium/cilium (commit 736337ca18ae7f23541567a4452cdd362d035817,
+#   GHSL-2024-226_GHSL-2024-227) has the same form on workflow_run: a run step
+#   writes github.event.workflow_run.head_sha to its output ref when the head
+#   repository is a fork, and actions/checkout checks out that output (line
+#   86).
+#   autorelease-preview.yml of excalidraw/excalidraw (commit
+#   148b895f462e02e2b18649caf57abc0416fd6d4a, GHSL-2024-158) has the form of
+#   Superset on a comment @excalibot trigger release: actions/github-script
+#   returns the head sha of the pull request, and actions/checkout checks out
+#   that output (line 31).
+#   zwave-js-bot.yml of zwave-js/zwavejs2mqtt (commit
+#   e758e76c3a7015d9a8cbb901e344dfba00a25d82, GHSL-2021-047) has the form of
+#   Superset on a comment @zwave-js-bot fix lint: actions/github-script
+#   returns the pull request, actions/checkout checks out fromJSON of that
+#   output's head.ref (line 66), and a later step runs npm install.
+# reason: steps.get-sha.outputs.sha is the head commit of the pull request,
+#   which the author of the pull request writes; the rule does not follow the
+#   output of a step back to what the script of actions/github-script
+#   returns.
+# cause: the rule does not read what actions/github-script returns.
+# attack: the author of a pull request from a fork changes
+#   scripts/build_docker.py in the head commit and comments on the pull
+#   request.
+# attack-run-behavior: actions/checkout checks out the head commit (the
+#   refusal of actions/checkout covers pull_request_target and workflow_run,
+#   not issue_comment), and the step Build ephemeral env image runs the
+#   author's script; the AWS secrets come to the job in a later step.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-208_Apache_Superset/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-226_GHSL-2024-227_Cilium/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-158_Excalidraw/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-047-zwave-js-zwavejs2mqtt-workflows/
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  ephemeral-docker-build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Get Info from comment
+        uses: actions/github-script@v7
+        id: get-pr-info
+        with:
+          script: |
+            const request = {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: ${{ github.event.issue.number }},
+            }
+            const pr = await github.rest.pulls.get(request);
+            return pr.data;
+      - name: Debug
+        id: get-sha
+        run: |
+          echo "sha=${{ fromJSON(steps.get-pr-info.outputs.result).head.sha }}" >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get-sha.outputs.sha }}
+          persist-credentials: false
+      - name: Build ephemeral env image
+        run: ./scripts/build_docker.py "ci" "pull_request"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

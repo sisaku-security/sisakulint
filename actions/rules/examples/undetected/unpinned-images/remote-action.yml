@@ -1,0 +1,20 @@
+# situation: on push, a step uses an action of another repository pinned to
+#   a SHA.
+# reason: a todo (a fact): the action may run an image of its own, which its
+#   action.yml in another repository names.
+# cause: the run has no answer of action.definition for the action, and no
+#   one was asked (no --online, no answer in --facts); the rule reads the
+#   action.yml of another repository only from that answer.
+# attack: whoever can push to the image that the action.yml of
+#   actions/hello-world-docker-action names by a tag pushes an image of
+#   theirs under that tag.
+# attack-run-behavior: the runner reads the action.yml of the pinned commit,
+#   pulls the image its runs.image names by the tag when the step runs,
+#   which is now that image, and runs it with the workspace and the step's
+#   environment; the SHA pins the action.yml, not the image it names.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/hello-world-docker-action@0123456789abcdef0123456789abcdef01234567

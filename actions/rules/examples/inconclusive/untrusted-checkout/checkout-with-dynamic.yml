@@ -1,0 +1,18 @@
+# situation: on pull_request_target, the with of the checkout is a whole ${{
+#   }}, and npm ci runs after it.
+# reason: with is a whole ${{ }}, so the ref and the repository of the
+#   checkout are not known.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: when vars.CHECKOUT gives a ref of the pull request's
+#   code (refs/pull/<n>/head, say) and allow-unsafe-pr-checkout, the
+#   checkout fetches the pull request's head, and npm ci runs its
+#   preinstall, which prints PWNED, with the base repository's GITHUB_TOKEN
+#   in .git/config and its secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: ${{ fromJSON(vars.CHECKOUT) }}
+      - run: npm ci

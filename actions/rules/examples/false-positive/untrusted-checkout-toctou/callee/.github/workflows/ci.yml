@@ -1,0 +1,4 @@
+on: push
+jobs:
+  call:
+    uses: o/r/.github/workflows/called.yml@main

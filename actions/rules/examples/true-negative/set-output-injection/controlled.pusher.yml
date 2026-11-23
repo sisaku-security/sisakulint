@@ -1,0 +1,26 @@
+# situation: on push, the step p prints the name and the email of the
+#   pusher, and the release step writes the output tag of the step p into
+#   its script.
+# reason: the pusher is the account that pushed, or, for a push that the
+#   merge of a pull request makes, the account that merged the pull request. A
+#   push and a merge need a credential that can push or merge, such as an
+#   account with the role write or above, and the credential premise assumes
+#   that no attacker holds such a credential when the attack starts, so no
+#   attacker writes the name or the email of the pusher.
+# attack: the author of a pull request writes x ##[set-output
+#   name=tag;]$(id) in the name or the email of the account of the author, and
+#   an account that can merge merges the pull request.
+# attack-run-behavior: for a merge commit and for a squash, the pusher of
+#   the push that the merge makes is the account that merged the pull request,
+#   so the step prints the name and the email of the account that merged the
+#   pull request, and the runner sets no output from the account of the
+#   author.
+on: push
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "pushed by ${{ github.event.pusher.name }} <${{ github.event.pusher.email }}>"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

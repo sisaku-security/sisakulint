@@ -1,0 +1,16 @@
+# situation: on push, a step runs when github.ref is a part of a string of
+#   refs.
+# reason: no added gain: on push, only those who can write make the ref, as
+#   in woodruffw/gha-hazmat's unsound-contains.yml (vulnerable-1).
+# cause: push is none of the attacker's events the rule reads the if on.
+# attack-value: github.ref = "refs/heads/mai"
+# attack-run-behavior: a push of a branch named mai makes github.ref
+#   refs/heads/mai, a part of refs/heads/main, so the step runs echo hello;
+#   only one who may push to the repository makes that push.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ contains('refs/heads/main refs/heads/develop', github.ref) }}
+        run: echo hello

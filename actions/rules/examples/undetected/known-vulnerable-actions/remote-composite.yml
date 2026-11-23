@@ -1,0 +1,18 @@
+# situation: a step uses example-org/composite-action (made up), a composite
+#   action whose action.yml, in its own repository, uses
+#   actions/download-artifact pinned to the commit of v4.1.2.
+# reason: the action this workflow names has no advisory; the one it uses
+#   inside has GHSA-cxww-7g56-2vh6 (path traversal in the files of an
+#   artifact).
+# cause: the rule reads the uses of the inputs, not of the action.yml of
+#   another repository.
+# attack: someone who makes the artifact the composite action downloads
+#   puts in it a file whose name climbs out of the path.
+# attack-run-behavior: v4.1.2, run inside the composite action, writes that
+#   file where its name points, and the rule says nothing.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/composite-action@4444444444444444444444444444444444444444

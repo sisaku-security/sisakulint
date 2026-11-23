@@ -1,0 +1,280 @@
+diff --git a/.github/workflows/all-rules.yml b/.github/workflows/all-rules.yml
+--- a/.github/workflows/all-rules.yml
++++ b/.github/workflows/all-rules.yml
+@@ -7,25 +7,29 @@
+     runs-on: ubuntu-latest
+     steps:
+       # commit-sha.unpinned: a tag, which whoever can move it moves
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+       # impostor-commit.fork-commit: a commit only in a fork of actions/checkout
+       # (the Trivy incident)
+       - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0
+       # code-injection.controlled (issues) and code-injection.wiki (gollum alone)
+-      - run: echo "${{ github.event.issue.title }} ${{ github.event.pages[0].title }}"
++      - run: echo "${ISSUE_TITLE} ${PAGES_TITLE}"
++        env:
++          ISSUE_TITLE: ${{ github.event.issue.title }}
++          PAGES_TITLE: ${{ github.event.pages[0].title }}
+       - env:
+           BODY: ${{ github.event.issue.body }}
+           PAGE: ${{ github.event.pages[0].title }}
++          ISSUE_TITLE: ${{ github.event.issue.title }}
+         run: |
+           # envvar-injection.controlled and output-clobbering.controlled
+-          echo "body=$BODY" >> "$GITHUB_ENV"
+-          echo "body=$BODY" >> "$GITHUB_OUTPUT"
++          echo "body=$(printf '%s' "${BODY}" | tr -d '\n')" >> "$GITHUB_ENV"
++          echo "body=$(printf '%s' "${BODY}" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+           # envvar-injection.wiki and output-clobbering.wiki
+-          echo "page=$PAGE" >> "$GITHUB_ENV"
+-          echo "page=$PAGE" >> "$GITHUB_OUTPUT"
++          echo "page=$(printf '%s' "${PAGE}" | tr -d '\n')" >> "$GITHUB_ENV"
++          echo "page=$(printf '%s' "${PAGE}" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+           # code-injection.controlled and envvar-injection.controlled: the expression
+           # written into the line of $GITHUB_ENV itself, one fix of the step for both
+-          echo "title=${{ github.event.issue.title }}" >> "$GITHUB_ENV"
++          echo "title=$(printf '%s' "${ISSUE_TITLE}" | tr -d '\n')" >> "$GITHUB_ENV"
+           # envpath-injection.controlled and envpath-injection.wiki: a directory of
+           # the PATH of the steps after it; no fix, and the fixes of the step still apply
+           echo "$BODY" >> "$GITHUB_PATH"
+@@ -34,17 +38,18 @@
+       # fixes apply together: the env goes right after the uses that the pin
+       # rewrites (the one kind of step where both give a fix)
+       - with:
+-          script: console.log("${{ github.event.issue.title }}")
+-        uses: actions/github-script@v7
++          script: console.log(process.env.ISSUE_TITLE)
++        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
++        env:
++          ISSUE_TITLE: ${{ github.event.issue.title }}
+   pwn:
+     runs-on: ubuntu-latest
+     steps:
+       # untrusted-checkout.executed: the head of a pull request from a fork,
+       # with the guard of actions/checkout taken away, and npm runs it
+       # (and commit-sha.unpinned: the tag)
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+         with:
+-          ref: ${{ github.event.pull_request.head.sha }}
+           allow-unsafe-pr-checkout: true
+       - run: npm ci
+   pwn-data:
+@@ -52,9 +57,8 @@
+     steps:
+       # untrusted-checkout.checkout: no step is seen to run the tree, so the
+       # finding holds if one does (checkout.executed, assumed true)
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+         with:
+-          ref: ${{ github.event.pull_request.head.sha }}
+           allow-unsafe-pr-checkout: true
+           path: pr
+       - run: echo checked out
+@@ -65,22 +69,25 @@
+     steps:
+       # artipacked.github-token: the checkout leaves the job's token in
+       # .git/config, the upload takes hidden files, and a step comes after it
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
++        with:
++          persist-credentials: false
+       # artipacked.token-input: the token given to the checkout does not expire
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+         with:
+           token: ${{ secrets.PAT }}
+           path: pat
++          persist-credentials: false
+       # secrets-in-artifacts.lasting: a service account key in gha-creds-*.json
+-      - uses: google-github-actions/auth@v2
++      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+         with:
+           credentials_json: ${{ secrets.GCP_KEY }}
+       # secrets-in-artifacts.job-scoped: Workload Identity Federation
+-      - uses: google-github-actions/auth@v2
++      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+         with:
+           workload_identity_provider: projects/1/locations/global/workloadIdentityPools/p/providers/github
+           service_account: ci@p.iam.gserviceaccount.com
+-      - uses: actions/upload-artifact@v4
++      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+         with:
+           path: .
+           include-hidden-files: true
+diff --git a/.github/workflows/bot.yml b/.github/workflows/bot.yml
+--- a/.github/workflows/bot.yml
++++ b/.github/workflows/bot.yml
+@@ -6,10 +6,10 @@
+ permissions: {}
+ jobs:
+   dependabot:
+-    if: github.actor == 'dependabot[bot]'
++    if: github.event.pull_request.user.login == 'dependabot[bot]'
+     runs-on: ubuntu-latest
+     steps:
+-      - if: contains('alice bob', github.event.pull_request.user.login)
++      - if: contains(fromJSON('["alice","bob"]'), github.event.pull_request.user.login)
+         run: echo approved
+-      - if: contains(github.event.pull_request.user.login, 'alice')
++      - if: github.event.pull_request.user.login == 'alice'
+         run: echo approved
+diff --git a/.github/workflows/cache.yml b/.github/workflows/cache.yml
+--- a/.github/workflows/cache.yml
++++ b/.github/workflows/cache.yml
+@@ -7,17 +7,16 @@
+ jobs:
+   cache:
+     runs-on: ubuntu-latest
+-    cache-mode: write
++    cache-mode: read
+     steps:
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+         with:
+-          ref: refs/pull/${{ github.event.issue.number }}/head
+           persist-credentials: false
+-      - uses: actions/cache@v4
++      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+         with:
+           path: dist
+           key: dist-${{ hashFiles('package-lock.json') }}
+-      - uses: actions/cache/save@v4
++      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+         with:
+           path: ${{ github.event.comment.body }}
+           key: comment-${{ github.event.comment.body }}
+diff --git a/.github/workflows/download.yml b/.github/workflows/download.yml
+--- a/.github/workflows/download.yml
++++ b/.github/workflows/download.yml
+@@ -11,15 +11,17 @@
+   run:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/download-artifact@v4
++      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+         with:
+           run-id: ${{ github.event.workflow_run.id }}
+           github-token: ${{ github.token }}
++          path: ${{ runner.temp }}/artifacts
+       - run: npm ci
+   data:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: dawidd6/action-download-artifact@v6
++      - uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
+         with:
+           run_id: ${{ github.event.workflow_run.id }}
++          path: ${{ runner.temp }}/artifacts
+       - run: echo done
+diff --git a/.github/workflows/labeled.yml b/.github/workflows/labeled.yml
+--- a/.github/workflows/labeled.yml
++++ b/.github/workflows/labeled.yml
+@@ -13,9 +13,9 @@
+       # untrusted-checkout-toctou.mutable-ref: a label approves the run, and the
+       # checkout fetches refs/pull/<n>/head, which a push after the label moves
+       # (and commit-sha.unpinned: the tag)
+-      - uses: actions/checkout@v4
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+         with:
+-          ref: refs/pull/${{ github.event.pull_request.number }}/head
++          ref: ${{ github.event.pull_request.head.sha }}
+           allow-unsafe-pr-checkout: true
+       - run: npm ci
+   agent:
+diff --git a/.github/workflows/least-privilege.yml b/.github/workflows/least-privilege.yml
+--- a/.github/workflows/least-privilege.yml
++++ b/.github/workflows/least-privilege.yml
+@@ -17,7 +17,7 @@
+       - run: make release
+   provenance:
+     permissions: {}
+-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
++    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+     secrets: inherit
+   local:
+     permissions: {}
+diff --git a/.github/workflows/quality.yml b/.github/workflows/quality.yml
+--- a/.github/workflows/quality.yml
++++ b/.github/workflows/quality.yml
+@@ -9,7 +9,7 @@
+   build:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/cache@v4
++      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+         with:
+           path: ~/.npm
+           key: npm-${{ hashFiles('package-lock.json') }}
+@@ -19,7 +19,7 @@
+     runs-on: ubuntu-latest
+     timeout-minutes: 10
+     steps:
+-      - uses: actions/dependency-review-action@v4
++      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+         with:
+           warn-only: true
+           vulnerability-check: false
+@@ -45,18 +45,18 @@
+     env:
+       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
+     steps:
+-      - uses: actions/setup-node@v5
++      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+         with:
+           node-version: 20
+       - uses: ./.github/actions/old-node
+-      - uses: actions/create-release@v1
++      - uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1
+         with:
+           tag_name: v1.0.0
+   paths:
+     runs-on: ubuntu-latest
+     timeout-minutes: 10
+     steps:
+-      - uses: actions/setup-node/./@v5
++      - uses: actions/setup-node/./@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+         with:
+           node-version: 24
+       - uses: actions/setup-node/../v4@v5
+diff --git a/.github/workflows/request.yml b/.github/workflows/request.yml
+--- a/.github/workflows/request.yml
++++ b/.github/workflows/request.yml
+@@ -20,7 +20,7 @@
+           curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+       # request-forgery.action-input: a full URL in route sends the token
+       # where the comment's body says
+-      - uses: octokit/request-action@v2.4.0
++      - uses: octokit/request-action@dad4362715b7fb2ddedf9772c8670824af564f0d # v2.4.0
+         env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         with:
+diff --git a/.github/workflows/reusable.yml b/.github/workflows/reusable.yml
+--- a/.github/workflows/reusable.yml
++++ b/.github/workflows/reusable.yml
+@@ -9,4 +9,6 @@
+   greet:
+     runs-on: ubuntu-latest
+     steps:
+-      - run: echo "${{ inputs.title }}"
++      - run: echo "${INPUTS_TITLE}"
++        env:
++          INPUTS_TITLE: ${{ inputs.title }}
+diff --git a/.github/workflows/vulnerable.yml b/.github/workflows/vulnerable.yml
+--- a/.github/workflows/vulnerable.yml
++++ b/.github/workflows/vulnerable.yml
+@@ -9,8 +9,8 @@
+   vulnerable:
+     runs-on: ubuntu-latest
+     steps:
+-      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4.1.2
+-      - uses: tj-actions/branch-names@ab304d8562e2f137165e1d930e6d22d431189074 # v7.0.6
+-      - uses: lycheeverse/lychee-action@2bb232618be239862e31382c5c0eaeba12e5e966 # v2.0.1
+-      - uses: Azure/setup-kubectl@6025c840858f1afa584a5190a4426c338f59e503 # v2.1
+-      - uses: example-org/example-action@1111111111111111111111111111111111111111 # v1.0.0
++      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85 # v4.1.3
++      - uses: tj-actions/branch-names@e497ceb8ccd43fd9573cf2e375216625bc411d1f # v9.0.0
++      - uses: lycheeverse/lychee-action@7cd0af4c74a61395d455af97419279d86aafaede # v2.0.2
++      - uses: Azure/setup-kubectl@901a10e89ea615cf61f57ac05cecdf23e7de06d8 # v3
++      - uses: example-org/example-action@2222222222222222222222222222222222222222 # v1.0.1

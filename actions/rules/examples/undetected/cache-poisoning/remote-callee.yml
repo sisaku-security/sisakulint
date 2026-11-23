@@ -1,0 +1,23 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/cache-poisoning-unanswered, whose content is
+#   the workflow of the true positive writable-job
+#   (writable-job.tanstack.yml) of the rule, with on: workflow_call in place
+#   of the on of writable-job.tanstack.yml. The linter has no answer of the
+#   fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack-value: the file packages/history/vite_setup.mjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches refs/pull/<n>/merge, the build
+#   runs the pull request's code, which writes into the pnpm store; at the
+#   end of the job actions/cache saves the store to the default branch's
+#   scope, and the release workflow restores it and runs it.
+on:
+  pull_request_target:
+    paths: ['packages/**']
+permissions: {}
+jobs:
+  c:
+    uses: example-org/cache-poisoning-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

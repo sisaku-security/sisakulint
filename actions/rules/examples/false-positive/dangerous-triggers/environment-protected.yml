@@ -1,0 +1,22 @@
+# situation: the job runs on issues in the environment production, with a
+#   secret.
+# reason: the environment production has required reviewers, who approve the
+#   job before it runs.
+# cause: the rule takes the environment as one that approves nothing unless
+#   a file of facts says it has required reviewers
+#   (repo.environment-protected is assumed false, the worst case).
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue queues the job a for the
+#   environment production, which waits for a required reviewer; until one
+#   approves, no step runs, neither the script, which would become echo "";
+#   echo PWNED; echo "" && ./deploy, nor anything with KEY.
+on: issues
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "${{ github.event.issue.title }}" && ./deploy
+        env:
+          KEY: ${{ secrets.DEPLOY_KEY }}

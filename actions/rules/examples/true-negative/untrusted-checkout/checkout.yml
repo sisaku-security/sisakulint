@@ -1,0 +1,19 @@
+# situation: on pull_request_target, the checkout, with no ref, fetches into
+#   pr/, and a step only runs echo.
+# reason: without a ref of the pull request, the checkout on
+#   pull_request_target fetches the base branch's commit, so the tree in pr/
+#   holds none of the pull request's code.
+# attack-value: the file build.sh in the pull request's head = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: with no ref, the checkout fetches the commit of the
+#   base branch into pr, so the pull request's build.sh is not there, and
+#   the job only runs echo checked out.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: echo checked out

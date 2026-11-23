@@ -1,0 +1,12 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: a
+        run: sleep 3; echo bg-a-done
+        background: true
+      - parallel:
+          - wait-all:
+          - run: echo sibling
+      - run: echo after

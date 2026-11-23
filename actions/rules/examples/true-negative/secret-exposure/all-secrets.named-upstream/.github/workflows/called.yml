@@ -1,0 +1,25 @@
+# situation: this reusable workflow, called.yml, puts toJSON(secrets) in the
+#   env of a step. mid.yml, a workflow that only a caller runs, calls
+#   called.yml with secrets: inherit, and the job deploy of ci.yml calls
+#   mid.yml on push and passes mid.yml only the secret DEPLOY_KEY, by name.
+#   All three files are given to the linter.
+# reason: the secrets context of mid.yml has only DEPLOY_KEY, which ci.yml
+#   passed by name; secrets: inherit in mid.yml passes called.yml only
+#   DEPLOY_KEY, so toJSON(secrets) in called.yml makes GitHub pass the
+#   runner of the job of called.yml only DEPLOY_KEY, the one secret that
+#   the job would get by naming DEPLOY_KEY.
+# attack: an action of the job of called.yml turns malicious and reads the
+#   secrets in the runner of the job.
+# attack-run-behavior: a push starts ci.yml, which runs mid.yml and then
+#   called.yml; the runner of the job of called.yml has DEPLOY_KEY and no
+#   other secret of the repository, so the action finds DEPLOY_KEY only.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          ALL: ${{ toJSON(secrets) }}

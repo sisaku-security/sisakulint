@@ -1,0 +1,25 @@
+# artifact-poisoning の例。workflow_run で、元の run（fork の PR の run でもありうる）の
+# artifact を workspace に取る。job run は npm ci で実行する（executed）。job data は
+# 実行しない（download。download.executed の既定の仮定で確定）。
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  actions: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci
+  data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+      - run: echo done

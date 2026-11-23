@@ -1,0 +1,29 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the directory web of the workspace
+#   (working-directory: web); a later step runs
+#   cd ${{ runner.temp }} && npm ci.
+# reason: a todo (the same file): the step changes its directory to runner.temp,
+#   out of the directory web that the agent may edit, and npm ci reads the
+#   package.json of runner.temp, so npm runs no code that the agent edits.
+# cause: the rule does not read the directory that a cd command changes
+#   to, and reads npm ci of a step with a cd command as a tool that may run
+#   in any directory, so the rule reports ai-action-execution-order.edited-code.
+# attack-value: the file package.json in the directory web = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm ci in runner.temp finds no package.json of the
+#   attacker and does not run the script preinstall, so PWNED is not
+#   printed.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+          working-directory: web
+      - run: cd ${{ runner.temp }} && npm ci

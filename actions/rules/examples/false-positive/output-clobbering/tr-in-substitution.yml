@@ -1,0 +1,18 @@
+# situation: the step writes the body of an issue to an environment file through
+#   a $( ) in which tr takes out the line breaks of the body.
+# reason: tr takes out the line breaks of the body before it is written.
+# cause: the ${{ }} is written in the $( ) itself, which the rule reads as
+#   the attacker's value whole (code-injection reports the ${{ }}).
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: ${{ }} puts the two lines inside the double quotes of
+#   the echo in $( ), whose output tr -d '\n' joins, so the step writes the
+#   one line v=xPWNED=1 to $GITHUB_OUTPUT, and the runner sets the output v to
+#   xPWNED=1 and no PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=$(echo "${{ github.event.issue.body }}" | tr -d '\n')" >> "$GITHUB_OUTPUT"

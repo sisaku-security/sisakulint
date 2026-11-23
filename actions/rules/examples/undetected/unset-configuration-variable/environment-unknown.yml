@@ -1,0 +1,17 @@
+# situation: the job names the environment production and the step writes
+#   vars.PRODUCTION_KEY_IDD; the run answers repo.configuration-variables
+#   with no names, and has no answer of
+#   repo.environment-configuration-variables for production.
+# reason: a todo (a fact): the environment level of production may define
+#   PRODUCTION_KEY_IDD, and the rule does not know.
+# cause: the rule compares the name only when every environment whose names
+#   the place of the reference reads has an answer.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - run: ./deploy.sh "${{ vars.PRODUCTION_KEY_IDD }}"

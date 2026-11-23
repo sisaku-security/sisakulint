@@ -1,0 +1,34 @@
+# situation: on comments on the diff, a step with
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS prints the comment's body, in a job
+#   that runs only when the head repository of the pull request is a fork.
+# reason: the job runs only when the head repository of the pull request
+#   is a fork. On a pull request from a branch of the repository, the head
+#   repository is the repository itself, so in a repository that is not a
+#   fork the job runs only for a review of a pull request from a fork. In
+#   a public repository, the run of such a review has no secrets and a
+#   token that only reads; in a private repository, the run has neither
+#   secrets nor a token that writes unless the repository gives secrets or
+#   a token that writes to the runs of pull requests from forks (the
+#   undetected form fork-review).
+# cause: the rule does not read whether the repository that runs the
+#   workflow (not the head repository of the pull request) is a fork, and
+#   reads the job as if the job ran for a review of a pull request from a
+#   branch of the repository.
+# attack-value: github.event.comment.body = "::set-env name=NODE_OPTIONS::--require=/tmp/PWNED.js"
+# attack-run-behavior: in a public repository that is not a fork, a review
+#   of a pull request from a branch of the repository does not start the
+#   job, as the head repository of such a pull request is the repository
+#   itself; a review of a pull request from a fork starts the job with no
+#   secrets and a token that only reads, so the value reaches no secret
+#   and no token that writes.
+on: pull_request_review_comment
+jobs:
+  a:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+          B: ${{ github.event.comment.body }}
+        run: echo "c=$B"
+      - run: echo next

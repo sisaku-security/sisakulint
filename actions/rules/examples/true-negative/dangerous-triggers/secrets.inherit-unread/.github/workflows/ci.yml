@@ -1,0 +1,6 @@
+on: issues
+permissions: {}
+jobs:
+  triage:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

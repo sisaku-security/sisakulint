@@ -1,0 +1,20 @@
+# situation: an action outside the table that may write a credential into a
+#   file of the workspace runs before actions/upload-artifact uploads it.
+# reason: a todo (a fact): a fact of whether the action writes a credential
+#   would tell.
+# cause: the rule reads the actions of its table as leaving a credential,
+#   and no other.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the key
+#   from the file example/writes-a-key wrote.
+# attack-run-behavior: when example/writes-a-key writes a key into a file of
+#   the workspace, the upload of path . puts it in the artifact; the reader
+#   takes the key.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example/writes-a-key@v1
+      - uses: actions/upload-artifact@v4
+        with: {path: .}

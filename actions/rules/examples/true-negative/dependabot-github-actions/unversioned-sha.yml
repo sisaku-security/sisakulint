@@ -1,0 +1,11 @@
+# situation: the repository has a configuration file of Renovate and no
+#   .github/dependabot.yml, and a workflow pins actions/checkout to a commit
+#   SHA with the version as a comment on the line.
+# reason: Renovate reads the comment as the version of the SHA and updates
+#   the SHA with the comment when a new version is released.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

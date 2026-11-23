@@ -1,0 +1,25 @@
+# situation: on workflow_dispatch, a job with no cache-mode saves build with
+#   actions/cache/save under a key that has ${{ inputs.x }} and ${{
+#   github.event.inputs.x }}.
+# reason: whoever dispatches the workflow chooses the value, and the workflow
+#   does not tell who that is, so whether an attacker controls it is not known;
+#   nothing the rule could read is expected to tell it.
+# attack-value: inputs.x = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: a run of workflow_dispatch saves to the cache with no
+#   cache-mode; when the one who dispatches the workflow chooses the default
+#   branch as the ref and gives the value as x, which ${{ inputs.x }} and
+#   ${{ github.event.inputs.x }} both hold, the job saves build to the cache
+#   of the default branch's scope under build-<value> <value>, a key the one
+#   who dispatches the workflow chose.
+on:
+  workflow_dispatch:
+    inputs:
+      x: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ inputs.x }} ${{ github.event.inputs.x }}

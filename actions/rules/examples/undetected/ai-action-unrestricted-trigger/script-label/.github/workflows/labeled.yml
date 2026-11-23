@@ -1,0 +1,30 @@
+# situation: labeler.yml runs on pull_request_target and adds the label
+#   safe-to-test with gh and a personal access token to a pull request whose
+#   title has [site]; labeled.yml runs on pull_request_target on labeled when
+#   the label is safe-to-test, and the job runs claude-code-action, which
+#   checks that the actor of the run has write access to the repository, on
+#   the pull request.
+# reason: the attacker writes the title of the pull request, and a label that
+#   a personal access token adds starts the labeled run, so no person approves
+#   the run before the label starts the run.
+# cause: the rule reads the steps of actions/labeler, and does not read the
+#   scripts that add labels.
+# attack-value: the title of the pull request = "[site] fix"
+# attack-run-behavior: the attacker opens a pull request from a fork whose
+#   title has [site]; gh adds the label safe-to-test, which starts
+#   labeled.yml, and the actor of the labeled run is the account of the
+#   personal access token, which has write access to the repository, so
+#   claude-code-action starts the agent, and the agent reads the pull request
+#   that the attacker wrote.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  review:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: "Review the pull request"

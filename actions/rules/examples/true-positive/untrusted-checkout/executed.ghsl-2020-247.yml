@@ -1,0 +1,117 @@
+# situation: on pull_request_target, actions/checkout v2.3.4 checks out the
+#   head commit of the pull request, and later steps run yarn install and yarn
+#   build over the checkout; a step after them has the AWS secrets in its env.
+#   This is create_pr_package.yaml of redwoodjs/redwood (commit
+#   acb4ecf523fc11c656cd31b86d9c9a58ffef1af9, lines 1-28 and 42-45), with
+#   actions/checkout@v2 pinned to v2.3.4, a release of the tag v2 before the
+#   release of v2 that refuses the code of a fork (v2.8.0, which the tag v2 now
+#   names); the step that packs and the defaults of the job are left out, and
+#   the run of the step that copies to S3 is shortened to aws s3 ls. The other advisories listed below, from
+#   2020 and 2021, have the same form: on pull_request_target, a step uses
+#   actions/checkout@v2 with the head sha, the head ref or refs/pull/<number>/…
+#   of the pull request, and later steps run what the checkout brings. With
+#   their actions/checkout@v2 pinned to v2.3.4, untrusted-checkout reports
+#   .executed or .checkout on each (2026-11-10). The workflows of
+#   GHSL-2020-314 (s4u/pgpverify-maven-plugin), GHSL-2021-005 (OpenRefine) and
+#   GHSL-2020-367 (Android-Password-Store) already use v2.3.4, and
+#   untrusted-checkout reports them unchanged. One of the three workflows of
+#   GHSL-2020-246 (ant-design) uses actions/checkout@master. GHSL-2020-266
+#   (afc163/surge-preview) is an action that runs the build script of its
+#   input, npm install and npm run build by default, over the checkout of the
+#   pull request in the usage example of its documentation. The pages of
+#   GHSL-2020-244, GHSL-2020-370 and GHSL-2021-007 have this form as their
+#   Issue 1 and a code injection as their Issue 2, which examples of
+#   code-injection cite. The pages of GHSL-2020-371 (tophat) and
+#   GHSL-2021-008 (actions-cool/issues-helper, with afc163/surge-preview)
+#   show only excerpts of their workflows.
+# reason: pull_request_target runs the job with the base repository's token
+#   and its secrets, while head.sha is the commit the author of the pull
+#   request, from a fork too, pushed; yarn runs the package.json of the
+#   checkout.
+# attack: the author of a pull request from a fork changes the script build of
+#   package.json and opens the pull request.
+# attack-run-behavior: yarn build runs the author's script with the base
+#   repository's token, which the checkout left in .git/config, and the AWS
+#   secrets come to the job in a later step.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-247-redwoodjs-redwood-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-271-openzfs-zfs-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-278-stm32-rs-stm32-rs-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-279-is-a-dev-register-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-282-open-telemetry-opentelemetry-ruby-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-283-GoogleCloudPlatform-functions-framework-ruby-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-284-dazuma-toys-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-285-cloudevents-sdk-ruby-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-286-PureStake-moonbeam-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-288-awslabs-one-line-scan-preview-action/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-315-rux616-karabiner-windows-mode-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-318-popsim-consortium-stdpopsim-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-320-illright-attractions-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-330-akka-alpakka-kafka-forkflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-243-preslavmihaylov-todocheck-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-245-strimzi-strimzi-ui-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-274-v8-v8-dev-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-275-LedgerHQ-ledger-live-desktop-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-280-deislabs-akri-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-316-indico-newdle-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-319-pangeo-data-pangeo-climpred-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-328-GoogleCloudPlatform-microservices-demo-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-333-osohq-oso-forkflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-334-gsantner-forkflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-369-nrfconnect-sdk-nrf-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-004-aeraki-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-006-decathlon-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-329-Automattic-jetpack-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-335-libpasta-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-264-youzan-vant-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-265-didi-cube-ui-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-267-antvis-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-268-umijs-dumi-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-269-alibaba-hooks-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-270-ant-design-colorful-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-287-jdf2e-nutui-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-009-lijinke666-react-music-player-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-372-418sec-huntr-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-364-apache-incubator-superset-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-1032_Solana/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-313-BitByte-TPC-first-bit-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-314-s4u-pgpverify-maven-plugin-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-005-openrefine-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-367-android-password-store-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-246-ant-design-ant-design-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-266-afc163-surge-preview-action/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-248-rism-ch-verovio-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-249-aws-amazon-chime-sdk-js-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-281-tskit-dev-msprime-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-273-numworks-epsilon-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-331-appsmithorg-appsmith-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-327-dmlc-gluon-cv-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-332-a2o-snoopy-forkflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-244-nonebot-nonebot2-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-370-rhinstaller-anaconda-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-007-dmlc-gluon-nlp-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-003-alisw-workflows/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-371-tophat-networkjs-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-008-actions-cool-issues-helper-workflow/
+on: pull_request_target
+jobs:
+  create_pkg:
+    name: Create PR packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f # v2.3.4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build
+        run: yarn build
+      - name: copy files to s3
+        env:
+          aws_key_id: ${{ secrets.AWS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET }}
+        run: aws s3 ls

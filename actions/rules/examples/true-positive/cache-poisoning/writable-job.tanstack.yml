@@ -1,0 +1,28 @@
+# situation: the bundle-size workflow of the TanStack incident (2026-05-11)
+#   with cache-mode: write: pull_request_target checks out the merge of the
+#   pull request, a composite action of another repository sets up pnpm
+#   with actions/cache, and a build runs the pull request's code.
+# reason: cache-mode: write lets the job save to the cache of the default
+#   branch's scope on pull_request_target; the build runs the author's
+#   code, which changes the pnpm store that the post step of actions/cache
+#   saves under the key the release workflow looks up.
+# attack-value: the file packages/history/vite_setup.mjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches refs/pull/<n>/merge, the build
+#   runs the pull request's code, which writes into the pnpm store; at the
+#   end of the job actions/cache saves the store to the default branch's
+#   scope, and the release workflow restores it and runs it.
+on:
+  pull_request_target:
+    paths: ['packages/**']
+permissions:
+  contents: read
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+      - run: pnpm nx run @benchmarks/bundle-size:build

@@ -1,0 +1,31 @@
+# situation: the example "Always save cache" of the README of
+#   actions/cache/save: restore by an exact key, and save under the key that
+#   the restore computed, when the restore did not find the key.
+# reason: the restore takes only the exact key. When the restore finds no
+#   cache, the restore writes nothing to the path; when the restore finds the
+#   cache, the save is skipped, and GitHub would not save a second cache under
+#   the same key. The content of an older cache does not go into the new
+#   cache.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore cached Prime Numbers
+        id: cache-prime-numbers-restore
+        uses: actions/cache/restore@v5
+        with:
+          key: ${{ runner.os }}-prime-numbers
+          path: |
+            path/to/dependencies
+            some/other/dependencies
+      - name: Always Save Prime Numbers
+        id: cache-prime-numbers-save
+        if: always() && steps.cache-prime-numbers-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ steps.cache-prime-numbers-restore.outputs.cache-primary-key }}
+          path: |
+            path/to/dependencies
+            some/other/dependencies

@@ -1,0 +1,26 @@
+# situation: on deployment_status, which an app outside GitHub Actions
+#   starts when the app makes a status of a deployment, the job writes the
+#   description of the deployment (github.event.deployment.description)
+#   where the rule reads it.
+# reason: a todo (a fact): no run of deployment_status started when a GitHub
+#   App made a deployment and a status of the deployment for a commit of a
+#   pull request from a fork (seen on GitHub), and why the run did not start
+#   was not found.
+# cause: the table of the attacker's events that the rule reads does not
+#   have deployment_status.
+# attack-value: github.event.deployment.description = "::set-env name=BASH_ENV::/tmp/x.sh"
+# attack-run-behavior: an outside app makes a deployment for the commit of
+#   the pull request from a fork with a description that the pull request
+#   gives, and a status of the deployment; if a run of deployment_status
+#   starts on the default branch, the value does there what the attack value
+#   of the message of the commit does on status.
+on: deployment_status
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ github.event.deployment.description }}"
+      - run: echo next

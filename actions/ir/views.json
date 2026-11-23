@@ -1,0 +1,713 @@
+{
+  "views": [
+    {
+      "name": "AIActionExcessiveTools",
+      "doc": "AIActionExcessiveTools is what ai-action-excessive-tools reads.",
+      "fields": [
+        "agent-step.action",
+        "agent-step.chain",
+        "agent-step.substituted",
+        "agent-step.inner-at",
+        "agent-step.open-gates",
+        "agent-step.inconclusive-settings",
+        "agent-step.actor-on",
+        "agent-step.attacker-on",
+        "agent-step.prompt-dispatch",
+        "agent-step.others-on",
+        "agent-step.capability-grants",
+        "agent-step.undecided-permissions",
+        "agent-step.setting-refs",
+        "agent-step.every-run-refs",
+        "agent-step.start-modes",
+        "composite-call.unanswered",
+        "composite-call.privileged-on"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "AIActionExecutionOrder",
+      "doc": "AIActionExecutionOrder is what ai-action-execution-order reads.",
+      "fields": [
+        "agent-step.action",
+        "agent-step.chain",
+        "agent-step.substituted",
+        "agent-step.inner-at",
+        "agent-step.open-gates",
+        "agent-step.unsafe-settings",
+        "agent-step.inconclusive-settings",
+        "agent-step.actor-on",
+        "agent-step.attacker-on",
+        "agent-step.prompt-dispatch",
+        "agent-step.others-on",
+        "agent-step.capability-grants",
+        "agent-step.every-run-refs",
+        "agent-step.agent-user",
+        "agent-step.runner-sudo",
+        "agent-step.git-write",
+        "agent-step.auto-mode",
+        "agent-step.scrub-decides",
+        "agent-step.later-steps",
+        "composite-call.unanswered",
+        "composite-call.privileged-on"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "AIActionPromptInjection",
+      "doc": "AIActionPromptInjection is what ai-action-prompt-injection reads.",
+      "fields": [
+        "agent-step.action",
+        "agent-step.chain",
+        "agent-step.substituted",
+        "agent-step.inner-at",
+        "agent-step.open-gates",
+        "agent-step.inconclusive-settings",
+        "agent-step.actor-on",
+        "agent-step.attacker-on",
+        "agent-step.prompt-dispatch",
+        "agent-step.prompt-refs",
+        "agent-step.written-value-on",
+        "composite-call.unanswered",
+        "composite-call.privileged-on"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "AIActionUnrestrictedTrigger",
+      "doc": "AIActionUnrestrictedTrigger is what ai-action-unrestricted-trigger reads.",
+      "fields": [
+        "agent-step.action",
+        "agent-step.chain",
+        "agent-step.substituted",
+        "agent-step.inner-at",
+        "agent-step.open-gates",
+        "agent-step.inconclusive-settings",
+        "agent-step.actor-on",
+        "agent-step.automatic-approval",
+        "agent-step.uses-text",
+        "composite-call.unanswered",
+        "composite-call.privileged-on"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "AIActionUnsafeSandbox",
+      "doc": "AIActionUnsafeSandbox is what ai-action-unsafe-sandbox reads.",
+      "fields": [
+        "agent-step.action",
+        "agent-step.chain",
+        "agent-step.substituted",
+        "agent-step.inner-at",
+        "agent-step.unsafe-settings",
+        "agent-step.inconclusive-settings",
+        "agent-step.attacker-on",
+        "agent-step.prompt-dispatch",
+        "agent-step.every-run-refs",
+        "composite-call.unanswered",
+        "composite-call.privileged-on"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ActionList",
+      "doc": "ActionList is what action-list reads.",
+      "fields": [
+        "composite-call.uses-text",
+        "composite-call.actions",
+        "composite-call.steps",
+        "composite-call.unanswered",
+        "uses.uses-text",
+        "uses.run-uses",
+        "image-site.site",
+        "image-site.images",
+        "image-site.service-name",
+        "image-site.inconclusive-images",
+        "composite-call.always-skipped",
+        "uses.always-skipped",
+        "image-site.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "AllowedActions",
+      "doc": "AllowedActions is what allowed-actions reads.",
+      "fields": [
+        "composite-call.uses-text",
+        "composite-call.steps",
+        "composite-call.unanswered",
+        "uses.uses-text",
+        "uses.run-uses",
+        "uses.level",
+        "uses.ref",
+        "image-site.site",
+        "image-site.images",
+        "composite-call.always-skipped",
+        "uses.always-skipped",
+        "image-site.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ArchivedUses",
+      "doc": "ArchivedUses is what archived-uses reads.",
+      "fields": [
+        "composite-call.uses-text",
+        "composite-call.steps",
+        "uses.repo",
+        "uses.level",
+        "uses.uses-text",
+        "uses.outside",
+        "uses.read-by-outside"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ArgumentInjection",
+      "doc": "ArgumentInjection is what argument-injection reads.",
+      "fields": [
+        "sink.arguments"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ArtifactPoisoning",
+      "doc": "ArtifactPoisoning is what artifact-poisoning reads.",
+      "fields": [
+        "download-site.pr-run-refs",
+        "download-site.same-run-uploads",
+        "download-site.inconclusive-values",
+        "download-site.dynamic",
+        "download-site.pr-code-on",
+        "download-site.dispatch-on",
+        "download-site.dispatch-input",
+        "download-site.approval",
+        "download-site.environment",
+        "download-site.automatic-approval",
+        "download-site.actions-read",
+        "download-site.destination",
+        "download-site.destination-text",
+        "download-site.missing-commits",
+        "download-site.code-run-steps",
+        "download-site.step-path",
+        "download-site.uses-text"
+      ],
+      "fixes": [
+        "DownloadSite.RunnerTempPath"
+      ]
+    },
+    {
+      "name": "Artipacked",
+      "doc": "Artipacked is what artipacked reads.",
+      "fields": [
+        "left-credential.file",
+        "left-credential.lifetime",
+        "left-credential.missing-commits",
+        "left-credential.checkout",
+        "left-credential.uses-text",
+        "upload.taken-credentials",
+        "upload.hidden-missing-commits",
+        "upload.downloadable-during-run",
+        "upload.token-write",
+        "upload.inconclusive",
+        "upload.uses-text",
+        "left-credential.always-skipped",
+        "upload.always-skipped"
+      ],
+      "fixes": [
+        "LeftCredential.PersistCredentialsFalse"
+      ]
+    },
+    {
+      "name": "BotConditions",
+      "doc": "BotConditions is what bot-conditions reads.",
+      "fields": [
+        "if-site.attacker-on",
+        "if-site.dependabot-bypasses",
+        "if-site.other-bots"
+      ],
+      "fixes": [
+        "IfSite.AuthorContext"
+      ]
+    },
+    {
+      "name": "CacheBloat",
+      "doc": "CacheBloat is what cache-bloat reads.",
+      "fields": [
+        "cache-restore-save.chain",
+        "cache-restore-save.action",
+        "cache-restore-save.separate",
+        "cache-restore-save.saves-on",
+        "cache-restore-save.save-text"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "CachePoisoning",
+      "doc": "CachePoisoning is what cache-poisoning reads.",
+      "fields": [
+        "job.cache-write-on",
+        "job.cache-approval",
+        "job.environment",
+        "job.automatic-approval",
+        "job.cache-mode-text",
+        "checkout-site.checkout-code",
+        "checkout-site.refs",
+        "checkout-site.guard",
+        "checkout-site.sha",
+        "checkout-site.approval",
+        "checkout-site.environment",
+        "checkout-site.automatic-approval",
+        "checkout-site.cache-saves",
+        "checkout-site.unanswered-calls",
+        "checkout-site.cache-write-on",
+        "checkout-site.dispatch-input",
+        "checkout-site.dispatch-cache-on",
+        "checkout-site.code-run-steps",
+        "checkout-site.uses-text",
+        "cache-save.action",
+        "cache-save.key-refs",
+        "cache-save.path-refs",
+        "cache-save.cache-write-on",
+        "cache-save.dispatch-on",
+        "cache-save.cache-approval",
+        "cache-save.environment",
+        "cache-save.automatic-approval",
+        "cache-save.uses-text"
+      ],
+      "fixes": [
+        "Job.CacheModeNoWrite"
+      ]
+    },
+    {
+      "name": "CodeInjection",
+      "doc": "CodeInjection is what code-injection reads.",
+      "fields": [
+        "sink.kind",
+        "sink.refs",
+        "sink.variable-codes",
+        "sink.calls-not-read"
+      ],
+      "fixes": [
+        "Sink.RefFix"
+      ]
+    },
+    {
+      "name": "CommitSHA",
+      "doc": "CommitSHA is what commit-sha reads.",
+      "fields": [
+        "uses.repo",
+        "uses.ref",
+        "uses.exact",
+        "uses.uses-text",
+        "uses.outside",
+        "uses.run-actions",
+        "uses.read-by-outside",
+        "composite-call.actions",
+        "uses.always-skipped",
+        "composite-call.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Cond",
+      "doc": "Cond is what cond reads.",
+      "fields": [
+        "mixed-if.condition",
+        "mixed-if.status-functions"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Credentials",
+      "doc": "Credentials is what credentials reads.",
+      "fields": [
+        "registry-credentials.password-form",
+        "registry-credentials.password-text",
+        "registry-credentials.container"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DangerousTriggers",
+      "doc": "DangerousTriggers is what dangerous-triggers reads.",
+      "fields": [
+        "job.privileged-on",
+        "job.approval",
+        "job.environment",
+        "job.automatic-approval",
+        "job.token-write",
+        "job.secrets"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DependabotGitHubActions",
+      "doc": "DependabotGitHubActions is what dependabot-github-actions reads.",
+      "fields": [
+        "uses.repo",
+        "uses.ref",
+        "uses.level",
+        "uses.uses-text",
+        "uses.folded",
+        "uses.line-comment"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DependencyReviewSettings",
+      "doc": "DependencyReviewSettings is what dependency-review-settings reads.",
+      "fields": [
+        "dependency-review-step.warn-only",
+        "dependency-review-step.vulnerability-check",
+        "dependency-review-step.license-check",
+        "dependency-review-step.license-policy",
+        "dependency-review-step.comment-requested",
+        "dependency-review-step.pull-requests-write",
+        "dependency-review-step.uses-text"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DeprecatedCommands",
+      "doc": "DeprecatedCommands is what deprecated-commands reads.",
+      "fields": [
+        "sink.authored-commands"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DeprecatedNodeRuntime",
+      "doc": "DeprecatedNodeRuntime is what deprecated-node-runtime reads.",
+      "fields": [
+        "uses.repo",
+        "uses.path",
+        "uses.ref",
+        "uses.level",
+        "uses.uses-text",
+        "uses.outside",
+        "runs-using-site.using",
+        "composite-call.uses-text",
+        "composite-call.steps",
+        "node-runtime-setting.name",
+        "setup-node-version.node-version"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "EnvVar",
+      "doc": "EnvVar is what env-var reads.",
+      "fields": [
+        "env-key.name",
+        "env-key.variable",
+        "env-key.runner-value"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Expression",
+      "doc": "Expression is what expression reads.",
+      "fields": [
+        "expression-mistake.expression-key",
+        "expression-mistake.expression",
+        "expression-mistake.error",
+        "expression-mistake.value-types",
+        "expression-mistake.object-text",
+        "configuration-variable-ref.name",
+        "configuration-variable-ref.expression"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "FileCommand",
+      "doc": "FileCommand is what envvar-injection, output-clobbering and envpath-injection read.",
+      "fields": [
+        "sink.refs",
+        "sink.environment-file-writes",
+        "sink.inconclusive-writes",
+        "sink.calls-not-read"
+      ],
+      "fixes": [
+        "Sink.WriteFix"
+      ]
+    },
+    {
+      "name": "ImpostorCommit",
+      "doc": "ImpostorCommit is what impostor-commit reads.",
+      "fields": [
+        "uses.repo",
+        "uses.ref",
+        "uses.level",
+        "uses.uses-text",
+        "uses.outside",
+        "uses.read-by-outside",
+        "uses.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "KnownVulnerableActions",
+      "doc": "KnownVulnerableActions is what known-vulnerable-actions reads.",
+      "fields": [
+        "composite-call.uses-text",
+        "composite-call.steps",
+        "composite-call.unanswered",
+        "uses.repo",
+        "uses.path",
+        "uses.ref",
+        "uses.exact",
+        "uses.uses-text",
+        "uses.outside",
+        "uses.read-by-outside",
+        "composite-call.always-skipped",
+        "uses.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "MissingTimeoutMinutes",
+      "doc": "MissingTimeoutMinutes is what missing-timeout-minutes reads.",
+      "fields": [
+        "job-timeout.written",
+        "job-timeout.job"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Permissions",
+      "doc": "Permissions is what permissions reads.",
+      "fields": [
+        "job.token-write",
+        "job.write-all",
+        "job.called-only",
+        "job.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "RequestForgery",
+      "doc": "RequestForgery is what request-forgery reads.",
+      "fields": [
+        "sink.requests",
+        "request-action-site.action",
+        "request-action-site.input",
+        "request-action-site.host-refs",
+        "request-action-site.path-refs",
+        "request-action-site.secrets",
+        "request-action-site.runner-hosting",
+        "request-action-site.runner-labels",
+        "sink.calls-not-read"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretExfiltration",
+      "doc": "SecretExfiltration is what secret-exfiltration reads.",
+      "fields": [
+        "sink.requests",
+        "sink.calls-not-read",
+        "sink.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretExposure",
+      "doc": "SecretExposure is what secret-exposure reads.",
+      "fields": [
+        "secrets-context-read.text",
+        "secrets-context-read.called-only",
+        "secrets-context-read.caller-coverage",
+        "secrets-context-read.inherit-callers",
+        "secrets-context-read.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretInLog",
+      "doc": "SecretInLog is what secret-in-log reads.",
+      "fields": [
+        "sink.secret-leaks",
+        "printed-output.secret",
+        "printed-output.token",
+        "printed-output.transform",
+        "printed-output.text",
+        "sink.calls-not-read",
+        "sink.always-skipped",
+        "printed-output.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretsInArtifacts",
+      "doc": "SecretsInArtifacts is what secrets-in-artifacts reads.",
+      "fields": [
+        "left-credential.file",
+        "left-credential.lifetime",
+        "left-credential.missing-commits",
+        "left-credential.uses-text",
+        "upload.taken-credentials",
+        "upload.hidden-missing-commits",
+        "upload.downloadable-during-run",
+        "upload.inconclusive",
+        "upload.uses-text",
+        "left-credential.always-skipped",
+        "upload.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretsInherit",
+      "doc": "SecretsInherit is what secrets-inherit reads.",
+      "fields": [
+        "job.inherit-secrets",
+        "job.called-kind",
+        "job.called-repo",
+        "job.uses-text",
+        "job.secrets",
+        "job.called-context-reads",
+        "job.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SelfHostedRunner",
+      "doc": "SelfHostedRunner is what self-hosted-runner reads.",
+      "fields": [
+        "job.runner-labels",
+        "job.inconclusive-labels"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SetOutputInjection",
+      "doc": "SetOutputInjection is what set-output-injection reads.",
+      "fields": [
+        "sink.refs",
+        "sink.has-step-id",
+        "sink.log-writes",
+        "sink.calls-not-read"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UnmaskedSecretExposure",
+      "doc": "UnmaskedSecretExposure is what unmasked-secret-exposure reads.",
+      "fields": [
+        "secret-part.secrets",
+        "secret-part.text",
+        "secret-part.via",
+        "secret-part.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UnpinnedImages",
+      "doc": "UnpinnedImages is what unpinned-images reads.",
+      "fields": [
+        "composite-call.uses-text",
+        "composite-call.actions",
+        "composite-call.steps",
+        "composite-call.unanswered",
+        "image-site.site",
+        "image-site.service-name",
+        "image-site.images",
+        "image-site.inconclusive-images",
+        "composite-call.always-skipped",
+        "image-site.always-skipped"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UnsecureCommands",
+      "doc": "UnsecureCommands is what unsecure-commands reads.",
+      "fields": [
+        "sink.refs",
+        "sink.unsecure-flag",
+        "sink.unsecure-flag-place",
+        "sink.has-step-after",
+        "sink.log-writes",
+        "sink.calls-not-read"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UnsetConfigurationVariable",
+      "doc": "UnsetConfigurationVariable is what unset-configuration-variable reads.",
+      "fields": [
+        "configuration-variable-ref.name",
+        "configuration-variable-ref.expression",
+        "configuration-variable-ref.use",
+        "configuration-variable-ref.environments",
+        "configuration-variable-ref.environment-expression",
+        "configuration-variable-ref.remote-caller-only"
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UnsoundContains",
+      "doc": "UnsoundContains is what unsound-contains reads.",
+      "fields": [
+        "if-site.attacker-on",
+        "if-site.substring-bypasses"
+      ],
+      "fixes": [
+        "IfSite.ContainsArray",
+        "IfSite.Equality"
+      ]
+    },
+    {
+      "name": "UntrustedCheckout",
+      "doc": "UntrustedCheckout is what untrusted-checkout reads.",
+      "fields": [
+        "checkout-site.checkout-code",
+        "checkout-site.refs",
+        "checkout-site.inconclusive-values",
+        "checkout-site.dynamic",
+        "checkout-site.pr-code-on",
+        "checkout-site.dispatch-on",
+        "checkout-site.dispatch-input",
+        "checkout-site.guard",
+        "checkout-site.sha",
+        "checkout-site.approval",
+        "checkout-site.environment",
+        "checkout-site.automatic-approval",
+        "checkout-site.code-run-steps",
+        "checkout-site.step-path",
+        "checkout-site.uses-text"
+      ],
+      "fixes": [
+        "CheckoutSite.BaseCheckout"
+      ]
+    },
+    {
+      "name": "UntrustedCheckoutToctou",
+      "doc": "UntrustedCheckoutToctou is what untrusted-checkout-toctou reads.",
+      "fields": [
+        "checkout-site.checkout-code",
+        "checkout-site.refs",
+        "checkout-site.inconclusive-values",
+        "checkout-site.dynamic",
+        "checkout-site.pr-code-on",
+        "checkout-site.guard",
+        "checkout-site.sha",
+        "checkout-site.approval",
+        "checkout-site.environment",
+        "checkout-site.automatic-approval",
+        "checkout-site.mutable",
+        "checkout-site.uses-text"
+      ],
+      "fixes": [
+        "CheckoutSite.PinHeadSHA"
+      ]
+    },
+    {
+      "name": "UsesPath",
+      "doc": "UsesPath is what uses-path reads.",
+      "fields": [
+        "uses-path-site.uses-text",
+        "uses-path-site.normalized",
+        "uses-path-site.form"
+      ],
+      "fixes": []
+    }
+  ]
+}

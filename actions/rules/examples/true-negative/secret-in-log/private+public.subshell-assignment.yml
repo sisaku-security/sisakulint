@@ -1,0 +1,18 @@
+# situation: on push, in a public repository, a step sets t to the secret
+#   TOKEN without its first character inside ( ... ), and after the ( ... )
+#   prints t.
+# reason: bash runs ( ... ) in a subshell, so after the subshell t is empty,
+#   and echo prints nothing of the secret.
+# attack: anyone opens the run's log.
+# attack-run-behavior: the log has the line t= alone.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          S: ${{ secrets.TOKEN }}
+        run: |
+          ( t=${S:1} )
+          echo "t=$t"

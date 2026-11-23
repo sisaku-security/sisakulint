@@ -1,0 +1,23 @@
+# situation: on pull_request_target, the job runs ./deploy.sh with
+#   secrets.DEPLOY_TOKEN only if contains(the repository of the pull
+#   request's head, 'myorg/repo') holds.
+# reason: contains with the head's repository first is true for a fork
+#   whose owner's login ends with myorg and whose name starts with repo,
+#   such as xmyorg/repo, which anyone can make.
+# cause: the rule reads the if also in the run of a pull request from a
+#   branch of the repository, whose head is the repository itself, and the
+#   repository may be myorg/repo, so comparing whole values does not keep
+#   every run out.
+# attack-value: github.event.pull_request.head.repo.full_name = "xmyorg/repo"
+# attack-run-behavior: a pull request from the fork xmyorg/repo starts the
+#   job; contains('xmyorg/repo', 'myorg/repo') is true, so ./deploy.sh runs
+#   with TOKEN set to DEPLOY_TOKEN's value.
+on: pull_request_target
+jobs:
+  deploy:
+    if: contains(github.event.pull_request.head.repo.full_name, 'myorg/repo')
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

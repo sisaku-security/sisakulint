@@ -1,0 +1,19 @@
+# situation: on issues, a job with cache-mode: write saves build with
+#   actions/cache/save under a key that has ${{ env.X }}.
+# reason: which names that env sets, and their values, are known only at run
+#   time, so whether an attacker controls env.X is not known.
+# attack-value: env.X = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when ${{ env.X }} holds the value, the job saves build
+#   to the cache of the default branch's scope under build-<value>, a key the
+#   attacker chose.
+on: issues
+cache-mode: write
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.E) }}
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ env.X }}

@@ -1,0 +1,24 @@
+# situation: the job uploads the path .git/config/.
+# reason: @actions/glob matches a line that ends in / with a directory only,
+#   and .git/config is a file, so the upload takes nothing from .git.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: the pattern .git/config/ matches only a directory,
+#   and .git/config is a file, so the upload finds no file and makes no
+#   artifact holding it; the reader takes no token.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .git/config/
+          include-hidden-files: true
+      - run: echo after the upload

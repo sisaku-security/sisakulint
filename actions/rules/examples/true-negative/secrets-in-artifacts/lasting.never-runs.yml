@@ -1,0 +1,43 @@
+# situation: on push, the job whose id is disabled has if: false, and the job
+#   whose id is on-failure needs the job build and has if: needs.build.result
+#   == 'failure'; each of the two jobs runs google-github-actions/auth v2 with
+#   the secret GCP_KEY, which writes a key file of the service account in the
+#   workspace, and uploads the workspace as an artifact.
+# reason: GitHub skips the job disabled because the if of the job disabled is
+#   false. The if of the job on-failure calls no status function, so GitHub
+#   evaluates the if of the job on-failure only when the job build succeeded;
+#   needs.build.result is then success, and the if is false. When the job
+#   build fails or is skipped, GitHub skips the job on-failure without
+#   evaluating the if. So neither job runs
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md).
+# attack: anyone who can read the repository downloads the artifacts of the
+#   run and reads the key file.
+# attack-run-behavior: GitHub skips the job disabled and the job on-failure,
+#   so no step writes the key file and no step uploads an artifact.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo built
+  disabled:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+  on-failure:
+    needs: build
+    if: needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .

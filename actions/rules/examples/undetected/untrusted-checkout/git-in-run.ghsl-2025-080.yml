@@ -1,0 +1,73 @@
+# situation: on issue_comment, when the comment is on a pull request and
+#   starts with @nf-core-bot changelog, and on pull_request_target opened, a
+#   run step sets PR_NUMBER to the number of the pull request and checks out
+#   the pull request with gh pr checkout $PR_NUMBER; a later step runs a
+#   python script of the checked-out tree, with a secret token. This is
+#   changelog.yml of nf-core/tools (commit
+#   75e643ad2c62cdc8ecd39aa56c0c314efd4b13e4, lines 1-37 and 50-55). The step
+#   that sets up Python, the step that installs packages, the variables of
+#   the python step other than the token, and the steps after the python
+#   step are left out. update-textual-snapshots.yml of the same commit
+#   (GHSL-2025-078, lines 1-13, 28-32 and 45-49) runs only on issue_comment,
+#   checks out the pull request with gh pr checkout and the number of the
+#   issue written by ${{ }}, and then runs pytest on the checked-out tree.
+#   galata-update.yml of jupyterlab/jupyterlab (commit
+#   362818faf8472179a3d0a87a58c3279efe003912, GHSL-2024-144, whose issue is
+#   GHSL-2024-138) runs gh pr checkout ${{ github.event.issue.number }} on
+#   issue_comment and then bash ./scripts/ci_install.sh of the pull request.
+#   scala3doc.yaml of lampepfl/dotty (commit
+#   3f4b10156da96e6ccea58e4955587c94a95294ac, GHSL-2020-272) runs git fetch
+#   and git checkout of refs/pull/$PR_NUMBER/merge on pull_request_target
+#   (lines 25-26), and pr.yml of gpuweb/cts (commit
+#   d516cfa8fe73f31b7c788e6b182360b843d52587, GHSL-2020-317) runs git fetch
+#   and git checkout of github.event.pull_request.head.sha (lines 17-18);
+#   later steps run sbt and npm over the checkout.
+# reason: the rule does not read gh or git in a run; reading gh pr checkout,
+#   or git fetch and git checkout of the pull request, in the run step would
+#   find the checkout of the pull request.
+# cause: the rule reads checkouts by actions/checkout only.
+# attack-value: the file .github/workflows/changelog.py in the pull request's head = "print(\"PWNED\")\n"
+# attack-run-behavior: when the author of a pull request from a fork opens
+#   the pull request, or comments @nf-core-bot changelog on the pull request,
+#   gh pr checkout switches the workspace to the head of the pull request,
+#   and python runs the changelog.py of the author, which prints PWNED, with
+#   the secret NF_CORE_BOT_AUTH_TOKEN in the environment.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-080_nf-core_tools/
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-078_nf-core_tools/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-144_JupyterLab/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-272-lampepfl-dotty-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-317-gpuweb-cts-workflow/
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened]
+    branches:
+      - dev
+jobs:
+  update_changelog:
+    runs-on: ubuntu-latest
+    if: |
+      github.repository_owner == 'nf-core' && (
+        github.event_name == 'pull_request_target' ||
+        github.event.issue.pull_request && startsWith(github.event.comment.body, '@nf-core-bot changelog')
+      )
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          token: ${{ secrets.NF_CORE_BOT_AUTH_TOKEN }}
+      - name: Checkout Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.NF_CORE_BOT_AUTH_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "issue_comment" ]]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+          elif [[ "${{ github.event_name }}" == "pull_request_target" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
+          gh pr checkout $PR_NUMBER
+      - name: Update CHANGELOG.md from the PR title
+        env:
+          GH_TOKEN: ${{ secrets.NF_CORE_BOT_AUTH_TOKEN }}
+        run: |
+          python ${GITHUB_WORKSPACE}/.github/workflows/changelog.py

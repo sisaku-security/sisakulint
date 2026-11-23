@@ -1,0 +1,14 @@
+# situation: after a checkout, a step uses ./../app/.github/actions/setup,
+#   a path that goes with .. above the root of the workspace.
+# reason: the runner resolves the path from the workspace, which is
+#   /home/runner/work/<repository>/<repository> on a GitHub-hosted runner;
+#   the step runs the action of the checked-out repository only when the
+#   repository is named app, and otherwise the action of another directory
+#   of the runner.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: ./../app/.github/actions/setup

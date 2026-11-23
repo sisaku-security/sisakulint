@@ -1,0 +1,28 @@
+# situation: on workflow_dispatch, a job with no cache-mode checks out the
+#   ref that ${{ inputs.ref }} names and runs npm --cache view ci.
+# reason: a limitation (run time): npm reads view as the value of the
+#   option --cache, which takes a value, and runs npm ci, which runs the
+#   script preinstall of the package.json of the ref; which options take
+#   a value is in the definitions of the npm release that the job uses,
+#   which is known when the job runs.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command as the npm command, so the rule reads npm --cache view ci as
+#   npm view, a step that runs no code of the tree, and reports nothing, not the inconclusive kind
+#   input-dispatch.
+# attack-value: the file package.json in the ref = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm --cache view ci runs the script preinstall,
+#   which prints PWNED, and can save an entry to the cache of the branch of the run.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.ref }}
+      - run: npm --cache view ci

@@ -1,0 +1,7 @@
+name: z33
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c33.yml
+    with:
+      b: ${{ format('{0}', 'true') }}

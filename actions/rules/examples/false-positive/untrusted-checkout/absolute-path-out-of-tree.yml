@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request and runs pnpm --dir /opt/tool install.
+# reason: a todo (the same file): pnpm runs in /opt/tool, out of the pull request, and loads the
+#   .pnpmfile.cjs and the package.json of /opt/tool, so pnpm runs no code
+#   of the pull request.
+# cause: the rule reads the absolute path /opt/tool as a path that may name
+#   a directory of the tree, so the rule reports untrusted-checkout.executed.
+# attack-value: the file .pnpmfile.cjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: pnpm --dir /opt/tool install does not load the .pnpmfile.cjs
+#   of the attacker, so PWNED is not printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: pnpm --dir /opt/tool install

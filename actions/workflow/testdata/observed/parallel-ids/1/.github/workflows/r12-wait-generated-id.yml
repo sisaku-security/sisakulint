@@ -1,0 +1,9 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 3; echo bg-noid-done
+        background: true
+      - wait: __run
+      - run: echo after

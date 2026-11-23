@@ -1,0 +1,24 @@
+# situation: on issue_comment with the activity type pinned, a job with a
+#   secret runs when the actor is a part of the string 'alice bob'
+#   (contains('alice bob', github.actor)).
+# reason: the actor of a run of issue_comment with the activity type
+#   pinned is the account that pins the comment. GitHub did not let an
+#   account with no role in the repository pin a comment, even on an issue
+#   that the account opened, so the actor of the run is an account that
+#   GitHub lets pin a comment, such as the owner, not an account with no
+#   role.
+# attack: an attacker whose login is ali, a part of alice, opens an issue,
+#   comments on the issue, and tries to pin the comment.
+# attack-run-behavior: GitHub does not let the attacker pin the comment,
+#   and no run of issue_comment with the activity type pinned starts for the
+#   attacker; a run that starts when the owner pins a comment has the owner
+#   as the actor.
+on: {issue_comment: {types: [pinned]}}
+jobs:
+  deploy:
+    if: contains('alice bob', github.actor)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

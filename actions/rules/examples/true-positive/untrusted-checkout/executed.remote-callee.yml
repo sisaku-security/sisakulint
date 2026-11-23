@@ -1,0 +1,25 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/untrusted-checkout-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   executed (executed.composer-test.yml) of the rule, with on:
+#   workflow_call in place of the on of executed.composer-test.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive,
+#   pull_request_target checks out the head of a pull request from a fork,
+#   with the guard of actions/checkout taken away, and composer test runs
+#   its code.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   pull_request_target runs the job with the base repository's token and
+#   secrets, while head.sha is the commit the fork's author pushed, and
+#   composer runs the script test of that commit's composer.json as a
+#   command of composer, and the script pre-command-run before any command.
+# attack-value: the file composer.json in the pull request's head = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the fork's commit, and
+#   composer test runs the script test of its composer.json, which prints
+#   PWNED, with the base repository's GITHUB_TOKEN, which the checkout left
+#   in .git/config, and its secrets.
+on: pull_request_target
+jobs:
+  c:
+    uses: example-org/untrusted-checkout-remote/.github/workflows/w.yml@v1
+    secrets: inherit

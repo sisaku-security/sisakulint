@@ -1,0 +1,21 @@
+# situation: on push, in a private repository (repo.public answered false),
+#   a step takes the password out of the JSON secret DB, registers the
+#   password with ::add-mask:: and prints the password after.
+# reason: the runner masks a value from the line after its ::add-mask::
+#   on, so the password is printed as ***.
+# attack: one with read access to the repository opens the run's log to
+#   read the password.
+# attack-run-behavior: the line of ::add-mask:: is not printed, and the step
+#   prints "password: ***".
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DB: ${{ secrets.DB }}
+        run: |
+          PASSWORD=$(jq -r .password <<< "$DB")
+          echo "::add-mask::$PASSWORD"
+          echo "password: $PASSWORD"

@@ -1,0 +1,20 @@
+# situation: on push, in a public repository or in a private one, a step
+#   reads the client id and the client secret from two secrets, one for
+#   each value.
+# reason: each value is a whole secret, which the runner masks wherever the
+#   log has it, the header of the step included.
+# attack: one who may read the run's log opens it to read the client
+#   secret.
+# attack-run-behavior: the header of the step prints CLIENT_ID and
+#   CLIENT_SECRET as ***.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: log in to azure
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: az login --service-principal -u "$CLIENT_ID" -p "$CLIENT_SECRET" --tenant contoso.onmicrosoft.com

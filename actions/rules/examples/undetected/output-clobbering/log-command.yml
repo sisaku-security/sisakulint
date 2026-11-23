@@ -1,0 +1,25 @@
+# situation: on issues opened, a step prints the issue's title, and the
+#   next step reads the output tag of the step.
+# reason: a todo (the same file): the runner reads ##[set-output name=…;]
+#   anywhere in a line of the log, without ACTIONS_ALLOW_UNSECURE_COMMANDS,
+#   so a title with ##[set-output name=tag;]PWNED sets the output tag that
+#   the next step writes into its script.
+# cause: the rule reads what a step writes to $GITHUB_OUTPUT, not the
+#   workflow commands of its log.
+# attack-value: github.event.issue.title = "x ##[set-output name=tag;]PWNED"
+# attack-run-behavior: the runner reads the line of the log as set-output,
+#   and the output tag of the step is PWNED.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: title
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "title: $TITLE"
+      - run: echo "tag ${{ steps.title.outputs.tag }}"

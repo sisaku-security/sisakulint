@@ -1,0 +1,32 @@
+on: push
+jobs:
+  after-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        run: exit 1
+      - id: c1
+        if: ${{ false }} && ${{ false }}
+        run: echo c1-ran
+      - id: c2
+        if: ${{ always() }} && ${{ false }}
+        run: echo c2-ran
+      - id: c3
+        if: always() && ${{ false }}
+        run: echo c3-ran
+      - id: c4
+        if: always() && false
+        run: echo c4-ran
+  trim:
+    runs-on: ubuntu-latest
+    steps:
+      - id: t1
+        if: " ${{ false }}"
+        run: echo t1-ran
+      - id: t2
+        if: |
+          ${{ false }}
+        run: echo t2-ran
+      - id: t3
+        if: x ${{ false }}
+        run: echo t3-ran

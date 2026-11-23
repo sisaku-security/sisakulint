@@ -1,0 +1,20 @@
+# situation: on push, the script of a step downloads a Dockerfile and builds
+#   an image from the Dockerfile.
+# reason: a limitation (decided when the job runs): the content of the
+#   Dockerfile, and so the image that the FROM of the Dockerfile names, is what the
+#   download gives when the job runs.
+# cause: the Dockerfile is not in the repository or in the workflow.
+# attack: whoever can push to the image that the FROM of the downloaded
+#   Dockerfile names by a tag pushes an image of theirs under that tag.
+# attack-run-behavior: docker build pulls the image that the FROM of the
+#   downloaded Dockerfile names, which is now the image of the attacker, and
+#   runs the RUN commands of the Dockerfile in a container of that image on
+#   the docker daemon of the runner.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsSL -o Dockerfile https://example.com/build/Dockerfile
+          docker build -t app .

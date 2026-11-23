@@ -1,0 +1,45 @@
+# situation: on issue_comment, when the comment is on a pull request and its
+#   body is run release_notes, a job checks out refs/pull/<number>/head and
+#   runs node .github/scripts/pr_list.mjs. This is release_notes.yml of
+#   mongodb/node-mongodb-native (commit
+#   7f8edf30e376738fd554ac232d238e7022bc86a8, lines 10, 21, 44 and 56),
+#   reduced to the checkout and the step after the checkout: the steps that
+#   check that the commenter is a maintainer (lines 26-39) are left out, so in
+#   this example anyone who comments starts the run.
+#   release_notes.yml of mongodb/js-bson (commit
+#   9272c9aeddd1dfb606ecd9e9ad770201afa28225), of
+#   mongodb-js/mongodb-connection-string-url (commit
+#   f145365bae7fe169d33a1d871cdd64d9b33cd8a0) and of mongodb-js/kerberos
+#   (commit 445408e9fa5789b71bfdcef37f7c0ccda5dc5126) have the same
+#   checkout and run the same scripts with node; only the step that installs
+#   the packages after the checkout differs.
+# reason: node runs the script of the checkout, which the author of the pull
+#   request writes. In this example, anyone who comments starts the run. In
+#   the workflow of the advisory, the comment of a maintainer starts the run,
+#   and the rule reports that workflow too, because the rule does not read a
+#   comment as an approval of the commit.
+# attack: the author of the pull request writes .github/scripts/pr_list.mjs in
+#   the head commit.
+# attack-run-behavior: after anyone comments run release_notes on the pull
+#   request, node runs the script of the author with contents: write. In the
+#   workflow of the advisory, the run goes on only when the commenter is a
+#   maintainer, and the author pushes the script after the comment of the
+#   maintainer.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-166_MongoDB_Node_js_Driver/
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-167_mongodb_js-bson_repository/
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-190_mongodb-js_mongodb-connection-string-url_repository/
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-191_mongodb-js_kerberos_repository/
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  notes:
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == 'run release_notes' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - run: node .github/scripts/pr_list.mjs

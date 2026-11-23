@@ -1,0 +1,26 @@
+# situation: the composite action runs ./deploy.sh with the token of the job
+#   only if contains(inputs.who, 'alice') holds; ci.yml calls the action on
+#   issue_comment and gives the login of the commenter as who.
+# reason: a todo (a file of the repository): contains with the login as the
+#   first argument is true for any login that has alice as a part, such as
+#   alice-x, and anyone can register such a login and comment on an issue.
+# cause: the rule does not follow the value under with: of the caller into
+#   inputs.who of the action, so the rule does not see that inputs.who holds
+#   the login of the commenter.
+# attack-value: github.event.comment.user.login = "alice-x"
+# attack-run-behavior: a comment by the account alice-x on any issue runs
+#   ci.yml on issue_comment; contains('alice-x', 'alice') is true, so
+#   ./deploy.sh runs with TOKEN set to the token of the job.
+name: deploy
+description: deploy for alice
+inputs:
+  who:
+    description: the login to compare
+runs:
+  using: composite
+  steps:
+    - if: contains(inputs.who, 'alice')
+      run: ./deploy.sh
+      shell: bash
+      env:
+        TOKEN: ${{ github.token }}

@@ -1,0 +1,7 @@
+name: withobj
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/echo
+      with:
+        v: ${{ github.event }}

@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/permissions-unanswered, whose content is the
+#   workflow of the true positive write-all (write-all.yml) of the rule,
+#   with on: workflow_call in place of the on of write-all.yml. The linter
+#   has no answer of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: actions/checkout writes the token into .git/config as
+#   an extraheader; npm ci runs the package's install script, which reads it
+#   there, and the token it sends writes every scope until the job ends.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/permissions-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

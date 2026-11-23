@@ -1,0 +1,28 @@
+# situation: the workflow runs on pull_request_target; the job whose id is
+#   test has no if and needs the job whose id is build; the if of a step of
+#   the job test is
+#   needs.build.result == 'failure' || github.head_ref == 'release', and the
+#   step runs echo with github.head_ref written in the script by a ${{ }}.
+# reason: GitHub runs the job test only after the job build succeeded, so in
+#   each step of the job test the needs.build.result value is success; the
+#   if of the step is then true only when github.head_ref equals release,
+#   ignoring the case of the letters, and a github.head_ref value of release
+#   in upper case or lower case letters holds no shell code
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-jobs-in-a-workflow-needs.md).
+# attack-value: github.head_ref = "$(echo PWNED)"
+# attack-run-behavior: the attacker opens a pull request from a fork whose
+#   branch is named $(echo PWNED); the job build succeeds, so the if of the
+#   step is false, and GitHub skips the step.
+on: pull_request_target
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo built
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ needs.build.result == 'failure' || github.head_ref == 'release' }}
+        run: echo "${{ github.head_ref }}"

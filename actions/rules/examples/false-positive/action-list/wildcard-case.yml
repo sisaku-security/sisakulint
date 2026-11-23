@@ -1,0 +1,17 @@
+# situation: repo.action-list is */Octocat@*, and a step uses
+#   space/octocat@v1.
+# reason: GitHub compares the owner and the name of a repository without
+#   case, so the pattern allows space/octocat, and the repository listed the
+#   action as one that the repository trusts.
+# cause: the rule compares the letters after the first * of a pattern as
+#   written.
+# attack: the maintainer of an action that the repository did not list
+#   writes code that reads the secrets of the job.
+# attack-run-behavior: the step runs space/octocat, which the repository
+#   listed, so no code of that maintainer runs.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: space/octocat@v1

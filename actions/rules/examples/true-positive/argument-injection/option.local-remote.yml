@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step fetches from the repository at
+#   the local path /tmp/r and passes the name of the pull request's head
+#   branch to git fetch after the repository, through env and inside quotes.
+# reason: git fetch reads a word that begins with - as an option even after
+#   the repository, and git runs the program given as the value of
+#   --upload-pack in place of git-upload-pack. For a repository on a local path, git runs
+#   that program on the runner, and git runs the program even when /tmp/r
+#   does not exist.
+# attack-value: github.head_ref = "--upload-pack=echo${IFS}PWNED>&2;false"
+# attack-run-behavior: git fetch reads the word as --upload-pack and runs
+#   echo${IFS}PWNED>&2;false through the shell on the runner: the shell
+#   expands ${IFS} to a blank and prints PWNED, and the fetch then fails.
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: git fetch /tmp/r "$HEAD_REF"

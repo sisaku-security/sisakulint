@@ -1,0 +1,7 @@
+name: v05
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/cin.yml
+    with:
+      s: ${{ github.event }}

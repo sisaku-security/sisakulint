@@ -1,0 +1,45 @@
+# situation: on pull_request_target, two jobs write an output of an action of
+#   another repository that lists the changed files into a run script by
+#   ${{ }}, in the forms of two advisories. The job changed is the proof of
+#   concept of GHSA-mcph-m25j-8j63: tj-actions/changed-files v40.2.3 (before
+#   41) gives the changed files in its output all_changed_files, and a step
+#   loops over the output (for file in ${{ … }}; do echo "$file was changed";
+#   done). The job verify is the proof of concept of GHSA-ghm2-rq8q-wrhc:
+#   tj-actions/verify-changed-files v16.1.1 (before 17) gives the changed files
+#   in its output changed_files, and a step echoes the output.
+# reason: the outputs are what the two actions set, and the action.yml of each
+#   action is not among the files that the linter reads, so whether an attacker
+#   controls an output is not known. Before the fixed versions, the two actions
+#   escape only " in the names of the files (GHSA-mcph-m25j-8j63: "only escapes
+#   \" for JSON values"), and the author of the pull request names the files
+#   of the pull request.
+# cause: the rule does not yet ask for the action.yml of another repository as
+#   a fact, and does not read what an action does with the names of files.
+# attack-value: steps.changed-files.outputs.all_changed_files = "$(echo${IFS}PWNED>/proc/$$/fd/1).txt"
+# attack-run-behavior: the author of a pull request from a fork adds a file
+#   named $(echo${IFS}PWNED>/proc/$$/fd/1).txt. The script of the step List
+#   all changed files becomes for file in $(echo${IFS}PWNED>/proc/$$/fd/1).txt;
+#   …, and bash runs the command substitution, which prints PWNED, with the
+#   token of the job. In the job verify, the name goes into the script of the
+#   echo the same way.
+# advisory: https://github.com/advisories/GHSA-mcph-m25j-8j63
+# advisory: https://github.com/advisories/GHSA-ghm2-rq8q-wrhc
+on: pull_request_target
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    steps:
+      - id: changed-files
+        uses: tj-actions/changed-files@56284d80811fb5963a972b438f2870f175e5b7c8 # v40.2.3
+      - name: List all changed files
+        run: |
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "$file was changed"
+          done
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - id: verify-changed-files
+        uses: tj-actions/verify-changed-files@54e20d3c522fbeed99ebaf2e38a1eb33214c58ba # v16.1.1
+      - run: |
+          echo "Changed files: ${{ steps.verify-changed-files.outputs.changed_files }}"

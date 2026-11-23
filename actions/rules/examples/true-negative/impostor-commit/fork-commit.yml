@@ -1,0 +1,15 @@
+# situation: the step uses actions/checkout by the tag v4.
+# reason: GitHub serves a fork's commit under the repository's name only by
+#   its SHA; a tag is looked up among actions/checkout's own tags, so v4
+#   cannot name a commit only a fork has (commit-sha reports the tag: the
+#   undetected form not-sha of this rule declares the form as other-rule).
+# attack: someone pushes a commit to their fork of actions/checkout.
+# attack-run-behavior: the runner looks up v4 among actions/checkout's own
+#   tags and runs 11d5960a, the commit v4 names; no tag of actions/checkout
+#   names the fork's commit, so the step does not run it.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4

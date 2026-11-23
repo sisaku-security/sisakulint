@@ -1,0 +1,18 @@
+# situation: on issues, a run writes secrets, variables and the runner to
+#   $GITHUB_OUTPUT.
+# reason: no added gain: no attacker writes them.
+# cause: the rule reads as what an attacker may write only references to
+#   github (through its table of contexts), env, the outputs of steps and of
+#   jobs needed, inputs and matrix; secrets, vars and runner are none of
+#   these, so it reads them as values no attacker writes.
+# attack-value: secrets.TOKEN = "x\nPWNED=1"
+# attack-run-behavior: ${{ }} puts the secret's two lines in the script, so
+#   echo writes the lines t=x and PWNED=1 followed by the values of vars.NAME
+#   and runner.os to $GITHUB_OUTPUT, and the runner sets the outputs t and
+#   PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ secrets.TOKEN }} ${{ vars.NAME }} ${{ runner.os }}" >> "$GITHUB_OUTPUT"

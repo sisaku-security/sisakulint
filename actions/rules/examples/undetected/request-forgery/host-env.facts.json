@@ -1,0 +1,13 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"sonarsource/sonarqube-scan-action","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"sonarsource/sonarqube-scan-action","ref":"v4"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"sonarsource/sonarqube-scan-action","ref":"v4"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"host-env.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-tags","repo":"sonarsource/sonarqube-scan-action","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":["refs/tags/v4"]},
+{"query":{"kind":"git.ref-commit","repo":"sonarsource/sonarqube-scan-action","ref":"v4"},"state":"found","value":{"ref":"refs/tags/v4","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"sonarsource/sonarqube-scan-action"},"state":"found","value":[{"first_patched_version":"6.0.0","ghsa_id":"GHSA-5xq9-5g24-4g6f","severity":"high","vulnerable_version_range":">= 4.0.0, < 6.0.0"},{"first_patched_version":"5.3.1","ghsa_id":"GHSA-f79p-9c5r-xg88","severity":"high","vulnerable_version_range":">= 4.0.0, <= 5.3.0"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"sonarsource/sonarqube-scan-action"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"host-env.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

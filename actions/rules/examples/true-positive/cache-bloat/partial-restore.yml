@@ -1,0 +1,21 @@
+# situation: on push, actions/cache saves under a key unique to the run and
+#   restores the newest older cache by restore-keys, as the tips of
+#   actions/cache write the pattern ("Update a cache").
+# reason: no cache has the key of the run, so each run restores the newest
+#   older cache by the prefix and saves the content of the older cache, with
+#   what the run added, under a new key: the content of every older cache
+#   stays in the next cache.
+on: push
+jobs:
+  primes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: update cache on every commit
+        uses: actions/cache@v4
+        with:
+          path: prime-numbers
+          key: primes-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            primes-${{ runner.os }}
+      - run: ./generate-primes.sh

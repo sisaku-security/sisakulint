@@ -1,0 +1,18 @@
+# situation: on issues, a job with cache-mode: write saves build with
+#   actions/cache/save under a key that has ${{ env.NOWHERE }}.
+# reason: a step before may set it at run time through $GITHUB_ENV, so what it
+#   holds, and whether an attacker controls it, is not known.
+# attack-value: env.NOWHERE = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when ${{ env.NOWHERE }} holds the value, the job saves
+#   build to the cache of the default branch's scope under build-<value>, a key
+#   the attacker chose.
+on: issues
+cache-mode: write
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ env.NOWHERE }}

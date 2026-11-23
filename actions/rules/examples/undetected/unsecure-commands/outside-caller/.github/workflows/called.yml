@@ -1,0 +1,28 @@
+# situation: the workflow is called; a job with
+#   ACTIONS_ALLOW_UNSECURE_COMMANDS true prints github.event.issue.body. Its
+#   one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack: an attacker opens an issue in another repository whose workflow
+#   calls this one, with the body ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: called by ci.yml on push, the event has no issue, so
+#   the step prints an empty line. Called on issues by another repository,
+#   the runner sets BASH_ENV in that run.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY"
+      - run: echo next

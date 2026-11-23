@@ -1,0 +1,22 @@
+# situation: a job starts the service db from the image
+#   example-org/unlisted-db:1; repo.action-list is * and patterns that start
+#   with !, among them !docker://example-org/unlisted-*.
+# reason: the publisher of example-org/unlisted-db decides what the service
+#   runs, though the repository did not list the image as one that the
+#   repository trusts, and the service reads the password that the job
+#   gives the service and the data that the tests send.
+# attack: the publisher of example-org/unlisted-db pushes an image under the
+#   tag 1 that sends the password and the data out.
+# attack-run-behavior: the runner pulls the image and starts the service
+#   beside the job, and the tests send their data to the service.
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: example-org/unlisted-db:1
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - run: make test

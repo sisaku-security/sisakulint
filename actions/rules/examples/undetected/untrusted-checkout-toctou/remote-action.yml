@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step uses an action of another
+#   repository whose checkout takes the pull request's code, as in the
+#   Ultralytics incident (ultralytics/actions
+#   eb1201bd933b9f6096c64525ccaee3684c91bf14, action.yml:94: repository: ${{
+#   github.event.pull_request.head.repo.full_name || github.repository }}).
+# reason: a todo (a fact): the checkout is in an action of another
+#   repository.
+# cause: the rule does not read the action.yml of another repository.
+# attack-value: the file prettier.config.js in the pull request's head = "console.log(\"PWNED\"); module.exports = {};\n"
+# attack-run-behavior: the action checks out the branch github.head_ref of
+#   github.event.pull_request.head.repo.full_name, the fork, with its token
+#   input, and its later steps run tools over that tree when their inputs
+#   turn them on: with prettier: true, npx prettier loads the pull request's
+#   prettier.config.js, which prints PWNED. This example passes no inputs,
+#   and the action's defaults turn those steps off.
+on: pull_request_target
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ultralytics/actions@main

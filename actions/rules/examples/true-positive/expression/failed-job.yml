@@ -1,0 +1,13 @@
+# situation: the env of the job is a configuration variable, vars.BUILD_ENV,
+#   which holds the variables as JSON.
+# reason: env takes a mapping, and the value is a string: the runner fails
+#   the job at Set up job, before any step runs.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env: ${{ vars.BUILD_ENV }}
+    steps:
+      - run: make

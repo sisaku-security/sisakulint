@@ -1,0 +1,2139 @@
+{
+  "imports": [
+    "github.com/sisaku-security/sisakulint/actions/analysis",
+    "github.com/sisaku-security/sisakulint/actions/calls",
+    "github.com/sisaku-security/sisakulint/actions/composite",
+    "github.com/sisaku-security/sisakulint/actions/expr",
+    "github.com/sisaku-security/sisakulint/actions/facts",
+    "github.com/sisaku-security/sisakulint/actions/labeler",
+    "github.com/sisaku-security/sisakulint/actions/workflow"
+  ],
+  "values": [
+    {
+      "name": "AuthoredCommand",
+      "doc": "AuthoredCommand is a workflow command (set-output, save-state, set-env or add-path) whose name is in the text of a run of bash or sh and that the run prints to its log (taint.AuthoredCommand).",
+      "fields": [
+        {"name": "Command", "type": "analysis.AuthoredCommandName", "doc": "the command"},
+        {"name": "At", "type": "Handle", "doc": "the name in the run", "compare": false}
+      ]
+    },
+    {
+      "name": "AutomaticApproval",
+      "doc": "AutomaticApproval is how a step of the repository that runs actions/labeler on an attacker's pull request lets a labeled run of the job in (actions/labeler): the automatic labels, the label, where the token of the step comes from, the step, and the environment of the job.",
+      "fields": [
+        {"name": "AutomaticLabels", "type": "[]analysis.AutomaticLabel", "doc": "AutomaticLabelFree alone, or the conditions that leave it undecided; none when no labeler lets the attacker in"},
+        {"name": "LabelNames", "type": "[]analysis.LabelName", "doc": "the labels of the configuration that let the run in, in the order of their names; none when the attacker writes the configuration or it is not known"},
+        {"name": "Token", "type": "labeler.TokenSource", "doc": "where the token of the labeler comes from, which decides the actor of the labeled run"},
+        {"name": "Environment", "type": "facts.EnvironmentName", "doc": "the environment of the job, written out, when AutomaticLabels is AutomaticLabelFree: it approves the run when it has required reviewers"},
+        {"name": "At", "type": "Handle", "doc": "the step of the labeler, in its workflow", "compare": false}
+      ]
+    },
+    {
+      "name": "CacheSaveStep",
+      "doc": "CacheSaveStep is a step that saves to the cache what a checkout brings (actions/prcode).",
+      "fields": [
+        {"name": "Name", "type": "string", "doc": "the step's name, else steps[<n>]"},
+        {"name": "Step", "type": "Key", "doc": "the step, as its CacheSave names it"},
+        {"name": "Action", "type": "analysis.CacheAction", "doc": "actions/cache, which saves at the end of the job, or actions/cache/save"},
+        {"name": "Line", "type": "string", "doc": "the line of its path that has the tree, as written"},
+        {"name": "Known", "type": "bool", "doc": "whether the line is known: false when a ${{ }} that is not the workspace's decides it"},
+        {"name": "SaveOn", "type": "[]analysis.EventActivity", "doc": "of the site's cacheWriteOn, the events the step's if lets through: those on which it saves the tree"},
+        {"name": "Via", "type": "[]composite.Hop", "doc": "for a step of a composite action that a step of the job runs (actions/composite), the uses from that step to the action the cache step is of, that action's last; none for a step of the job"},
+        {"name": "Substituted", "type": "bool", "doc": "whether the action the step is of has a file in the archive the runner downloads unlike its blob (export-subst), whose content may change after the run"},
+        {"name": "At", "type": "Handle", "doc": "its path, else its with; for a step of a composite action, the uses of the step of the job that runs the action", "compare": false},
+        {"name": "PathAt", "type": "Handle", "doc": "for a step of a composite action, its path, else its with, in the file it is written in (an input, or the value of action.definition); zero for a step of the job", "compare": false}
+      ]
+    },
+    {
+      "name": "CalledJob",
+      "doc": "CalledJob is a job of a reusable workflow of another repository that a job of the input calls (actions/composite.Reader.ExpandCall): the labels of its runs-on and its cache-mode.",
+      "fields": [
+        {"name": "ID", "type": "string", "doc": "the ID of the job, as written"},
+        {"name": "Chain", "type": "[]composite.Hop", "doc": "the uses from the calling job to the workflow the job is of, that workflow's last"},
+        {"name": "Query", "type": "facts.Query", "doc": "the workflow.definition whose value is the file the job is written in"},
+        {"name": "RunnerLabels", "type": "[]RunnerLabel", "doc": "the labels of its runs-on"},
+        {"name": "InconclusiveLabels", "type": "[]InconclusiveLabel", "doc": "the labels of its runs-on that are inconclusive"},
+        {"name": "CacheModeText", "type": "string", "doc": "its cache-mode as written; empty when it writes none"},
+        {"name": "CacheModeAt", "type": "Handle", "doc": "its cache-mode, else the job", "compare": false},
+        {"name": "At", "type": "Handle", "doc": "the job, in the file it is written in", "compare": false}
+      ]
+    },
+    {
+      "name": "CallsNotRead",
+      "doc": "CallsNotRead is the first call of a function whose body the readings of a run did not read past their limit of calls.",
+      "fields": [
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where the call is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "CapabilityGrant",
+      "doc": "CapabilityGrant is a capability a permission of a step of an agent action gives its agent (actions/agent): through the permission alone, or with an edit of the workspace (Partner) whose code the permitted command runs.",
+      "fields": [
+        {"name": "Capability", "type": "analysis.AgentCapability", "doc": "what it lets the agent do"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input the permission is in; unset for one the action allows on its own"},
+        {"name": "Permission", "type": "string", "doc": "the permission as written, or as the action writes it"},
+        {"name": "At", "type": "Handle", "doc": "the permission in its input, the input's value, or the uses", "compare": false},
+        {"name": "Partner", "type": "string", "doc": "the permission to edit whose edits the permitted command runs; empty when there is none"},
+        {"name": "PartnerAt", "type": "Handle", "doc": "where Partner is", "compare": false}
+      ]
+    },
+    {
+      "name": "CarriedSecret",
+      "doc": "CarriedSecret is a secret a request carries (actions/taint): by name, the job's token, or the whole secrets context.",
+      "fields": [
+        {"name": "Name", "type": "string", "doc": "the secret's name as written; empty for the job's token"},
+        {"name": "Token", "type": "bool", "doc": "the job's token: secrets.GITHUB_TOKEN or github.token"},
+        {"name": "Whole", "type": "bool", "doc": "the whole secrets context: toJSON(secrets), secrets[x]"},
+        {"name": "At", "type": "Handle", "doc": "where the request takes it: the ${{ }}, the variable, or the command for gh api's enterprise token; none for an action's", "compare": false}
+      ]
+    },
+    {
+      "name": "CheckoutRef",
+      "doc": "CheckoutRef is a reference to a pull request's code in the with of a checkout.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "as written"
+        },
+        {
+          "name": "Input",
+          "type": "analysis.CheckoutInput",
+          "doc": "the input it is in"
+        },
+        {
+          "name": "Mutable",
+          "type": "bool",
+          "doc": "a branch's name, or a ref GitHub moves"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "CodeRunStep",
+      "doc": "CodeRunStep is a step after a checkout that runs the code it brings.",
+      "fields": [
+        {
+          "name": "Name",
+          "type": "string",
+          "doc": "the step's name, else steps[<n>]"
+        },
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "the command or the uses, as written"
+        },
+        {
+          "name": "Cite",
+          "type": "string",
+          "doc": "the https URL of why the row of the table runs code of the tree"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "the command in the run, else the uses, else the step",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "CommandArgument",
+      "doc": "CommandArgument is a word of a simple command of a run of bash or sh with a value an attacker may control in it, and how the command reads the word (actions/taint).",
+      "fields": [
+        {"name": "Command", "type": "string", "doc": "the command and its subcommands, such as git fetch"},
+        {"name": "Known", "type": "bool", "doc": "the table of commands has the command"},
+        {"name": "Word", "type": "int", "doc": "the index of the word among the command's words"},
+        {"name": "OptionPlace", "type": "bool", "doc": "the command may read as an option a word the value starts: the word, at the place of options, and the value at its head; or, for a value outside quotes that can hold blanks, a word it splits into"},
+        {"name": "Undecided", "type": "bool", "doc": "the word before it is an option the table of commands does not declare, which may take it as its value"},
+        {"name": "Runs", "type": "bool", "doc": "the command declares an option that runs a program: one seen to in an attacker's spelling, or one read as code or a program"},
+        {"name": "Spelled", "type": "[]string", "doc": "the options seen to run a program in a spelling the attacker can write with this value, as they write them: a long option with = for one word (--to-command=), a short option alone for one word or two (-e, -c); an option whose program runs on the remote side only when the command names a repository on a local path, where the program runs on the runner"},
+        {"name": "Remote", "type": "bool", "doc": "an option seen to run a program on the remote side can be written, and the command names no repository on a local path nor one of HTTPS: the program runs on the remote host of an SSH remote, or where the repository decides at run time"},
+        {"name": "RemoteSSH", "type": "bool", "doc": "with Remote: the command names an SSH remote, where the program runs on the remote host"},
+        {"name": "RepoName", "type": "bool", "doc": "every value that may begin with - is the name of a repository, which holds only ASCII letters, digits, ., - and _: the attacker writes only a short option with its value joined in one word"},
+        {"name": "Unverified", "type": "bool", "doc": "a spelling the attacker can write is, for an option that runs a program, seen neither to run it nor not to"},
+        {"name": "Ref", "type": "ExprRef", "doc": "the reference: the ${{ }}, or what env gives the variable"},
+        {"name": "Path", "type": "string", "doc": "the context path of the reference, such as github.head_ref: of the ${{ }}, or of the reference in the env value, the same before and after a fix moves the ${{ }} into env"},
+        {"name": "LeadingDash", "type": "[]analysis.EventActivity", "doc": "the events on which an attacker can make the value begin with -"},
+        {"name": "DashUndecided", "type": "[]analysis.EventActivity", "doc": "the events, not of LeadingDash, on which whether an attacker can make the value begin with - is not known"},
+        {"name": "Head", "type": "bool", "doc": "the value is at the head of the word"},
+        {"name": "Blanks", "type": "bool", "doc": "an attacker can write blanks in the value: one of the events is one on which they write it freely"},
+        {"name": "Quoted", "type": "bool", "doc": "the word is inside quotes"},
+        {"name": "At", "type": "Handle", "doc": "the ${{ }} or the variable in the run", "compare": false}
+      ]
+    },
+    {
+      "name": "CompositeAction",
+      "doc": "CompositeAction is an action a step runs, or that a step of a composite action it runs runs, to the depth composite.Reader reads (actions/composite): an action.yml of the inputs, or the file action.definition answers for an action of another repository.",
+      "fields": [
+        {"name": "Chain", "type": "[]composite.Hop", "doc": "the uses from the step to the action, its own last"},
+        {"name": "File", "type": "facts.ActionFileName", "doc": "the file that defines the action, as action.definition answers; unset for an input"},
+        {"name": "Input", "type": "facts.InputPath", "doc": "the input the action is; zero for an action of another repository"},
+        {"name": "Query", "type": "facts.Query", "doc": "the action.definition whose value is the file of the action; nil for an input"},
+        {"name": "Substituted", "type": "bool", "doc": "whether the archive the runner downloads has the file of the action unlike its blob (export-subst), so that the content may change after the run"},
+        {"name": "Images", "type": "[]Image", "doc": "the runs.image of a Docker container action as written after docker://, when it is an image (not a Dockerfile); none for another action"},
+        {"name": "At", "type": "Handle", "doc": "the root of the file of the action; zero for a Dockerfile", "compare": false}
+      ]
+    },
+    {
+      "name": "CompositeStep",
+      "doc": "CompositeStep is a step of a composite action that a step runs, to the depth composite.Reader reads (actions/composite).",
+      "fields": [
+        {"name": "UsesText", "type": "string", "doc": "the uses of the step as written; empty for a run"},
+        {"name": "Repo", "type": "string", "doc": "owner/repo of the uses when the uses names another repository, as written; else empty"},
+        {"name": "Path", "type": "string", "doc": "the path of the action of the uses in that repository, as the runner reads it; empty at the root, and when the uses names no other repository"}, {"name": "RunUses", "type": "[]string", "doc": "each reading of the action that the uses runs, as owner/repo[/path]@ref with the path as the runner reads it, as the field runUses of a Uses has; empty when the uses names no other repository"},
+        {"name": "Ref", "type": "string", "doc": "the ref of the uses as written; empty when the uses names no other repository"},
+        {"name": "Chain", "type": "[]composite.Hop", "doc": "the uses from the calling step to the action the step is of, that action's last"},
+        {"name": "Input", "type": "facts.InputPath", "doc": "the input the step is written in; zero for a step of an action of another repository"},
+        {"name": "Query", "type": "facts.Query", "doc": "the action.definition whose value is the file the step is written in; nil for an input"},
+        {"name": "Substituted", "type": "bool", "doc": "whether the archive the runner downloads has the file the step is written in unlike its blob (export-subst), so that the step may change after the run"},
+        {"name": "Images", "type": "[]Image", "doc": "the image of a uses: docker:// as written after docker://; none for another step"},
+        {"name": "At", "type": "Handle", "doc": "the step, in the file it is written in", "compare": false}
+      ]
+    },
+    {
+      "name": "DependabotBypass",
+      "doc": "DependabotBypass is a comparison of an if that a run of Dependabot lets through.",
+      "fields": [
+        {
+          "name": "Path",
+          "type": "string",
+          "doc": "the reference compared, as written"
+        },
+        {
+          "name": "Literal",
+          "type": "string",
+          "doc": "the string or number it is compared with"
+        },
+        {
+          "name": "Replacement",
+          "type": "string",
+          "doc": "the context of the author of the pull request in its place (the fix's), empty when there is none"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "the reference",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "EnvironmentFileWrite",
+      "doc": "EnvironmentFileWrite is what a run writes to an environment file.",
+      "fields": [
+        {
+          "name": "File",
+          "type": "analysis.EnvironmentFile",
+          "doc": "the file command"
+        },
+        {
+          "name": "Side",
+          "type": "analysis.Side",
+          "doc": "where on the line it is written"
+        },
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "what is written, as written"
+        },
+        {
+          "name": "RefIndex",
+          "type": "int",
+          "doc": "of the refs of the sink; -1 when Var is the variable written"
+        },
+        {
+          "name": "Var",
+          "type": "ExprRef",
+          "doc": "when Ref is -1: the variable written"
+        },
+        {
+          "name": "Reach",
+          "type": "[]analysis.EventActivity",
+          "doc": "the events on which an attacker writes with it what the runner reads as their own: a name, or a directory of $GITHUB_PATH"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        },
+        {
+          "name": "start",
+          "type": "int",
+          "doc": "in the value, for the plan",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "EveryRunRef",
+      "doc": "EveryRunRef is a reference that reaches the agent of a step of an agent action and whose value the attacker chooses in every run, whoever starts the run: a variable or a secret, in a run of an attacker who writes vars or secrets.",
+      "fields": [
+        {"name": "Route", "type": "analysis.AgentValueRoute", "doc": "an input written into the prompt, an env of the step, a setting input, or an input of a composite action of another repository whose step runs the agent"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input, by the route of an input"},
+        {"name": "Env", "type": "workflow.EnvName", "doc": "the name of the env, by the route of an env"},
+        {"name": "CompositeInput", "type": "workflow.InputName", "doc": "the input of the composite action that the with of the step gives, by the route of an input of a composite action; the zero InputName when the with is a ${{ }} as a whole"},
+        {"name": "Composite", "type": "string", "doc": "the uses of the step that uses the composite action, as written, by the route of an input of a composite action"},
+        {"name": "Ref", "type": "ExprRef", "doc": "the reference"},
+        {"name": "EveryRunOn", "type": "[]analysis.EventActivity", "doc": "the EveryRunOn of the reference, of the events the action runs on"},
+        {"name": "Source", "type": "string", "doc": "the reference of vars or secrets the value comes from, as one string (expr.PathString), such as vars.NAME; empty when the value does not come from one reference of vars or secrets"},
+        {"name": "SourceName", "type": "string", "doc": "the name of the variable or the secret of Source, as written; empty when Source is empty"},
+        {"name": "SourceSecret", "type": "bool", "doc": "whether Source is a reference of secrets, not of vars"},
+        {"name": "Direct", "type": "bool", "doc": "whether the reference is Source itself, not a reference of env or inputs whose value comes from Source"}
+      ]
+    },
+    {
+      "name": "ExprRef",
+      "doc": "ExprRef is a ${{ }} reference in a run or a script, or the value a variable written to a file command has.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "as written"
+        },
+        {
+          "name": "Verdict",
+          "type": "analysis.Verdict",
+          "doc": "whether an attacker controls it"
+        },
+        {
+          "name": "ControlledOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "when Controlled: those on which an attacker controls it"
+        },
+        {
+          "name": "InconclusiveKind",
+          "type": "analysis.InconclusiveRefKind",
+          "doc": "when Inconclusive: why"
+        },
+        {
+          "name": "QuotedJSON",
+          "type": "bool",
+          "doc": "toJson(...) as the whole ${{ }}, in the body of a bash or sh heredoc whose delimiter is quoted and cannot be a line toJson writes"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        },
+        {
+          "name": "Env",
+          "type": "[]Handle",
+          "doc": "where each env it went through gets its value, the first first",
+          "compare": false
+        },
+        {
+          "name": "With",
+          "type": "[]Handle",
+          "doc": "inputs.x: the with of the callers (or the input's default) it came through, the outermost caller's first; in the inputs they are of",
+          "compare": false
+        },
+        {
+          "name": "OtherCallers",
+          "type": "[]Handle",
+          "doc": "inputs.x: the with of each other caller that gives it what an attacker controls",
+          "compare": false
+        },
+        {
+          "name": "part",
+          "type": "int",
+          "doc": "of the parts of the value, for the plan",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "GapCredential",
+      "doc": "GapCredential is a step before an upload that leaves a credential whose taking a gap of the upload decides (actions/artifact).",
+      "fields": [
+        {
+          "name": "File",
+          "type": "analysis.CredentialFile",
+          "doc": "the file the step leaves the credential in"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "the step",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "Image",
+      "doc": "Image is an image to run, as written, or a value of the matrix a whole ${{ matrix.<name> }} takes.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "the image as written, without docker://"
+        },
+        {
+          "name": "Tag",
+          "type": "string",
+          "doc": "its tag; empty when it has none"
+        },
+        {
+          "name": "Pinned",
+          "type": "bool",
+          "doc": "whether a digest pins it"
+        },
+        {
+          "name": "Matrix",
+          "type": "bool",
+          "doc": "whether it is a value of the matrix"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is written",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "InconclusiveImage",
+      "doc": "InconclusiveImage is an image that is a ${{ }} the analysis cannot read as values written in the matrix: inconclusive.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "as written"
+        },
+        {
+          "name": "Dispatch",
+          "type": "bool",
+          "doc": "whether the ${{ }} has an input of workflow_dispatch (inputs, github.event.inputs): whoever dispatches the workflow chooses the image"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "InconclusiveLabel",
+      "doc": "InconclusiveLabel is a label of runs-on that is a ${{ }} the analysis cannot read as values written in the matrix: inconclusive.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "as written"
+        },
+        {
+          "name": "Dispatch",
+          "type": "bool",
+          "doc": "whether the ${{ }} has an input of workflow_dispatch (inputs, github.event.inputs): whoever dispatches the workflow chooses the label"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "InconclusiveSetting",
+      "doc": "InconclusiveSetting is an input of a step of an agent action the analysis does not read: a ${{ }}, or a settings that names a file.",
+      "fields": [
+        {"name": "Kind", "type": "analysis.InconclusiveAgentKind", "doc": "a gate or a setting"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input; unset when the whole with is a ${{ }}"},
+        {"name": "Text", "type": "string", "doc": "as written"},
+        {"name": "UndecidedOn", "type": "[]analysis.EventActivity", "doc": "for a gate: the events of the step's actorOn on which whom it lets in is not decided; none for a setting"},
+        {"name": "At", "type": "Handle", "doc": "where it is", "compare": false}
+      ]
+    },
+    {
+      "name": "InconclusiveUpload",
+      "doc": "InconclusiveUpload is an input of an upload whose analysis is inconclusive.",
+      "fields": [
+        {
+          "name": "Kind",
+          "type": "analysis.InconclusiveUploadKind",
+          "doc": "an input of the upload, or of a step that leaves a credential"
+        },
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "the input and its value, as written"
+        },
+        {
+          "name": "Files",
+          "type": "[]analysis.CredentialFile",
+          "doc": "the files of the credentials whose leaving, or whose taking by the upload, its value decides"
+        },
+        {
+          "name": "Credentials",
+          "type": "[]GapCredential",
+          "doc": "of a gap of the upload: the steps before the upload that leave a credential whose taking its value decides, in their order"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "InconclusiveWrite",
+      "doc": "InconclusiveWrite is a write to an environment file whose analysis is inconclusive.",
+      "fields": [
+        {
+          "name": "File",
+          "type": "analysis.EnvironmentFile",
+          "doc": "the file command"
+        },
+        {
+          "name": "Kind",
+          "type": "analysis.InconclusiveWriteKind",
+          "doc": "why it is inconclusive"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "InheritCaller",
+      "doc": "InheritCaller is a job of the inputs that calls a workflow with secrets: inherit.",
+      "fields": [
+        {"name": "Caller", "type": "calls.Node", "doc": "the file the job is in: an input, or a remote called workflow"},
+        {"name": "Job", "type": "string", "doc": "the job's ID, for the note of a related location"},
+        {"name": "At", "type": "Handle", "doc": "its secrets", "compare": false}
+      ]
+    },
+    {
+      "name": "LaterStep",
+      "doc": "LaterStep is a step that may run after a step of an agent action has started, or beside it (actions/agent): what it holds that the agent does not, and where it runs what the agent may leave.",
+      "fields": [
+        {"name": "Name", "type": "string", "doc": "the step's name, else steps[<n>]"},
+        {"name": "On", "type": "[]analysis.EventActivity", "doc": "of the agent step's attackerOn, and of the events of its everyRunRefs, the events its if lets through"},
+        {"name": "Secrets", "type": "[]string", "doc": "the names of the secrets it reads that the agent does not hold"},
+        {"name": "AllSecrets", "type": "bool", "doc": "whether it reads secrets whose names it does not write out, and the agent does not"},
+        {"name": "Token", "type": "bool", "doc": "whether it reads the job's token, which the agent does not hold"},
+        {"name": "CodeRuns", "type": "[]CodeRunStep", "doc": "where it runs the code of the agent's working directory"},
+        {"name": "GitRuns", "type": "[]CodeRunStep", "doc": "where it starts git"},
+        {"name": "At", "type": "Handle", "doc": "its run, else its uses, else the step", "compare": false}
+      ]
+    },
+    {
+      "name": "LogWrite",
+      "doc": "LogWrite is a reference an attacker may control that a run of bash or sh prints to its log, set -x included (actions/taint).",
+      "fields": [
+        {"name": "Text", "type": "string", "doc": "the reference as written: the ${{ }}'s reference, or the variable"},
+        {"name": "Path", "type": "string", "doc": "the reference the value comes from: the context's path, also through env, which the fix of code-injection keeps"},
+        {"name": "RefIndex", "type": "int", "doc": "of the refs of the sink; -1 when Var is the variable printed"},
+        {"name": "Var", "type": "ExprRef", "doc": "when RefIndex is -1: the variable printed"},
+        {"name": "Commands", "type": "[]analysis.EventActivity", "doc": "the events on which an attacker writes a workflow command of the runner in it: ##[set-env ...] or ##[set-output ...] anywhere in a line, or ::set-env or ::set-output after a line break"},
+        {"name": "CommandsUndecided", "type": "[]analysis.EventActivity", "doc": "the events on which whether an attacker writes one is not known: a structured value not checked"},
+        {"name": "PathCommands", "type": "[]analysis.EventActivity", "doc": "the events on which an attacker writes an add-path command in it, of a value that holds no command that takes a property (set-env, set-output): the name of a wiki page"},
+        {"name": "At", "type": "Handle", "doc": "where it is", "compare": false}
+      ]
+    },
+    {
+      "name": "MissingCommit",
+      "doc": "MissingCommit is a commit a pinned uses has to lack for a finding to hold (git.commit-contains false).",
+      "fields": [
+        {
+          "name": "Repo",
+          "type": "facts.Repo",
+          "doc": "the repository of the uses"
+        },
+        {
+          "name": "SHA",
+          "type": "facts.SHA",
+          "doc": "the commit it is pinned to"
+        },
+        {
+          "name": "Commit",
+          "type": "facts.SHA",
+          "doc": "the commit it has to lack"
+        }
+      ]
+    },
+    {
+      "name": "OpenGate",
+      "doc": "OpenGate is a gate a step of an agent action opens (actions/agent): whom it lets start the agent past the action's check of the actor.",
+      "fields": [
+        {"name": "Gate", "type": "analysis.AgentGate", "doc": "whom it lets in"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input that opens it; unset when the action checks no actor"},
+        {"name": "Text", "type": "string", "doc": "the input's value as written; empty when the action checks no actor"},
+        {"name": "OpenOn", "type": "[]analysis.EventActivity", "doc": "the events of the step's actorOn on which it lets the attacker in: all of them for '*' and for an action that checks no actor, else those on which its ${{ }} is their login (attacker.Table.ActorListed)"},
+        {"name": "At", "type": "Handle", "doc": "the input's value, or the uses", "compare": false}
+      ]
+    },
+    {
+      "name": "OtherBot",
+      "doc": "OtherBot is a comparison of an actor with a bot other than Dependabot, in an if.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "the reference and the bot it is compared with"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "the comparison",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "PRRunRef",
+      "doc": "PRRunRef is what makes a download take the artifact of a run an attacker drives.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "as written: a context, allow_forks, or the uses"
+        },
+        {
+          "name": "Input",
+          "type": "analysis.DownloadInput",
+          "doc": "the input it is in, or the uses"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "PromptRef",
+      "doc": "PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step.",
+      "fields": [
+        {"name": "Route", "type": "analysis.PromptRoute", "doc": "an input or an env"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input, by the route of an input"},
+        {"name": "Env", "type": "workflow.EnvName", "doc": "the env's name, by the route of an env"},
+        {"name": "Ref", "type": "ExprRef", "doc": "the reference"},
+        {"name": "On", "type": "[]analysis.EventActivity", "doc": "when Controlled: those of its events the action runs on"},
+        {"name": "OthersOn", "type": "[]analysis.EventActivity", "doc": "of On: those on which a run whose actor is not the attacker, in which it is theirs, gets past the ifs (attacker.Table.KeptOthers)"},
+        {"name": "EveryRunOn", "type": "[]analysis.EventActivity", "doc": "of the EveryRunOn of the reference (taint.ExprRef.EveryRunOn), those the action runs on, not only the privileged events: the events on which the attacker chooses the value in every run, whoever starts the run; none but in a run of an attacker who writes vars or secrets"}
+      ]
+    },
+    {
+      "name": "RequestRef",
+      "doc": "RequestRef is a value an attacker may control in the destination of a request (actions/taint).",
+      "fields": [
+        {"name": "Path", "type": "string", "doc": "the context path of the reference, the same before and after a fix moves its ${{ }} into env"},
+        {"name": "Ref", "type": "ExprRef", "doc": "the reference: the ${{ }}, or what env gives the variable"},
+        {"name": "At", "type": "Handle", "doc": "the ${{ }} or the variable in the run", "compare": false}
+      ]
+    },
+    {
+      "name": "RequestSite",
+      "doc": "RequestSite is a request a simple command of a run of bash or sh sends to one of its destinations: curl, wget or gh api (actions/taint).",
+      "fields": [
+        {"name": "Command", "type": "string", "doc": "curl, wget or gh api"},
+        {"name": "Occurrence", "type": "int", "doc": "the n-th request of the same command in the run, from 1"},
+        {"name": "HostRefs", "type": "[]RequestRef", "doc": "the values an attacker may control before the path of its destination, where a value can end the authority and write its own host"},
+        {"name": "PathRefs", "type": "[]RequestRef", "doc": "the values an attacker may control in the path, query or fragment of its destination"},
+        {"name": "Secrets", "type": "[]CarriedSecret", "doc": "the secrets it carries to its destination; not a secret at the place of the host, which names the destination"},
+        {"name": "EnterpriseToken", "type": "bool", "doc": "gh api with GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN in env, which it sends to any host not of GitHub"},
+        {"name": "Destination", "type": "analysis.DestinationKind", "doc": "where the host of its destination comes from"},
+        {"name": "DestinationHost", "type": "string", "doc": "when DestinationLiteral: the host, lower case, without the port"},
+        {"name": "DestinationPath", "type": "string", "doc": "when DestinationNamed: the context path, such as secrets.UPLOAD_API"},
+        {"name": "DestinationRef", "type": "ExprRef", "doc": "when DestinationNamed: the path read as a value an attacker may control"},
+        {"name": "RunnerHosting", "type": "analysis.RunnerHosting", "doc": "who runs the machine of its job, by the job's runs-on; unknown in an action.yml"},
+        {"name": "RunnerLabels", "type": "[]string", "doc": "the labels of the job's runs-on, as written"},
+        {"name": "ServiceNames", "type": "[]string", "doc": "the names of the services of its job"},
+        {"name": "At", "type": "Handle", "doc": "the destination's word in the run", "compare": false},
+        {"name": "CommandAt", "type": "Handle", "doc": "the command's word in the run", "compare": false}
+      ]
+    },
+    {
+      "name": "RunnerLabel",
+      "doc": "RunnerLabel is a label of the runs-on of a job: as written, or a value of the matrix a whole ${{ matrix.<name> }} takes.",
+      "fields": [
+        {
+          "name": "Label",
+          "type": "workflow.RunnerLabelName",
+          "doc": "the label, trimmed where GitHub trims it"
+        },
+        {
+          "name": "HasSelfHostedLabel",
+          "type": "bool",
+          "doc": "whether it is the label every self-hosted runner has"
+        },
+        {
+          "name": "Matrix",
+          "type": "bool",
+          "doc": "whether it is a value of the matrix"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "where it is written",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "SameRunUpload",
+      "doc": "SameRunUpload is an upload of the current run, in a job that checks out the code of a pull request before the upload, whose artifact a download of the current run takes.",
+      "fields": [
+        {
+          "name": "Text",
+          "type": "string",
+          "doc": "jobs.<id> of the job that uploads"
+        },
+        {
+          "name": "CheckoutAt",
+          "type": "Handle",
+          "doc": "the step that checks out the code of the pull request",
+          "compare": false
+        },
+        {
+          "name": "UploadAt",
+          "type": "Handle",
+          "doc": "the step that uploads",
+          "compare": false
+        },
+        {
+          "name": "Unless",
+          "type": "[]MissingCommit",
+          "doc": "the commits of the guard of actions/checkout, for a checkout pinned to a commit in no table: the upload holds the code of the pull request unless the commit has one of them"
+        }
+      ]
+    },
+    {
+      "name": "SecretLeak",
+      "doc": "SecretLeak is a value the shell made from a secret, which the runner does not mask, where a run prints it to its log (actions/taint).",
+      "fields": [
+        {"name": "Secret", "type": "string", "doc": "the secret's name as written; empty for the job's token"},
+        {"name": "Token", "type": "bool", "doc": "the job's token: secrets.GITHUB_TOKEN or github.token"},
+        {"name": "Place", "type": "analysis.LogPlace", "doc": "where the run prints it"},
+        {"name": "Transform", "type": "string", "doc": "how the shell changed the value: the operator of an expansion, or the command"},
+        {"name": "At", "type": "Handle", "doc": "the value in the run: the variable, the $( ), the command", "compare": false},
+        {"name": "Command", "type": "Handle", "doc": "the command that prints or writes it", "compare": false}
+      ]
+    },
+    {
+      "name": "SecretPartVia",
+      "doc": "SecretPartVia is an output of a job that a value taken out of a secret comes through, which a later job reads with needs.",
+      "fields": [
+        {"name": "Job", "type": "string", "doc": "the job's ID as written, for the note of a related location"},
+        {"name": "Output", "type": "string", "doc": "the output's name as written"},
+        {"name": "At", "type": "Handle", "doc": "the ${{ }} of the output", "compare": false}
+      ]
+    },
+    {
+      "name": "Secrets",
+      "doc": "Secrets are the secrets a job reads (actions/job): by name, GITHUB_TOKEN not among them, or All when it reads secrets whose names it does not write out.",
+      "fields": [
+        {
+          "name": "All",
+          "type": "bool",
+          "doc": "toJSON(secrets), secrets[x], or secrets: inherit to a reusable workflow that reads them so, or whose contents the linter does not have"
+        },
+        {
+          "name": "Names",
+          "type": "[]string",
+          "doc": "the names it reads, as first written"
+        }
+      ]
+    },
+    {
+      "name": "SettingRef",
+      "doc": "SettingRef is a ${{ }} reference in a value of a setting input of a step of an agent action, whose words or JSON set what the agent may do (actions/agent).",
+      "fields": [
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input"},
+        {"name": "Ref", "type": "ExprRef", "doc": "the reference"},
+        {"name": "On", "type": "[]analysis.EventActivity", "doc": "when Controlled: those of its events the action runs on"},
+        {"name": "OthersOn", "type": "[]analysis.EventActivity", "doc": "of On: those on which a run whose actor is not the attacker, in which it is theirs, gets past the ifs (attacker.Table.KeptOthers)"},
+        {"name": "EveryRunOn", "type": "[]analysis.EventActivity", "doc": "of the EveryRunOn of the reference (taint.ExprRef.EveryRunOn), those the action runs on, not only the privileged events: the events on which the attacker chooses the value in every run, whoever starts the run; none but in a run of an attacker who writes vars or secrets"}
+      ]
+    },
+    {
+      "name": "StartMode",
+      "doc": "StartMode is the permission mode Claude Code starts in on the runs of a step of claude-code-action or its base-action (actions/agent).",
+      "fields": [
+        {"name": "Mode", "type": "analysis.ClaudeStartMode", "doc": "the mode, or why it is not decided"},
+        {"name": "Source", "type": "string", "doc": "what decides an auto or a plan mode, as written"},
+        {"name": "On", "type": "[]analysis.EventActivity", "doc": "the events of the runs it starts in the mode: those of the agent mode, and of the tag mode when a --permission-mode of claude_args wins over the tag mode's"},
+        {"name": "At", "type": "Handle", "doc": "the input that decides it, or the uses", "compare": false}
+      ]
+    },
+    {
+      "name": "SubstringBypass",
+      "doc": "SubstringBypass is a call of contains, startsWith or endsWith of a string and a reference in an if that a part of a value passes: a part of the string, or, with the reference first, a value with the string as a part.",
+      "fields": [
+        {
+          "name": "Func",
+          "type": "string",
+          "doc": "the function, as written"
+        },
+        {
+          "name": "Literal",
+          "type": "string",
+          "doc": "the string"
+        },
+        {
+          "name": "Path",
+          "type": "string",
+          "doc": "the reference, as written"
+        },
+        {
+          "name": "ReferenceFirst",
+          "type": "bool",
+          "doc": "the reference is the first argument: a value with the string as a part passes"
+        },
+        {
+          "name": "Fits",
+          "type": "bool",
+          "doc": "ReferenceFirst, and the string has the form of the attacker's value of the reference, so == of the two is a comparison some value passes"
+        },
+        {
+          "name": "Standalone",
+          "type": "bool",
+          "doc": "the call is the whole if, in parentheses, or an operand of && or ||, where == can stand in its place"
+        },
+        {
+          "name": "At",
+          "type": "Handle",
+          "doc": "the call",
+          "compare": false
+        }
+      ]
+    },
+    {
+      "name": "TakenCredential",
+      "doc": "TakenCredential is a LeftCredential an upload takes (actions/artifact).",
+      "fields": [
+        {
+          "name": "Index",
+          "type": "int",
+          "doc": "of the LeftCredentials of the IR, in their order"
+        },
+        {
+          "name": "Hidden",
+          "type": "bool",
+          "doc": "whether the upload takes the file only as a hidden file, on the condition of the upload's hiddenMissingCommits"
+        }
+      ]
+    },
+    {
+      "name": "UnansweredCall",
+      "doc": "UnansweredCall is a uses of another repository, on the way from a step of the job, whose action.definition someone asked could not answer (an unknown of --online, or of a file of facts that records one): what it runs may save the tree to the cache (actions/prcode).",
+      "fields": [
+        {"name": "Via", "type": "[]composite.Hop", "doc": "the uses from the step of the job to the uses with no answer, the uses with no answer last"},
+        {"name": "Reason", "type": "string", "doc": "why there is no answer, as the answer says"},
+        {"name": "At", "type": "Handle", "doc": "the uses of the step of the job", "compare": false}
+      ]
+    },
+    {
+      "name": "UnansweredUses",
+      "doc": "UnansweredUses is a uses of another repository, on the way from a step, whose action.definition has no answer (actions/composite).",
+      "fields": [
+        {"name": "Chain", "type": "[]composite.Hop", "doc": "the uses from the step to the unanswered uses, the unanswered uses last, with no commit"},
+        {"name": "Asked", "type": "bool", "doc": "whether someone asked could not answer (an unknown of --online, or of a file of facts that records one); false when no one answered"},
+        {"name": "Reason", "type": "string", "doc": "why there is no answer, as the answer says"}
+      ]
+    },
+    {
+      "name": "UndecidedPermission",
+      "doc": "UndecidedPermission is a permission of a step of an agent action, or an input of them, whose capabilities the analysis does not decide (actions/agent).",
+      "fields": [
+        {"name": "Kind", "type": "analysis.InconclusiveAgentKind", "doc": "why"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input; unset for the whole with"},
+        {"name": "Permission", "type": "string", "doc": "the permission or the input as written"},
+        {"name": "At", "type": "Handle", "doc": "where it is", "compare": false}
+      ]
+    },
+    {
+      "name": "UnsafeSetting",
+      "doc": "UnsafeSetting is a setting of a step of an agent action that takes a layer of the agent's sandbox off.",
+      "fields": [
+        {"name": "Layer", "type": "analysis.SandboxLayer", "doc": "what it takes off"},
+        {"name": "Input", "type": "analysis.AgentInput", "doc": "the input"},
+        {"name": "Value", "type": "string", "doc": "the word of its value that takes the layer off"},
+        {"name": "At", "type": "Handle", "doc": "the input's value", "compare": false}
+      ]
+    },
+    {
+      "name": "VariableCode",
+      "doc": "VariableCode is a variable of env, or one the runner writes, whose value an attacker may control and that a run of bash reads as code (taint.VariableCode).",
+      "fields": [
+        {"name": "Text", "type": "string", "doc": "the variable as written: $NAME, ${NAME...}, or a name without $ in arithmetic"},
+        {"name": "Path", "type": "string", "doc": "the reference the value comes from: the context's path in the value of env, or the context of the variable the runner writes"},
+        {"name": "Reading", "type": "analysis.CodeReading", "doc": "how bash or the program reads the value as code"},
+        {"name": "Ref", "type": "ExprRef", "doc": "what env gives the variable, and whether an attacker controls it"},
+        {"name": "At", "type": "Handle", "doc": "where it is in the run", "compare": false}
+      ]
+    }
+  ],
+  "summaries": [
+    {
+      "name": "AgentStep",
+      "list": "AgentSteps",
+      "slug": "agent-step",
+      "doc": "AgentStep is the summary of a step of an action that runs an AI agent (actions/agent): whom it lets start the agent, the settings that take a layer of its sandbox off, the events an attacker reaches it on, and what its permissions let the agent do.",
+      "handles": [
+        {"name": "at", "doc": "the uses of the step"}
+      ],
+      "fields": [
+        {"name": "action", "type": "analysis.AgentAction", "doc": "the action"},
+        {"name": "openGates", "type": "[]OpenGate", "doc": "the gates it opens"},
+        {"name": "unsafeSettings", "type": "[]UnsafeSetting", "doc": "its settings that take a layer off"},
+        {"name": "inconclusiveSettings", "type": "[]InconclusiveSetting", "doc": "its inputs the analysis does not read"},
+        {"name": "actorOn", "type": "[]analysis.EventActivity", "doc": "the privileged events an attacker triggers themselves, as the actor, that the step runs on: those whose ifs, read with the attacker as the actor, let them in (attacker.Table.KeptActor), of those the action runs on"},
+        {"name": "attackerOn", "type": "[]analysis.EventActivity", "doc": "the privileged events the step runs on whose payload has what an attacker wrote: those whose ifs some attacker run passes (taint.Filter), of those the action runs on"},
+        {"name": "promptRefs", "type": "[]PromptRef", "doc": "the references of its values that reach the agent as text"},
+        {"name": "promptDispatch", "type": "bool", "doc": "whether a reference of promptRefs is an input of workflow_dispatch and the step can run on workflow_dispatch past its ifs"},
+        {"name": "othersOn", "type": "[]analysis.EventActivity", "doc": "of attackerOn: those on which a run whose actor is not the attacker, whose payload has what they wrote, gets past the ifs (attacker.Table.KeptOthers)"},
+        {"name": "capabilityGrants", "type": "[]CapabilityGrant", "doc": "what its permissions let the agent do"},
+        {"name": "undecidedPermissions", "type": "[]UndecidedPermission", "doc": "its permissions whose capabilities are not decided"},
+        {"name": "settingRefs", "type": "[]SettingRef", "doc": "the references of the values of its setting inputs"},
+        {"name": "writtenValueOn", "type": "[]analysis.EventActivity", "doc": "the events of the step, of those the action runs on, on which a value that the attacker writes for every workflow run, a variable or a secret, may reach the step (taint.StepValue.WrittenValueOn); for a step of a composite action of another repository, the events on which the with of the step that uses the action may give such a value (taint.ValuePartOn) to an input that may reach a reference of the prompt of the step, kept by the ifs of the steps of the composite action: an input that the prompt of the step refers to (directly or through an env of the step), or any input when the with is one ${{ }}, when the prompt has a value (directly or through an env of the step) that is not analyzed and is not an input, or when the step is in an action that the used action runs. None but in a run of an attacker who writes vars or secrets"},
+        {"name": "everyRunRefs", "type": "[]EveryRunRef", "doc": "the references of promptRefs and settingRefs whose EveryRunOn is not empty"},
+        {"name": "agentUser", "type": "analysis.AgentUser", "doc": "whom its agent's process runs as"},
+        {"name": "runnerSudo", "type": "bool", "doc": "whether its job's runs-on is of GitHub-hosted Linux or macOS runners, whose user has passwordless sudo; false in an action metadata file"},
+        {"name": "gitWrite", "type": "analysis.AgentGitWrite", "doc": "whether its agent's edits may write .git"},
+        {"name": "autoMode", "type": "analysis.AgentAutoMode", "doc": "whether claude starts in auto mode: undecided when a ${{ }} sets the mode or decides the subprocess env scrub"},
+        {"name": "scrubDecides", "type": "bool", "doc": "whether a ${{ }} that decides claude's subprocess env scrub leaves open what its agent may do: a mode the scrub keeps in the default mode, or the tag mode's acceptEdits (agent.ScrubDecides)"},
+        {"name": "startModes", "type": "[]StartMode", "doc": "the mode claude starts in on its runs: none for other actions"},
+        {"name": "laterSteps", "type": "[]LaterStep", "doc": "the steps of its job or action that may run after it has started, or beside it"},
+        {"name": "automaticApproval", "type": "AutomaticApproval", "doc": "of its labeled runs, how a step of the repository that runs actions/labeler lets the attacker in"},
+        {"name": "usesText", "type": "string", "doc": "the uses as written", "display": true},
+        {"name": "chain", "type": "[]composite.Hop", "doc": "for a step of a composite action of another repository that a step of the input runs (actions/composite), the uses from that step to the action; at is then the uses of the step of the input, and the other handles are in the file of the action (the value of action.definition); none for a step of the input"},
+        {"name": "substituted", "type": "bool", "doc": "whether the archive the runner downloads has the file of that action unlike its blob (export-subst), so that the step may change after the run; false for a step of the input"},
+        {"name": "innerAt", "type": "Handle", "doc": "for a step of a composite action of another repository, the step in the file of the action; zero for a step of the input", "compare": false}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "CacheRestoreSave",
+      "list": "CacheRestoreSaves",
+      "slug": "cache-restore-save",
+      "doc": "CacheRestoreSave is the summary of a step that may save to the cache, under a new key, what a step of its job, or itself, restored from another key by restore-keys: actions/cache with restore-keys, or actions/cache/save after actions/cache/restore with restore-keys.",
+      "handles": [
+        {"name": "saveAt", "doc": "the step that saves"},
+        {"name": "restoreAt", "doc": "the step that restores: the same step for actions/cache"}
+      ],
+      "fields": [
+        {"name": "action", "type": "analysis.CacheAction", "doc": "actions/cache, which saves at the end of the job on a miss, or actions/cache/save"},
+        {"name": "separate", "type": "bool", "doc": "whether the restore is another step than the save"},
+        {"name": "savesOn", "type": "[]workflow.EventName", "doc": "the events of the workflow on which the job and both steps may run and the job may save to the cache"},
+        {"name": "saveText", "type": "string", "doc": "the uses of the step that saves, as written", "display": true},
+        {"name": "chain", "type": "[]composite.Hop", "doc": "for actions/cache with restore-keys in a composite action of another repository that a step of the job runs (actions/composite), the uses from that step to the action; saveAt is then the uses of the step of the job, and restoreAt the step in the file of the action (the value of action.definition); none for a step of the job"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "CacheSave",
+      "list": "CacheSaves",
+      "slug": "cache-save",
+      "doc": "CacheSave is the summary of a step of actions/cache or actions/cache/save of a job that may save to the cache of the default branch's scope (actions/job): the references of its key and its path, and the events on which its job may save.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step"
+        }
+      ],
+      "fields": [
+        {
+          "name": "action",
+          "type": "analysis.CacheAction",
+          "doc": "actions/cache or actions/cache/save"
+        },
+        {
+          "name": "keyRefs",
+          "type": "[]ExprRef",
+          "doc": "each ${{ }} reference in its key, and whether an attacker controls it"
+        },
+        {
+          "name": "pathRefs",
+          "type": "[]ExprRef",
+          "doc": "each ${{ }} reference in its path, and whether an attacker controls it"
+        },
+        {
+          "name": "cacheWriteOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the events on which its job may save to the cache of the default branch's scope, that the step's if lets through"
+        },
+        {
+          "name": "dispatchOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the runs of workflow_dispatch on which its job may save to the cache of the scope of the ref that the one who dispatches the workflow chooses, that the step's if lets through"
+        },
+        {
+          "name": "cacheApproval",
+          "type": "analysis.Approval",
+          "doc": "what makes a person approve the run on those events"
+        },
+        {
+          "name": "environment",
+          "type": "facts.EnvironmentName",
+          "doc": "the environment of the job, when the approval is ApprovalEnvironment"
+        },
+        {
+          "name": "automaticApproval",
+          "type": "AutomaticApproval",
+          "doc": "of its labeled runs, how a step of the repository that runs actions/labeler lets the attacker in"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        }
+      ],
+      "fixes": []
+    },
+    {
+      "name": "CheckoutSite",
+      "list": "CheckoutSites",
+      "slug": "checkout-site",
+      "doc": "CheckoutSite is the summary of a step of actions/checkout that can run on a privileged event (actions/prcode): the code it brings, the guard of its release, the approval of its job, and the steps after it that run what it brings.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step"
+        }
+      ],
+      "fields": [
+        {
+          "name": "checkoutCode",
+          "type": "analysis.CheckoutCode",
+          "doc": "what code it brings"
+        },
+        {
+          "name": "refs",
+          "type": "[]CheckoutRef",
+          "doc": "the references that make the tree a pull request's, the repository's first"
+        },
+        {
+          "name": "fork",
+          "type": "bool",
+          "doc": "whether the repository is the fork"
+        },
+        {
+          "name": "noRef",
+          "type": "bool",
+          "doc": "whether no ref is given"
+        },
+        {
+          "name": "inconclusiveValues",
+          "type": "[]string",
+          "doc": "the values whose code is inconclusive by the tables, as written",
+          "display": true
+        },
+        {
+          "name": "dynamic",
+          "type": "bool",
+          "doc": "whether with is a whole ${{ }}"
+        },
+        {
+          "name": "prCodeOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the privileged events the step can run on"
+        },
+        {
+          "name": "dispatchOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the runs of workflow_dispatch the step can run on"
+        },
+        {
+          "name": "dispatchInput",
+          "type": "bool",
+          "doc": "whether its ref or repository refers to an input of workflow_dispatch"
+        },
+        {
+          "name": "guard",
+          "type": "analysis.Guard",
+          "doc": "whether its release refuses a fork's code"
+        },
+        {
+          "name": "sha",
+          "type": "facts.SHA",
+          "doc": "the commit it is pinned to, when the guard is GuardSHA"
+        },
+        {
+          "name": "approval",
+          "type": "analysis.Approval",
+          "doc": "what makes a person approve the run"
+        },
+        {
+          "name": "environment",
+          "type": "facts.EnvironmentName",
+          "doc": "the environment of the job, when the approval is ApprovalEnvironment"
+        },
+        {
+          "name": "automaticApproval",
+          "type": "AutomaticApproval",
+          "doc": "of its labeled runs, how a step of the repository that runs actions/labeler lets the attacker in"
+        },
+        {
+          "name": "codeRunSteps",
+          "type": "[]CodeRunStep",
+          "doc": "the steps after it that run what it brings"
+        },
+        {
+          "name": "cacheSaves",
+          "type": "[]CacheSaveStep",
+          "doc": "the steps that save what it brings to the cache"
+        },
+        {
+          "name": "unansweredCalls",
+          "type": "[]UnansweredCall",
+          "doc": "the uses with no answer that someone asked could not give, on the way from the steps that may save what it brings to the cache, as cacheSaves reads them (actions/composite)"
+        },
+        {
+          "name": "cacheWriteOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "of prCodeOn, the events on which its job may save to the cache of the default branch's scope"
+        },
+        {
+          "name": "dispatchCacheOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the runs of workflow_dispatch on which its job may save to the cache of the scope of the ref that the one who dispatches the workflow chooses, that the step's if lets through"
+        },
+        {
+          "name": "mutable",
+          "type": "bool",
+          "doc": "whether what it brings can move after the event"
+        },
+        {
+          "name": "stepPath",
+          "type": "facts.StepPath",
+          "doc": "the step as a file of facts names it"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        }
+      ],
+      "fixes": [
+        {
+          "name": "BaseCheckout",
+          "params": "",
+          "result": "FixPlan",
+          "doc": "the fix that makes the checkout bring the base's code",
+          "reads": [
+            "checkout-site.refs"
+          ]
+        },
+        {
+          "name": "PinHeadSHA",
+          "params": "ref int, events []analysis.EventActivity",
+          "result": "FixPlan",
+          "doc": "the fix that makes the checkout bring the commit the approval saw, for the reference ref of Refs on events",
+          "reads": [
+            "checkout-site.refs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CompositeCall",
+      "list": "CompositeCalls",
+      "slug": "composite-call",
+      "doc": "CompositeCall is the summary of a step of a workflow or of a composite action that runs an action of the inputs or of another repository: the actions the step runs and their steps, to the depth composite.Reader reads (actions/composite), and the uses of other repositories on the way that action.definition does not answer.",
+      "handles": [
+        {"name": "at", "doc": "the uses of the step: where a finding of what the step runs is"}
+      ],
+      "fields": [
+        {"name": "usesText", "type": "string", "doc": "the uses of the step as written", "display": true},
+        {"name": "actions", "type": "[]CompositeAction", "doc": "the actions the step runs, in the order read (depth first, in the order of the steps)"},
+        {"name": "steps", "type": "[]CompositeStep", "doc": "the steps of the composite actions among them, in the same order"},
+        {"name": "unanswered", "type": "[]UnansweredUses", "doc": "the uses of other repositories on the way that have no answer"},
+        {"name": "privilegedOn", "type": "[]analysis.EventActivity", "doc": "the privileged events of an attacker the step can run on past the ifs of its job and its own (job.Privileged; of the callers when they decide them)"},
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ConfigurationVariableRef",
+      "list": "ConfigurationVariableRefs",
+      "slug": "configuration-variable-ref",
+      "doc": "ConfigurationVariableRef is the summary of a reference to a configuration variable by its name (vars.<name>, or vars['<name>']) in a ${{ }} of a workflow: how the ${{ }} uses the value, which is the empty string when no level defines the name, and the environments whose names of the environment level the place of the reference reads. The keys are those ExpressionMistake reads, the name of a step among them; an if of text and ${{ }} is not read (GitHub reads it as a text, which is true whatever the value), nor run-name of a workflow that runs only when called (GitHub names the run by the caller), nor a reference whose index is not a literal, nor the whole vars context.",
+      "handles": [
+        {"name": "at", "doc": "the reference"}
+      ],
+      "fields": [
+        {"name": "name", "type": "string", "doc": "the name, as written", "display": true},
+        {"name": "expression", "type": "string", "doc": "the ${{ }}, as written"},
+        {"name": "use", "type": "analysis.ConfigurationVariableUse", "doc": "how the ${{ }} uses the value"},
+        {"name": "environments", "type": "[]facts.EnvironmentName", "doc": "the environments, each once and in order, whose names of the environment level the place of the reference may read: that of the job of the key; of every job of the workflow for a key outside the jobs; none for run-name, the if and the name of a job, which do not read the environment level"},
+        {"name": "environmentExpression", "type": "bool", "doc": "whether the environment of a job of environments is written with a ${{ }}, so that its name is not known"},
+        {"name": "remoteCallerOnly", "type": "bool", "doc": "whether the workflow runs on workflow_call only and no input calls it with ./ or $/: a caller of another repository decides the configuration variables"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DependencyReviewStep",
+      "list": "DependencyReviewSteps",
+      "slug": "dependency-review-step",
+      "doc": "DependencyReviewStep is the summary of a step of actions/dependency-review-action: the inputs that turn off what it checks or ask for a comment, and whether its job's GITHUB_TOKEN may write pull-requests.",
+      "handles": [
+        {"name": "at", "doc": "the step"},
+        {"name": "warnOnlyAt", "doc": "the value of warn-only, else the step"},
+        {"name": "vulnerabilityCheckAt", "doc": "the value of vulnerability-check, else the step"},
+        {"name": "licenseCheckAt", "doc": "the value of license-check, else the step"},
+        {"name": "commentAt", "doc": "the value of comment-summary-in-pr that asks for a comment, else the step"}
+      ],
+      "fields": [
+        {"name": "warnOnly", "type": "analysis.ActionBoolean", "doc": "warn-only, as the action reads it"},
+        {"name": "vulnerabilityCheck", "type": "analysis.ActionBoolean", "doc": "vulnerability-check, as the action reads it"},
+        {"name": "licenseCheck", "type": "analysis.ActionBoolean", "doc": "license-check, as the action reads it"},
+        {"name": "licensePolicy", "type": "bool", "doc": "whether allow-licenses or deny-licenses is written"},
+        {"name": "commentRequested", "type": "bool", "doc": "whether comment-summary-in-pr is always, on-failure or true"},
+        {"name": "pullRequestsWrite", "type": "analysis.PullRequestsWrite", "doc": "whether the job's GITHUB_TOKEN may write pull-requests, by its permissions or the workflow's"},
+        {"name": "usesText", "type": "string", "doc": "the uses as written", "display": true}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "DownloadSite",
+      "list": "DownloadSites",
+      "slug": "download-site",
+      "doc": "DownloadSite is the summary of a step of actions/download-artifact or dawidd6/action-download-artifact that can run on a privileged event (actions/prcode): the run it takes, the token's scope, where it puts the files, and the steps after it that run them.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step"
+        },
+        {
+          "name": "usesAt",
+          "doc": "the uses"
+        }
+      ],
+      "fields": [
+        {
+          "name": "prRunRefs",
+          "type": "[]PRRunRef",
+          "doc": "what makes it take an attacker's run"
+        },
+        {
+          "name": "sameRunUploads",
+          "type": "[]SameRunUpload",
+          "doc": "the uploads of the current run that check out the code of a pull request, when it takes the current run"
+        },
+        {
+          "name": "inconclusiveValues",
+          "type": "[]string",
+          "doc": "the inputs that decide the run whose analysis is inconclusive, as written",
+          "display": true
+        },
+        {
+          "name": "dynamic",
+          "type": "bool",
+          "doc": "whether with is a whole ${{ }}"
+        },
+        {
+          "name": "prCodeOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the privileged events it can run on, of those of its references"
+        },
+        {
+          "name": "dispatchOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the runs of workflow_dispatch the step can run on"
+        },
+        {
+          "name": "dispatchInput",
+          "type": "bool",
+          "doc": "whether its run, repository, token or allow_forks refers to an input of workflow_dispatch"
+        },
+        {
+          "name": "approval",
+          "type": "analysis.Approval",
+          "doc": "what makes a person approve the run"
+        },
+        {
+          "name": "environment",
+          "type": "facts.EnvironmentName",
+          "doc": "the environment of the job, when the approval is ApprovalEnvironment"
+        },
+        {
+          "name": "automaticApproval",
+          "type": "AutomaticApproval",
+          "doc": "of its labeled runs, how a step of the repository that runs actions/labeler lets the attacker in"
+        },
+        {
+          "name": "actionsRead",
+          "type": "analysis.ActionsRead",
+          "doc": "whether its token may read the artifacts of another run"
+        },
+        {
+          "name": "destination",
+          "type": "analysis.DownloadDestination",
+          "doc": "where it puts the files"
+        },
+        {
+          "name": "destinationText",
+          "type": "string",
+          "doc": "the path, when the destination is inconclusive, as written",
+          "display": true
+        },
+        {
+          "name": "missingCommits",
+          "type": "[]MissingCommit",
+          "doc": "the commits its pinned commit has to lack for the reading to hold"
+        },
+        {
+          "name": "codeRunSteps",
+          "type": "[]CodeRunStep",
+          "doc": "the steps after it that run what it puts"
+        },
+        {
+          "name": "stepPath",
+          "type": "facts.StepPath",
+          "doc": "the step as a file of facts names it"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        }
+      ],
+      "fixes": [
+        {
+          "name": "RunnerTempPath",
+          "params": "",
+          "result": "FixPlan",
+          "doc": "the fix that puts the files under runner.temp: path ${{ runner.temp }}/artifacts in its with",
+          "reads": [
+            "download-site.destination"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EnvKey",
+      "list": "EnvKeys",
+      "slug": "env-key",
+      "doc": "EnvKey is the summary of a key of env, of the workflow, a job or a step, of a job's container or a service, or of runs.env or a step of an action.yml, that does not set the variable it names: one with = in it, or one the runner writes over in every step (taint.RunnerVariable; not read for a service). A key with a ${{ }}, and an env that is a ${{ }}, are not summarized.",
+      "handles": [
+        {"name": "at", "doc": "the key"}
+      ],
+      "fields": [
+        {"name": "name", "type": "string", "doc": "the key, as written", "display": true},
+        {"name": "variable", "type": "string", "doc": "the part of the key before its first =, which the runner sets instead; empty when the key has no ="},
+        {"name": "runnerValue", "type": "string", "doc": "what the runner writes to the variable the key names: the ${{ }} of a context (${{ github.sha }}), or the text true; empty when the runner does not write it, or the key is written with that value"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "ExpressionMistake",
+      "list": "ExpressionMistakes",
+      "slug": "expression-mistake",
+      "doc": "ExpressionMistake is the summary of a ${{ }}, of a workflow or an action.yml, that does not fit its key or fails when it runs (by the source of actions/runner at https://github.com/actions/runner/tree/397b032cbf865e9c3ddfab89d533ec19325e1273, read on 2026-10-21, and by runs observed on 2026-10-21, which alone show which forms keep a job from starting: lines 358-384 of src/Sdk/DTObjectTemplating/ObjectTemplating/TemplateEvaluator.cs check a literal that a ${{ }} written alone gives against the definition of its key, and other lines of the same directory check a mapping or a sequence it gives; src/Sdk/Expressions/Sdk/Functions/Format.cs, Case.cs and FromJson.cs fail when the number of a placeholder is not below the number of the arguments after the format string, when a predicate evaluated before the first true one is not a boolean, and when the argument made a string is no JSON, as an object made the string Object is not), by the types of the contexts where it is: a ${{ }} written alone as the value of a key, none of whose types the key takes; a call of format(), case() or fromJSON() that fails; or a ${{ }} in a text whose value is an object or an array, which the text holds as Object or Array (objectText). An if is read for its calls only (cond reads an if of text and ${{ }}), the name of a step for its text only (GitHub only warns when the name fails). A ${{ }} whose type is not known is not summarized.",
+      "handles": [
+        {"name": "at", "doc": "the ${{ }}, or the value it is written as"}
+      ],
+      "fields": [
+        {"name": "expressionKey", "type": "analysis.ExpressionKey", "doc": "the key; ExpressionKeyUnset for a ${{ }} in a text"},
+        {"name": "expression", "type": "string", "doc": "the ${{ }}, as written", "display": true},
+        {"name": "error", "type": "analysis.EvaluationError", "doc": "why it fails; EvaluationErrorUnset for a ${{ }} in a text"},
+        {"name": "valueTypes", "type": "[]expr.ValueType", "doc": "the types the value may be, for EvaluationErrorType and for a ${{ }} in a text; empty for the others"},
+        {"name": "objectText", "type": "bool", "doc": "whether it is a ${{ }} in a text whose value is an object or an array"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "IfSite",
+      "list": "IfSites",
+      "slug": "if-site",
+      "doc": "IfSite is the summary of the if of a job or a step that an attacker's privileged event may run (actions/attacker): the events, and the comparisons of it that a run of Dependabot or a part of a string lets through.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the if"
+        }
+      ],
+      "fields": [
+        {
+          "name": "attackerOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the privileged events the job or step may run on: those of the job that its if, read in the attacker runs, lets in (for a step), whose event and activity type the if allows"
+        },
+        {
+          "name": "dependabotBypasses",
+          "type": "[]DependabotBypass",
+          "doc": "the comparisons a run of Dependabot lets through"
+        },
+        {
+          "name": "otherBots",
+          "type": "[]OtherBot",
+          "doc": "the comparisons of an actor with another bot"
+        },
+        {
+          "name": "substringBypasses",
+          "type": "[]SubstringBypass",
+          "doc": "the calls a part of a value passes"
+        },
+        {
+          "name": "automaticApproval",
+          "type": "AutomaticApproval",
+          "doc": "of the labeled runs that its if guards, how a step of the repository that runs actions/labeler lets the attacker in"
+        }
+      ],
+      "fixes": [
+        {
+          "name": "AuthorContext",
+          "params": "i int",
+          "result": "FixPlan",
+          "doc": "the fix that compares the author of the pull request in place of the actor, of the bypass i of DependabotBypasses",
+          "reads": [
+            "if-site.dependabot-bypasses"
+          ]
+        },
+        {
+          "name": "ContainsArray",
+          "params": "i int",
+          "result": "FixPlan",
+          "doc": "the fix that compares the words of the string as an array, of the bypass i of SubstringBypasses",
+          "reads": [
+            "if-site.substring-bypasses"
+          ]
+        },
+        {
+          "name": "Equality",
+          "params": "i int",
+          "result": "FixPlan",
+          "doc": "the fix that compares the reference with the whole string by ==, of the bypass i of SubstringBypasses whose reference is the first argument",
+          "reads": [
+            "if-site.substring-bypasses"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ImageSite",
+      "list": "ImageSites",
+      "slug": "image-site",
+      "doc": "ImageSite is the summary of a place that names an image to run: a job's container or service, a step's uses: docker://, or an action.yml's runs.image: docker://. An image whose digest docker refuses is not among its images: it is never pulled.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the image, else the place"
+        }
+      ],
+      "fields": [
+        {
+          "name": "site",
+          "type": "analysis.ImageSiteKind",
+          "doc": "what the place is"
+        },
+        {
+          "name": "serviceName",
+          "type": "string",
+          "doc": "the name of the service, when the place is one",
+          "display": true
+        },
+        {
+          "name": "images",
+          "type": "[]Image",
+          "doc": "the images it may run"
+        },
+        {
+          "name": "inconclusiveImages",
+          "type": "[]InconclusiveImage",
+          "doc": "the images it may run that are inconclusive"
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Job",
+      "list": "Jobs",
+      "slug": "job",
+      "doc": "Job is the summary of a job of a workflow (actions/job): the attacker's privileged events it can run on, what approves it, whether its GITHUB_TOKEN may write and where write-all holds for it, the secrets it reads, the reusable workflow it calls, the labels of its runs-on, and the events on which its cache-mode lets it save to the cache.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the job"
+        },
+        {
+          "name": "runsOnAt",
+          "doc": "its runs-on, else the job"
+        },
+        {
+          "name": "secretsAt",
+          "doc": "its secrets, else the job"
+        },
+        {
+          "name": "cacheModeAt",
+          "doc": "the cache-mode that lets it save to the cache, the job's or the workflow's, else the job"
+        }
+      ],
+      "fields": [
+        {
+          "name": "privilegedOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the attacker's privileged events it can run on"
+        },
+        {
+          "name": "approval",
+          "type": "analysis.Approval",
+          "doc": "what makes a person approve the run"
+        },
+        {
+          "name": "environment",
+          "type": "facts.EnvironmentName",
+          "doc": "the environment, when the approval is ApprovalEnvironment"
+        },
+        {
+          "name": "automaticApproval",
+          "type": "AutomaticApproval",
+          "doc": "of its labeled runs, how a step of the repository that runs actions/labeler lets the attacker in"
+        },
+        {
+          "name": "tokenWrite",
+          "type": "analysis.TokenWrite",
+          "doc": "whether its GITHUB_TOKEN may write"
+        },
+        {
+          "name": "writeAll",
+          "type": "analysis.WriteAll",
+          "doc": "where write-all holds for its GITHUB_TOKEN: its permissions, else the workflow's"
+        },
+        {
+          "name": "calledOnly",
+          "type": "bool",
+          "doc": "whether its workflow has no event but workflow_call: only a caller runs it, or nothing does (on: {} or no on)"
+        },
+        {
+          "name": "inheritSecrets",
+          "type": "bool",
+          "doc": "whether it calls a reusable workflow with secrets: inherit"
+        },
+        {
+          "name": "calledKind",
+          "type": "analysis.CalledWorkflowKind",
+          "doc": "where the reusable workflow it calls is"
+        },
+        {
+          "name": "calledRepo",
+          "type": "facts.Repo",
+          "doc": "owner/name of the reusable workflow it calls, for one of another repository"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "its uses as written",
+          "display": true
+        },
+        {
+          "name": "secrets",
+          "type": "Secrets",
+          "doc": "the secrets it reads"
+        },
+        {
+          "name": "calledContextReads",
+          "type": "[]Handle",
+          "doc": "for a job that calls a reusable workflow whose contents the linter has: the ${{ }} of that workflow, or of one it calls in turn, whose reads of the secrets context name no secret and make the job read every secret",
+          "compare": false
+        },
+        {
+          "name": "runnerLabels",
+          "type": "[]RunnerLabel",
+          "doc": "the labels of its runs-on"
+        },
+        {
+          "name": "inconclusiveLabels",
+          "type": "[]InconclusiveLabel",
+          "doc": "the labels of its runs-on that are inconclusive"
+        },
+        {
+          "name": "cacheWriteOn",
+          "type": "[]analysis.EventActivity",
+          "doc": "the attacker's privileged events on which it may save to the cache of the default branch's scope: by its cache-mode, on its events and on those of its callers that write none"
+        },
+        {
+          "name": "cacheApproval",
+          "type": "analysis.Approval",
+          "doc": "what makes a person approve the run on the events of cacheWriteOn"
+        },
+        {
+          "name": "cacheModeText",
+          "type": "string",
+          "doc": "the cache-mode that lets it save, as written",
+          "display": true
+        },
+        {
+          "name": "calledCacheModes",
+          "type": "[]CalledJob",
+          "doc": "for a job that writes no cache-mode and calls a reusable workflow of another repository (workflow.definition): the jobs of that workflow whose cache-mode, else their workflow's, saves, which let the job save; cacheModeAt is then the uses of the job"
+        },
+        {
+          "name": "calledUnanswered",
+          "type": "[]UnansweredUses",
+          "doc": "for a job that writes no cache-mode and calls a reusable workflow of another repository: the call when workflow.definition has no answer for it"
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": [
+        {
+          "name": "CacheModeNoWrite",
+          "params": "",
+          "result": "FixPlan",
+          "doc": "the fix that makes its cache-mode one that does not save: write becomes read, write-only none",
+          "reads": [
+            "job.cache-write-on"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "JobTimeout",
+      "list": "JobTimeouts",
+      "slug": "job-timeout",
+      "doc": "JobTimeout is the summary of a job that runs on a runner (not one that calls a reusable workflow): whether it writes timeout-minutes.",
+      "handles": [
+        {"name": "at", "doc": "the job's ID"}
+      ],
+      "fields": [
+        {"name": "written", "type": "bool", "doc": "whether it writes timeout-minutes, a value or a ${{ }}"},
+        {"name": "job", "type": "string", "doc": "the job's ID", "display": true}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "LeftCredential",
+      "list": "LeftCredentials",
+      "slug": "left-credential",
+      "doc": "LeftCredential is a credential a step before an upload left in a file that an upload takes (actions/artifact), once however many uploads take it: an upload names it by its index (TakenCredential). Its key is the step's; a step that leaves two files has two.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step that left it"
+        }
+      ],
+      "fields": [
+        {
+          "name": "file",
+          "type": "analysis.CredentialFile",
+          "doc": "where it is left"
+        },
+        {
+          "name": "lifetime",
+          "type": "analysis.CredentialLifetime",
+          "doc": "how long it works"
+        },
+        {
+          "name": "missingCommits",
+          "type": "[]MissingCommit",
+          "doc": "of the step's pin"
+        },
+        {
+          "name": "checkout",
+          "type": "bool",
+          "doc": "whether the step is actions/checkout"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses of the step, as written",
+          "display": true
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": [
+        {
+          "name": "PersistCredentialsFalse",
+          "params": "",
+          "result": "FixPlan",
+          "doc": "the fix that keeps the credential out of .git/config: persist-credentials false on its checkout",
+          "reads": [
+            "left-credential.checkout"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MixedIf",
+      "list": "MixedIfs",
+      "slug": "mixed-if",
+      "doc": "MixedIf is the summary of an if, of a job or a step of a workflow or of a step of a composite action, that GitHub reads as a string (workflow.IfMixed): text outside its ${{ }}, or more than one ${{ }}.",
+      "handles": [
+        {"name": "at", "doc": "the value of the if"}
+      ],
+      "fields": [
+        {"name": "condition", "type": "string", "doc": "the value of the if, as written", "display": true},
+        {"name": "statusFunctions", "type": "[]analysis.StatusFunction", "doc": "the status functions that an expression of its ${{ }} calls, in the order of the if, once each: with one, the runner does not add success() &&"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "NodeRuntimeSetting",
+      "list": "NodeRuntimeSettings",
+      "slug": "node-runtime-setting",
+      "doc": "NodeRuntimeSetting is the summary of a key of env, of the workflow, a job or a step, that names a setting of the Node.js runtime of actions: ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION or FORCE_JAVASCRIPT_ACTIONS_TO_NODE20, compared without case.",
+      "handles": [
+        {"name": "at", "doc": "the key"}
+      ],
+      "fields": [
+        {"name": "name", "type": "string", "doc": "the key as written", "display": true}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "PrintedOutput",
+      "list": "PrintedOutputs",
+      "slug": "printed-output",
+      "doc": "PrintedOutput is a ${{ }} of a step's env, with or name, or of a job's env, that reads an output whose value the shell made from a secret: the runner prints the value in the header of the step (actions/taint).",
+      "handles": [
+        {"name": "at", "doc": "the ${{ }}"}
+      ],
+      "fields": [
+        {"name": "secret", "type": "string", "doc": "the secret's name as written; empty for the job's token"},
+        {"name": "token", "type": "bool", "doc": "the job's token"},
+        {"name": "transform", "type": "string", "doc": "how the shell changed the value: the operator of an expansion, or the command"},
+        {"name": "text", "type": "string", "doc": "the ${{ }} as written", "display": true},
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "RegistryCredentials",
+      "list": "RegistryCredentials",
+      "slug": "registry-credentials",
+      "doc": "RegistryCredentials is the summary of the credentials of a job's container or service that have a password.",
+      "handles": [
+        {
+          "name": "passwordAt",
+          "doc": "the password"
+        }
+      ],
+      "fields": [
+        {
+          "name": "passwordForm",
+          "type": "PasswordForm",
+          "doc": "whether the password is written in the workflow, read from secrets, or read from another context"
+        },
+        {
+          "name": "passwordText",
+          "type": "string",
+          "doc": "the password as written, for the note of an inconclusive one",
+          "display": true
+        },
+        {
+          "name": "container",
+          "type": "string",
+          "doc": "container, or services.<name>",
+          "display": true
+        }
+      ],
+      "fixes": []
+    },
+    {
+      "name": "RemoteCall",
+      "list": "RemoteCalls",
+      "slug": "remote-call",
+      "doc": "RemoteCall is the summary of a job of a workflow that calls a reusable workflow of another repository: the workflows it calls, to the depth composite.Reader.ExpandCall reads (workflow.definition), their jobs and the steps of those, and the calls on the way that workflow.definition does not answer.",
+      "handles": [
+        {"name": "at", "doc": "the uses of the job: where a finding of what the job calls is"}
+      ],
+      "fields": [
+        {"name": "usesText", "type": "string", "doc": "the uses of the job as written", "display": true},
+        {"name": "jobs", "type": "[]CalledJob", "doc": "the jobs of the workflows called, in the order read (depth first, in the order of the jobs)"},
+        {"name": "steps", "type": "[]CompositeStep", "doc": "the steps of those jobs, in the same order; Query is the workflow.definition of the file"},
+        {"name": "unanswered", "type": "[]UnansweredUses", "doc": "the calls on the way that have no answer"},
+        {"name": "called", "type": "[]composite.Called", "doc": "the workflows called, as read, for the analyses of this package", "compare": false}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "RequestActionSite",
+      "list": "RequestActionSites",
+      "slug": "request-action-site",
+      "doc": "RequestActionSite is the summary of an input of a step of an action that sends its credential where the input says (actions/taint): the scanner of SonarSource's actions and octokit/request-action.",
+      "handles": [
+        {"name": "at", "doc": "the input's value"}
+      ],
+      "fields": [
+        {"name": "action", "type": "string", "doc": "owner/repo of the action"},
+        {"name": "input", "type": "string", "doc": "the name of the input"},
+        {"name": "hostRefs", "type": "[]ExprRef", "doc": "the ${{ }} references in it that can decide the host the action sends to, and whether an attacker controls each"},
+        {"name": "pathRefs", "type": "[]ExprRef", "doc": "the other ${{ }} references in it: after the host of a route or a URL"},
+        {"name": "secrets", "type": "[]CarriedSecret", "doc": "the secrets the action reads its credential from: of env and with"},
+        {"name": "runnerHosting", "type": "analysis.RunnerHosting", "doc": "who runs the machine of its job; unknown in an action.yml"},
+        {"name": "runnerLabels", "type": "[]string", "doc": "the labels of the job's runs-on, as written"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "RunsUsingSite",
+      "list": "RunsUsingSites",
+      "slug": "runs-using-site",
+      "doc": "RunsUsingSite is the summary of the runs.using of an action.yml.",
+      "handles": [
+        {"name": "at", "doc": "the value of runs.using"}
+      ],
+      "fields": [
+        {"name": "using", "type": "string", "doc": "runs.using as written"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretPart",
+      "list": "SecretParts",
+      "slug": "secret-part",
+      "doc": "SecretPart is a ${{ }} whose value has a value taken out of a secret by fromJSON, which the runner does not mask, where the runner prints it in the log (actions/job).",
+      "handles": [
+        {"name": "at", "doc": "the ${{ }}"}
+      ],
+      "fields": [
+        {"name": "secrets", "type": "[]string", "doc": "the names of the secrets it is taken out of; * for one not named"},
+        {"name": "via", "type": "[]SecretPartVia", "doc": "the outputs of the jobs that the value comes through by needs, nearest first"},
+        {"name": "text", "type": "string", "doc": "the ${{ }} as written", "display": true},
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SecretsContextRead",
+      "list": "SecretsContextReads",
+      "slug": "secrets-context-read",
+      "doc": "SecretsContextRead is a ${{ }} with a reference that reads the secrets context and names no secret, for which GitHub sends the job every secret (actions/job); and, of a workflow that only a caller runs, its callers.",
+      "handles": [
+        {"name": "at", "doc": "the ${{ }}"}
+      ],
+      "fields": [
+        {"name": "text", "type": "string", "doc": "the reference as written, the first if it has several", "display": true},
+        {"name": "calledOnly", "type": "bool", "doc": "whether its workflow has no event but workflow_call"},
+        {"name": "callerCoverage", "type": "analysis.CallerCoverage", "doc": "how much of the callers of its workflow the inputs have"},
+        {"name": "inheritCallers", "type": "[]InheritCaller", "doc": "the jobs of the inputs that call its workflow with secrets: inherit"},
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "SetupNodeVersion",
+      "list": "SetupNodeVersions",
+      "slug": "setup-node-version",
+      "doc": "SetupNodeVersion is the summary of the node-version of a step of actions/setup-node that has no ${{ }}: the Node.js the steps after it build and test with.",
+      "handles": [
+        {"name": "at", "doc": "the value of node-version"}
+      ],
+      "fields": [
+        {"name": "nodeVersion", "type": "string", "doc": "node-version as written"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Sink",
+      "list": "Sinks",
+      "slug": "sink",
+      "doc": "Sink is the summary of a run of a step, or the script of actions/github-script, and what an attacker controls in it (actions/taint).",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the run or the script"
+        }
+      ],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "analysis.SinkKind",
+          "doc": "a run or a script"
+        },
+        {
+          "name": "refs",
+          "type": "[]ExprRef",
+          "doc": "each ${{ }} reference in it, and whether an attacker controls it"
+        },
+        {
+          "name": "environmentFileWrites",
+          "type": "[]EnvironmentFileWrite",
+          "doc": "what it writes to a file command of the runner"
+        },
+        {
+          "name": "inconclusiveWrites",
+          "type": "[]InconclusiveWrite",
+          "doc": "the writes to an environment file whose analysis is inconclusive"
+        },
+        {
+          "name": "arguments",
+          "type": "[]CommandArgument",
+          "doc": "for a run of bash or sh, the words of its commands with a value an attacker may control in them"
+        },
+        {
+          "name": "requests",
+          "type": "[]RequestSite",
+          "doc": "for a run of bash or sh, the requests its commands send: curl, wget, gh api"
+        },
+        {
+          "name": "secretLeaks",
+          "type": "[]SecretLeak",
+          "doc": "for a run of bash or sh, where it prints a value it made from a secret"
+        },
+        {
+          "name": "unsecureFlag",
+          "type": "analysis.UnsecureState",
+          "doc": "for a run of bash or sh, ACTIONS_ALLOW_UNSECURE_COMMANDS in the env context of its step"
+        },
+        {
+          "name": "unsecureFlagPlace",
+          "type": "analysis.FlagPlace",
+          "doc": "where the flag is set"
+        },
+        {
+          "name": "hasStepId",
+          "type": "bool",
+          "doc": "whether the step has an id: the runner keeps the outputs of a step only when the step has an id"
+        },
+        {
+          "name": "hasStepAfter",
+          "type": "bool",
+          "doc": "whether a step of the job, or of the action, starts after the step is done; a step of the same parallel group does not"
+        },
+        {
+          "name": "variableCodes",
+          "type": "[]VariableCode",
+          "doc": "for a run of bash, the variables of env whose value an attacker may control and that it reads as code"
+        },
+        {
+          "name": "logWrites",
+          "type": "[]LogWrite",
+          "doc": "for a run of bash or sh whose flag may be true with a step after it, or whose step has an id, the references an attacker may control it prints to its log"
+        },
+        {
+          "name": "authoredCommands",
+          "type": "[]AuthoredCommand",
+          "doc": "for a run of bash or sh, the workflow commands set-output, save-state, set-env and add-path whose names are in its text and that it prints to its log"
+        },
+        {
+          "name": "callsNotRead",
+          "type": "[]CallsNotRead",
+          "doc": "for a run of bash or sh, none, or the first call of a function whose body the readings of the run did not read past their limit of calls"
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": [
+        {
+          "name": "RefFix",
+          "params": "i int",
+          "result": "FixPlan",
+          "doc": "what the fix of its step gives the reference i of Refs",
+          "reads": [
+            "sink.refs",
+            "step-fix.plan"
+          ]
+        },
+        {
+          "name": "WriteFix",
+          "params": "i int",
+          "result": "FixPlan",
+          "doc": "what the fix of its step gives the write i of EnvironmentFileWrites: that of its reference, or of its variable",
+          "reads": [
+            "sink.refs",
+            "sink.environment-file-writes",
+            "step-fix.plan"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "StepFix",
+      "list": "StepFixes",
+      "slug": "step-fix",
+      "doc": "StepFix is the fix of a step whose run or script has what an attacker controls: one plan for the step, which every rule that reports in it gives.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step"
+        }
+      ],
+      "fields": [
+        {
+          "name": "plan",
+          "type": "*stepPlan",
+          "doc": "what each place of the step gets",
+          "compare": false
+        }
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Upload",
+      "list": "Uploads",
+      "slug": "upload",
+      "doc": "Upload is the summary of a step of actions/upload-artifact and the credentials it puts in its artifact (actions/artifact).",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the step"
+        },
+        {
+          "name": "pathAt",
+          "doc": "the path of its with, else the step: where a finding of it is"
+        }
+      ],
+      "fields": [
+        {
+          "name": "takenCredentials",
+          "type": "[]TakenCredential",
+          "doc": "the credentials the steps before it left that it takes, as indices of the LeftCredentials of the IR, compared by place: an index moves when a LeftCredential before it goes"
+        },
+        {
+          "name": "hiddenMissingCommits",
+          "type": "[]MissingCommit",
+          "doc": "the commits the pin of its release lacks when the release takes hidden files: the condition of a TakenCredential whose Hidden is set"
+        },
+        {
+          "name": "downloadableDuringRun",
+          "type": "bool",
+          "doc": "whether others can download the artifact while the run goes on"
+        },
+        {
+          "name": "tokenWrite",
+          "type": "analysis.TokenWrite",
+          "doc": "whether the job's GITHUB_TOKEN may write"
+        },
+        {
+          "name": "inconclusive",
+          "type": "[]InconclusiveUpload",
+          "doc": "the inputs it and the steps before it have whose analysis is inconclusive"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "Uses",
+      "list": "Uses",
+      "slug": "uses",
+      "doc": "Uses is the summary of a uses that names another repository: a job's (a reusable workflow), or a step's of a workflow or of a composite action. A uses folded from a literal is one when what it folds to is.",
+      "handles": [
+        {
+          "name": "refAt",
+          "doc": "the ref in the uses: where a finding of it is, and what a pin replaces"
+        },
+        {
+          "name": "pathAt",
+          "doc": "the path in the uses, as written: where a finding of the action is that a path above the root of the repository names; the ref when the uses has no path"
+        }
+      ],
+      "fields": [
+        {
+          "name": "repo",
+          "type": "string",
+          "doc": "owner/repo as written"
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "doc": "the path of the action or the reusable workflow that runs, in its repository, after owner/repo/, as GitHub reads it (empty parts dropped, . and .. resolved); empty when it is at the root or when the uses goes above the root of its repository"
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "doc": "the ref as written, after @"
+        },
+        {
+          "name": "exact",
+          "type": "bool",
+          "doc": "whether the ref is written as it reads, with no escape, so that a fix can write in its place"
+        },
+        {
+          "name": "level",
+          "type": "UsesLevel",
+          "doc": "whether it is a job's or a step's"
+        },
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        },
+        {
+          "name": "folded",
+          "type": "bool",
+          "doc": "whether the uses is folded from a ${{ }} literal, which the update tools do not read as a uses"
+        },
+        {
+          "name": "lineComment",
+          "type": "string",
+          "doc": "the text of the comment at the end of the line the uses ends on, after the # and without the white space around it; empty without one"
+        },
+        {
+          "name": "outside",
+          "type": "bool",
+          "doc": "whether the path goes above the root of the repository with ..: the runner downloads owner/repo at the ref, and runs an action of another directory of its directory of actions"
+        },
+        {
+          "name": "runActions",
+          "type": "[]string",
+          "doc": "when outside and no other uses of the same steps downloads the action that runs: each reading of that action, as owner/repo@ref; empty otherwise"
+        },
+        {
+          "name": "runUses",
+          "type": "[]string",
+          "doc": "each reading of the action or the reusable workflow that runs, as owner/repo[/path]@ref with the path as the runner reads it (empty parts dropped, . and .. resolved): the readings of Runs of workflow.Uses: one when the path stays in its repository; when the path goes above the root of its repository, the one that another uses of the same steps downloads, or else every reading; none when the path goes above the directory of actions"
+        },
+        {
+          "name": "readByOutside",
+          "type": "bool",
+          "doc": "whether another uses of the same steps goes above the root of its repository into the directory of this uses, so that pinning this ref leaves that uses with no action"
+        },
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never"}
+      ],
+      "fixes": []
+    },
+    {
+      "name": "UsesPathSite",
+      "list": "UsesPathSites",
+      "slug": "uses-path-site",
+      "doc": "UsesPathSite is the summary of a step's uses (of another repository, ./ or $/) that GitHub does not read as written: one with parts that GitHub drops or resolves, or whose path goes with .. above its root.",
+      "handles": [
+        {
+          "name": "at",
+          "doc": "the value of the uses"
+        }
+      ],
+      "fields": [
+        {
+          "name": "usesText",
+          "type": "string",
+          "doc": "the uses as written",
+          "display": true
+        },
+        {
+          "name": "normalized",
+          "type": "string",
+          "doc": "the uses as GitHub reads it; empty when outside"
+        },
+        {
+          "name": "form",
+          "type": "UsesForm",
+          "doc": "how the uses is written apart from how GitHub reads it"
+        }
+      ],
+      "fixes": []
+    }
+  ]
+}

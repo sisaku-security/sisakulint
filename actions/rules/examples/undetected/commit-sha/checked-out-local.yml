@@ -1,0 +1,25 @@
+# situation: on push, a step checks out example-org/tools at a full commit SHA
+#   into the workspace, and the next step uses ./helper, a composite action
+#   of that tree whose step uses actions/setup-go@v5, by a tag.
+# reason: a todo (a fact): the commit decides the action.yml of ./helper, and an answer of action.definition for example-org/tools at the commit would let the rule read the uses of its steps.
+# cause: the action.yml of ./helper is a file of example-org/tools, not a
+#   file of the repository of the workflow that the linter reads.
+# attack: the owner of actions/setup-go, or whoever has taken over a token
+#   that pushes to it, moves the tag v5 to a commit of theirs, as the tags
+#   v1 to v45.0.7 of tj-actions/changed-files were moved in 2025 to a commit
+#   that prints secrets to the log.
+# attack-run-behavior: when ./helper runs, the runner resolves @v5 to that
+#   commit, downloads it and runs its action as a step of ./helper, in the
+#   job's workspace and environment.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: example-org/tools
+          ref: 0123456789abcdef0123456789abcdef01234567
+          persist-credentials: false
+      - uses: ./helper

@@ -1,0 +1,5 @@
+on:
+  workflow_call:
+jobs:
+  b:
+    uses: ./.github/workflows/called.yml

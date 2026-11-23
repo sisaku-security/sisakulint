@@ -1,0 +1,21 @@
+# situation: on check_suite, the job checks out check_suite.after and runs
+#   npm ci.
+# reason: for a commit of a pull request from a fork, check_suite.after was
+#   null (seen on GitHub), so the checkout brings the default branch, not
+#   the code of the pull request.
+# attack-value: the file package.json at the head of the pull request from a fork = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: an outside CI completes the checks of the commit of
+#   the pull request from a fork; the run of check_suite checks out the
+#   default branch, so npm ci runs the preinstall of the default branch, not
+#   the pushed one.
+on:
+  check_suite:
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.check_suite.after }}
+      - run: npm ci

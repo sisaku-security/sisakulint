@@ -1,0 +1,22 @@
+# situation: on workflow_dispatch, the step p prints the input x, and
+#   the release step writes the output tag of the step p into its
+#   script.
+# reason: whoever dispatches the workflow chooses the input.
+# cause: the rule leaves the inputs of a dispatch to who dispatches.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on:
+  workflow_dispatch:
+    inputs:
+      x: {}
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ inputs.x }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

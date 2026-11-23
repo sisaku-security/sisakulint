@@ -1,0 +1,23 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace and runs npm web ci.
+# reason: a todo (the same file): npm stops with an error at web, the
+#   first word that is not an option, because web is not the name, an alias
+#   name or the beginning of exactly one name of an npm command, and npm
+#   runs no code of the artifact.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command, ci, as the npm command, so the rule reports artifact-poisoning.executed.
+# attack-value: the file package.json in the artifact = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm web ci stops with the error Unknown command and
+#   does not run the script preinstall, so PWNED is not printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: npm web ci

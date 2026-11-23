@@ -1,0 +1,20 @@
+# situation: after a checkout of the pull request's head, a job runs an
+#   action of another repository whose directory .gitattributes marks
+#   export-ignore, so that the archive the runner downloads has no
+#   action.yml there.
+# reason: the runner stops the job before the steps run ("Can't find
+#   'action.yml', 'action.yaml' or 'Dockerfile'"), as seen on 2026-10-30;
+#   action.definition answers absent, and the job saves nothing.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the job fails while it sets up, before the checkout
+#   runs, and nothing of the attacker's is saved.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: example-org/ignored-composite@v1

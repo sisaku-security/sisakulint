@@ -1,0 +1,8 @@
+name: dockenv
+description: runs.env with = in a key and a name the runner writes
+runs:
+  using: docker
+  image: Dockerfile
+  env:
+    "A=B": x
+    GITHUB_SHA: over

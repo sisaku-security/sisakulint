@@ -1,0 +1,23 @@
+# situation: on workflow_run, a step uses a local action that downloads the
+#   artifact (GHSL-2024-314, aws/karpenter-provider-aws: uses:
+#   ./.github/actions/download-artifact), and make snapshot runs.
+# reason: a todo (a file of the repository): the download is in the local
+#   action's action.yml; reading it would find it.
+# cause: its action.yml is another file, which the rule does not read with
+#   the workflow.
+# attack-value: the file Makefile in the artifact of the ApprovalComment run = "snapshot:\n	echo PWNED\n"
+# attack-run-behavior: when the local action downloads the artifact of the
+#   run workflow_run follows into the workspace, make snapshot reads its
+#   Makefile and runs the snapshot recipe, which prints PWNED, with the base
+#   repository's secrets; the action.yml is not part of this example.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-314_AWS_Karpenter_Provider/
+on:
+  workflow_run:
+    workflows: [ApprovalComment]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/download-artifact
+      - run: make snapshot

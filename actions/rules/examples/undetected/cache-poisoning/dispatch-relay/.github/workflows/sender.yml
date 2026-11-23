@@ -1,0 +1,13 @@
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: write
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VALUE: ${{ github.event.issue.title }}
+        run: gh api "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=relay -f "client_payload[key]=$VALUE"

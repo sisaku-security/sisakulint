@@ -1,0 +1,32 @@
+# untrusted-checkout-toctou.mutable-ref and
+# ai-action-unrestricted-trigger.labeler-token-owner of sisakulint. How to run it:
+# the README of the all-rules example. Not for GitHub.
+on:
+  pull_request_target:
+    types: [labeled]
+permissions: {}
+jobs:
+  approved:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      # untrusted-checkout-toctou.mutable-ref: a label approves the run, and the
+      # checkout fetches refs/pull/<n>/head, which a push after the label moves
+      # (and commit-sha.unpinned: the tag)
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          allow-unsafe-pr-checkout: true
+      - run: npm ci
+  agent:
+    if: github.event.label.name == 'agent-review'
+    runs-on: ubuntu-latest
+    steps:
+      # ai-action-unrestricted-trigger.labeler-token-owner: actions/labeler in
+      # labeler.yml adds agent-review with a personal access token to a pull
+      # request that changes a file under site/, and the actor of the labeled
+      # run is the account of the token, which the check of the actor lets in
+      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          github_token: ${{ github.token }}
+          prompt: Review the pull request

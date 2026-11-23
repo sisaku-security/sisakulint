@@ -1,0 +1,9 @@
+name: z10
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "jobs.x.result == ''"
+      run: echo ran
+    - shell: bash
+      run: echo after

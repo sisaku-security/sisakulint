@@ -1,0 +1,20 @@
+# situation: on push, in a public repository, a step defines the function f,
+#   which prints t, inside ( ... ), then sets t to the secret TOKEN without
+#   its first character, and calls f.
+# reason: bash runs ( ... ) in a subshell, so after the subshell f is not
+#   defined, and the call of f prints nothing of the secret.
+# attack: anyone opens the run's log.
+# attack-run-behavior: the call of f fails with f: command not found, and the
+#   log has the line t= alone from the call inside ( ... ).
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          S: ${{ secrets.TOKEN }}
+        run: |
+          ( f() { echo "t=$t"; }; f )
+          t=${S:1}
+          f

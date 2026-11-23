@@ -1,0 +1,17 @@
+# situation: on push, a step's whole env is the JSON secret DB read by
+#   fromJSON.
+# reason: a todo (the same file): whether GitHub takes such an env, and the
+#   runner prints each of its values in the step's header, was not checked.
+# cause: the rule takes a secret read whole by fromJSON as an object, which
+#   it does not print.
+# attack: one who may read the run's log opens it to read the password.
+# attack-run-behavior: if the runner sets the env from the object, its
+#   header prints each key with its value, the password among them.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env: ${{ fromJSON(secrets.DB) }}
+        run: ./migrate.sh

@@ -1,0 +1,11 @@
+on: push
+permissions: {}
+jobs:
+  make:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit
+  show:
+    needs: make
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.make.outputs.prefix }}"

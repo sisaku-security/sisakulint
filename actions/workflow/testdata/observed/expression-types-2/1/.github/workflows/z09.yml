@@ -1,0 +1,11 @@
+name: z09
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.t }}
+    strategy:
+      matrix:
+        t: [5]
+    steps:
+      - run: echo ok

@@ -1,0 +1,28 @@
+# situation: the composite action gets the JSON key of a service account as
+#   inputs.key, takes the private key out with jq and prints the private key;
+#   ci.yml calls the action on push and gives the secret GCP_SA_KEY as key
+#   under with:.
+# reason: a todo (a file of the repository): the runner masks the whole JSON
+#   where the whole JSON is in the log, not the private key that jq extracts
+#   from the JSON, so the private key is in the log as the private key is.
+# cause: the rule does not follow the value under with: of the caller into
+#   inputs.key of the action, so the rule does not know that inputs.key holds
+#   a secret.
+# attack: anyone who may read the log of the run opens the log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key; the log
+#   keeps the private key for 90 days by default.
+name: deploy
+description: deploy with the key
+inputs:
+  key:
+    description: the JSON key of the service account
+runs:
+  using: composite
+  steps:
+    - env:
+        GCP_SA_KEY: ${{ inputs.key }}
+      run: |
+        PRIVATE_KEY=$(echo "$GCP_SA_KEY" | jq -r '.private_key')
+        echo "key: $PRIVATE_KEY"
+      shell: bash

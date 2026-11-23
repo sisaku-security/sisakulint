@@ -1,0 +1,10 @@
+name: z14
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo ok
+        timeout-minutes: ${{ github.run_number }}
+      - run: echo after

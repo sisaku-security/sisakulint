@@ -1,0 +1,21 @@
+# situation: the job runs its steps in the container ghcr.io/o/build:1,
+#   named by a tag and no digest.
+# reason: the runner pulls the image the tag 1 names when the job starts,
+#   and make runs inside it, so the image pushed last as ghcr.io/o/build:1
+#   decides the files, the make and the environment of the step.
+# attack: whoever can push to ghcr.io/o/build pushes an image of theirs
+#   under the tag 1, as in 2026 images that steal the secrets of CI were
+#   pushed to aquasec/trivy on Docker Hub as 0.69.4 to 0.69.6 and latest was
+#   re-pointed to them.
+# attack-run-behavior: the runner pulls ghcr.io/o/build:1, which is now that
+#   image, when the job starts, and runs make and every step of the job
+#   inside it, with the workspace and the docker socket mounted, so the
+#   image's files and programs see what the steps are given.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/o/build:1
+    steps:
+      - run: make

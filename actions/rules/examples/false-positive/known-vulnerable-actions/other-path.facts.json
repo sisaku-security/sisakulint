@@ -1,0 +1,16 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"github/codeql-action","path":"upload-sarif","ref":"d68b2d4edb4189fd2a5366ac14e72027bd4b37dd"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"github/codeql-action","path":"upload-sarif","ref":"dd196fa9ce80b6bacc74ca1c32bd5b0ba22efca7"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"github/codeql-action","path":"upload-sarif","ref":"d68b2d4edb4189fd2a5366ac14e72027bd4b37dd"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"other-path.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"github/codeql-action","sha":"d68b2d4edb4189fd2a5366ac14e72027bd4b37dd"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"github/codeql-action","sha":"d68b2d4edb4189fd2a5366ac14e72027bd4b37dd"},"state":"found","value":["refs/tags/v3.28.2"]},
+{"query":{"kind":"git.commit-tags","repo":"github/codeql-action","sha":"dd196fa9ce80b6bacc74ca1c32bd5b0ba22efca7"},"state":"found","value":[]},
+{"query":{"kind":"git.ref-commit","repo":"github/codeql-action","ref":"v3.28.3"},"state":"found","value":{"ref":"refs/tags/v3.28.3","sha":"dd196fa9ce80b6bacc74ca1c32bd5b0ba22efca7"}},
+{"query":{"kind":"package.advisories","package":"github/codeql-action","version":"v3.28.2"},"state":"found","value":[{"first_patched_version":"3.28.3","ghsa_id":"GHSA-vqf5-2xx6-9wfm","severity":"high","vulnerable_version_range":">= 3.26.11, <= 3.28.2"},{"ghsa_id":"GHSA-vqf5-2xx6-9wfm","severity":"high","vulnerable_version_range":">= 2.26.11, < 3.0.0"}]},
+{"query":{"kind":"package.advisories","package":"github/codeql-action"},"state":"found","value":[{"first_patched_version":"3.28.3","ghsa_id":"GHSA-vqf5-2xx6-9wfm","severity":"high","vulnerable_version_range":">= 3.26.11, <= 3.28.2"},{"ghsa_id":"GHSA-vqf5-2xx6-9wfm","severity":"high","vulnerable_version_range":">= 2.26.11, < 3.0.0"}]},
+{"query":{"kind":"package.advisories","package":"github/codeql-action/upload-sarif"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"github/codeql-action"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

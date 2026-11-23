@@ -1,0 +1,30 @@
+# situation: on workflow_run after a run of a pull request, a job with
+#   contents write runs when github.actor is dependabot[bot].
+# reason: a todo (a fact): whether Dependabot's push to the attacker's
+#   branch makes its actor dependabot[bot] is not known.
+# cause: the rule knows no run of Dependabot on workflow_run, so it does not
+#   read the comparison as one Dependabot passes. Nor does it report the
+#   comparison as one with another bot: it does not take the attacker as
+#   triggering workflow_run themselves.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: the run of ci for Dependabot's push completes and
+#   starts this workflow on workflow_run; in the case where its github.actor
+#   is dependabot[bot], which is not known, the if is true and the job merge
+#   runs echo merge with contents: write.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo merge

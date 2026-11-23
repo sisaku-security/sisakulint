@@ -1,0 +1,20 @@
+# situation: a reusable workflow (on: workflow_call) writes no permissions,
+#   and checks out, sets up Node and runs npm ci && npm test.
+# reason: unlike a workflow on push, which gets the repository's default
+#   token, a called workflow gets the caller's token, whose permissions it
+#   can only lower, so it may write no more than the caller chose.
+# attack: the maintainer of a package npm ci installs, or whoever takes over
+#   their account, publishes a version whose install script reads the token
+#   and sends it out.
+# attack-run-behavior: the job runs only when another workflow calls it,
+#   with the caller's token, whose permissions this file does not raise; the
+#   install script reads that token from .git/config, and it writes only the
+#   scopes the caller's job gave it.
+on: workflow_call
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - run: npm ci && npm test

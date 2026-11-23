@@ -1,0 +1,21 @@
+# situation: on pull_request_target, actions/cache/restore restores
+#   node_modules, and npm test runs.
+# reason: a todo (the same file): the pull request's code comes in a cache
+#   another run wrote, not by a checkout.
+# cause: the rule does not read caches.
+# attack: code of the pull request, run in another run that shares the base
+#   branch's cache scope, saves node_modules under the key deps-<hash> with
+#   a module that prints PWNED when it is loaded.
+# attack-run-behavior: the restore puts that node_modules in the workspace,
+#   and npm test runs the test script, which loads the planted module, with
+#   the base repository's token and secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: deps-${{ hashFiles('package-lock.json') }}
+      - run: npm test

@@ -1,0 +1,17 @@
+# situation: on issues, a run of pwsh passes the issue's title to tar after
+#   the file names, through env.
+# reason: a todo (the same file): reading pwsh would find it.
+# cause: the rule reads runs of bash and sh only.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: pwsh passes "$env:TITLE" to tar as one word, and tar
+#   reads it as --to-command and runs echo PWNED for notes.txt as it
+#   extracts it, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: tar -xf archive.tar notes.txt "$env:TITLE"

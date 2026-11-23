@@ -1,0 +1,35 @@
+# situation: sender.yml runs on issues opened, and with the GITHUB_TOKEN
+#   sends a repository_dispatch of the type relay whose client_payload has the
+#   title of the issue as the value run; receiver.yml runs on that
+#   repository_dispatch, and dawidd6/action-download-artifact takes the
+#   artifact of the run that the value run of the client_payload names, and
+#   ./out/publish.sh runs.
+# reason: the author of the issue writes the value, and sender.yml relays
+#   the value to receiver.yml in a repository_dispatch that a run of the
+#   repository sends with a token of the repository; GitHub creates a workflow
+#   run for a repository_dispatch sent with the GITHUB_TOKEN, as an exception
+#   to the rule that an event that the GITHUB_TOKEN triggers creates no
+#   workflow run.
+# cause: the rule reads the events of each workflow alone, and does not read
+#   what a workflow sends to another workflow as the client_payload of a
+#   repository_dispatch.
+# attack-value: github.event.issue.title = "1234"
+# attack-run-behavior: the attacker opens an issue whose title is the value;
+#   sender.yml sends the value, and in the run of receiver.yml the download
+#   takes the artifact of the run 1234, a pull_request run of a pull request
+#   from a fork whose workflow uploads out/publish.sh that prints PWNED, and
+#   ./out/publish.sh runs the file, which prints PWNED, with the secrets of
+#   the repository.
+on:
+  repository_dispatch:
+    types: [relay]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event.client_payload.run }}
+          name: out
+          path: out
+      - run: ./out/publish.sh

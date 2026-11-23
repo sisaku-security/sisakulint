@@ -1,0 +1,19 @@
+# situation: a step of a composite action has an if written as a block
+#   scalar (if: |), which keeps a line break after the ${{ }}.
+# reason: the runner does not drop the white space around the ${{ }} of an
+#   if of an action.yml, and reads the if as the string "false" and a line
+#   break, which is not empty and so true: the step runs whatever the input
+#   publish is.
+name: publish
+description: publishes the build when the input publish is true
+inputs:
+  publish:
+    description: whether to publish
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - if: |
+        ${{ inputs.publish == 'true' }}
+      shell: bash
+      run: ./publish.sh

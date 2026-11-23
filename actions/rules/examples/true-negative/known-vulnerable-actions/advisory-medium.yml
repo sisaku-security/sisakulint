@@ -1,0 +1,14 @@
+# situation: the same step with lycheeverse/lychee-action pinned to the
+#   commit of v2.0.2.
+# reason: GHSA-65rg-554r-9j5x says 2.0.2 fixes it; GitHub gives no advisory
+#   for 2.0.2.
+# attack-value: the title of the pull request = "1$(echo${IFS}PWNED)"
+# attack-run-behavior: v2.0.2 does not run the version as code.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: lycheeverse/lychee-action@7cd0af4c74a61395d455af97419279d86aafaede # v2.0.2
+        with:
+          lycheeVersion: ${{ github.event.pull_request.title }}

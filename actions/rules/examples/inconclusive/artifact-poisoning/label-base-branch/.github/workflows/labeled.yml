@@ -1,0 +1,38 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request whose base branch is site-preview;
+#   labeled.yml runs on pull_request_target on opened and labeled; the job
+#   build checks out the head of the pull request and uploads dist, and the
+#   job deploy, which needs build and runs on labeled when the if
+#   github.event.label.name == 'safe-to-test' is true, downloads dist and
+#   runs ./dist/deploy.sh.
+# reason: the attacker chooses the base branch of the pull request among the
+#   branches of the repository, so the attacker gets the label when the
+#   repository has a branch site-preview, which the linter does not know.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: when the repository has a branch site-preview, the
+#   attacker opens a pull request from a fork to that branch;
+#   actions/labeler adds the label safe-to-test, which starts labeled.yml,
+#   and the job deploy downloads dist, which the job build uploaded from the
+#   head of the pull request, and runs ./dist/deploy.sh, which prints PWNED.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

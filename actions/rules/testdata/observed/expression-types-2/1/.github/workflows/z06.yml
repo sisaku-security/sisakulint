@@ -1,0 +1,10 @@
+name: z06
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: z06-${{ github.run_id }}
+      cancel-in-progress: ${{ format('{0}', 'true') }}
+    steps:
+      - run: echo ok

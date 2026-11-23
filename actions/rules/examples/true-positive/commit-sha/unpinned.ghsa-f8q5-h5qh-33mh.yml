@@ -1,0 +1,23 @@
+# situation: a step uses xygeni/xygeni-action by the tag v5. The advisory
+#   (GHSA-f8q5-h5qh-33mh) names no workflow: "Any GitHub Actions workflow
+#   referencing `xygeni/xygeni-action@v5` during the affected window
+#   (approximately March 3–10, 2026) executed a C2 implant".
+# reason: the runner resolves @v5 to the commit the tag names when the job
+#   runs, not to one this workflow chose, and whoever may push to
+#   xygeni/xygeni-action can move the tag.
+# attack: in March 2026, an attacker with stolen credentials of a GitHub
+#   App moved the tag v5 to the commit
+#   4bf1d4e19ad81a3e8d4063755ae0f482dd3baf12 of a pull request that was not
+#   merged, whose action.yml ran a client of a command and control server.
+# attack-run-behavior: when the job runs, the runner resolves @v5 to that
+#   commit and runs its action.yml as the step, which polls the server for
+#   180 seconds and runs the commands the server sends, with the token and
+#   the secrets of the job.
+# advisory: https://github.com/advisories/GHSA-f8q5-h5qh-33mh
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: xygeni/xygeni-action@v5

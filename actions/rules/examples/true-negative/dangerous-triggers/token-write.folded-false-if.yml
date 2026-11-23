@@ -1,0 +1,20 @@
+# situation: on issues, the job's if is ${{ 'false' }}, a string literal
+#   alone in ${{ }}, and the job, whose token may write contents, puts the
+#   issue's title into a run by ${{ }}.
+# reason: GitHub reads the string of a string literal alone in ${{ }} as the
+#   expression of the if, so the if of the job is the expression false, and
+#   the job never runs: no one who opens an issue starts the job that holds
+#   the token.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the workflow, and GitHub
+#   reads the if of the job a as false, so the job a is skipped and no
+#   script runs.
+on: issues
+jobs:
+  a:
+    if: ${{ 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

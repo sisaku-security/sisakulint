@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A report of sisakulint (sisakulint/report/v0). It refers to facts-v0.json, which is to be in the same directory. Offsets are of bytes; line and column start at 1, and column counts bytes. The same inputs and the same file of facts give the same bytes.",
+  "type": "object",
+  "properties": {
+    "schema": {"const": "sisakulint/report/v0"},
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/input"}},
+    "complete": {"description": "Whether the inputs are every workflow and action.yml of the repository.", "type": "boolean"},
+    "excluded": {"description": "The paths left out of the run with what is under them (--exclude of the CLI), in the order of their names, each once; the inputs under them are in inputs, excluded. None when nothing was left out.", "type": "array", "items": {"type": "string", "minLength": 1}},
+    "reported_inputs": {"description": "The reported inputs: the inputs whose places the report is about, in the order of their names: every input of the run, or the PATHs of --read-all, or the changed inputs of a pull request (and with PATHs, those PATHs). The array findings and the array quality_findings have only the findings, of every certainty, whose location, evidence or related place is in a reported input. The array inputs has every input of the run, the reported inputs and the others. Of the states of the inputs, the bits of the exit code count those of the counted inputs: the reported inputs, but in a pull request run with PATHs every changed input; of the places, those of the counted inputs; and every error in the array errors. An empty array is a pull request that changes no input.", "type": "array", "items": {"type": "string", "minLength": 1}},
+    "rules": {"description": "The rules that ran.", "type": "array", "items": {"$ref": "#/$defs/rule-ref"}},
+    "skipped_rules": {"description": "The rules and quality rules left out of the run, by ID: in a run of --rule, those that --rule did not name; in a run of --skip-rule, those that --skip-rule named; and, in a run without --rule, those whose default_run (registry-v0.json) does not hold in the run. A rule left out did not run and asked no fact, so no finding or fact of the rule is here.", "type": "array", "items": {"$ref": "registry-v0.json#/$defs/id"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "quality_rules": {"description": "The quality rules that ran, by ID. A quality rule's finding alone gives no attacker a gain: an attack needs another flaw. The flaw that a quality rule finds may still let an attack through another flaw give the attacker more, or keep a vulnerability unfixed for longer. The quality rules check reliability and maintainability, in the words of GitHub Code Quality. A quality rule has no threat, no CVSS and no severity. The findings of a quality rule set no bit of the exit code; the findings of the other rules, of every certainty, and the inputs set the bits as in a run without the quality rules.", "type": "array", "items": {"$ref": "registry-v0.json#/$defs/id"}},
+    "quality_findings": {"description": "The findings of the quality rules, in the order of their places. A quality finding sets no bit of the exit code (Classify). The kinds are in the registry (finding_kinds of each of quality_rules).", "type": "array", "items": {"$ref": "#/$defs/quality-finding"}},
+    "facts": {"description": "The facts the rules asked about, and the answers.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/entry"}},
+    "errors": {"description": "Internal errors: a rule that failed, a finding or a fix that broke the contract.", "type": "array", "items": {"$ref": "#/$defs/error"}},
+    "remote_revision": {"description": "What a run read of a repository of GitHub (--remote of the CLI): the repository, the commit, its tree and the files whose contents the run read or tried to read. Null for a run of files on disk.", "oneOf": [{"$ref": "#/$defs/remote-revision"}, {"type": "null"}]},
+    "added_attackers": {"description": "The attackers that the run added with --add-attacker. The report has this field only when the run added an attacker; only then can a finding have added_attackers. The run adds each of these attackers alone, as a separate attacker: the report does not have a place that only two or more of these attackers together give.", "$ref": "registry-v0.json#/$defs/added-attackers"},
+    "fix": {"description": "What came of applying the fixes to the files: there only when they were applied (--fix of the CLI). It counts for nothing in the bits of the exit code (Classify): the findings are of the files before the fixes. The CLI exits 70 when error is there.", "$ref": "#/$defs/fix-result"}
+  },
+  "required": ["schema", "inputs", "complete", "excluded", "reported_inputs", "rules", "skipped_rules", "findings", "quality_rules", "quality_findings", "facts", "errors", "remote_revision"],
+  "additionalProperties": false,
+  "$defs": {
+    "remote-revision": {"description": "A repository of GitHub as a run read it.", "type": "object", "properties": {
+      "repository": {"description": "The repository, owner/name.", "$ref": "facts-v0.json#/$defs/repo"},
+      "ref": {"description": "The ref given after @ (a branch, a tag or a commit SHA); null for the default branch, and for a pull request.", "oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+      "commit": {"description": "The commit read: the one the ref named when the run began, or the head of the pull request.", "$ref": "facts-v0.json#/$defs/sha"},
+      "tree": {"description": "The tree of the commit, by its SHA.", "$ref": "facts-v0.json#/$defs/sha"},
+      "read_files": {"description": "The entries of the tree whose contents the run read or tried to read: the inputs, the files that are not inputs (the configuration of actions/labeler, .github/dependabot.yml), and the symlinks the run followed to them, in the order of their paths. git/blobs/{blob} of the repository gives the contents again.", "type": "array", "items": {"$ref": "#/$defs/remote-file"}},
+      "pull_request": {"description": "The pull request the run read (--pull-request); null for another run.", "oneOf": [{"$ref": "#/$defs/pull-request-revision"}, {"type": "null"}]}
+    }, "required": ["repository", "ref", "commit", "tree", "read_files", "pull_request"], "additionalProperties": false},
+    "pull-request-revision": {"description": "A pull request as a run read it: the run read the commit of its head (commit of remote_revision).", "type": "object", "properties": {
+      "number": {"description": "The number of the pull request.", "type": "integer"},
+      "base": {"description": "The commit of the base branch of the pull request when the run read it.", "$ref": "facts-v0.json#/$defs/sha"},
+      "merge_base": {"description": "The merge base of the head and base.", "$ref": "facts-v0.json#/$defs/sha"},
+      "behind_by": {"description": "How many commits base has that the head has not: changes of the base the run did not read.", "type": "integer"},
+      "changed_inputs": {"description": "The inputs the pull request changes, those under --exclude too, in the order of their names: an input at a path whose entry differs between the trees of merge_base and the head, an input a symlink on whose way is at such a path, and an input that calls by uses: ./ into a submodule at such a path. Without PATHs, the reported inputs are these (but those under --exclude), or every input when the pull request changes a file that the run read and that is not an input; with PATHs, the PATHs, each a changed input.", "type": "array", "items": {"type": "string", "minLength": 1}},
+      "unreported_count": {"description": "How many places of the inputs the bits of the exit code count the PATHs left out of the arrays findings and quality_findings; 0 each without PATHs. findings counts the findings of every certainty, and inconclusive counts the findings of the certainty inconclusive among them. The bits of the exit code count those places too.", "type": "object", "properties": {"findings": {"type": "integer"}, "quality_findings": {"type": "integer"}, "inconclusive": {"type": "integer"}}, "required": ["findings", "quality_findings", "inconclusive"], "additionalProperties": false},
+      "base_change_count": {"description": "How many paths base changed after merge_base that are where an input may be (in either tree) or that the run read: what the head does not have and the merge would. Not 0 sets bit 16 of the exit code.", "type": "integer"},
+      "accepted_count": {"description": "How many findings whose certainty is inconclusive, of the changed inputs, an acceptance matched (--accept): a finding is of the changed inputs when its location or a related place is in a changed input. An acceptance matches the place of the finding and the text of the place, and does not see what the pull request changed around the place.", "type": "integer"}
+    }, "required": ["number", "base", "merge_base", "behind_by", "changed_inputs", "unreported_count", "base_change_count", "accepted_count"], "additionalProperties": false},
+    "remote-file": {"description": "An entry of the tree whose contents a run read or tried to read.", "type": "object", "properties": {
+      "path": {"description": "The path from the root of the repository.", "type": "string", "minLength": 1},
+      "blob": {"description": "The blob of the entry, by its SHA: for a symlink, the blob of its target text.", "$ref": "facts-v0.json#/$defs/sha"},
+      "mode": {"description": "The mode of the entry in the tree.", "enum": ["100644", "100755", "120000"]}
+    }, "required": ["path", "blob", "mode"], "additionalProperties": false},
+    "severity": {"$ref": "registry-v0.json#/$defs/severity"},
+    "certainty": {
+      "description": "Whether a finding holds.",
+      "oneOf": [
+        {"const": "confirmed", "description": "The finding holds: the finding has no condition, or the condition of the finding holds by the answers about facts, assumed values included."},
+        {"const": "conditional", "description": "The finding holds if the condition of the finding holds; the condition depends on facts or inputs that the run does not know."},
+        {"const": "inconclusive", "description": "The rule found and examined the place of the finding, and cannot decide whether the finding holds: the value or the content that decides whether the finding holds is outside what the rule reads, and no answer about facts decides whether the finding holds. The finding has no condition, no fix and no reason for no fix."}
+      ]
+    },
+    "no-fix-reason": {
+      "description": "Why a rule that fixes gives no fix for a finding.",
+      "oneOf": [
+        {"const": "form", "description": "The form cannot be fixed."},
+        {"const": "manual", "description": "A person has to decide."},
+        {"const": "fact", "description": "A fact the fix needs is not known (facts)."},
+        {"const": "too-many-fixes", "description": "The input has more fixes of the rule than are checked after they are applied, and a fix not checked is not given; only the engine gives it."}
+      ]
+    },
+    "input-state": {
+      "description": "Whether an input could be read.",
+      "x-go-zero": "read",
+      "oneOf": [
+        {"const": "read", "description": "Read, and GitHub would take it."},
+        {"const": "unreadable", "description": "Not read: the bytes could not be read, or are not UTF-8."},
+        {"const": "invalid", "description": "Read, but GitHub would not take it: diagnostics, or a symlink workflow."},
+        {"const": "excluded", "description": "Left out by --exclude: not read."}
+      ]
+    },
+    "offset": {"type": "integer"},
+    "span": {
+      "type": "object",
+      "properties": {
+        "start": {"$ref": "#/$defs/offset"},
+        "end": {"$ref": "#/$defs/offset"},
+        "line": {"type": "integer"},
+        "column": {"type": "integer"}
+      },
+      "required": ["start", "end", "line", "column"],
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "input_kind": {"$ref": "registry-v0.json#/$defs/input-kind"},
+        "state": {"$ref": "#/$defs/input-state"},
+        "reason": {"type": "string"},
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {"type": "string"},
+              "message": {"type": "string"},
+              "start": {"$ref": "#/$defs/offset"},
+              "end": {"$ref": "#/$defs/offset"},
+              "line": {"type": "integer"},
+              "column": {"type": "integer"}
+            },
+            "required": ["code", "message", "start", "end", "line", "column"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["name", "input_kind", "state", "diagnostics"],
+      "additionalProperties": false
+    },
+    "rule-ref": {
+      "type": "object",
+      "properties": {"id": {"type": "string"}, "severity": {"description": "The worst of the severities of its kinds.", "$ref": "#/$defs/severity"}},
+      "required": ["id", "severity"],
+      "additionalProperties": false
+    },
+    "file": {
+      "description": "An input by its name, or a file that is the value of a fact.",
+      "oneOf": [
+        {"type": "object", "properties": {"input": {"type": "string", "minLength": 1}}, "required": ["input"], "additionalProperties": false},
+        {"type": "object", "properties": {"query": {"$ref": "facts-v0.json#/$defs/query"}}, "required": ["query"], "additionalProperties": false}
+      ]
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "file": {"$ref": "#/$defs/file"},
+        "start": {"$ref": "#/$defs/offset"},
+        "end": {"$ref": "#/$defs/offset"},
+        "line": {"type": "integer"},
+        "column": {"type": "integer"},
+        "exact": {"description": "false: where a ${{ }} is, only nearly.", "type": "boolean"},
+        "via": {"description": "The aliases it was reached through, outermost first.", "type": "array", "items": {"$ref": "#/$defs/span"}}
+      },
+      "required": ["file", "start", "end", "line", "column", "exact", "via"],
+      "additionalProperties": false
+    },
+    "related": {
+      "type": "object",
+      "properties": {"location": {"$ref": "#/$defs/location"}, "note": {"type": "string"}},
+      "required": ["location", "note"],
+      "additionalProperties": false
+    },
+    "condition": {
+      "description": "When the finding holds, in Kleene's logic: all holds when every part holds, any when some part does; a fact leaf is unknown when the fact is. A leaf with eq holds when the fact is found with that value (compared as JSON values), with absent when the fact is absent, with present when the input is in the set.",
+      "oneOf": [
+        {"type": "object", "properties": {"all": {"type": "array", "items": {"$ref": "#/$defs/condition"}}}, "required": ["all"], "additionalProperties": false},
+        {"type": "object", "properties": {"any": {"type": "array", "items": {"$ref": "#/$defs/condition"}}}, "required": ["any"], "additionalProperties": false},
+        {"type": "object", "properties": {"query": {"$ref": "facts-v0.json#/$defs/query"}, "eq": {}}, "required": ["query", "eq"], "additionalProperties": false},
+        {"type": "object", "properties": {"query": {"$ref": "facts-v0.json#/$defs/query"}, "absent": {"const": true}}, "required": ["query", "absent"], "additionalProperties": false},
+        {"type": "object", "properties": {"input": {"type": "string", "minLength": 1}, "present": {"const": true}}, "required": ["input", "present"], "additionalProperties": false}
+      ]
+    },
+    "fix": {
+      "type": "object",
+      "properties": {
+        "kind_id": {"type": "string"},
+        "title": {"type": "string"},
+        "side_effects": {"description": "What this fix may change besides the finding (possible_side_effects of its kind in the registry): none for a safe fix.", "type": "array", "items": {"$ref": "registry-v0.json#/$defs/side-effect"}},
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {"$ref": "#/$defs/offset"},
+              "end": {"$ref": "#/$defs/offset"},
+              "old": {"type": "string"},
+              "new": {"type": "string"}
+            },
+            "required": ["start", "end", "old", "new"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["kind_id", "title", "side_effects", "edits"],
+      "additionalProperties": false
+    },
+    "no-fix": {
+      "type": "object",
+      "properties": {
+        "reason": {"$ref": "#/$defs/no-fix-reason"},
+        "queries": {"type": "array", "items": {"$ref": "facts-v0.json#/$defs/query"}},
+        "note": {"type": "string"}
+      },
+      "required": ["reason", "queries", "note"],
+      "additionalProperties": false
+    },
+    "finding": {
+      "description": "A finding: of a certainty confirmed or conditional, whose kind is a finding kind of its rule, or of the certainty inconclusive, whose kind is an inconclusive kind of its rule.",
+      "oneOf": [{"$ref": "#/$defs/confirmed-or-conditional-finding"}, {"$ref": "#/$defs/inconclusive-finding"}]
+    },
+    "confirmed-or-conditional-finding": {
+      "description": "A finding whose certainty is confirmed or conditional: its kind is a finding kind of its rule.",
+      "type": "object",
+      "properties": {
+        "rule": {"type": "string"},
+        "severity": {"$ref": "#/$defs/severity"},
+        "certainty": {"description": "Whether the finding holds (certainty): confirmed or conditional.", "enum": ["confirmed", "conditional"]},
+        "location": {"$ref": "#/$defs/location"},
+        "args": {"description": "What the finding is about: its kind (<rule>.<kind>) and the values of its arguments, as the schema of findings of the rules (findings-v0.json of actions/rules) says. detected is made of them, for people; read these.", "type": "object", "properties": {"kind_id": {"$ref": "registry-v0.json#/$defs/finding-kind-id"}}, "required": ["kind_id"]},
+        "detected": {"description": "What the finding says is detected: the x-detected of its kind (findings-v0.json of actions/rules) with its args, for people.", "type": "string", "minLength": 1},
+        "consequence": {"description": "Why it is bad: the same for every finding of its kind (consequence of the kind in the registry).", "type": "string", "minLength": 1},
+        "remedy": {"description": "What a person does about it, fix or none: the same for every finding of its kind (remedy of the kind in the registry).", "type": "string", "minLength": 1},
+        "related": {"type": "array", "items": {"$ref": "#/$defs/related"}},
+        "evidence": {"description": "The path of the evidence, in order: from where a value comes to where it is used.", "type": "array", "items": {"$ref": "#/$defs/related"}},
+        "condition": {"$ref": "#/$defs/condition"},
+        "fix": {"description": "How to fix it: there when its kind fixes and no_fix is not.", "$ref": "#/$defs/fix"},
+        "no_fix": {"description": "Why there is no fix: there when its kind fixes and fix is not.", "$ref": "#/$defs/no-fix"},
+        "added_attackers": {"description": "The added attackers with which a run reports this finding. A finding has this field only when a run that adds no attacker reports no finding at this place with the same certainty and the same condition. When the run that adds no attacker reports a finding at this place with another certainty or another condition, the report has the finding of the run with the added attackers, with this field, instead. The list holds each added attacker such that a run that adds that attacker alone reports this finding in this form.", "$ref": "registry-v0.json#/$defs/added-attackers"},
+        "key_path": {"description": "The path of YAML keys from the document to the element of the place: keys joined by dots; a key of other characters than letters, digits, - and _ as a JSON string in brackets; an item of a sequence as its index in brackets; an item of steps or of a parallel group as its id in brackets, when no other item of the same sequence has the id (when two or more items of one sequence have one id, each of the items is its index). An element reached through aliases has the path of the outermost alias, then the path from what each alias refers to.", "type": "string"},
+        "span_text": {"description": "The text of the span of the place. The text is taken from the bytes the element is written in: from the anchor when the place is an element reached through an alias. The indentation that the lines of span_lines have in common is taken off each line after the first; the first line of span_text starts where the span starts, so the first line has no indentation to take off. The spaces and tabs at the end of each line are taken off, and the lines are joined by a line feed.", "type": "string"},
+        "span_lines": {"description": "The text of the lines the span of the place is on, from the start of the first line to the end of the last line, taken from the same bytes as span_text (from the anchor when the place is an element reached through an alias): the indentation that the lines have in common is taken off, and the spaces and tabs at the end of each line; the lines are joined by a line feed.", "type": "string"},
+        "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["rule", "severity", "certainty", "location", "args", "detected", "consequence", "remedy", "related", "evidence", "key_path", "span_text", "span_lines", "fingerprint"],
+      "additionalProperties": false
+    },
+    "inconclusive-finding": {
+      "description": "A finding whose certainty is inconclusive: the rule found and examined the place of the finding, and cannot decide whether the workflow departs from the expected state of the rule, or whether the consequence of a finding kind of the rule can occur at the place, because the value or the content that decides the answer is outside what the rule reads, such as a value that an attacker may write, the value of a setting, or the content of a file that the rule does not read. No answer about facts decides the answer, unlike the answer for a conditional finding. The kind of the finding is an inconclusive kind of the rule (inconclusive_kinds of the rule in the registry of rules). The finding sets bit 8 of the exit code when the severity of the finding is at or above the severity of --fail-on, unless the finding has an acceptance.",
+      "type": "object",
+      "properties": {
+        "rule": {"type": "string"},
+        "severity": {"description": "The severity of the rule of the finding: the worst severity of the finding kinds of the rule.", "$ref": "#/$defs/severity"},
+        "certainty": {"const": "inconclusive"},
+        "location": {"$ref": "#/$defs/location"},
+        "args": {"description": "The kind of the finding: <rule>.<kind>, where <kind> is an inconclusive kind of the rule. The certainty inconclusive of the finding says that the kind is an inconclusive kind, not a finding kind.", "type": "object", "properties": {"kind_id": {"$ref": "registry-v0.json#/$defs/finding-kind-id"}}, "required": ["kind_id"], "additionalProperties": false},
+        "detected": {"description": "What the rule says of the place of the finding, or, when the rule says nothing, the text of the inconclusive kind in the registry, for people.", "type": "string", "minLength": 1},
+        "consequence": {"description": "The problem that the rule looks for (problem of the rule in the registry): the problem that the place of the finding may have.", "type": "string", "minLength": 1},
+        "remedy": {"description": "What a person does about the place of the finding: the same for every inconclusive finding of the rule.", "type": "string", "minLength": 1},
+        "related": {"description": "The places that would take part in the consequence if the consequence occurred at the place of the finding, each with what the place would do.", "type": "array", "items": {"$ref": "#/$defs/related"}},
+        "evidence": {"description": "Empty: an inconclusive finding has the places of the consequence in related.", "type": "array", "items": {"$ref": "#/$defs/related"}},
+        "key_path": {"description": "The path of YAML keys from the document to the element of the place: keys joined by dots; a key of other characters than letters, digits, - and _ as a JSON string in brackets; an item of a sequence as its index in brackets; an item of steps or of a parallel group as its id in brackets, when no other item of the same sequence has the id (when two or more items of one sequence have one id, each of the items is its index). An element reached through aliases has the path of the outermost alias, then the path from what each alias refers to.", "type": "string"},
+        "span_text": {"description": "The text of the span of the place. The text is taken from the bytes the element is written in: from the anchor when the place is an element reached through an alias. The indentation that the lines of span_lines have in common is taken off each line after the first; the first line of span_text starts where the span starts, so the first line has no indentation to take off. The spaces and tabs at the end of each line are taken off, and the lines are joined by a line feed.", "type": "string"},
+        "span_lines": {"description": "The text of the lines the span of the place is on, from the start of the first line to the end of the last line, taken from the same bytes as span_text (from the anchor when the place is an element reached through an alias): the indentation that the lines have in common is taken off, and the spaces and tabs at the end of each line; the lines are joined by a line feed.", "type": "string"},
+        "acceptance": {
+          "description": "Present when an entry of the file of acceptances (--accept of the CLI, acceptances-v0.json) matches the place: then the place does not set bit 8 of the exit code. reason is the reason of the entry.",
+          "type": "object",
+          "properties": {"reason": {"type": "string", "minLength": 1}},
+          "required": ["reason"],
+          "additionalProperties": false
+        },
+        "added_attackers": {"description": "The added attackers with which a run reports this finding. A finding has this field only when a run that adds no attacker reports no finding at this place with the same certainty and the same condition. When the run that adds no attacker reports a finding at this place with another certainty or another condition, the report has the finding of the run with the added attackers, with this field, instead. The list holds each added attacker such that a run that adds that attacker alone reports this finding in this form.", "$ref": "registry-v0.json#/$defs/added-attackers"},
+        "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["rule", "severity", "certainty", "location", "args", "detected", "consequence", "remedy", "related", "evidence", "key_path", "span_text", "span_lines", "fingerprint"],
+      "additionalProperties": false
+    },
+    "quality-finding": {
+      "description": "A finding of a quality rule: as a finding, with no severity, fix or reason for none.",
+      "type": "object",
+      "properties": {
+        "rule": {"type": "string"},
+        "certainty": {"description": "Whether the finding holds: confirmed or conditional (certainty). A quality rule reports no finding whose certainty is inconclusive.", "enum": ["confirmed", "conditional"]},
+        "location": {"$ref": "#/$defs/location"},
+        "args": {"description": "What the finding is about: its kind (<rule>.<kind>) and the values of its arguments, as the schema of findings of the rules (findings-v0.json of actions/rules) says.", "type": "object", "properties": {"kind_id": {"$ref": "registry-v0.json#/$defs/finding-kind-id"}}, "required": ["kind_id"]},
+        "detected": {"description": "What the finding says is detected: the x-detected of its kind with its args, for people.", "type": "string", "minLength": 1},
+        "consequence": {"description": "Why it is bad: the same for every finding of its kind.", "type": "string", "minLength": 1},
+        "remedy": {"description": "What a person does about it: the same for every finding of its kind.", "type": "string", "minLength": 1},
+        "related": {"type": "array", "items": {"$ref": "#/$defs/related"}},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/related"}},
+        "condition": {"$ref": "#/$defs/condition"},
+        "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["rule", "certainty", "location", "args", "detected", "consequence", "remedy", "related", "evidence", "fingerprint"],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {"rule": {"type": "string"}, "input": {"type": "string"}, "message": {"type": "string"}},
+      "required": ["message"],
+      "additionalProperties": false
+    },
+    "fix-result": {
+      "type": "object",
+      "properties": {
+        "safety": {"description": "The fixes asked for: safe, or review for all.", "$ref": "registry-v0.json#/$defs/safety"},
+        "written": {"description": "The files written, in the order of their names.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "error": {"description": "Why not every file to fix was written; there only then.", "type": "string", "minLength": 1},
+        "unchecked_rules": {"description": "The rules left out of the run (skipped_rules) a field of which the fixes asked for change: the fixes were not checked against them. By ID.", "type": "array", "items": {"$ref": "registry-v0.json#/$defs/id"}}
+      },
+      "required": ["safety", "written", "unchecked_rules"],
+      "additionalProperties": false
+    }
+  }
+}

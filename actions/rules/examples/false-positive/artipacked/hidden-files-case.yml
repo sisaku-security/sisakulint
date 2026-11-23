@@ -1,0 +1,30 @@
+# situation: the job checks out the repository and uploads the workspace
+#   with include-hidden-files: tRuE.
+# reason: core.getBooleanInput takes true, True and TRUE only, and throws on
+#   tRuE ("const trueValue = ['true', 'True', 'TRUE']",
+#   https://github.com/actions/toolkit/blob/6cb87687384f971ebb756e43c7a56f62cd80a31d/packages/core/src/core.ts#L198-L208;
+#   actions/upload-artifact reads include-hidden-files with it,
+#   https://github.com/actions/upload-artifact/blob/043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/src/upload/input-helper.ts#L12),
+#   so the step fails and uploads nothing.
+# cause: the rule reads include-hidden-files as true in any case of the
+#   letters, so it takes the upload as one of the hidden files.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: core.getBooleanInput throws on tRuE, so the upload
+#   step fails and makes no artifact; the reader has nothing to download.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+          include-hidden-files: tRuE
+      - run: echo after the upload

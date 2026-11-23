@@ -1,0 +1,30 @@
+# situation: on comments on the diff, a step merges the pull request only
+#   if the actor is dependabot[bot], in a job that runs only for a pull
+#   request from a fork.
+# reason: a todo (a fact): the job runs only for a pull request from a
+#   fork. Where a private repository gives secrets or a token that writes
+#   to the runs of pull requests from forks, the run of a review that the
+#   attacker writes on the pull request of another person from a fork has
+#   those secrets or that token, and the job runs for the attacker.
+# cause: the rule does not read the settings of a private repository for
+#   the runs of pull requests from forks, and does not count the run of a
+#   review of a pull request from a fork as a run of the attacker.
+# attack: in the case where the attacker can have a bot that the if lets
+#   in act on the pull request of another person from a fork, as the
+#   inconclusive kind other-bot of this rule says of a run of a pull
+#   request from a branch of the repository, the attacker has that bot
+#   comment on the diff of that pull request.
+# attack-run-behavior: the comment of the bot starts the job a with the
+#   actor that the if compares, and gh pr merge --auto --rebase turns on
+#   auto-merge for the pull request with the token of the run.
+on: pull_request_review_comment
+jobs:
+  a:
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.actor == 'dependabot[bot]'
+        run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

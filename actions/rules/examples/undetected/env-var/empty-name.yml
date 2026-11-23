@@ -1,0 +1,16 @@
+# situation: the job sets an env key =A, with no name before the =.
+# reason: a todo (the same file): no name of an environment variable can be
+#   empty, and the step does not get the variable as the key is written.
+# cause: the rule reports a key with = by the name before the first =, and
+#   the name before the = of =A is empty; how the runner passes the key has
+#   not been tried.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      =A: x
+    steps:
+      - run: env

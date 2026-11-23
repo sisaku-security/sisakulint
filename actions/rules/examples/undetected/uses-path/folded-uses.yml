@@ -1,0 +1,15 @@
+# situation: a step uses ${{ 'actions/cache/restore/../save@0057852bfaa89a56745cba8c7296529d2fc39830' }}, which
+#   GitHub evaluates to the string and runs as actions/cache/save.
+# reason: the uses as written does not name the action that runs.
+# cause: the rule reads the uses as written, and a folded uses is written as
+#   a ${{ }} expression.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+      - uses: ${{ 'actions/cache/restore/../save@0057852bfaa89a56745cba8c7296529d2fc39830' }}
+        with:
+          path: build
+          key: build-${{ github.sha }}

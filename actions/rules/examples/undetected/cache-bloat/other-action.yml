@@ -1,0 +1,17 @@
+# situation: actions/setup-node caches the npm cache by the cache input of
+#   actions/setup-node, which uses the cache of GitHub inside the action.
+# reason: whether actions/setup-node restores another key and saves a new
+#   key is in the code of the action, not in the workflow.
+# cause: the rule reads actions/cache, actions/cache/restore and
+#   actions/cache/save only, as written in the workflow.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci

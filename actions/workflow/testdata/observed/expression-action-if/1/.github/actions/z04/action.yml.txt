@@ -1,0 +1,9 @@
+name: z04
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "hashFiles('x') == ''"
+      run: echo ran
+    - shell: bash
+      run: echo after

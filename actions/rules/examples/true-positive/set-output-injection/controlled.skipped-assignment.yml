@@ -1,0 +1,25 @@
+# situation: on issues, the step p passes the title of the issue in the
+#   environment variable TITLE, defines a function f that sets TITLE to a
+#   fixed word only when Q is set, calls f, and prints TITLE; the release
+#   step writes the output tag of the step p into its script.
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, TITLE holds the title when echo runs, and the
+#   step prints the title.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the step prints the title, the runner sets the output
+#   tag to $(id), and the release step runs id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          if [ -n "$Q" ]; then f() { TITLE=safe; }; fi
+          f
+          echo "issue: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

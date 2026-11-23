@@ -1,0 +1,28 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/self-hosted-runner-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   private (private.yml) of the rule, with on: workflow_call in place of
+#   the on of private.yml. The job passes its secrets with secrets: inherit.
+#   In the true positive, on pull_request, a job runs make on a runner
+#   labelled self-hosted and linux, in a private or internal repository that
+#   lets those who may read it fork it and runs the workflows of pull
+#   requests from its forks (repo.public false, repo.allow-forking true,
+#   repo.fork-pr-run-workflows true).
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: on
+#   pull_request, GitHub runs the workflow file as the pull request has it,
+#   so one who may read the repository and fork it (every member of the
+#   enterprise reads an internal one) can rewrite the steps, and runs-on:
+#   [self-hosted, linux] sends them to the repository's own runner.
+# attack: one who may read the repository forks it and opens a pull request
+#   whose copy of this workflow runs a step of their own in place of make.
+# attack-run-behavior: the setting Run workflows from fork pull requests is
+#   on, so the pull request's run starts; the job a runs the attacker's step
+#   on a runner of the repository with both labels, where what it leaves
+#   stays for the jobs that run there after it, with their secrets and
+#   tokens.
+on: pull_request
+jobs:
+  c:
+    uses: example-org/self-hosted-runner-remote/.github/workflows/w.yml@v1
+    secrets: inherit

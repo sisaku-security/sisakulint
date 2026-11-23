@@ -1,0 +1,30 @@
+# situation: the workflow is called; it downloads the artifact of
+#   github.event.workflow_run.id into the workspace, and npm ci runs. Its
+#   one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no workflow_run, so the value
+#   that the run reads is not a value that an attacker wrote. Another
+#   repository may call the workflow on an event whose payload has what an
+#   attacker wrote, but that run has the token and the secrets of the other
+#   repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: ci.yml calls it on push, whose event has no
+#   workflow_run, so run-id is empty, the download does not name the fork's
+#   ci run, and npm ci reads no package.json of the pull request. A workflow
+#   of another repository that calls it on workflow_run would download the
+#   fork's artifact, with that repository's token.
+on:
+  workflow_call:
+permissions:
+  actions: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci

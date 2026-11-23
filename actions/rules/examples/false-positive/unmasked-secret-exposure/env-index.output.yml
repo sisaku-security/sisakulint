@@ -1,0 +1,36 @@
+# situation: on push, the env of the job `read` has the whole secret TOKEN
+#   under TOKEN and a literal under N, an output of the job `read` is
+#   env[matrix.key] and the password of the JSON secret DB, where
+#   matrix.key is TOKEN in every run; the later job `print` prints the
+#   output.
+# reason: env[matrix.key] is the whole secret TOKEN in every run, which the
+#   runner masks, so the runner drops the output and the job `print` gets
+#   an empty value.
+# cause: the rule reads env[matrix.key] as any one variable of the env, so
+#   the rule reads the output as an output that the runner may keep.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` to read the password.
+# attack-run-behavior: the job `read` warns that it skips the output
+#   credential since the output may contain a secret; the header of the
+#   step of the job `print` shows the run: script of the step with an empty
+#   value.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        key: [TOKEN]
+    env:
+      TOKEN: ${{ secrets.TOKEN }}
+      N: plain
+    outputs:
+      credential: ${{ env[matrix.key] }}-${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.credential }}"

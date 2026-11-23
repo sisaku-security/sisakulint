@@ -1,0 +1,18 @@
+# situation: the step gives the configuration variable NODE_VERSION to the
+#   input node-version of actions/setup-node; no level defines
+#   NODE_VERSION, on purpose.
+# reason: actions/setup-node reads an empty node-version as no version and
+#   uses the version of the file .nvmrc or of the runner, which is what the
+#   workflow expects when NODE_VERSION is missing.
+# cause: the code of the action decides what an empty input means, and the
+#   rule does not read the code.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ vars.NODE_VERSION }}

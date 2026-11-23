@@ -1,0 +1,26 @@
+# situation: on push, the job writes the message of the head commit of the
+#   push (github.event.head_commit.message) into the key of a cache that the
+#   job saves.
+# reason: a todo (the same file): when one who can write merges a pull
+#   request into the default branch, the message of the commit that merges
+#   the pull request can have the title of the pull request, which the
+#   author of the pull request writes, and the push of the merge starts a
+#   run of push on the default branch, whose saves reach the scope of the
+#   default branch.
+# cause: the rule reads the author of a merged commit only on status,
+#   check_suite and check_run, not on push or merge_group.
+# attack-value: github.event.head_commit.message = "main"
+# attack-run-behavior: the author of a pull request writes the value as the
+#   title of the pull request; one who can write merges the pull request
+#   with the title as the message of the commit, the run of push saves the
+#   cache under the key build-main, and a job on the default branch restores
+#   the cache.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ github.event.head_commit.message }}

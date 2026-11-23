@@ -1,0 +1,18 @@
+# situation: runs-on reads the configuration variable RUNNER_LABEL, which
+#   only the environment level of the environment production defines; the
+#   job names production.
+# reason: a todo (a fact): if GitHub reads runs-on before the names of the
+#   environment level are seen, as it does for the if and the name of a
+#   job, runs-on is empty and the job does not start; the authors of the
+#   rule did not try runs-on.
+# cause: the rule reads the environment level as defined in the keys of a
+#   job that were not tried.
+on: push
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ${{ vars.RUNNER_LABEL }}
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - run: ./deploy.sh

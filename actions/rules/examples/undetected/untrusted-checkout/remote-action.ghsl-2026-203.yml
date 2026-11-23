@@ -1,0 +1,43 @@
+# situation: on issue_comment, when the comment is on a pull request and
+#   contains please update snapshots, a step uses the composite action
+#   update-snapshots-checkout of jupyterlab/maintainer-tools; a later step
+#   uses the local action ./.github/actions/build-dist. The action stops
+#   unless the author_association of the comment is OWNER, COLLABORATOR or
+#   MEMBER, stops when the head repository of the pull request was pushed
+#   at a later whole second than the comment, and then checks out
+#   the pull request with gh pr checkout in a run step. This is
+#   playwright-update.yml of jupyter/notebook (commit
+#   1cabcced0af1f7d6e43f06cec6883576399d6ac1, lines 1-35), with the action
+#   at commit b48fcdb87e70c45789abd80d4042b06641e47b46 (action.yml, lines
+#   15-36 and 54-91). The matrix of the job, the step Base Setup and the
+#   steps after the step Build are left out.
+# reason: the rule does not read the action.yml of another repository, and
+#   inside the action, the checkout of the pull request is gh pr checkout in
+#   a run step, which the rule does not read either (the undetected form
+#   git-in-run); reading both would find the checkout of the pull request.
+# cause: the rule does not read the action.yml of another repository.
+# attack-value: the file .github/actions/build-dist/action.yml in the pull request's head = "runs:\n  using: composite\n  steps:\n    - run: echo PWNED\n      shell: bash\n"
+# attack-run-behavior: after an OWNER, a COLLABORATOR or a MEMBER comments
+#   please update snapshots, the author of the pull request pushes a commit
+#   in the same second as the comment; the times compare equal, so the
+#   action does not stop, and the action checks out the pushed commit. The
+#   step Build then runs the author's
+#   ./.github/actions/build-dist/action.yml, which prints PWNED, with the
+#   GITHUB_TOKEN of contents: write.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-203_jupyter_notebook_repository/
+on:
+  issue_comment:
+    types: [created, edited]
+jobs:
+  update-snapshots:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, 'please update snapshots')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: jupyterlab/maintainer-tools/.github/actions/update-snapshots-checkout@b48fcdb87e70c45789abd80d4042b06641e47b46 # v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        uses: ./.github/actions/build-dist

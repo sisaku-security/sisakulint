@@ -1,0 +1,25 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/untrusted-checkout-toctou-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   mutable-ref (mutable-ref.yml) of the rule, with on: workflow_call in
+#   place of the on of mutable-ref.yml. The job passes its secrets with
+#   secrets: inherit. In the true positive, on pull_request_target labeled,
+#   the job checks out refs/pull/<n>/head and runs npm ci.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   label is the approval, but refs/pull/<n>/head names the pull request's
+#   head when the checkout fetches it, not the commit that was labelled, so
+#   a push between the label and the fetch is what npm ci runs.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: the labeled run checks out refs/pull/<n>/head, which
+#   GitHub has moved to the pushed commit, and npm ci runs its preinstall,
+#   with the base repository's GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  c:
+    uses: example-org/untrusted-checkout-toctou-remote/.github/workflows/w.yml@v1
+    secrets: inherit

@@ -1,0 +1,15 @@
+# situation: a step uses example-org/unanswered-action pinned to a commit
+#   (made up), and nothing answers what advisories it has (no file of facts,
+#   no --online).
+# reason: the rule cannot tell whether an advisory names the version it
+#   runs.
+# attack: someone uses a vulnerability of the action, if the version is
+#   one an advisory names.
+# attack-run-behavior: a vulnerable version runs the vulnerable code; a
+#   fixed one does not.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/unanswered-action@5555555555555555555555555555555555555555 # v1.0.0

@@ -1,0 +1,21 @@
+# situation: a step checks out example-org/unlisted-tools into the
+#   workspace, and the next step uses ./ to run an action of that tree;
+#   repo.action-list is * and patterns that start with !, among them
+#   !example-org/unlisted-*.
+# reason: the ./ step runs the code of example-org/unlisted-tools, which
+#   repo.action-list does not allow, with the job's secrets and GITHUB_TOKEN
+#   in reach.
+# cause: the rule does not compare a ./ uses with repo.action-list.
+# attack: the maintainer of example-org/unlisted-tools writes code that
+#   reads the job's secrets into the action of the tree.
+# attack-run-behavior: the ./ step runs that code in the job.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: example-org/unlisted-tools
+          persist-credentials: false
+      - uses: ./setup

@@ -1,0 +1,27 @@
+# situation: on workflow_run, the script of a step copies into $GITHUB_PATH, with
+#   cat, the content of a file of an artifact that was uploaded by the run
+#   that triggered the workflow, by printing the file, not through a shell
+#   variable.
+# reason: a todo (the same file): reading, in the workflow, the command that
+#   copies the file and the step that downloads the file would find it.
+#   artifact-poisoning reports the download of the artifact, and this rule
+#   reports nothing.
+# cause: the rule reads the text of the script, and does not follow where
+#   the file comes from (the step that downloads the file).
+# attack-value: the file tool_dir.txt of the artifact tool_dir = "/tmp/PWNED"
+# attack-run-behavior: download-artifact puts tool_dir.txt in the workspace, and cat appends
+#   the line /tmp/PWNED to $GITHUB_PATH; the steps after the step of
+#   cat get /tmp/PWNED first in PATH.
+on:
+  workflow_run:
+    workflows: ["receive-pr"]
+    types: [completed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tool_dir
+          run-id: ${{ github.event.workflow_run.id }}
+      - run: cat tool_dir.txt >> "$GITHUB_PATH"

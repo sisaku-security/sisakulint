@@ -1,0 +1,26 @@
+# situation: the composite action of the true positive executed.no-caller of
+#   this rule; the only caller, ci.yml, runs on pull_request and calls the
+#   action after actions/checkout.
+# reason: the files that the linter reads are the whole repository and hold
+#   every caller of the action, so the rule reads the action on the events of
+#   the callers, in this example, pull_request alone. A run of pull_request for a pull
+#   request from a fork has a read-only GITHUB_TOKEN and no secrets of the
+#   repository.
+# attack-value: the file package.json in the head of the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork, which
+#   starts a run of ci.yml on pull_request; npm ci runs the preinstall of the
+#   package.json and prints PWNED, with the read-only GITHUB_TOKEN of the run
+#   of pull_request and no secret. The author of the pull request can get the
+#   same read-only GITHUB_TOKEN without the action, by changing ci.yml in the
+#   pull request.
+name: test
+description: test the pull request
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        allow-unsafe-pr-checkout: true
+    - run: npm ci
+      shell: bash

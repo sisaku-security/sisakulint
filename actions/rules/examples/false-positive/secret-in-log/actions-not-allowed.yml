@@ -1,0 +1,30 @@
+# situation: the workflow of the true positive private (private.yml) of the
+#   rule, with a job added whose step uses example-org/not-allowed-action,
+#   which the setting of allowed actions of GitHub (repo.allowed-actions)
+#   blocks with !example-org/not-allowed-action@*. In the true positive, on
+#   push, in a private repository (repo.public answered false), a step
+#   prints the first characters of the secret DEPLOY_TOKEN to check which
+#   token is set.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: one with read access to the repository opens the run's log and
+#   reads the first characters of the token.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: echo "token starts with ${DEPLOY_TOKEN:0:8}"
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

@@ -1,0 +1,25 @@
+# situation: on issues opened, a job with ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   true has a step with the env key T=X with the issue's title, which
+#   prints $T, and a step after it.
+# reason: a todo (the same file): the runner sets the variable T to X= and
+#   the title, and a title with ##[set-env name=…;] sets an environment
+#   variable of the step after it.
+# cause: the rule reads a variable of env by a key equal to its name, and
+#   no key is T.
+# attack-value: github.event.issue.title = "##[set-env name=PWNED;]1"
+# attack-run-behavior: echo prints X=##[set-env name=PWNED;]1, and the
+#   runner reads the line as set-env and sets PWNED for the step after it.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T=X: ${{ github.event.issue.title }}
+        run: echo "$T"
+      - run: make

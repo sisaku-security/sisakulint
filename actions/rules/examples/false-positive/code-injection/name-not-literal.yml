@@ -1,0 +1,23 @@
+# situation: on issues opened, a step passes the issue's title in the
+#   environment variable TITLE, sets n to the name TITLE, assigns a fixed
+#   command to the variable that n names with declare, and runs TITLE with
+#   eval.
+# reason: bash assigns the fixed command to TITLE, so TITLE holds the fixed
+#   command when eval runs, and the title of the issue does not run.
+# cause: the variable name of the assignment is not a literal word, so the
+#   rule reads TITLE as holding the value of the env.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: eval runs the fixed command, which prints "safe".
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          n=TITLE
+          declare "$n=echo safe"
+          eval "$TITLE"

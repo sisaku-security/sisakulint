@@ -1,0 +1,24 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step writes body= and the body of an issue to
+#   $GITHUB_OUTPUT.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, issues among the
+#   events. Anyone who opens an issue writes its body, and the runner reads
+#   $GITHUB_OUTPUT one line at a time as name=value with nothing that escapes
+#   the line breaks of the body, so each later line of the body such as x=y is
+#   read as an output of its own beside body.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds the two lines x and PWNED=1, so echo
+#   writes the lines body=x and PWNED=1 to $GITHUB_OUTPUT, and the runner
+#   reads each line as name=value and sets the outputs body (x) and PWNED (1).
+#   A line approved=true in the body sets the output approved in the same way,
+#   and wins over an approved the step wrote before the line.
+name: save body
+description: give the body of the issue as an output
+runs:
+  using: composite
+  steps:
+    - env:
+        BODY: ${{ github.event.issue.body }}
+      run: echo "body=$BODY" >> "$GITHUB_OUTPUT"
+      shell: bash

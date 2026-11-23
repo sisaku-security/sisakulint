@@ -1,0 +1,11 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: g
+            run: sleep 3; echo g-done
+          - run: echo sibling
+      - wait: g
+      - run: echo after

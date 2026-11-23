@@ -1,0 +1,22 @@
+# situation: google-github-actions/auth leaves a credential, and
+#   actions/upload-pages-artifact uploads the workspace.
+# reason: a todo (the same file): actions/upload-pages-artifact makes the
+#   workspace readable.
+# cause: the rule reads actions/upload-artifact only.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the
+#   service account key from gha-creds-*.json.
+# attack-run-behavior: google-github-actions/auth writes the key of
+#   secrets.GCP to gha-creds-<hex>.json at the top of the workspace, and
+#   actions/upload-pages-artifact tars the path ., excluding only .git and
+#   .github, so the artifact github-pages holds it; the key keeps working
+#   after the run.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with: {credentials_json: '${{ secrets.GCP }}'}
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: .}

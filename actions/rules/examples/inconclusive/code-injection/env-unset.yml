@@ -1,0 +1,14 @@
+# situation: a step writes env.NOWHERE into its run script by ${{ }}, an env
+#   the workflow does not set.
+# reason: a step before may set it at run time through $GITHUB_ENV, so what
+#   it holds, and whether an attacker controls it, is not known.
+# attack-value: env.NOWHERE = "\"; echo PWNED; echo \""
+# attack-run-behavior: when a step before writes NOWHERE with the value to
+#   $GITHUB_ENV, the script becomes echo ""; echo PWNED; echo "", and bash
+#   runs the second echo as a command, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ env.NOWHERE }}"

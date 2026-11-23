@@ -1,0 +1,10 @@
+# situation: a composite action of the repository uses
+#   gradle/actions/wrapper-validation, which the setting of allowed actions
+#   of GitHub allows with gradle/*.
+# reason: the setting allows the uses, so the job runs the steps.
+name: validate
+description: validate the Gradle wrapper
+runs:
+  using: composite
+  steps:
+    - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4

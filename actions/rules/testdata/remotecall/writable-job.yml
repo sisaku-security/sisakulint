@@ -1,0 +1,16 @@
+# The workflow of TestRemoteCalledCacheMode.
+# situation: on pull_request_target, a job that writes no cache-mode calls
+#   example-org/cache-write-workflow/.github/workflows/build.yml@v1, a
+#   reusable workflow of another repository whose job asks for cache-mode:
+#   write.
+# reason: the caller limits nothing, so the called job saves to the cache
+#   of the default branch's scope on the attacker's event;
+#   workflow.definition answers the file of the called workflow.
+# attack: a flaw in the called job runs the attacker's code, which saves to
+#   the default branch's scope under a key a later run restores.
+# attack-run-behavior: the called job runs with Cache mode: write, and code
+#   run in the called job saves to the cache.
+on: pull_request_target
+jobs:
+  call:
+    uses: example-org/cache-write-workflow/.github/workflows/build.yml@v1

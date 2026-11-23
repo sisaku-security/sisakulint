@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and passes the variable to eval of
+#   JavaScript in actions/github-script.
+# reason: eval reads the value of process.env.ISSUE_TITLE as JavaScript.
+# cause: the rule reads the variables of runs of bash only.
+# attack-value: github.event.issue.title = "require('child_process').execSync('echo PWNED', {stdio: 'inherit'})"
+# attack-run-behavior: eval runs the JavaScript, which runs echo PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        with:
+          script: eval(process.env.ISSUE_TITLE)

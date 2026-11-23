@@ -1,0 +1,28 @@
+# situation: on issue_comment, a job runs on a maintainer's comment, checks
+#   out refs/pull/<n>/head and runs a script of it, as in GHSL-2026-166
+#   (mongodb/node-mongodb-native 7f8edf30e376738fd554ac232d238e7022bc86a8,
+#   .github/workflows/release_notes.yml:10,21,44,56).
+# reason: another rule's: untrusted-checkout reports it as a checkout no one
+#   approves.
+# cause: the rule reads a label or an environment as an approval, not a
+#   comment.
+# attack: after a maintainer comments run release_notes on the pull request,
+#   its author pushes a commit whose .github/scripts/pr_list.mjs prints
+#   PWNED, before the job's checkout fetches.
+# attack-run-behavior: the comment's run passes the if, checks out
+#   refs/pull/<n>/head, which then names the pushed commit, and node runs
+#   its pr_list.mjs, with the job's GITHUB_TOKEN in .git/config and its
+#   secrets.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-166_MongoDB_Node_js_Driver/
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  notes:
+    if: ${{ github.event.issue.pull_request && github.event.comment.body == 'run release_notes' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - run: node .github/scripts/pr_list.mjs

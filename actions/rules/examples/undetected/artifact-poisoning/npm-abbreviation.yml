@@ -1,0 +1,25 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace and runs npm tes.
+# reason: a limitation (run time): npm reads tes as the npm command test,
+#   because tes is the beginning of no other command name or alias name of
+#   the npm release that the job uses, and npm test runs the script test of
+#   the package.json of the artifact; which names the npm release has is known when
+#   the job runs.
+# cause: the rule reads npm tes as a step that runs nothing of the
+#   artifact, so the rule reports artifact-poisoning.download, not
+#   artifact-poisoning.executed.
+# attack-value: the file package.json in the artifact out = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: the download puts the package.json of the attacker
+#   in the workspace, and npm tes runs its script test, which prints PWNED.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: npm tes

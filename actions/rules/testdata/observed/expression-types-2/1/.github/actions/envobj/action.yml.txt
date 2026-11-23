@@ -1,0 +1,8 @@
+name: envobj
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        X: ${{ github.event }}
+      run: printf 'X=[%s]\n' "$X"

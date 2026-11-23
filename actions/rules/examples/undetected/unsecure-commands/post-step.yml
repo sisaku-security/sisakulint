@@ -1,0 +1,22 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and its last step prints the title of the issue; the post step of
+#   actions/checkout runs after it.
+# reason: a todo (a fact): whether set-env reaches the post step of an
+#   action was not checked.
+# cause: the rule counts the steps of the job, not the post steps of its
+#   actions.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the runner sets BASH_ENV; whether the post step of
+#   actions/checkout gets it was not seen.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "$TITLE"

@@ -1,0 +1,23 @@
+# situation: the job on pull_request_target checks out the pull request's
+#   head and runs npm ci, in an environment that a ${{ }} picks.
+# reason: both environments have required reviewers, who approve the job
+#   before it runs.
+# cause: which environment the job takes is known when it runs, so it is
+#   read as approving nothing.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the job waits until a required reviewer of production
+#   or staging, whichever the expression gives, approves it; a reviewer who
+#   reads the pull request's package.json does not approve, and the checkout
+#   and npm ci do not run. An approval followed by a push is
+#   untrusted-checkout-toctou's.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.pull_request.base.ref == 'main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

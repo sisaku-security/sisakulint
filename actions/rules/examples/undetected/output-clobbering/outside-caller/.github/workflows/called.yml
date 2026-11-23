@@ -1,0 +1,23 @@
+# situation: the workflow is called; a run writes github.event.issue.body to
+#   $GITHUB_OUTPUT. Its one caller in the repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: with the body in BODY, echo writes the lines body=x and
+#   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs body and PWNED.
+#   In a run of ci.yml, on push, the event has no issue: BODY is empty and the
+#   step writes the one line body=.
+on:
+  workflow_call:
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$BODY" >> "$GITHUB_OUTPUT"

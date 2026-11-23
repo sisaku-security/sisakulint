@@ -1,0 +1,18 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/known-vulnerable-actions-unknown, whose
+#   content is the workflow of the true positive advisory-critical
+#   (advisory-critical.yml) of the rule, with on: workflow_call in place of
+#   the on of advisory-critical.yml. The linter asked the fact
+#   workflow.definition for the reusable workflow and got no answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack-value: the name of the pull request's branch = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: the action's script runs the command in the branch
+#   name, with the token and the secrets of the job of the base repository.
+on: pull_request_target
+permissions: {}
+jobs:
+  c:
+    uses: example-org/known-vulnerable-actions-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

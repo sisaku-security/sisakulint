@@ -1,0 +1,8 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"remote-callee-unknown.yml"},"state":"found","value":true},
+{"query":{"kind":"package.advisories","package":"example-org/untrusted-checkout-unknown"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/untrusted-checkout-unknown/.github/workflows/w.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"example-org/untrusted-checkout-unknown"},"state":"found","value":false},
+{"query":{"kind":"workflow.definition","repo":"example-org/untrusted-checkout-unknown","path":".github/workflows/w.yml","ref":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},"state":"unknown","reason":"the example does not answer it"}
+]}

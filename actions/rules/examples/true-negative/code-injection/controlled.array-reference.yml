@@ -1,0 +1,15 @@
+# situation: on a push, a step writes the messages of the pushed commits
+#   into a run by ${{ github.event.commits.*.message }}, with no function
+#   around the reference.
+# reason: a reference through .* is an array, and the runner writes an
+#   array into a script as the text Array, with none of the messages in it;
+#   so no commit message reaches the shell.
+# attack-value: github.event.commits.*.message = "\"; echo PWNED; echo \""
+# attack-run-behavior: the runner writes Array in the place of the ${{ }},
+#   the script becomes echo "messages Array", and echo prints that line.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "messages ${{ github.event.commits.*.message }}"

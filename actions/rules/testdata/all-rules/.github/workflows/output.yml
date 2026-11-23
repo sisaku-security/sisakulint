@@ -1,0 +1,13 @@
+on: issues
+permissions: {}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - id: title
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "$TITLE"
+      - env:
+          TAG: ${{ steps.title.outputs.tag }}
+        run: ./release.sh "$TAG"

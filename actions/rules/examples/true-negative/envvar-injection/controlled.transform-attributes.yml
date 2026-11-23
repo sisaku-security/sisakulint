@@ -1,0 +1,21 @@
+# situation: on issues opened, a step writes to $GITHUB_ENV the attributes
+#   of the variable that holds the issue's body (${V@a}), and the variable
+#   written as a declare command that sets the variable again (${V@A}).
+# reason: ${V@a} writes the letters of the attributes of V (x for a
+#   variable of env), and ${V@A} writes the value of V quoted in the form
+#   $'...', so neither writes a line break of the body.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the step writes the line A=x and the line B=declare
+#   -x V=$'x\nPWNED=1', and the runner sets no environment variable PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          echo "A=${V@a}" >> "$GITHUB_ENV"
+          echo "B=${V@A}" >> "$GITHUB_ENV"

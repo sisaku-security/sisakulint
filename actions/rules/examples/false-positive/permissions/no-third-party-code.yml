@@ -1,0 +1,15 @@
+# situation: the job writes no permissions and runs nothing but a command of
+#   the runner.
+# reason: no code of others holds the token.
+# cause: the rule does not tell a job that runs no code of others apart.
+# attack: the maintainer of an action or a package, or whoever takes over
+#   their account, turns its code malicious, as in the true positive.
+# attack-run-behavior: the job runs echo hello, a builtin of bash, and uses
+#   no action and installs no package, so no code of others runs in it to
+#   read the token.
+on: push
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello

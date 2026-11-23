@@ -1,0 +1,14 @@
+# situation: a step uses tj-actions/changed-files@main, whose head no
+#   version tag points to.
+# reason: the package has advisories, but the commit main runs has no
+#   version, so the rule cannot ask which of them affect it.
+# attack: someone uses a vulnerability of the code main has, if it has one
+#   an advisory names.
+# attack-run-behavior: the runner runs the head of main, whatever it is
+#   when the job starts.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tj-actions/changed-files@main

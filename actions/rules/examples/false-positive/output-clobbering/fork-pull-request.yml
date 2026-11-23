@@ -1,0 +1,30 @@
+# situation: on pull_request, a job that runs only when the head repository
+#   of the pull request is a fork writes values of vars and secrets where
+#   the rule reads a value that the attacker writes.
+# reason: in a run of the linter that adds variables-writer or
+#   secrets-writer, the rule reads each value of vars and secrets as a
+#   value that the attacker writes. In a repository that is not a fork,
+#   the job runs only for a pull request from a fork, and such a workflow
+#   run has no secret except GITHUB_TOKEN and a GITHUB_TOKEN that only
+#   reads, unless the settings of a private repository send secrets or a
+#   GITHUB_TOKEN that writes to the workflow runs for pull requests from
+#   forks (the facts repo.fork-pr-secrets and repo.fork-pr-write-tokens).
+#   The attacker who writes a variable or a secret gets nothing from the
+#   job that the author of the pull request does not get from the code of
+#   the pull request.
+# cause: the rule counts every workflow run of the event pull_request, and
+#   does not tell a workflow run for a pull request from a fork from a
+#   workflow run for a pull request from a branch of the repository.
+# attack-value: secrets.TOKEN = "x\nPWNED=1"
+# attack-run-behavior: a pull request from a branch of the repository does
+#   not start the job, as the head repository of such a pull request is the
+#   repository itself; a pull request from a fork starts the job with no
+#   secret and a GITHUB_TOKEN that only reads, so the value reaches no
+#   secret and no token that writes.
+on: pull_request
+jobs:
+  j:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ secrets.TOKEN }} ${{ vars.NAME }} ${{ runner.os }}" >> "$GITHUB_OUTPUT"

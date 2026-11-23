@@ -1,0 +1,16 @@
+# situation: on gollum, a step passes the title of the first wiki page
+#   changed in the environment variable PAGE_TITLE and prints the variable
+#   with printf, inside double quotes.
+# reason: printf reads the value as text; nothing reads the value again as
+#   code.
+# attack-value: github.event.pages[0].title = "$(echo PWNED)"
+# attack-run-behavior: printf prints the line $(echo PWNED) as text.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE_TITLE: ${{ github.event.pages[0].title }}
+        run: |
+          printf '%s\n' "$PAGE_TITLE"

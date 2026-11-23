@@ -1,0 +1,21 @@
+# situation: the step uses an action by the tag v3.1.0, and the repository's
+#   workflow dependency lockfile (.github/workflows/actions.lock) lists this
+#   workflow and records the commit v3.1.0 resolved to.
+# reason: for a workflow onboarded to the lockfile, the commit the lockfile
+#   records runs, not the one the tag points to at run time.
+# cause: the rule reads the workflow alone, not the lockfile beside it.
+# attack: the owner of o/locked-action moves the tag v3.1.0 to a commit of
+#   theirs.
+# attack-run-behavior: GitHub runs the commit the lockfile records for
+#   o/locked-action@v3.1.0, and checks that the repository behind the name is
+#   still the one locked, so the moved tag does not change what runs. Seen on
+#   2026-10-14 (runner 2.337.0) in a private repository on the Free plan: a
+#   step whose uses named a branch ran the older commit the lockfile recorded,
+#   not the branch's head, and a lockfile recording the ids of another
+#   repository failed the job at setup.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: o/locked-action@v3.1.0

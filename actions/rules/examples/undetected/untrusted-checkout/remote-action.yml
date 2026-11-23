@@ -1,0 +1,41 @@
+# situation: on pull_request_target, a step uses an action of another
+#   repository whose checkout takes the pull request's code, as in the
+#   Ultralytics incident (ultralytics/actions
+#   eb1201bd933b9f6096c64525ccaee3684c91bf14, action.yml:94: repository: ${{
+#   github.event.pull_request.head.repo.full_name || github.repository }}).
+#   The job review uses anthropics/claude-code-action pinned to the commit
+#   of v1.0.73, which checks out the head branch of the pull request and
+#   starts every MCP server of the .mcp.json of the checkout
+#   (GHSA-8q5r-mmjf-575q: "checking out PR head branches
+#   (attacker-controlled), reading `.mcp.json` from the working directory
+#   via default setting sources, and unconditionally enabling all project
+#   MCP servers via `enableAllProjectMcpServers`"); the advisory names no
+#   workflow, and the job is the automatic trigger it describes.
+# reason: a todo (a fact): the checkout is in an action of another
+#   repository.
+# cause: the rule does not read the action.yml of another repository.
+# attack-value: the file prettier.config.js in the pull request's head = "console.log(\"PWNED\"); module.exports = {};\n"
+# attack-run-behavior: the action checks out the branch github.head_ref of
+#   github.event.pull_request.head.repo.full_name, the fork, with its token
+#   input, and its later steps run tools over that tree when their inputs
+#   turn them on: with prettier: true, npx prettier loads the pull request's
+#   prettier.config.js, which prints PWNED. This example passes no inputs,
+#   and the action's defaults turn those steps off. In the job review,
+#   claude-code-action v1.0.73 checks out the head branch of the pull
+#   request and starts the server of its .mcp.json, a command that the
+#   author of the pull request writes, with the secrets of the job, before
+#   the agent chooses any tool.
+# advisory: https://github.com/advisories/GHSA-8q5r-mmjf-575q
+on: pull_request_target
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ultralytics/actions@main
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@1b422b3517b51140e4484faab676c5e68b914866 # v1.0.73
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: Review the pull request.

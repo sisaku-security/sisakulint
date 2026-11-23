@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"sonarsource/sonarqube-scan-action","ref":"713881670b6b3676cda39549040e2d88c70d582e"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"sonarsource/sonarqube-scan-action","ref":"713881670b6b3676cda39549040e2d88c70d582e"},"state":"found","value":"node24"},
+{"query":{"kind":"checkout.executed","input_path":"checkout.ghsl-2026-208.yml","step":"jobs.sonarqube.steps[0]"},"state":"found","value":true},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"checkout.ghsl-2026-208.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"actions/checkout","sha":"9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"},"state":"absent"},
+{"query":{"kind":"git.commit-ref","repo":"sonarsource/sonarqube-scan-action","sha":"713881670b6b3676cda39549040e2d88c70d582e"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"sonarsource/sonarqube-scan-action","sha":"713881670b6b3676cda39549040e2d88c70d582e"},"state":"found","value":["refs/tags/v8.2.0"]},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"sonarsource/sonarqube-scan-action","version":"v8.2.0"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"sonarsource/sonarqube-scan-action"},"state":"found","value":[{"first_patched_version":"6.0.0","ghsa_id":"GHSA-5xq9-5g24-4g6f","severity":"high","vulnerable_version_range":">= 4.0.0, < 6.0.0"},{"first_patched_version":"5.3.1","ghsa_id":"GHSA-f79p-9c5r-xg88","severity":"high","vulnerable_version_range":">= 4.0.0, <= 5.3.0"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"sonarsource/sonarqube-scan-action"},"state":"found","value":false}
+]}

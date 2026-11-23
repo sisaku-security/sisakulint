@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a step extracts from an archive the
+#   members that match the pull request's title with tar -xv inside $( ) in
+#   the target of a redirect, passing the title through env and inside
+#   quotes.
+# reason: bash runs the $( ) in the target of the redirect, and tar reads a
+#   title that starts with - as an option.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: tar in $( ) reads the title as --to-command and runs
+#   echo PWNED for each member it extracts; the value of the $( ), which is
+#   the name of the file of the redirect, holds the names of the members
+#   that tar lists and the line PWNED that echo PWNED writes, and echo done
+#   writes to the file of that name.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: echo done > "$(tar -xvf archive.tar "$TITLE")"

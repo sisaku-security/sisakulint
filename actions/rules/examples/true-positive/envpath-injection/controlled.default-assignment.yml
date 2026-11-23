@@ -1,0 +1,18 @@
+# situation: on issues opened, a step sets out to $GITHUB_PATH with the operator
+#   := of a parameter expansion, and writes $V to "$out".
+# reason: bash assigns $GITHUB_PATH to out, which is
+#   unset, so the value goes to $GITHUB_PATH.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value goes to $GITHUB_PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          : "${out:=$GITHUB_PATH}"
+          echo "$V" >> "$out"

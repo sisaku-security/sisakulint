@@ -1,0 +1,23 @@
+# situation: on issue_comment, a job with cache-mode: write checks out the
+#   base, and saves with actions/cache/save the path the comment's body
+#   names.
+# reason: cache-mode: write lets the job save to the cache of the default
+#   branch's scope, and the commenter chooses the files saved: the
+#   credential the checkout leaves in .git/config among them; anyone who
+#   can open a pull request reads the caches of the default branch.
+# attack-value: github.event.comment.body = ".git/config"
+# attack-run-behavior: the comment starts the job; the checkout writes the
+#   job's token into .git/config, the save puts .git/config in the cache of
+#   the default branch's scope, and a pull_request run of the attacker's
+#   restores it and prints the token while the job runs.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ github.event.comment.body }}
+          key: saved-${{ github.run_id }}

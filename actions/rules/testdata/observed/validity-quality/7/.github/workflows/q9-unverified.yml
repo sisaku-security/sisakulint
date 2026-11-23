@@ -1,0 +1,21 @@
+on: push
+jobs:
+  pre-post-if:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: ./.github/actions/postif
+  docker-action-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: ./.github/actions/dockenv
+  container-env:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.20
+      env:
+        GITHUB_SHA: over
+        GITHUB_REF: over
+    steps:
+      - run: echo "GITHUB_SHA=$GITHUB_SHA GITHUB_REF=$GITHUB_REF"

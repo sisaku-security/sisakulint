@@ -1,0 +1,22 @@
+# situation: on issues opened, a step sets out to $GITHUB_ENV, defines a
+#   function f that sets out to /dev/null only when Q is set, calls f, and
+#   writes V= and the issue's body to "$out".
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, out holds $GITHUB_ENV, and the body goes to
+#   $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          out=$GITHUB_ENV
+          if [ -n "$Q" ]; then f() { out=/dev/null; }; fi
+          f
+          echo "V=$V" >> "$out"

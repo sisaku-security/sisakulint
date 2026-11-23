@@ -1,0 +1,22 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secrets-inherit-unanswered, whose content is
+#   the workflow of the true positive remote (remote.yml) of the rule, with
+#   on: workflow_call in place of the on of remote.yml. The linter has no
+#   answer of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: a maintainer of octo-org/shared-workflows, or whoever takes over
+#   one of their accounts, moves the tag v1 to a commit whose deploy.yml has
+#   a step that sends toJSON(secrets) out.
+# attack-run-behavior: on the next push, the job deploy runs deploy.yml at
+#   the moved v1 with every secret this job can read, by their own names;
+#   toJSON(secrets) in the step expands to all of them, names and values,
+#   and the step sends them.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/secrets-inherit-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

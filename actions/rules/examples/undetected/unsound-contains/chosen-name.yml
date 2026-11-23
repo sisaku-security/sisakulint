@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a job runs when contains('main
+#   release', github.head_ref).
+# reason: no added gain: the attacker names the branch of their pull request
+#   in full, so comparing whole values lets them in too; the if is no
+#   approval, and the rules of what the job does report it.
+# cause: the rule reports a contains only where reading its words as whole
+#   values keeps the attacker out, which a name they choose does not.
+# attack-value: github.head_ref = "main"
+# attack-run-behavior: a pull request from the branch main of the
+#   attacker's fork runs pull_request_target with github.head_ref main;
+#   contains('main release', 'main') is true, as a comparison of whole
+#   values would be, so the job a runs (echo here) with the token and the
+#   secrets of the base repository.
+on: pull_request_target
+jobs:
+  a:
+    if: contains('main release', github.head_ref)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo

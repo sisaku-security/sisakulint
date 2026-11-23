@@ -1,0 +1,10 @@
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: p1
+            run: echo one
+          - id: P1
+            run: echo two

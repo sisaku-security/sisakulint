@@ -1,0 +1,5 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"option.runner-variable.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

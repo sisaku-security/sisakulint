@@ -1,0 +1,31 @@
+# situation: on pull_request_target, the job runs only when the actor is
+#   dependabot[bot], and then has gh pr merge --auto merge the pull request
+#   with a token that may write contents and pull requests.
+# reason: github.actor names whoever caused the event, not who wrote the
+#   pull request, so the if also lets in a pull request whose last push
+#   Dependabot made, and gh pr merge then merges that pull request's code
+#   with the job's token.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], so the if is true and the
+#   job merge starts with contents: write and pull-requests: write; gh pr
+#   merge --auto --rebase turns on auto-merge for the attacker's pull
+#   request, which GitHub merges once its requirements are met.
+on: pull_request_target
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

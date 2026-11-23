@@ -1,0 +1,7 @@
+name: x21
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ github.nonexistent }}"

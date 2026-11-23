@@ -1,0 +1,21 @@
+# situation: the composite action of the true positive superstring.no-caller
+#   of this rule; the only caller, ci.yml, runs on push and calls the action
+#   after actions/checkout.
+# reason: the files that the linter reads are the whole repository and hold
+#   every caller of the action, so the rule reads the action on the events of
+#   the callers, here push alone, and a push comes from one who can write to
+#   the repository, not from the attacker.
+# attack-value: github.actor = "alice-x"
+# attack-run-behavior: the attacker cannot push to the repository, so the
+#   attacker starts no run of ci.yml, and the steps of the action never run on
+#   an event of the attacker.
+name: deploy
+description: deploy for alice
+runs:
+  using: composite
+  steps:
+    - if: contains(github.actor, 'alice')
+      run: ./deploy.sh
+      shell: bash
+      env:
+        TOKEN: ${{ github.token }}

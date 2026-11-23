@@ -1,0 +1,21 @@
+# situation: on issues, a job on a self-hosted runner prints the title of
+#   the issue; the process of the runner has ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   true in its environment, which the workflow does not show.
+# reason: a limitation (the run decides): the runner reads the flag from its
+#   own environment first.
+# cause: the rule reads the flag in the workflow.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id, where the runner
+#   has the flag.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: [self-hosted, linux]
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "$TITLE"
+      - run: echo next

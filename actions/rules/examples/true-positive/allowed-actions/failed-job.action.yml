@@ -1,0 +1,15 @@
+# situation: a composite action of the repository uses
+#   gradle/actions/setup-gradle, which the setting of allowed actions of
+#   GitHub blocks with !gradle/actions/setup-gradle@*.
+# reason: GitHub fails each job that runs the composite action in the step
+#   Set up job, before any step of the job runs (in runs that the authors of
+#   the rule made on GitHub, the job failed with the error "The action ... is
+#   not allowed").
+name: build
+description: build with Gradle
+runs:
+  using: composite
+  steps:
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+    - run: ./gradlew build
+      shell: bash

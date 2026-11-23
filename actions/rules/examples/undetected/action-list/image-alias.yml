@@ -1,0 +1,18 @@
+# situation: a step runs docker://docker.io/aquasec/trivy:0.69.4;
+#   repo.action-list is * and patterns that start with !, among them
+#   !docker://aquasec/trivy:*.
+# reason: Docker reads docker.io/aquasec/trivy and aquasec/trivy as the same
+#   image, so the step runs the image that repo.action-list does not allow.
+# cause: the rule compares the text of the image as written.
+# attack: the publisher of aquasec/trivy pushes an image that reads the
+#   secrets of CI under the tag 0.69.4.
+# attack-run-behavior: the runner pulls docker.io/aquasec/trivy:0.69.4 and
+#   runs the image as the step.
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://docker.io/aquasec/trivy:0.69.4
+        with:
+          args: fs .

@@ -1,0 +1,19 @@
+# situation: the step s runs a script that writes the output o to
+#   $GITHUB_OUTPUT, and the next step passes steps.s.outputs.o to tar after
+#   the file names, by ${{ }} inside quotes.
+# reason: the output is what the script writes at run time, so whether an
+#   attacker controls it is not known.
+# cause: the rule does not yet follow what a script writes to
+#   $GITHUB_OUTPUT.
+# attack-value: steps.s.outputs.o = "--to-command=echo PWNED"
+# attack-run-behavior: when the script of the step s writes o with the value
+#   to $GITHUB_OUTPUT, tar reads the word as --to-command and runs echo
+#   PWNED for notes.txt as it extracts it, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        run: echo "o=x" >> "$GITHUB_OUTPUT"
+      - run: tar -xf archive.tar notes.txt "${{ steps.s.outputs.o }}"

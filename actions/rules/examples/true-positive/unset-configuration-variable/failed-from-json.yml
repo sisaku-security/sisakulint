@@ -1,0 +1,14 @@
+# situation: the step reads the list of test shards from the configuration
+#   variable TEST_SHARDS with fromJSON(), and no level defines TEST_SHARDS.
+# reason: GitHub gives the empty string for TEST_SHARDS, and fromJSON() of
+#   the empty string fails (in a run that the authors of the rule made on
+#   GitHub, the step failed with Error reading JToken from JsonReader), so
+#   the step fails.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./test.sh ${{ join(fromJSON(vars.TEST_SHARDS), ' ') }}

@@ -1,0 +1,90 @@
+# situation: on issue_comment, when the comment is /benchmarks, a run step
+#   writes the name of the head branch of the pull request (gh pr view --json
+#   headRefName) to $GITHUB_OUTPUT, actions/checkout@v4 checks out that name
+#   with the input repository not set, and a later step uses the local action
+#   ./.github/actions/setup-nx. This is performance.yml of ag-grid/ag-grid
+#   (commit 7d969b0a0374d1e0ce690ae1159ceb7b6091f325, the commit of the
+#   advisory's links; performance.yml at that commit is the same blob as at
+#   6b5582325b9eb843e2d566aff8b530eaee5996ad; lines 3-5, 43-52, 72-95 and
+#   115-119). The triggers workflow_dispatch and schedule, the env of the
+#   workflow except PR_ID, the step Notify start and the test of its output in
+#   the script (lines 56-70 and 80), the two echo lines of the script (lines
+#   78-79), the branches of the script for the other events (lines 83-89), and
+#   the steps between the step Checkout and the step Setup and after the step
+#   Setup are left out; the if of the job keeps only its part for issue_comment,
+#   and PR_ID keeps only github.event.issue.number.
+# reason: the rule does not read what the run step writes to the output, so
+#   the ref is not known. The advisory says that the code of the pull request
+#   runs; the source of actions/checkout does not fetch the code of a pull
+#   request from a fork in this form. With the input repository not set,
+#   actions/checkout fetches from the repository of the run (src/input-helper.ts
+#   of v4.4.0, 11d5960a326750d5838078e36cf38b85af677262, lines 22-24), and for a
+#   ref that is not a SHA and does not start with refs/, actions/checkout
+#   fetches only +refs/heads/<ref>* and +refs/tags/<ref>* (src/ref-helper.ts,
+#   lines 106-111). The base repository has no branch of a fork: the base
+#   repository has refs/pull/<number>/head and refs/pull/<number>/merge only
+#   (GET /repos/{owner}/{repo}/git/matching-refs on 2026-11-07). A run of the
+#   same form on 2026-11-07 (actions/checkout@v4 resolved to 11d5960a) showed
+#   two results: for a pull request from a fork whose branch name the base
+#   repository does not have, the fetch failed (git exited with code 1) and the
+#   later step found no file of the fork; for a pull request from a fork whose
+#   branch has the name of a branch of the base repository, the checkout took
+#   the branch of the base repository, not the commit of the fork. Two kinds of
+#   names would reach the code of the fork, as actions/checkout takes a ref that
+#   starts with refs/ as a full name of a ref and a ref of 40 hexadecimal digits
+#   as a commit, but GitHub refused a push of a branch named refs/pull/32/head
+#   ("Invalid branch or tag name") and of a branch named by the 40 hexadecimal
+#   digits of a commit ("branch or tag names consisting of 40 or 64 hex
+#   characters are not allowed"), on 2026-11-07. gh pr view --json headRefName
+#   gives the name of the branch without its owner (cli/cli v2.76.1,
+#   api/queries_pr.go line 37). So the checkout brings the code of a branch of
+#   the base repository, to which only an account with write access to the
+#   repository can push; if the rule read what the run step writes, the form
+#   would be the one of the declaration branch-name-ref (a checkout of a name of
+#   a branch, which brings no code of a fork). The timeline of the advisory says
+#   how ag-grid fixed the workflow, by approval of the runs of pull requests
+#   from forks: "2025-08-05: Issue fixed by requiring approval for external
+#   forked PR"; in the form of this example, a pull request from a fork brings
+#   no code, and a pull request from a branch of the base repository brings the
+#   code of the branch.
+# attack: the author of a pull request from a fork writes
+#   .github/actions/setup-nx/action.yml in the head branch and comments
+#   /benchmarks on the pull request.
+# attack-run-behavior: gh pr view gives the name of the head branch, which is
+#   in the fork; actions/checkout fetches +refs/heads/<name>* and
+#   +refs/tags/<name>* from the base repository, which has no ref of the name,
+#   and the fetch fails (git exits with code 1), so the step Setup does not run
+#   the action.yml of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-082_ag-grid_ag-grid/
+on:
+  issue_comment:
+    types: [created]
+env:
+  PR_ID: ${{ github.event.issue.number }}
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    if: github.event_name == 'issue_comment' && github.event.comment.body == '/benchmarks'
+    steps:
+      - name: Assign correct Branch name
+        id: get-branch
+        env:
+          REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "branch=$(gh pr view $PR_ID --repo $REPO --json headRefName --jq '.headRefName')" >> $GITHUB_OUTPUT
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ steps.get-branch.outputs.branch }}
+      - name: Setup
+        id: setup
+        uses: ./.github/actions/setup-nx
+        with:
+          cache_mode: rw

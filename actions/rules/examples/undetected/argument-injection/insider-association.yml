@@ -1,0 +1,27 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER passes the issue's title to tar after the
+#   file names, through env and inside quotes.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: the job's if is false for an issue whose
+#   author_association is not MEMBER, and the runner skips the job; for an
+#   issue a member opens, tar reads "$TITLE" as --to-command and runs echo
+#   PWNED for notes.txt as it extracts it, which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: tar -xf archive.tar notes.txt "$TITLE"

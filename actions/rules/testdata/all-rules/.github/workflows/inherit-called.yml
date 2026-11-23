@@ -1,0 +1,13 @@
+# A reusable workflow that least-privilege.yml calls with secrets: inherit:
+# its job reads toJSON(secrets), so GitHub passes every secret to the runner
+# of the job (secrets-inherit.local on the caller, secret-exposure here).
+on: workflow_call
+permissions: {}
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: ./report
+        env:
+          ALL: ${{ toJSON(secrets) }}

@@ -1,0 +1,110 @@
+# Every kind of finding of every rule of sisakulint, and fixes of several rules
+# in one step. How to run it: the README of the all-rules example. Not for GitHub.
+on: [issues, gollum, pull_request_target]
+permissions: {}
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    steps:
+      # commit-sha.unpinned: a tag, which whoever can move it moves
+      - uses: actions/checkout@v4
+      # impostor-commit.fork-commit: a commit only in a fork of actions/checkout
+      # (the Trivy incident)
+      - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0
+      # code-injection.controlled (issues) and code-injection.wiki (gollum alone)
+      - run: echo "${{ github.event.issue.title }} ${{ github.event.pages[0].title }}"
+      - env:
+          BODY: ${{ github.event.issue.body }}
+          PAGE: ${{ github.event.pages[0].title }}
+        run: |
+          # envvar-injection.controlled and output-clobbering.controlled
+          echo "body=$BODY" >> "$GITHUB_ENV"
+          echo "body=$BODY" >> "$GITHUB_OUTPUT"
+          # envvar-injection.wiki and output-clobbering.wiki
+          echo "page=$PAGE" >> "$GITHUB_ENV"
+          echo "page=$PAGE" >> "$GITHUB_OUTPUT"
+          # code-injection.controlled and envvar-injection.controlled: the expression
+          # written into the line of $GITHUB_ENV itself, one fix of the step for both
+          echo "title=${{ github.event.issue.title }}" >> "$GITHUB_ENV"
+          # envpath-injection.controlled and envpath-injection.wiki: a directory of
+          # the PATH of the steps after it; no fix, and the fixes of the step still apply
+          echo "$BODY" >> "$GITHUB_PATH"
+          echo "$PAGE" >> "$GITHUB_PATH"
+      # commit-sha.unpinned and code-injection.controlled in one step, whose
+      # fixes apply together: the env goes right after the uses that the pin
+      # rewrites (the one kind of step where both give a fix)
+      - with:
+          script: console.log("${{ github.event.issue.title }}")
+        uses: actions/github-script@v7
+  pwn:
+    runs-on: ubuntu-latest
+    steps:
+      # untrusted-checkout.executed: the head of a pull request from a fork,
+      # with the guard of actions/checkout taken away, and npm runs it
+      # (and commit-sha.unpinned: the tag)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci
+  pwn-data:
+    runs-on: ubuntu-latest
+    steps:
+      # untrusted-checkout.checkout: no step is seen to run the tree, so the
+      # finding holds if one does (checkout.executed, assumed true)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: echo checked out
+  artifact:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # artipacked.github-token: the checkout leaves the job's token in
+      # .git/config, the upload takes hidden files, and a step comes after it
+      - uses: actions/checkout@v4
+      # artipacked.token-input: the token given to the checkout does not expire
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT }}
+          path: pat
+      # secrets-in-artifacts.lasting: a service account key in gha-creds-*.json
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_KEY }}
+      # secrets-in-artifacts.job-scoped: Workload Identity Federation
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1/locations/global/workloadIdentityPools/p/providers/github
+          service_account: ci@p.iam.gserviceaccount.com
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+          include-hidden-files: true
+      - run: echo after the upload
+  deploy:
+    # self-hosted-runner.public: a self-hosted runner, if the repository is
+    # public (repo.public, assumed true)
+    runs-on: [self-hosted, linux]
+    # dangerous-triggers.secrets: issues runs the job with no approval but the
+    # environment's, if it has required reviewers (repo.environment-protected,
+    # assumed false), and it reads a secret; the token writes nothing, as the
+    # workflow writes permissions: {} (dangerous-triggers.token-write is the
+    # job artifact's, whose permissions write)
+    environment: production
+    steps:
+      - run: ./deploy
+        env:
+          KEY: ${{ secrets.DEPLOY_KEY }}
+  env-variable:
+    runs-on: ubuntu-latest
+    steps:
+      # code-injection.env-variable (issues) and code-injection.env-variable-wiki
+      # (gollum alone): eval reads the values of the variables as code; no fix
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+          PAGE: ${{ github.event.pages[0].title }}
+        run: eval "echo $TITLE $PAGE"

@@ -1,0 +1,20 @@
+# situation: on issues, a run writes the issue's title to $GITHUB_ENV by
+#   sudo tee, command tee and /usr/bin/tee.
+# reason: a todo (the same file): reading tee through another command or by
+#   its path would find it.
+# cause: the rule reads tee by its name alone.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: each echo prints a=x and PWNED=1, and sudo tee,
+#   command tee and /usr/bin/tee each append them to $GITHUB_ENV; the runner
+#   sets a to x and PWNED to 1.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          echo "a=$T" | sudo tee -a "$GITHUB_ENV"
+          echo "a=$T" | command tee -a "$GITHUB_ENV"
+          echo "a=$T" | /usr/bin/tee -a "$GITHUB_ENV"

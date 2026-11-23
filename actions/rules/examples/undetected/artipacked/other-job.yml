@@ -1,0 +1,26 @@
+# situation: on push with write-all, a job uses the local composite action
+#   ./.github/actions/checkout-and-upload.
+# reason: a todo (a file of the repository): the upload is in another job
+#   than the step that left the credential (a job that downloads the
+#   artifact of the first and uploads it again), or in a composite action
+#   the job calls.
+# cause: the rule pairs the steps of one job or of one composite action read
+#   as an input of its own.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: when the local composite action checks out and
+#   uploads the workspace with its hidden files, the artifact holds
+#   .git/config with the job's token, which write-all lets write, and while
+#   echo after and the post steps run, the token pushes to the repository;
+#   the action.yml is not part of this example.
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/checkout-and-upload
+      - run: echo after

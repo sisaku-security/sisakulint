@@ -1,0 +1,30 @@
+name: shell-options-2-probe
+on:
+  push:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      GIT_CONFIG_NOSYSTEM: "1"
+    steps:
+      - name: quoted, -c and code without blanks in one word
+        env:
+          X: -cecho${IFS}MARK-NOBLANK
+        run: |
+          printf 'echo SCRIPT-RAN\n' > x.sh
+          for s in bash sh dash; do echo "-- $s"; "$s" "$X" x.sh 2>&1 || true; done
+      - name: the code of -c ends the options
+        env:
+          Y: -c
+        run: |
+          for s in bash sh dash; do echo "-- $s"; "$s" -c 'echo "0=$0"' "$Y" 'echo PWNED-AFTER-C' 2>&1 || true; done
+          echo "-- python3"; python3 -c 'import sys; print(sys.argv)' -c 'print("PWNED-AFTER-C")' 2>&1 || true
+      - name: git upload-pack without blanks, after the operand
+        env:
+          U: --upload-pack=echo${IFS}MARK-GIT>&2;false
+        run: |
+          git init -q /tmp/r && git -C /tmp/r -c user.name=a -c user.email=a@b commit -q --allow-empty -m x
+          git init -q /tmp/w && cd /tmp/w
+          echo "-- fetch"; git fetch /tmp/r "$U" 2>&1 || true
+          echo "-- clone"; git clone /tmp/r /tmp/c "$U" 2>&1 || true
+          echo "-- pull"; git pull /tmp/r "$U" 2>&1 || true

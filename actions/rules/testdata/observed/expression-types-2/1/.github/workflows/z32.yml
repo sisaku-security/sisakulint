@@ -1,0 +1,5 @@
+name: z32
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c32.yml

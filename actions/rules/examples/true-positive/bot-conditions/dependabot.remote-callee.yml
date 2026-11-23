@@ -1,0 +1,30 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/bot-conditions-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   dependabot (dependabot.yml) of the rule, with on: workflow_call in place
+#   of the on of dependabot.yml. The job passes its secrets with secrets:
+#   inherit. In the true positive, on pull_request_target, the job runs only
+#   when the actor is dependabot[bot], and then has gh pr merge --auto merge
+#   the pull request with a token that may write contents and pull requests.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   github.actor names whoever caused the event, not who wrote the pull
+#   request, so the if also lets in a pull request whose last push
+#   Dependabot made, and gh pr merge then merges that pull request's code
+#   with the job's token.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], so the if is true and the
+#   job merge starts with contents: write and pull-requests: write; gh pr
+#   merge --auto --rebase turns on auto-merge for the attacker's pull
+#   request, which GitHub merges once its requirements are met.
+on: pull_request_target
+jobs:
+  c:
+    uses: example-org/bot-conditions-remote/.github/workflows/w.yml@v1
+    secrets: inherit

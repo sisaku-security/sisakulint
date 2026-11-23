@@ -1,0 +1,20 @@
+name: "Auto Labeler"
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply Documentation Label
+        uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yaml
+          sync-labels: true
+          repo-token: ${{ secrets.PAT }}

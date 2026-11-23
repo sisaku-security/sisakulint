@@ -1,0 +1,14 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: b
+            run: |
+              echo "Y=from-b" >> "$GITHUB_ENV"
+              echo "o=from-b" >> "$GITHUB_OUTPUT"
+          - run: |
+              sleep 5
+              echo "inside Y=[$Y] o=[${{ steps.b.outputs.o }}]"
+      - run: echo "after-group Y=[$Y] o=[${{ steps.b.outputs.o }}]"

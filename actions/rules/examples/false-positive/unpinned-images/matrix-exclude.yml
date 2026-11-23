@@ -1,0 +1,23 @@
+# situation: the job's container is a value of a matrix of an image without
+#   a digest and one with a digest.
+# reason: exclude takes out the image without a digest, so every job runs
+#   the pinned one.
+# cause: the rule does not read exclude.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: exclude takes out the matrix value alpine:3, so the
+#   only job runs in alpine:3@sha256:0000, pulled by its digest; the pushed
+#   image is not pulled.
+on: push
+jobs:
+  a:
+    strategy:
+      matrix:
+        image: ["alpine:3", "alpine:3@sha256:0000000000000000000000000000000000000000000000000000000000000000"]
+        exclude:
+          - image: "alpine:3"
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - run: make

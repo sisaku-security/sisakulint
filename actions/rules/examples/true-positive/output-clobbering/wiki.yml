@@ -1,0 +1,19 @@
+# situation: on gollum, a step writes page= and the wiki page's title to
+#   $GITHUB_OUTPUT.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
+#   assumed true), and the runner reads $GITHUB_OUTPUT one line at a time as
+#   name=value with nothing that escapes the title's line breaks, so each
+#   later line of the title such as x=y is read as an output of its own
+#   beside page.
+# attack-value: github.event.pages[0].title = "x\nPWNED=1"
+# attack-run-behavior: PAGE holds the two lines x and PWNED=1, so echo writes
+#   the lines page=x and PWNED=1 to $GITHUB_OUTPUT, and the runner reads each
+#   line as name=value and sets the outputs page (x) and PWNED (1).
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].title }}
+        run: echo "page=$PAGE" >> "$GITHUB_OUTPUT"

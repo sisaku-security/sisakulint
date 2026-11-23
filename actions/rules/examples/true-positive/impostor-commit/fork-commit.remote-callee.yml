@@ -1,0 +1,32 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/impostor-commit-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   fork-commit (fork-commit.yml) of the rule, with on: workflow_call in
+#   place of the on of fork-commit.yml. The job passes its secrets with
+#   secrets: inherit. In the true positive, a step uses actions/checkout by
+#   a commit SHA that only a fork of actions/checkout has.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: GitHub
+#   serves the commits of a repository's forks under the repository's name,
+#   so the SHA, which reads as a pin of actions/checkout, runs code that
+#   whoever pushed it to the fork wrote (the Trivy incident,
+#   GHSA-69fq-xp46-6x23: https://github.com/advisories/GHSA-69fq-xp46-6x23).
+# attack: the rule reports the form in which someone pushes a commit to
+#   their fork of actions/checkout and gets its SHA written in this
+#   workflow, such as by a pull request from a fork that changes the SHA of
+#   the uses and is merged. Background: in the Trivy incident of 2026-03-19,
+#   a commit pushed with stolen credentials swapped the workflow's
+#   actions/checkout for the impostor commit 70379aad; the credential
+#   premise leaves the holder of such stolen credentials out of the threat
+#   model, but the workflow that the incident left has the same form.
+# attack-run-behavior: the runner fetches 70379aad by the name
+#   actions/checkout, from the objects the fork network shares, and runs its
+#   action as the step, in the job's workspace and environment; in the Trivy
+#   incident it was a composite action that downloaded malicious Go source
+#   files from a typosquatted domain, and the commit was tagged v0.69.4 so
+#   that the release pipeline ran it.
+on: push
+jobs:
+  c:
+    uses: example-org/impostor-commit-remote/.github/workflows/w.yml@v1
+    secrets: inherit

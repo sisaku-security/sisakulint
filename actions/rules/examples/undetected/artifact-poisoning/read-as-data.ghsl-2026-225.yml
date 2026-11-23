@@ -1,0 +1,53 @@
+# situation: on workflow_run, the job downloads the artifact rebuilt-dist of
+#   the run of a pull request that triggered the job under runner.temp, a
+#   step writes the first line of the file dist-meta/head-ref of the artifact
+#   to $GITHUB_OUTPUT, and the job checks out that branch and pushes to it.
+#   These are the steps of commit-dist.yml of actions/attest (commit
+#   60c80190bb1a4fb35e5724ede753db5656412b68, lines 13-79 and 92-110); the
+#   validation of the values and the copy of dist/ are cut.
+# reason: a todo (the same file): following the value from the file of the
+#   artifact to the ref of the checkout and of the push would find it.
+# cause: the rule reports the files of an artifact that a step runs, and
+#   does not follow a file that a step reads as a value.
+# attack-value: the file dist-meta/head-ref of the artifact rebuilt-dist = "main"
+# attack-run-behavior: the step check writes head-ref=main to
+#   $GITHUB_OUTPUT, and the job checks out main and pushes to main, a branch
+#   that the author of the pull request chose (in the advisory, with dist/
+#   of the artifact copied into the checkout).
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-225_actions_attest/
+on:
+  workflow_run:
+    workflows: ["Rebuild dist"]
+    types:
+      - completed
+permissions:
+  contents: read
+jobs:
+  commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Download rebuilt dist/
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          name: rebuilt-dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/incoming
+      - name: Check for artifact
+        id: check
+        run: |
+          incoming="${{ runner.temp }}/incoming"
+          head_ref="$(head -n1 "$incoming/dist-meta/head-ref" | tr -d '\r\n')"
+          echo "head-ref=$head_ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout PR branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.check.outputs.head-ref }}
+          token: ${{ github.token }}
+      - run: git push origin HEAD:${{ steps.check.outputs.head-ref }}

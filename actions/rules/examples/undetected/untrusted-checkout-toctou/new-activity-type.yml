@@ -1,0 +1,26 @@
+# situation: on pull_request_target of an activity type added_later, a job
+#   of the environment approve checks out refs/pull/<n>/head, and npm ci runs.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack: after a reviewer of the environment approve approves the job, the
+#   author of the pull request from a fork pushes to the branch of the pull
+#   request a commit whose package.json has a preinstall that prints PWNED.
+# attack-run-behavior: when GitHub sends pull_request_target with the
+#   activity type added_later, the job waits for the environment's reviewers;
+#   after the approval, the checkout fetches refs/pull/<n>/head, which names
+#   the pushed commit, and npm ci runs its preinstall.
+on:
+  pull_request_target:
+    types: [added_later]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    environment: approve
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      - run: npm ci

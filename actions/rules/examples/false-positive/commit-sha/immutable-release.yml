@@ -1,0 +1,15 @@
+# situation: the step uses an action by the tag v1.
+# reason: v1 is the tag of an immutable release, which no one can move or
+#   delete while the release is there.
+# cause: the rule does not ask whether a release is immutable.
+# attack: the owner of o/immutable-action moves the tag v1 to a commit of
+#   theirs.
+# attack-run-behavior: GitHub refuses to move or delete the tag of an
+#   immutable release while the release is there, so the push fails, and the
+#   runner still resolves @v1 to 11bd7190 and runs that commit.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: o/immutable-action@v1

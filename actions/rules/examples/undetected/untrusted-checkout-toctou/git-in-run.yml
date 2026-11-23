@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a run fetches the pull request's head
+#   with git, checks it out, and runs npm ci.
+# reason: a todo (the same file): reading git in a run would find it.
+# cause: the rule reads checkouts by actions/checkout only.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: git fetch takes pull/<n>/head of the base repository,
+#   which GitHub keeps at the fork's head, git checkout pr switches the
+#   workspace to it, and npm ci runs its preinstall, which prints PWNED,
+#   with the GITHUB_TOKEN actions/checkout left in .git/config and the job's
+#   secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          git fetch origin "pull/${{ github.event.pull_request.number }}/head:pr"
+          git checkout pr
+          npm ci

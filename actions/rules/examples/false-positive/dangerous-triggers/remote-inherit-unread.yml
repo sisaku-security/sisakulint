@@ -1,0 +1,26 @@
+# situation: on issues, the job calls the reusable workflow
+#   .github/workflows/triage.yml of the repository example-org/shared, of
+#   the same organization, at a commit, with secrets: inherit and
+#   permissions: {}. The jobs of triage.yml read no secret, by name or
+#   without a name, and the fact workflow.definition has no answer for
+#   triage.yml.
+# reason: GitHub passes the runner of a job of a called workflow of another
+#   repository of the organization only the secrets that the job reads, so
+#   no secret is passed to the runners of the jobs of triage.yml; with
+#   permissions: {}, a flaw in triage.yml gives an attacker no secret and no
+#   token that writes.
+# cause: without an answer of workflow.definition, the linter does not have
+#   the contents of triage.yml, and the rule assumes that the jobs of
+#   triage.yml read every secret.
+# attack: the attacker opens an issue, and a flaw in a job of triage.yml (an
+#   injection of the issue's title, for example) runs the attacker's code in
+#   the job of the flaw.
+# attack-run-behavior: the issue starts this workflow, which runs the jobs
+#   of triage.yml with no secret in the runners of those jobs; the
+#   attacker's code finds no secret in the runner.
+on: issues
+permissions: {}
+jobs:
+  triage:
+    uses: example-org/shared/.github/workflows/triage.yml@0123456789abcdef0123456789abcdef01234567
+    secrets: inherit

@@ -1,0 +1,12 @@
+# situation: the repository has no update tool, and a step writes its uses
+#   as a ${{ }} literal.
+# reason: no update tool updates the uses, and an update tool would not
+#   read the folded form either.
+# cause: the rule does not count a folded uses, since an entry of
+#   .github/dependabot.yml would not update the uses.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ${{ 'actions/setup-node@v4' }}

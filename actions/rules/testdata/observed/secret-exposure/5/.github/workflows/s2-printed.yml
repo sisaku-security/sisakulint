@@ -1,0 +1,18 @@
+# Where a value taken out of PROBE_JSON by fromJSON is printed in the log:
+# the env of the workflow, the name of a step, and case() and || that
+# return it. PROBE_JSON is the dummy {"user":"probe-user-65a3a91b0584","pass":"probe-pass-65a3a91b0584"}.
+on: push
+permissions: {}
+env:
+  WORKFLOW_USER: ${{ fromJSON(secrets.PROBE_JSON).user }}
+jobs:
+  printed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: named ${{ fromJSON(secrets.PROBE_JSON).user }}
+        run: echo step-name
+      - name: case
+        env:
+          K: ${{ case(true, fromJSON(secrets.PROBE_JSON).pass, 'none') }}
+          L: ${{ fromJSON(secrets.PROBE_JSON).missing || fromJSON(secrets.PROBE_JSON).user }}
+        run: echo case

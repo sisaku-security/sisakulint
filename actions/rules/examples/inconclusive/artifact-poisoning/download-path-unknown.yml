@@ -1,0 +1,25 @@
+# situation: on workflow_run, on a self-hosted runner,
+#   actions/download-artifact puts the artifact of the triggering run in
+#   /tmp/artifacts, and ./run.sh runs after it.
+# reason: the path is absolute; whether it is in the workspace is not known
+#   from the workflow, because on a self-hosted runner /tmp and /var can
+#   hold the workspace.
+# attack-value: the file run.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: when the self-hosted runner's workspace is
+#   /tmp/artifacts, the download puts run.sh in it, and ./run.sh runs it,
+#   which prints PWNED, with the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: /tmp/artifacts
+      - run: ./run.sh

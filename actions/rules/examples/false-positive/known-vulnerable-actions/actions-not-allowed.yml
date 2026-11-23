@@ -1,0 +1,26 @@
+# situation: the workflow of the true positive advisory-critical
+#   (advisory-critical.yml) of the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on
+#   pull_request_target, a step reads the branch names with
+#   tj-actions/branch-names pinned to the commit of v7.0.6.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack-value: the name of the pull request's branch = "a$(echo${IFS}PWNED)"
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tj-actions/branch-names@ab304d8562e2f137165e1d930e6d22d431189074 # v7.0.6
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

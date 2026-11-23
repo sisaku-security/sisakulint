@@ -1,0 +1,19 @@
+# situation: on issues, a step gives the issue's title to the input tool-dir
+#   of some/setup-tool, an action that may put it in PATH.
+# reason: a todo (a fact): what the action does with the input is in its
+#   action.yml, another repository's.
+# cause: the rule reads what a run writes to $GITHUB_PATH, not the inputs of
+#   an action.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: some/setup-tool gets /tmp/PWNED as tool-dir; if the
+#   action writes the input to $GITHUB_PATH (with core.addPath or by echo),
+#   the line /tmp/PWNED goes there and the steps after it get /tmp/PWNED
+#   first in PATH. No run step of the job has the value.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/setup-tool@v1
+        with:
+          tool-dir: ${{ github.event.issue.title }}

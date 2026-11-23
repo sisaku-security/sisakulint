@@ -1,0 +1,27 @@
+# situation: on issues, a step passes the issue's title in the environment
+#   variable HOST, turns lastpipe on with shopt -s and the option name in a
+#   variable, sets HOST to a fixed host in the last command of a pipeline,
+#   and sends a request with curl and the secret DEPLOY_TOKEN to HOST.
+# reason: with lastpipe, bash runs the last command of the pipeline in the
+#   shell that runs the pipeline, so HOST holds the fixed host when curl
+#   runs, and the request goes to the fixed host.
+# cause: the rule follows lastpipe only after shopt -s lastpipe written as
+#   literal words, so the rule reads HOST as the value of the env.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request to api.example.com, and the
+#   server of the attacker gets nothing.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - env:
+          HOST: ${{ github.event.issue.title }}
+        run: |
+          o=lastpipe
+          shopt -s "$o"
+          true | HOST=api.example.com
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"

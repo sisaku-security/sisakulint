@@ -1,0 +1,10 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"atlassian/gajira-create","ref":"77d13eab156b8ad1c08c0655011b8a442c502998"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"atlassian/gajira-create","ref":"77d13eab156b8ad1c08c0655011b8a442c502998"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"action-input-remote.ghsa-4xqx-pqpj-9fqw.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"atlassian/gajira-create","sha":"77d13eab156b8ad1c08c0655011b8a442c502998"},"state":"absent"},
+{"query":{"kind":"package.advisories","package":"atlassian/gajira-create"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"atlassian/gajira-create"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

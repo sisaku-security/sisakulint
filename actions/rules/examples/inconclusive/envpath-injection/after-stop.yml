@@ -1,0 +1,20 @@
+# situation: a step puts the body of the issue in the env B; its script
+#   first runs an echo with a case inside $( ), and then writes "b=$B" to
+#   $GITHUB_PATH.
+# reason: the rule stops following the script where it cannot read it (the
+#   case), so what the script writes to the file after that is not analyzed.
+# attack-value: github.event.issue.body = "x\n/tmp/PWNED"
+# attack-run-behavior: the first echo prints a=, as x matches no pattern of
+#   the case; echo "b=$B" then writes the lines b=x and /tmp/PWNED to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH, and
+#   the relative path b=x after it.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: |
+          echo "a=$(case x in a) b;; esac)"
+          echo "b=$B" >> "$GITHUB_PATH"

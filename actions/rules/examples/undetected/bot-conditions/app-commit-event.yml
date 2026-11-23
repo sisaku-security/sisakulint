@@ -1,0 +1,27 @@
+# situation: on status, the job runs only when the actor is netlify[bot],
+#   checks out the commit of the status (github.event.sha) and runs a build
+#   with a token that writes.
+# reason: a todo (the same file): when an outside app, here Netlify, writes
+#   a status for a commit of a pull request from a fork, the run of status
+#   starts on the default branch, and the actor of the run is the bot of the
+#   app (seen on GitHub for a GitHub App), so the check of the actor lets in
+#   the run of a commit of the pull request.
+# cause: the rule reads a run of a privileged event only where the attacker
+#   is the actor of the run or the run is of the act of another person on
+#   what the attacker wrote, by the attacker run table, which has no rows of
+#   status, check_suite and check_run.
+# attack-value: the file package.json at the head of the pull request from a fork = "{\"scripts\":{\"build\":\"echo PWNED\"}}"
+# attack-run-behavior: Netlify writes a status for the commit of the pull
+#   request from a fork; the run of status, whose actor is netlify[bot],
+#   passes the if, checks out that commit, and npm run build prints PWNED.
+on: status
+jobs:
+  j:
+    if: github.actor == 'netlify[bot]'
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.sha }}
+      - run: npm run build

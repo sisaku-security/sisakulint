@@ -1,0 +1,39 @@
+# situation: on pull_request_target, a job writes a file of AWS credentials
+#   with a secret into the home directory of the runner, outside the
+#   checkout, checks out the head of the pull request with actions/checkout
+#   v4.2.2, and runs tmatens/compose-lint pinned to the commit of v0.24.0.
+#   The advisory names no workflow; the step follows the configuration that
+#   GHSA-88f4-frh5-gmcr describes: a pull request commits .compose-lint.yml
+#   as a symlink to a file on the runner. GHSA-88f4-frh5-gmcr describes a
+#   file of credentials in the INI form, of which the parse error quoted the
+#   head of the second line (aws_access_key_id = and the first characters of
+#   the value).
+# reason: a limitation (the run decides): a parse error of compose-lint up
+#   to 0.31.0 quotes about 30 characters around the place where the YAML
+#   parser fails in .compose-lint.yml, so the log has the first characters
+#   of the value of the secret and not the whole value; the runner masks a
+#   registered value only where the whole value is in a line of the log.
+# cause: the rule reads the run scripts of the workflow, not the code of an
+#   action.
+# attack: the author of a pull request from a fork commits .compose-lint.yml
+#   as a symlink to /home/runner/.aws/credentials.
+# attack-run-behavior: compose-lint fails to parse the file of credentials
+#   and quotes the first characters of the value of AWS_KEY_ID in the log of
+#   the step, which the author of the pull request reads on a public
+#   repository.
+# advisory: https://github.com/advisories/GHSA-88f4-frh5-gmcr
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p "$HOME/.aws"
+          printf '[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n' "$AWS_KEY_ID" "$AWS_SECRET" > "$HOME/.aws/credentials"
+        env:
+          AWS_KEY_ID: ${{ secrets.AWS_KEY_ID }}
+          AWS_SECRET: ${{ secrets.AWS_SECRET }}
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: tmatens/compose-lint@d6e1817352200adbd0a72893fd7ea7880874759b # v0.24.0

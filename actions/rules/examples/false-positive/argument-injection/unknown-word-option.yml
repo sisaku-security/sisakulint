@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a function of the script runs tar with
+#   its first argument and then the name of the pull request's head branch,
+#   passed through env and inside quotes; the script calls it with -C.
+# reason: the word before the branch's name is -C, an option of tar that
+#   takes the next word as its value, so tar reads the name as the
+#   directory to extract into, not as an option.
+# cause: the rule does not follow the argument -C from the call of the
+#   function to "$1", and reads the word after "$1" as one that tar may read
+#   as an option.
+# attack-value: github.head_ref = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: tar takes the name as the directory of -C, fails to
+#   enter it ("Cannot open: No such file or directory"), and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          unpack() { tar -xf archive.tar "$1" "$HEAD_REF"; }
+          unpack -C

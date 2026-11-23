@@ -1,0 +1,5 @@
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

@@ -1,0 +1,12 @@
+name: z17
+inputs:
+  i:
+    description: i
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "steps.a.outcome == '' && strategy.job-index == 0 && matrix.x == '' && github.sha != '' && inputs.i == '' && job.status != '' && runner.os != '' && env.E == ''"
+      run: echo ran
+    - shell: bash
+      run: echo after

@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE, and echo writes the variable into a
+#   pipe to bash, whose standard input is redirected from /dev/null.
+# reason: the redirect of bash takes its standard input from /dev/null, so
+#   bash does not read the pipe.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: bash reads nothing from /dev/null and runs nothing;
+#   the line echo PWNED stays in the pipe.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: echo "$ISSUE_TITLE" | bash < /dev/null

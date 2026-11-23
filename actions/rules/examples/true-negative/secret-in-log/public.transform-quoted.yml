@@ -1,0 +1,17 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step prints the secret API_KEY written as a declare command that sets
+#   the variable again (${API_KEY@A}).
+# reason: ${API_KEY@A} writes the whole key inside quotes, as ${API_KEY@Q}
+#   does, and the runner masks the key where the whole key is in the log.
+# attack: anyone signed in to GitHub opens the run's log to read the key.
+# attack-run-behavior: the step prints "declare -x API_KEY='***'"; the key is
+#   not in the log.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: echo "${API_KEY@A}"

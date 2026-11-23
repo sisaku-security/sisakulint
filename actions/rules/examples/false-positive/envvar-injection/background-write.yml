@@ -1,0 +1,24 @@
+# situation: on issues opened, a step runs in the background (&), with no
+#   wait, a subshell that sleeps 5 seconds and then writes V= and the
+#   issue's body to $GITHUB_ENV; the shell of the script ends before the
+#   write.
+# reason: a write that the background command makes after the shell of the
+#   script ends does not reach the steps after the step (seen on the runner
+#   on 2026-11-17), so the body sets no variable.
+# cause: the rule reads the write in the background as a write that reaches
+#   $GITHUB_ENV, and does not read when the background command writes.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the runner sets neither V nor PWNED for the steps
+#   after the step.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          (sleep 5; echo "V=$V" >> "$GITHUB_ENV") &
+      - run: printenv V || true

@@ -1,0 +1,15 @@
+# situation: a step sets continue-on-error to an output of an earlier step,
+#   which is true.
+# reason: an output is a string, and continue-on-error takes a boolean:
+#   when the step fails, the runner writes an error and the job fails.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: flaky
+        run: echo "allow=true" >> "$GITHUB_OUTPUT"
+      - run: make flaky-test
+        continue-on-error: ${{ steps.flaky.outputs.allow }}

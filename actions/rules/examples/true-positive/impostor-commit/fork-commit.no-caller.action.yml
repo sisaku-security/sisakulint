@@ -1,0 +1,27 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step uses actions/checkout by a commit SHA that only a
+#   fork of actions/checkout has.
+# reason: GitHub serves the commits of the forks of a repository under the
+#   name of the repository, so the SHA, which reads as a pin of
+#   actions/checkout, runs code that whoever pushed the commit to the fork
+#   wrote (the Trivy incident, GHSA-69fq-xp46-6x23:
+#   https://github.com/advisories/GHSA-69fq-xp46-6x23).
+# attack: the rule reports the form in which someone pushes a commit to a
+#   fork of actions/checkout and gets the SHA of the commit written in the
+#   action, such as by a pull request from a fork that changes the SHA of the
+#   uses and is merged. Background: in the Trivy incident of 2026-03-19, a
+#   commit pushed with stolen credentials swapped the actions/checkout of a
+#   workflow for the impostor commit 70379aad; the credential premise leaves
+#   the holder of such stolen credentials out of the threat model, but the
+#   workflow that the incident left has the same form.
+# attack-run-behavior: the runner fetches 70379aad by the name
+#   actions/checkout, from the objects the fork network shares, and runs the
+#   action of the commit as the step, in the workspace and environment of the
+#   job; in the Trivy incident the commit was a composite action that
+#   downloaded malicious Go source files from a typosquatted domain.
+name: checkout
+description: check out the repository
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0

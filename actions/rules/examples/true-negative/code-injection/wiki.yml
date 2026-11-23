@@ -1,0 +1,18 @@
+# situation: on gollum, a step passes the title of a wiki page in the
+#   environment variable PAGES_TITLE and runs echo with it.
+# reason: the title is not pasted into the script by ${{ }} before the shell
+#   parses it; the shell expands ${PAGES_TITLE} after parsing, inside double
+#   quotes, so a quote or $( ) in the title is text, not code.
+# attack-value: github.event.pages[0].title = "$(echo PWNED)"
+# attack-run-behavior: the script stays echo "${PAGES_TITLE}", and
+#   PAGES_TITLE holds the value; bash expands the variable after it parses
+#   the script, without running a command substitution in its text, and echo
+#   prints the line $(echo PWNED) as text.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${PAGES_TITLE}"
+        env:
+          PAGES_TITLE: ${{ github.event.pages[0].title }}

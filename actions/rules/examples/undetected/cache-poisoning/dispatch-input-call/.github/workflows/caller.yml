@@ -1,0 +1,10 @@
+on:
+  workflow_dispatch:
+    inputs:
+      x: {type: string}
+jobs:
+  call:
+    uses: ./.github/workflows/called.yml
+    with:
+      x: ${{ inputs.x }}
+    secrets: inherit

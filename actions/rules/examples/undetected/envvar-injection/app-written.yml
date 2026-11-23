@@ -1,0 +1,22 @@
+# situation: on check_run, which an app outside GitHub Actions starts when
+#   the app makes a check run for a commit, the job writes the name of the
+#   check run (github.event.check_run.name) where the rule reads it.
+# reason: a todo (a fact): the app writes the name of the check run, and an
+#   app may copy a value of a pull request from a fork into the name, such
+#   as the name of a job that a configuration file of the pull request gives
+#   to an outside CI.
+# cause: the table of what an attacker controls reads the values that the
+#   app writes into a commit status or a check run as the values that the
+#   app chooses.
+# attack-value: github.event.check_run.name = "a\nBASH_ENV=/tmp/x.sh"
+# attack-run-behavior: an outside CI copies the name of a job from the
+#   configuration file of the pull request from a fork into the name of the
+#   check run; the run of check_run starts on the default branch, and the
+#   value does there what the attack value of the message of the commit does
+#   on status.
+on: check_run
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "t=${{ github.event.check_run.name }}" >> "$GITHUB_ENV"

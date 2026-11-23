@@ -1,0 +1,14 @@
+# situation: the job sets env keys with a space and with &.
+# reason: GitHub accepts such names, and the step gets the variables as
+#   written, which a program reads by the names.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MY VAR: one
+      A&B: two
+    steps:
+      - run: env

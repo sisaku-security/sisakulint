@@ -1,0 +1,27 @@
+# situation: on workflow_dispatch, a job with no cache-mode checks out the
+#   ref that ${{ inputs.ref }} names, then runs pnpm build, which runs the
+#   script build of the package.json of that ref.
+# reason: whoever dispatches the workflow chooses the ref, and the workflow
+#   does not tell who that is, so whether an attacker controls the code that
+#   pnpm build runs is not known; nothing the rule could read is expected to
+#   tell it.
+# attack-value: inputs.ref = "refs/pull/1/head"
+# attack-run-behavior: a run of workflow_dispatch has write access to the
+#   cache of the branch it runs on; when the one who dispatches the workflow
+#   chooses the default branch as the ref of the run and a ref of an attacker
+#   as ref, pnpm build runs the script build of the attacker, which can save
+#   an entry to the cache of the default branch's scope.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.ref }}
+      - run: pnpm build

@@ -1,0 +1,21 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"3d3c42e5aac5ba805825da76410c181273ba90b1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/download-artifact","ref":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/github-script","ref":"3a2844b7e9c422d3c10d287c895573f7108da1b3"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"3d3c42e5aac5ba805825da76410c181273ba90b1"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"actions/download-artifact","ref":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"actions/github-script","ref":"3a2844b7e9c422d3c10d287c895573f7108da1b3"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"download.ghsl-2026-204.yml"},"state":"found","value":true},
+{"query":{"kind":"download.executed","input_path":"download.ghsl-2026-204.yml","step":"jobs.apply.steps[1]"},"state":"unknown","reason":"the example does not answer it"},
+{"query":{"kind":"git.commit-ref","repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1"},"state":"absent"},
+{"query":{"kind":"git.commit-ref","repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"},"state":"absent"},
+{"query":{"kind":"git.commit-ref","repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"actions/download-artifact"},"state":"found","value":[{"first_patched_version":"4.1.3","ghsa_id":"GHSA-cxww-7g56-2vh6","severity":"high","vulnerable_version_range":">= 4.0.0, < 4.1.3"}]},
+{"query":{"kind":"package.advisories","package":"actions/github-script"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"actions/download-artifact"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"actions/github-script"},"state":"found","value":false}
+]}

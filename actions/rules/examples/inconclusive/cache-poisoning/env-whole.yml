@@ -1,0 +1,18 @@
+# situation: on issues, a job with cache-mode: write saves build with
+#   actions/cache/save under a key that has ${{ toJSON(env) }}.
+# reason: the whole env has what steps set at run time, so whether an attacker
+#   controls a part of it is not known.
+# attack-value: a variable of env that a step before sets through $GITHUB_ENV = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when ${{ toJSON(env) }} holds the value, the job saves
+#   build to the cache of the default branch's scope under build-<value>, a key
+#   the attacker chose.
+on: issues
+cache-mode: write
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ toJSON(env) }}

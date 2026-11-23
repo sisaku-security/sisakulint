@@ -1,0 +1,34 @@
+# situation: on workflow_dispatch, the job build checks out the ref of an
+#   input, builds and uploads an artifact; the job publish downloads it in
+#   the current run and runs ./out/publish.sh.
+# reason: a limitation (decided by dispatcher): whoever dispatches the workflow
+#   chooses the ref the job builds, and so what the artifact has.
+# cause: the download has no run-id, so the rule reads it as of the current
+#   run, which no pull request from a fork drives.
+# attack-value: inputs.ref = "refs/pull/1/head"
+# attack-run-behavior: when the pull request 1 is from a fork, the job build
+#   checks out the head of the fork's pull request, whose build.sh writes
+#   out/publish.sh that prints PWNED; the upload takes out,
+#   the job publish downloads it in the environment release, and
+#   ./out/publish.sh runs it with that environment's secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      ref: {type: string}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ inputs.ref }}'}
+      - run: ./build.sh
+      - uses: actions/upload-artifact@v4
+        with: {name: out, path: out}
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: out}
+      - run: ./out/publish.sh

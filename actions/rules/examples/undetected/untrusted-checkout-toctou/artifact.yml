@@ -1,0 +1,24 @@
+# situation: on workflow_run, the artifact of the run workflow_run follows
+#   is downloaded into the workspace, and ./build.sh runs.
+# reason: another rule's: the pull request's code comes in an artifact,
+#   which artifact-poisoning reports.
+# cause: the rule reads checkouts by actions/checkout, not downloads.
+# attack-value: the file build.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the fork's pull request changes ci so its run uploads
+#   build.sh; when that run completes, the download takes its artifact by
+#   workflow_run.id with the token into the workspace, and ./build.sh runs
+#   it, with this run's token and the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: ./build.sh

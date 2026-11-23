@@ -1,0 +1,16 @@
+# code-injection's fix moves the title into env; set-output-injection
+# keeps its finding with the same fingerprint, read through the variable. The flag
+# of the job makes unsecure-commands report the same value.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - id: title
+        run: echo "${{ github.event.issue.title }}"
+      - env:
+          TAG: ${{ steps.title.outputs.tag }}
+        run: ./release.sh "$TAG"

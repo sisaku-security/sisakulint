@@ -1,0 +1,22 @@
+# situation: on workflow_dispatch, a step passes the title of the issue to
+#   tar after the file names, by ${{ }} inside quotes. If the workflow also
+#   ran on issues, the rule would report the same step.
+# reason: no added gain: on workflow_dispatch the event has no issue object,
+#   so the expression of the title gives an empty string; whoever dispatches
+#   the workflow chooses the ref and the inputs of the dispatch, and the step
+#   reads no input of the dispatch.
+# cause: the table of the attacker's events that the rule reads does not
+#   have workflow_dispatch; the rule reports an input of a dispatch with the
+#   inconclusive kind input-dispatch.
+# attack-value: github.event.issue.title = "--to-command=echo PWNED"
+# attack-run-behavior: with the value put in, tar reads the word as
+#   --to-command and runs echo PWNED for notes.txt as it extracts it, which
+#   prints PWNED. On workflow_dispatch the event has no issue object,
+#   though: the expression gives an empty string, and tar gets an empty file
+#   name.
+on: workflow_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ github.event.issue.title }}"

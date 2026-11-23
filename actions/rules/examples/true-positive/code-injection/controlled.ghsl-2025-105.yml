@@ -1,0 +1,37 @@
+# situation: on pull_request ready_for_review and on workflow_run, a step
+#   writes github.head_ref, the name of the head branch of the pull request,
+#   into its script, and a later step, only on workflow_run, puts
+#   github.event.workflow_run.head_branch, the name of the head branch of the
+#   run that triggered the workflow, into its script twice. This is
+#   ready_for_review.yml of department-of-veterans-affairs/vets-api (commit
+#   678873b5ddb98b610daa3e25411984f6b4ca8f54, lines 43-59).
+# reason: on workflow_run, the run that triggers the workflow can be a run of
+#   a pull request from a fork, whose author names the branch; the runner
+#   puts the name into the script before bash reads the script. On
+#   pull_request, github.head_ref is the branch of a pull request that runs
+#   without the secrets of the base repository, so the rule reports
+#   only github.event.workflow_run.head_branch.
+# attack-value: github.event.workflow_run.head_branch = "x\";echo${IFS}PWNED;#"
+# attack-run-behavior: the line HEAD_BRANCH="x";echo${IFS}PWNED;#" runs echo
+#   PWNED, and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-105_vets-api/
+on:
+  pull_request:
+    types: [ready_for_review]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+permissions: write-all
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch info
+        id: branch
+        run: |
+          echo "pr_branch=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+      - name: Process workflow run
+        if: github.event_name == 'workflow_run'
+        run: |
+          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          echo "pr_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT

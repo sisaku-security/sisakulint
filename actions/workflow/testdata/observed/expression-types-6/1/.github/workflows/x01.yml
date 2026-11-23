@@ -1,0 +1,17 @@
+name: x01
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      m: ${{ steps.s.outputs.m }}
+    steps:
+      - id: s
+        run: echo 'm={"x":["a"]}' >> "$GITHUB_OUTPUT"
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ needs.a.outputs.m }}
+    steps:
+      - run: echo "x=${{ matrix.x }}"

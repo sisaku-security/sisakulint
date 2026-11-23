@@ -1,0 +1,24 @@
+# situation: on issues opened, a step opens a descriptor on $GITHUB_ENV with
+#   exec {fd} when QUIET is empty and on /dev/null otherwise, closes the
+#   descriptor whose number fd holds with exec {fd}>&-, writes V= and the
+#   issue's body to the descriptor whose number fd holds, and goes on when
+#   the write fails (|| true).
+# reason: exec {fd}>&- closes the descriptor that exec {fd} in the branch of
+#   if opened, so the write fails on both paths, and the body does not go to
+#   $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the write fails with a bad file descriptor, || true
+#   keeps the step going, and the runner sets no environment variable.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          if [ -z "$QUIET" ]; then exec {fd}>>"$GITHUB_ENV"; else exec {fd}>/dev/null; fi
+          exec {fd}>&-
+          echo "V=$V" >&$fd || true

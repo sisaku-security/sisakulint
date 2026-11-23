@@ -1,0 +1,18 @@
+# situation: the job runs on gollum and reads the title of a wiki page.
+# reason: the wiki is off, or only collaborators may edit it (GitHub's
+#   default), so no outsider writes the title of a page.
+# cause: the rule takes the wiki as one anyone may edit unless a file of
+#   facts says it is not (repo.wiki-open is assumed true, the worst case).
+# attack-value: github.event.pages[0].title = "x\nPWNED=1"
+# attack-run-behavior: V holds x, a line break and PWNED=1, so echo appends
+#   v=x and PWNED=1 to $GITHUB_ENV, and the runner sets v to x and PWNED to
+#   1; with the wiki off or closed to outsiders, only a collaborator writes
+#   a title so.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.pages[0].title }}
+        run: echo "v=$V" >> "$GITHUB_ENV"

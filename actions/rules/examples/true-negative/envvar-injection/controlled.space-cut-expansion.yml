@@ -1,0 +1,23 @@
+# situation: on issues, the step writes the line HOST=<the first word of the
+#   title of the issue> to an environment file, with a parameter expansion
+#   that removes everything from the first white-space character of the
+#   title to the end.
+# reason: the parameter expansion ${TITLE%%[[:space:]]*} removes everything
+#   from the first white-space character of the title (the class
+#   [[:space:]], which includes the line break) to the end, so the line that
+#   the step writes has no line break; the runner splits the environment
+#   file at line breaks, so the title sets only HOST.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: the step writes the one line HOST=x to the
+#   environment file, and the runner sets HOST to x, and does not set a
+#   variable PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "HOST=${TITLE%%[[:space:]]*}" >> "$GITHUB_ENV"

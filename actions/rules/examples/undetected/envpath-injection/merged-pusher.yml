@@ -1,0 +1,25 @@
+# situation: on a pull request that is closed, a step writes the name of the
+#   account that merged the pull request to $GITHUB_PATH.
+# reason: whether GitHub sets merged_by of a merged pull request to the
+#   account of the author of the pull request was not checked: no payload with
+#   merged_by was seen on GitHub. Were merged_by the author, the author would
+#   write the name of merged_by, which is the profile name of the account of
+#   the author.
+# cause: the table of what an attacker controls reads merged_by as the
+#   account that merged the pull request, and the account that merged the pull
+#   request holds a credential that can merge.
+# attack-value: github.event.pull_request.merged_by.name = "/tmp/PWNED"
+# attack-run-behavior: were merged_by the author of the pull request and the
+#   profile name of the account of the author this value, echo would write the
+#   line /tmp/PWNED to $GITHUB_PATH, and the steps after the step would get
+#   /tmp/PWNED first in PATH.
+on:
+  pull_request_target:
+    types: [closed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          MERGER: ${{ github.event.pull_request.merged_by.name }}
+        run: echo "$MERGER" >> "$GITHUB_PATH"

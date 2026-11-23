@@ -1,0 +1,12 @@
+# situation: a Docker container action sets a variable of runs.env to the
+#   whole payload of the event.
+# reason: env takes strings, and the value is an object, so the runner
+#   cannot use the value.
+# cause: the rule does not read runs.env of a Docker container action.
+name: build
+description: build
+runs:
+  using: docker
+  image: Dockerfile
+  env:
+    PAYLOAD: ${{ github.event }}

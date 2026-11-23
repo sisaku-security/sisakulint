@@ -1,0 +1,23 @@
+# situation: on workflow_run, the job downloads the artifact of the run that
+#   started it to ${{ runner.temp }}/artifacts, outside the workspace, and
+#   then only runs echo done.
+# reason: unlike a download into the workspace, the artifact's files replace
+#   none of the workspace's, and no step of this job runs anything under
+#   runner.temp, so none of the artifact's files run.
+# attack-value: the file build.sh in the artifact of the pull request's ci run = "echo PWNED\n"
+# attack-run-behavior: the download puts the artifact's build.sh under
+#   runner.temp/artifacts, and the job then only runs echo done; nothing
+#   runs build.sh.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/artifacts
+      - run: echo done

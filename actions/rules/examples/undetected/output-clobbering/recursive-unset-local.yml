@@ -1,0 +1,30 @@
+# situation: on issues opened, a step defines f, which calls h on the first
+#   call of f and calls g on the second call of f; h sets out to
+#   $GITHUB_OUTPUT, makes out local with /dev/null, and calls f. g unsets out
+#   and writes v= and "$V" to the file in "$out".
+# reason: a todo (the same file): in the second call of f, the unset in g
+#   takes away the local that h made, and out holds the value that h set
+#   before h made out local: $GITHUB_OUTPUT, which gets the issue's body.
+# cause: the rule reads the second call of f, which f makes through h, where
+#   the first call of f runs, without the call of h, so the rule does not read
+#   the value that the unset reveals.
+# attack-value: github.event.issue.body = "x\napproved=true"
+# attack-run-behavior: the step s has the output approved.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          f() { if [ -z "$inner" ]; then inner=1; h; else g; fi; }
+          g() { unset out; echo "v=$V" >> "$out"; }
+          h() { out="$GITHUB_OUTPUT"; local out=/dev/null; f; }
+          f
+      - env:
+          W: ${{ steps.s.outputs.v }}
+        run: echo "$W"

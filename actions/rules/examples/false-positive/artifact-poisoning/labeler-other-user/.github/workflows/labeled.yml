@@ -1,0 +1,46 @@
+# situation: labeler.yml runs, on pull_request_target, actions/checkout of
+#   the head of the pull request into pr, then sudo -u nobody ./pr/build.sh
+#   || true, then actions/labeler with if: failure() and a personal access
+#   token; the configuration .github/labeler.yml adds the label safe-to-test
+#   to a pull request that changes a file under site/; labeled.yml runs on
+#   pull_request_target on opened and labeled; the job build checks out the
+#   head of the pull request and uploads dist, and the job deploy, which
+#   needs build and runs on labeled when the if github.event.label.name ==
+#   'safe-to-test' is true, downloads dist and runs ./dist/deploy.sh.
+# reason: the step that runs ./pr/build.sh runs the code of the attacker as
+#   the user nobody, and a failure of the code does not end the step (||
+#   true); the code of the attacker runs as a user that is not the user of
+#   the shell of the step, so the code cannot stop the shell of the step,
+#   the step does not fail, and the step of actions/labeler, whose if is
+#   failure(), does not run (observed on 2026-11-16 on ubuntu-latest: kill
+#   from the user nobody to the shell of the step fails with Operation not
+#   permitted).
+# cause: the rule reads the step that runs ./pr/build.sh as a step that the
+#   attacker can make fail, so the rule reads the step of actions/labeler as
+#   a step that runs after a failure.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/ and whose pr/build.sh tries to stop the shell
+#   of the step; the kill fails, the step succeeds, actions/labeler does not
+#   run and adds no label, and labeled.yml does not start.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

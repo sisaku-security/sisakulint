@@ -1,0 +1,21 @@
+# situation: on issue_comment, a job with cache-mode: write checks out the
+#   head of the pull request, and actions/cache saves the path a variable of
+#   the repository names.
+# reason: whether the path is the tree the checkout brings is known when the
+#   job runs: the variable's value is not in the workflow.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: when vars.DIR is dist, actions/cache saves the
+#   attacker's dist/index.js to the default branch's scope.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: actions/cache@v4
+        with:
+          path: ${{ vars.DIR }}
+          key: dist-${{ hashFiles('package-lock.json') }}

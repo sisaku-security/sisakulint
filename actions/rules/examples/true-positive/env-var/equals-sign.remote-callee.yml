@@ -1,0 +1,18 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/env-var-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   equals-sign (equals-sign.yml) of the rule, with on: workflow_call in
+#   place of the on of equals-sign.yml. The job passes its secrets with
+#   secrets: inherit. In the true positive, the job sets an env key
+#   DATABASE=URL, meant as the variable DATABASE_URL.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: no
+#   name of an environment variable can have =: the step gets no variable
+#   DATABASE_URL, and the runner sets the variable DATABASE to
+#   URL=postgres://db instead.
+on: push
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/env-var-remote/.github/workflows/w.yml@v1
+    secrets: inherit

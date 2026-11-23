@@ -1,0 +1,24 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/unmasked-secret-exposure-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   private (private.yml) of the rule, with on: workflow_call in place of
+#   the on of private.yml. The job passes its secrets with secrets: inherit.
+#   In the true positive, on push, in a private repository (repo.public
+#   false), a step takes clientId and clientSecret out of the JSON secret
+#   AZURE_CREDENTIALS into its env.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   runner masks AZURE_CREDENTIALS whole, not the values fromJSON takes out
+#   of it, and prints the step's env in its header before it runs, so the
+#   client secret is in the log as it is.
+# attack: someone with read access to the repository, who may not read its
+#   secrets, opens the run's log and reads the client secret.
+# attack-run-behavior: the header of the step prints CLIENT_ID and
+#   CLIENT_SECRET with their values; the log keeps them for 90 days by
+#   default.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/unmasked-secret-exposure-remote/.github/workflows/w.yml@v1
+    secrets: inherit

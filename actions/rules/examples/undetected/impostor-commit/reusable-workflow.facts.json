@@ -1,0 +1,8 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"reusable-workflow.yml"},"state":"found","value":true},
+{"query":{"kind":"package.advisories","package":"owner/repo"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"owner/repo/.github/workflows/r.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"owner/repo"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

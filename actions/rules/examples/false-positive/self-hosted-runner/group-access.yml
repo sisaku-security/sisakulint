@@ -1,0 +1,22 @@
+# situation: a public repository runs a job of pull_request on
+#   [self-hosted, linux], and the only runners with those labels are
+#   runners of the organization in a runner group that does not allow
+#   public repositories.
+# reason: GitHub does not let a public repository use any runner of a
+#   runner group that does not allow public repositories, and a runner
+#   group does not allow public repositories by default
+#   (https://github.com/github/docs/blob/5815d11586b0796688963a98c889680e60d72dc4/data/reusables/actions/self-hosted-runner-public-repo-access.md),
+#   so the job of a pull request from a fork reaches no such runner.
+# cause: the rule reads the labels of runs-on only, and does not ask which
+#   runners have them, or the settings of their runner groups.
+# attack: the attacker opens a pull request from a fork whose workflow runs
+#   their code on [self-hosted, linux].
+# attack-run-behavior: the repository can use no runner that has the
+#   labels, so no self-hosted runner takes the job of the pull request, and
+#   the code of the attacker runs on no self-hosted runner.
+on: pull_request
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make

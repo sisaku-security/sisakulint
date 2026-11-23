@@ -1,0 +1,22 @@
+# situation: on issues opened, a step writes body= and the issue's body to
+#   $GITHUB_OUTPUT.
+# reason: anyone who opens an issue writes its body, and the runner reads
+#   $GITHUB_OUTPUT one line at a time as name=value with nothing that
+#   escapes the body's line breaks, so each later line of the body such as
+#   x=y is read as an output of its own beside body.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds the two lines x and PWNED=1, so echo writes
+#   the lines body=x and PWNED=1 to $GITHUB_OUTPUT, and the runner reads each
+#   line as name=value and sets the outputs body (x) and PWNED (1). A line
+#   approved=true in the body sets the output approved in the same way, and
+#   wins over an approved the step wrote before it.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$BODY" >> "$GITHUB_OUTPUT"

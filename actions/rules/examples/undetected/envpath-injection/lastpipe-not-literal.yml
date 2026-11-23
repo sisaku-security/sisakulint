@@ -1,0 +1,24 @@
+# situation: on issues opened, a step turns lastpipe on with shopt -s and
+#   the option name in a variable, sets out to $GITHUB_PATH in the last command
+#   of a pipeline, and writes $V to "$out".
+# reason: a todo (the same file): with lastpipe, bash runs the last command
+#   of the pipeline in the shell itself, so out stays $GITHUB_PATH after the
+#   pipeline and the value goes to $GITHUB_PATH.
+# cause: the rule follows lastpipe only after shopt -s lastpipe written as
+#   literal words, and reads the last command as a command in a subshell.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value goes to $GITHUB_PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          o=lastpipe
+          shopt -s "$o"
+          true | out=$GITHUB_PATH
+          echo "$V" >> "$out"

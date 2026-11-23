@@ -1,0 +1,16 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints whether the title of the issue is x.
+# reason: no added gain: the printed value is true or false.
+# cause: a compared value is not the value.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: the step prints false; nothing is set.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ github.event.issue.title == 'x' }}"
+      - run: echo next

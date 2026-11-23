@@ -1,0 +1,73 @@
+# situation: on push, a step passes the GITHUB_TOKEN to
+#   canonical/get-workflow-version-action v1.0.0, whose exception output may
+#   print a part of the token (GHSA-26wh-cc3r-w6pj: "the token may be
+#   truncated—causing part of the GITHUB_TOKEN to be displayed in plaintext in
+#   the GitHub Actions logs"). The job php is the form of GHSA-5wxr-w449-57cm:
+#   shivammathur/setup-php before 2.37.1 with a pinned Composer version (tools:
+#   composer:2.9.7) gives the GITHUB_TOKEN to Composer, which prints the token
+#   when it rejects the format of the token. The job steam is the form of
+#   GHSA-c5qx-p38x-qf5w and GHSA-mj96-mh85-r574: a step after the main step of
+#   setup-steamcmd logs in with steamcmd, which saves the token of the Steam
+#   account in config/config.vdf, and the post step of setup-steamcmd, which
+#   runs at the end of the job after the later steps
+#   (RageAgainstThePixel/setup-steamcmd v1.2.7, commit
+#   ec536b530bd3bd059377d0d0c376c52c6b870de1, src/logging.ts lines 29 and 34),
+#   prints the .vdf files; the action takes no secret as an input (its
+#   action.yml has no inputs). The job vault is the form of
+#   GHSA-4mgv-m5cm-f9h7: hashicorp/vault-action before 2.2.0 reads a secret
+#   from Vault and, for a secret of several lines, "did not correctly handle
+#   the marking of multi-line variables", so the runner does not mask the
+#   lines of the secret that the action prints in its output. The advisories
+#   name no workflow; the jobs are the configurations that the advisories
+#   describe.
+# reason: a limitation (the run decides): the code of the action prints the
+#   part of the token, which the runner does not mask.
+# cause: the rule reads the run scripts of the workflow, not the code of an
+#   action.
+# attack: one who may read the run's log opens the log and uses the part of
+#   the token while the job runs.
+# attack-run-behavior: when the step fails, the action prints an exception
+#   with a part of the token. In the job php, Composer prints the token in
+#   its error; in the job steam, the post step of setup-steamcmd, at the end
+#   of the job, prints
+#   config.vdf with the saved token of the Steam account, which does not
+#   expire when the job ends.
+# advisory: https://github.com/advisories/GHSA-26wh-cc3r-w6pj
+# advisory: https://github.com/advisories/GHSA-4mgv-m5cm-f9h7
+# advisory: https://github.com/advisories/GHSA-5wxr-w449-57cm
+# advisory: https://github.com/advisories/GHSA-c5qx-p38x-qf5w
+# advisory: https://github.com/advisories/GHSA-mj96-mh85-r574
+on: push
+permissions: {}
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: canonical/get-workflow-version-action@a5d53b08d254a157ea441c9819ea5002ffc12edc # v1.0.0
+        with:
+          repository-name: canonical/data-platform-workflows
+          file-name: build_charm.yaml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # 2.37.0
+        with:
+          php-version: '8.3'
+          tools: composer:2.9.7
+  steam:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: RageAgainstThePixel/setup-steamcmd@ec536b530bd3bd059377d0d0c376c52c6b870de1 # v1.2.7
+      - run: steamcmd +login "$STEAM_USERNAME" "$STEAM_PASSWORD" +quit
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+  vault:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hashicorp/vault-action@5e5c06a3c8e96b7c4757fe7a10e03469cdbd07bb # v2.1.2
+        with:
+          url: https://vault.example.com
+          token: ${{ secrets.VAULT_TOKEN }}
+          secrets: secret/data/ci certificate | CERTIFICATE

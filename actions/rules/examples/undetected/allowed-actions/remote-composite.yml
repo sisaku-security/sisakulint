@@ -1,0 +1,17 @@
+# situation: a step uses example-org/unasked-composite@v1, a composite
+#   action of another repository that the pattern * of the setting of
+#   allowed actions of GitHub allows (the setting also blocks
+#   gradle/actions/setup-gradle@*), and the run has no answer of
+#   action.definition for the composite action.
+# reason: a step of the composite action may use an action that the setting
+#   does not allow, and then GitHub fails the job.
+# cause: the rule reads the steps of a composite action of another
+#   repository only from the answer of action.definition.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-org/unasked-composite@v1

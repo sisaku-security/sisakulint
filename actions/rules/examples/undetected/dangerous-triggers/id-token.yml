@@ -1,0 +1,19 @@
+# situation: on issues, a job has id-token write alone.
+# reason: a todo (the same file): code run here takes an OIDC token for the
+#   clouds that trust the repository.
+# cause: the analysis of the token counts id-token write as no write.
+# attack: the attacker opens an issue, and a flaw in the job's steps runs
+#   their code there (the step here runs only echo).
+# attack-run-behavior: the issue starts the job a with id-token: write,
+#   which puts ACTIONS_ID_TOKEN_REQUEST_URL and
+#   ACTIONS_ID_TOKEN_REQUEST_TOKEN in its environment; with them, code there
+#   requests an OIDC token for the repository, which a cloud that trusts the
+#   repository exchanges for credentials.
+on: issues
+permissions:
+  id-token: write
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo

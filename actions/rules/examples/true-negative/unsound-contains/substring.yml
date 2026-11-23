@@ -1,0 +1,19 @@
+# situation: on issue_comment, the job runs ./deploy.sh with the secret
+#   DEPLOY_TOKEN only if the commenter's login is in
+#   fromJSON('["alice","bob"]').
+# reason: contains of an array compares the login with each element as a
+#   whole, unlike contains of the string 'alice bob', which matches any part
+#   of it, such as ali; so only alice and bob pass.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: a comment by the account ali on any issue runs the
+#   if; contains(fromJSON('["alice","bob"]'), 'ali') compares ali with alice
+#   and with bob as wholes and is false, so the job deploy is skipped.
+on: issue_comment
+jobs:
+  deploy:
+    if: contains(fromJSON('["alice","bob"]'), github.event.comment.user.login)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

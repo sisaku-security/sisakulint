@@ -1,0 +1,10 @@
+name: w06
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.event }}
+    steps:
+      - run: echo ok

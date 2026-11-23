@@ -1,0 +1,36 @@
+# request-forgery of sisakulint. How to run it:
+# the README of the all-rules example. Not for GitHub.
+on: issue_comment
+permissions: {}
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      # request-forgery.credential-host: the comment's body names the host
+      # curl sends the secret to
+      - env:
+          HOST: ${{ github.event.comment.body }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"
+      # secret-exfiltration.untrusted-destination: the secret goes to a host the
+      # workflow writes, which no file of facts says to trust with the secret
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+      # request-forgery.action-input: a full URL in route sends the token
+      # where the comment's body says
+      - uses: octokit/request-action@v2.4.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          route: ${{ github.event.comment.body }}
+  probe:
+    runs-on: [self-hosted, linux]
+    steps:
+      # request-forgery.runner-network: the request reaches the network of the
+      # self-hosted runner
+      - shell: bash
+        env:
+          HOST: ${{ github.event.comment.body }}
+        run: curl -fsS "http://$HOST/healthz"

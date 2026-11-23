@@ -1,0 +1,23 @@
+# situation: the first step uses example-org/partly-listed/setup@v1, which
+#   the pattern * of repo.action-list allows; the second step uses $/ (the
+#   reference of GitHub to the repository of the workflow, at the commit that
+#   runs) with a path that goes with .. above the root of the repository, to
+#   the directory hidden of example-org/partly-listed at v1 in the directory
+#   where the runner puts the actions of the job; the pattern
+#   !example-org/partly-listed/hidden@* of repo.action-list blocks the action
+#   hidden.
+# reason: the second step runs the action hidden of
+#   example-org/partly-listed, which repo.action-list does not allow.
+# cause: the rule does not compare a $/ uses with repo.action-list.
+# attack: the maintainer of example-org/partly-listed writes code that reads
+#   the job's secrets into the action hidden at the commit that v1 names.
+# attack-run-behavior: the runner downloads example-org/partly-listed at v1
+#   for the first step, and the second step runs the action hidden of that
+#   download, with the job's secrets and GITHUB_TOKEN in reach.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/partly-listed/setup@v1
+      - uses: $/../../../example-org/partly-listed/v1/hidden

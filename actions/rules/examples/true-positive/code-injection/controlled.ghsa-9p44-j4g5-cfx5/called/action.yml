@@ -1,0 +1,78 @@
+# situation: a composite action whose steps write an input into run by ${{ }},
+#   in the ways of four advisories, and a caller,
+#   .github/workflows/validate.yml, which gives the body of a pull request as
+#   each input on pull_request_target. The step ydb is
+#   .github/actions/validate_pr_description/action.yaml of ydb-platform/ydb
+#   (commit dd07662a0e0b98b6bbd07da00386bb889c683c27, lines 6-9): the input in
+#   double quotes of echo. The step prek is the step Resolve download URL of
+#   action.yaml of j178/prek-action (v1.0.5, commit
+#   93b4659bafa2a5a18b7aaa0130b417f0ae29b1ac, lines 26-29): the input in double
+#   quotes of [ ]; lines 31-37 of the script and the steps after the step are
+#   left out. The step sonar is the step Run SonarScanner of action.yml of
+#   SonarSource/sonarqube-scan-action (v5.3.0, commit
+#   8c71dc039c2dd71d3821e89a2b58ecc7fee6ced9, lines 53-55): the input as the
+#   words of an array, with no quotes; the lines that run the scanner (lines
+#   56-57) are left out. The step trivy is the step that writes trivy_envs.txt
+#   in action.yaml of aquasecurity/trivy-action (v0.33.1, commit
+#   b6643a29fecd7f34b3597bc6acb0a98b03d33ff8, lines 181-190 and 201): the input
+#   in double quotes, as an argument of a function that writes an export line;
+#   the calls for the other inputs (lines 194-200 and 202-211) and the step that
+#   sources trivy_envs.txt in entrypoint.sh are left out.
+# reason: the author of a pull request writes its body, and the runner puts
+#   the input into each script before bash reads the script, so a $( ) in the
+#   body runs as a command in each way: inside double quotes and in a word with
+#   no quotes. For trivy-action, the advisory names a second place: the export
+#   line written without escaping, which entrypoint.sh sources; the rule reports
+#   the first place, where the input is written into run.
+# attack-value: inputs.pr_body = "$(echo PWNED > /proc/$$/fd/1)"
+# attack-run-behavior: in the script of the step ydb, bash runs the command
+#   substitution of the input while it reads the line; $$ inside the
+#   substitution is the process ID of the shell of the script, so echo writes
+#   PWNED to the standard output of the script, and the line PWNED appears in
+#   the log of the step. The steps prek and trivy run the substitution the same
+#   way inside double quotes, and the step sonar runs the substitution in a word
+#   with no quotes.
+# advisory: https://github.com/advisories/GHSA-9p44-j4g5-cfx5
+# advisory: https://github.com/advisories/GHSA-pwf7-47c3-mfhx
+# advisory: https://github.com/advisories/GHSA-f79p-9c5r-xg88
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-089_ydb-platform_ydb/
+name: validate
+description: four steps that write an input into run
+inputs:
+  pr_body:
+    description: the body of the pull request
+  prek-version:
+    description: the version of prek
+  args:
+    description: the arguments of the scanner
+  output:
+    description: the file of the output of trivy
+runs:
+  using: composite
+  steps:
+    - name: Save PR body to temporary file
+      shell: bash
+      run: |
+        echo "${{ inputs.pr_body }}" > pr_body.txt
+    - name: Resolve download URL
+      run: |
+        if [ "${{ inputs.prek-version }}" = "latest" ]; then
+          echo "version=latest" >> $GITHUB_OUTPUT
+        fi
+      shell: bash
+    - name: Run SonarScanner
+      run: |
+        args=(${{ inputs.args }})
+      shell: bash
+    - name: Set Trivy environment variables
+      shell: bash
+      run: |
+        set_env_var_if_provided() {
+          local var_name="$1"
+          local input_value="$2"
+          local default_value="$3"
+          if [ ! -z "$input_value" ] && [ "$input_value" != "$default_value" ]; then
+            echo "export $var_name=$input_value" >> trivy_envs.txt
+          fi
+        }
+        set_env_var_if_provided "TRIVY_OUTPUT" "${{ inputs.output }}" ""

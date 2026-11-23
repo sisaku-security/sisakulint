@@ -1,0 +1,16 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_OUTPUT.
+# reason: another rule's: output-clobbering reports a value written to
+#   $GITHUB_OUTPUT.
+# cause: the rule reads writes to $GITHUB_ENV only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo appends b=x and PWNED=1 to $GITHUB_OUTPUT, and
+#   the runner sets the outputs b to x and PWNED to 1 of the step; nothing
+#   is written to $GITHUB_ENV, and no variable PWNED is set.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$B" >> "$GITHUB_OUTPUT"

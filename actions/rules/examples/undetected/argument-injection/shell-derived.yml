@@ -1,0 +1,46 @@
+# situation: on pull_request_target, a step takes the parts in brackets of
+#   the pull request's title into message with $( ), as the step "get
+#   message" of Azure/azure-cli's .github/workflows/AddPRComment.yml does
+#   (https://github.com/Azure/azure-cli/blob/ea42584eda8f5b658d4d7daf42656c1292eeba24/.github/workflows/AddPRComment.yml,
+#   GHSL-2024-294,
+#   https://securitylab.github.com/advisories/GHSL-2024-294_Azure-cli/),
+#   and then passes message to tar after the file names. The line of tar
+#   is added here: the advisory put -a into [ -z $message ], an operator of
+#   test that runs no program, to pass the check on its way to a line
+#   break in $GITHUB_ENV.
+# reason: a todo (the same file): message holds the attacker's text, and
+#   following a value through what the script makes of it would find it.
+# cause: the rule reads a value through ${{ }} and through the variables of
+#   the workflow's env; message is one the script sets from $( ).
+# attack-value: github.event.pull_request.title = "[--to-command=echo PWNED]"
+# attack-run-behavior: grep -oP takes [--to-command=echo PWNED] out of the
+#   title and sed takes away the brackets, so message is --to-command=echo
+#   PWNED; [ -z $message ] fails with an error and the step goes on, and tar
+#   reads "$message" as --to-command and runs echo PWNED for notes.txt as it
+#   extracts it, which prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-294_Azure-cli/
+on:
+  pull_request_target:
+    types: [opened]
+    branches:
+      - dev
+      - release
+
+permissions:
+  pull-requests: write
+
+jobs:
+  thank-user:
+    runs-on: ubuntu-latest
+    name: Say thanks for the PR
+    steps:
+      - name: get message
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          message=$(echo "$TITLE" | grep -oP '[{\[][^}\]]+[}\]]' | sed 's/{\|}\|\[\|\]//g')
+          echo "message=$message" >> $GITHUB_ENV
+          if [ -z $message ]; then
+              echo "message=$(echo 'Thank you for your contribution! We will review the pull request and get back to you soon.')" >> $GITHUB_ENV
+          fi
+          tar -xf archive.tar notes.txt "$message"

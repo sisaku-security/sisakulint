@@ -1,0 +1,9 @@
+name: z28
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      X: ${{ format('{0} {1}', 'a') }}
+    steps:
+      - run: printf 'X=[%s]\n' "$X"

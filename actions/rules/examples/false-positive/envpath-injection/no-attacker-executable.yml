@@ -1,0 +1,22 @@
+# situation: the step writes the body of an issue to $GITHUB_PATH, and a
+#   step after it runs git.
+# reason: the body names a directory, but no file of the attacker's is on
+#   the runner for the PATH to find there.
+# cause: the rule does not look for a file of the attacker's on the runner,
+#   and holds that one is there as the precondition of AT:P.
+# attack-value: github.event.issue.body = "/tmp/PWNED"
+# attack-run-behavior: echo writes the line /tmp/PWNED to $GITHUB_PATH, and
+#   the next step's PATH starts with /tmp/PWNED; nothing in the job puts a
+#   file there, so the runner finds no bash there for the step's shell, nor
+#   git for git status, and both are the system's.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: echo "$V" >> "$GITHUB_PATH"
+      - run: git status

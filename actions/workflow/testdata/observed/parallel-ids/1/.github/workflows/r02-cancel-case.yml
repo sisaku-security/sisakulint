@@ -1,0 +1,10 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: a
+        run: sleep 3; echo bg-a-done
+        background: true
+      - cancel: A
+      - run: echo after

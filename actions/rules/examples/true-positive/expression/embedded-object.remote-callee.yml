@@ -1,0 +1,18 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/expression-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   embedded-object (embedded-object.yml) of the rule, with on:
+#   workflow_call in place of the on of embedded-object.yml. The job passes
+#   its secrets with secrets: inherit. In the true positive, a step prints
+#   the names of the labels of the pull request with
+#   github.event.pull_request.labels.*.name in the text of run.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   value of the ${{ }} is an array, and GitHub writes the text Array in
+#   place of the names: the step prints labels=Array.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/expression-remote/.github/workflows/w.yml@v1
+    secrets: inherit

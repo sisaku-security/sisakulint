@@ -1,0 +1,22 @@
+# situation: on pull_request_target, the checkout of the head of the pull
+#   request has the path ${{ runner.temp }}/pr, and npm ci and
+#   $RUNNER_TEMP/pr/build.sh run after it, on a hosted runner.
+# reason: actions/checkout resolves the path from github.workspace and fails
+#   when the path is not under it; the runner puts runner.temp at
+#   <work>/_temp, next to the workspace <work>/<repository>/<repository>, so
+#   the checkout fails before it fetches anything, and no step runs the code
+#   of the pull request.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fails with "Repository path ... is not
+#   under ...", the job stops, and neither npm ci nor build.sh runs.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/pr
+      - run: npm ci
+      - run: bash $RUNNER_TEMP/pr/build.sh

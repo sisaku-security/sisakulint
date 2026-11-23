@@ -1,0 +1,30 @@
+# situation: the composite action of the true positive dependabot.no-caller
+#   of this rule; the only caller, ci.yml, runs on push and calls the action
+#   after actions/checkout.
+# reason: the files that the linter reads are the whole repository and hold
+#   every caller of the action, so the rule reads the action on the events of
+#   the callers, here push alone, and a push comes from one who can write to
+#   the repository, not from the attacker. The if of the step of the action is
+#   false on push as well; the rule reports nothing because of the event of
+#   the caller, not because of the steps.
+# attack: the attacker enables Dependabot in the attacker's fork, opens a
+#   pull request to this repository from the branch of a pull request
+#   Dependabot opened in the fork, then comments @dependabot recreate on the
+#   pull request of Dependabot in the fork, so that Dependabot pushes to the
+#   branch of the pull request (Synacktiv did so against a copy of
+#   spring-projects/spring-security in 2024, and the file evil.txt of
+#   Synacktiv was merged).
+# attack-run-behavior: the attacker cannot push to the repository, so the
+#   attacker starts no run of ci.yml, and the steps of the action never run on
+#   an event of the attacker.
+name: merge dependabot
+description: merge the pull requests of Dependabot
+runs:
+  using: composite
+  steps:
+    - if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
+      run: gh pr merge --auto --rebase "$PR"
+      shell: bash
+      env:
+        PR: ${{ github.event.pull_request.html_url }}
+        GH_TOKEN: ${{ github.token }}

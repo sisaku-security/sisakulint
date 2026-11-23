@@ -1,0 +1,22 @@
+# situation: the matrix has a value from a variable, and a step sends a
+#   request with curl and the secret DEPLOY_TOKEN to the host matrix.host
+#   names.
+# reason: the value of the matrix is not written out in the workflow.
+# cause: the rule reads the values of a matrix written out only.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - host: ${{ vars.HOST }}
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ matrix.host }}/status"

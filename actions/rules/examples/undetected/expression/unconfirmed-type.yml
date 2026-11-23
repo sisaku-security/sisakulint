@@ -1,0 +1,19 @@
+# situation: the job sets timeout-minutes to an input of workflow_dispatch
+#   of the type choice.
+# reason: a value of choice is likely a string, which timeout-minutes of a
+#   job does not take, so GitHub would not start the job.
+# cause: the documentation of GitHub names choice as the type, and the rule
+#   does not know the type of the value.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        type: choice
+        options: ['5', '10']
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.minutes }}
+    steps:
+      - run: make test

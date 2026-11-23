@@ -1,0 +1,25 @@
+# situation: on issues opened, a step puts the title of the issue into its
+#   script, outside quotes. This is check-issue.yaml of milvus-io/milvus
+#   (commit f3e4cb0de9d2d4891567714b2a23f555d4d9003d, lines 3-35), reduced
+#   to the step: the heredoc of the step and the steps after the step are
+#   left out.
+# reason: the runner puts the title into the script before bash reads the
+#   script, so anyone who opens an issue writes code that the step runs with
+#   the token of the job, which can write issues.
+# attack-value: github.event.issue.title = "x; echo PWNED"
+# attack-run-behavior: the line becomes echo Issue title: x; echo PWNED, and
+#   bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-120_Milvus/
+on:
+  issues:
+    types: [opened]
+jobs:
+  check_issue_title:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Check Issue
+        shell: bash
+        run: |
+          echo Issue title: ${{ github.event.issue.title }}

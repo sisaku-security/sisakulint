@@ -1,0 +1,16 @@
+# situation: the job runs on gollum and reads the title of a wiki page.
+# reason: the wiki is off, or only collaborators may edit it (GitHub's
+#   default), so no outsider writes the title of a page.
+# cause: the rule takes the wiki as one anyone may edit unless a file of
+#   facts says it is not (repo.wiki-open is assumed true, the worst case).
+# attack-value: github.event.pages[0].title = "$(echo PWNED)"
+# attack-run-behavior: with the wiki off or edited only by collaborators,
+#   the title is one a collaborator wrote; were it the value, the script
+#   would become echo "$(echo PWNED)", and bash would run the command
+#   substitution, so echo would print PWNED.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pages[0].title }}"

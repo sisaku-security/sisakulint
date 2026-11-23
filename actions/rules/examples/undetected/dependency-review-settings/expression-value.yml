@@ -1,0 +1,16 @@
+# situation: warn-only is written as a ${{ }} of a variable of the
+#   repository.
+# reason: when the variable is true, the check succeeds whatever the check
+#   finds.
+# cause: the value is known only when the workflow runs; the rule reads
+#   values written without ${{ }}.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          warn-only: ${{ vars.REVIEW_WARN_ONLY }}

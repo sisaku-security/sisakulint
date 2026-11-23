@@ -1,0 +1,17 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_OUTPUT.
+# reason: another rule's: output-clobbering reports a value written to
+#   $GITHUB_OUTPUT.
+# cause: the rule reads writes to $GITHUB_PATH only.
+# attack-value: github.event.issue.body = "x\ndir=/tmp/PWNED"
+# attack-run-behavior: echo writes the lines b=x and dir=/tmp/PWNED to
+#   $GITHUB_OUTPUT, which set the outputs b and dir of the step; the step
+#   has no id, so no later expression reads them. Nothing is written to
+#   $GITHUB_PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "b=$B" >> "$GITHUB_OUTPUT"

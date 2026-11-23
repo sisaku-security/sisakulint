@@ -1,0 +1,28 @@
+# situation: on issue_comment, in a job with cache-mode: write, a step of
+#   actions/cache/save runs only when the comment's body is deps-linux, and
+#   saves the directory build under the key
+#   ${{ github.event.comment.body }}.
+# reason: the step's if lets the key be only deps-linux, ignoring the case
+#   of its letters, so the commenter does not choose a key that a later run
+#   computes; actions/cache/save has no pre step.
+# cause: the rule does not limit the with of a step that uses an action by
+#   the if of the step. At the start of the job, the runner runs the pre
+#   step of an action from another repository whose action.yml has
+#   runs.pre, under the condition runs.pre-if of that action.yml and not
+#   under the if of the step, and the runner evaluates the with for the pre
+#   step.
+# attack-value: github.event.comment.body = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: the step's if is false for such a body, and the
+#   runner skips the step.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - if: github.event.comment.body == 'deps-linux'
+        uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.comment.body }}

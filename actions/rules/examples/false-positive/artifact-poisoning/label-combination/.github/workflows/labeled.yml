@@ -1,0 +1,38 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   labels safe-to-test and blocked to a pull request that changes a file
+#   under site/; labeled.yml runs on pull_request_target on opened and
+#   labeled; the job build checks out the head of the pull request and
+#   uploads dist, and the job deploy, which needs build and runs on labeled
+#   when the if github.event.label.name == 'safe-to-test' &&
+#   !contains(github.event.pull_request.labels.*.name, 'blocked') is true,
+#   downloads dist and runs ./dist/deploy.sh.
+# reason: actions/labeler adds blocked whenever it adds safe-to-test, so the
+#   pull request of the attacker has the label blocked, and the job does not
+#   run for it.
+# cause: the rule evaluates the if with the label safe-to-test alone.
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; actions/labeler adds safe-to-test and
+#   blocked, and the if of labeled.yml is false.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test' && !contains(github.event.pull_request.labels.*.name, 'blocked'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

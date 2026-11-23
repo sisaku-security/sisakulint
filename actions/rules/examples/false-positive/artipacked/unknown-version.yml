@@ -1,0 +1,26 @@
+# situation: the job checks out the repository with actions/checkout@main
+#   and uploads the workspace.
+# reason: the main of actions/checkout keeps the token out of .git/config,
+#   so the upload takes no token.
+# cause: the version of @main is not known, so it is read in the worst case.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: the main of actions/checkout keeps the credential out
+#   of .git/config, so the artifact's .git/config holds no token, and the
+#   reader takes none.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@main
+      - uses: actions/upload-artifact@main
+        with:
+          path: .
+          include-hidden-files: true
+      - run: echo after the upload

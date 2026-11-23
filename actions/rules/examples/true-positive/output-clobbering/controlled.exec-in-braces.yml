@@ -1,0 +1,23 @@
+# situation: on issues opened, a step opens descriptor 3 on $GITHUB_OUTPUT
+#   with exec inside braces, and writes body= and the issue's body to it.
+# reason: braces run in the shell itself, so the descriptor stays open
+#   after them, and the runner reads $GITHUB_OUTPUT one line at a time:
+#   each later line of the body such as x=y is read as an output of its
+#   own beside body.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: BODY holds the two lines x and PWNED=1; exec inside
+#   the braces opens descriptor 3 on $GITHUB_OUTPUT for the rest of the
+#   script, so echo writes the lines body=x and PWNED=1 there, and the
+#   runner sets the outputs body (x) and PWNED (1).
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          { exec 3>> "$GITHUB_OUTPUT"; }
+          echo "body=$BODY" >&3

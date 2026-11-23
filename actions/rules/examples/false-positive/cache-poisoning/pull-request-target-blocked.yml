@@ -1,0 +1,32 @@
+# situation: on pull_request_target, a job with cache-mode: write checks out
+#   the base and saves node_modules to the cache.
+# reason: the Actions policies of the repository block the runs of the
+#   workflow on pull_request_target: the default policy that GitHub adds to a
+#   public repository without an applicable event policy, from the time when
+#   GitHub enforces the default policy on the repository, or an event policy
+#   whose list of allowed events does not have pull_request_target. GitHub's
+#   documents say that GitHub evaluates the policies before a run, and that a
+#   run that a policy does not allow fails with an error; the documents do not
+#   say whether a job of such a run starts before the run fails, and the rule
+#   assumes that no job starts.
+# cause: the rule assumes that a run on pull_request_target starts, unless a
+#   file of facts or --fact says that the Actions policies block the runs
+#   (repo.pull-request-target-allowed is assumed true, the worst case).
+# attack: a flaw of the job runs the code of the attacker, which saves an
+#   entry under the key of the release workflow.
+# attack-run-behavior: the pull request of the attacker triggers
+#   pull_request_target, and the run fails with an error, and no job of the
+#   run starts (the assumption of the reason), so the job never saves to the
+#   cache.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ hashFiles('package-lock.json') }}
+      - run: npm ci

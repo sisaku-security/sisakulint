@@ -1,0 +1,10 @@
+name: w10
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c10.yml
+  k:
+    needs: call
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "o=[${{ needs.call.outputs.o }}]"

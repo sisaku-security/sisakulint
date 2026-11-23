@@ -1,0 +1,10 @@
+name: x20
+on: push
+env:
+  A: a
+  B: ${{ env.A }}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

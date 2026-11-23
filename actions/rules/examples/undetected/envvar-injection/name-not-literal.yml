@@ -1,0 +1,22 @@
+# situation: on issues opened, a step sets n to the name out, assigns
+#   $GITHUB_ENV to the variable that n names with declare, and writes
+#   V=$V to "$out".
+# reason: a todo (the same file): bash assigns $GITHUB_ENV to out, so
+#   the value goes to $GITHUB_ENV.
+# cause: the variable name of the assignment is not a literal word, so the
+#   rule does not read the assignment.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          n=out
+          declare "$n=$GITHUB_ENV"
+          echo "V=$V" >> "$out"

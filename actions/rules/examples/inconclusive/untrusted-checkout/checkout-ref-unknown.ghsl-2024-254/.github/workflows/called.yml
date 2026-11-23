@@ -1,0 +1,25 @@
+# situation: on pull_request_target, caller.yml calls the reusable workflow
+#   called.yml with the input nx-head set to refs/pull/N/merge, where N is the
+#   number of the pull request, and called.yml checks out the ref of the input
+#   and runs bun install. This is nx.template.yml of amplication/amplication
+#   (commit 7d7661d2b31120fa2abbb70be09c45cf0118bd87, line 63) and its caller
+#   pr-labeler.yml.
+# reason: the ref of the checkout is an input of the reusable workflow, and
+#   the rule does not follow the input to the value that the caller passes.
+# attack: the author of the pull request writes a script postinstall in
+#   package.json of the pull request.
+# attack-run-behavior: the job checks out the merge commit of the pull
+#   request, and bun install runs the script of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-254_Amplification/
+on:
+  workflow_call:
+    inputs:
+      nx-head: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.nx-head }}
+      - run: bun install

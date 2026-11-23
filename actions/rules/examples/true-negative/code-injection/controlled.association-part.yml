@@ -1,0 +1,24 @@
+# situation: on an opened issue, a step puts the issue's title into a run by
+#   ${{ }}; the step's if lets it run only when contains(the issue's
+#   author_association, 'MEMBER') holds.
+# reason: the author_association of an issue someone outside the repository
+#   opens is NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR, and no
+#   such value has MEMBER as a part; so the step is skipped for an outsider's
+#   issue, and only a title a member wrote reaches the shell: a member whose
+#   role is triage or above holds a credential that the credential premise
+#   assumes no attacker holds, and a member whose role is read only is the
+#   undetected form insider-association.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the step's if is false for an issue whose
+#   author_association is CONTRIBUTOR, and the runner skips the step, so no
+#   script runs; when a member opens the issue, the script becomes echo "";
+#   echo PWNED; echo "".
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(github.event.issue.author_association, 'MEMBER')
+        run: echo "${{ github.event.issue.title }}"

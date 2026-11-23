@@ -1,0 +1,12 @@
+# situation: the repository has no update tool, and a workflow uses an
+#   action by a tag named stable.
+# reason: the uses stays on whatever commit stable points to; whether
+#   Dependabot would move a tag that is not a version is not known.
+# cause: the rule counts a uses only when its ref is a commit SHA or a
+#   version, the refs that Dependabot is known to update.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/build-action@stable

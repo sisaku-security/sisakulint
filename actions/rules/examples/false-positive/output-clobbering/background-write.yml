@@ -1,0 +1,27 @@
+# situation: on issues opened, the step s runs in the background (&), with
+#   no wait, a subshell that sleeps 5 seconds and then writes v= and the
+#   issue's body to $GITHUB_OUTPUT; the shell of the script ends before the
+#   write; the next step reads the output v.
+# reason: a write that the background command makes after the shell of the
+#   script ends does not reach the steps after the step (seen on the runner
+#   on 2026-11-17), so the body sets no output.
+# cause: the rule reads the write in the background as a write that reaches
+#   $GITHUB_OUTPUT, and does not read when the background command writes.
+# attack-value: github.event.issue.body = "x\napproved=true"
+# attack-run-behavior: the step s has neither the output v nor the output
+#   approved.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          (sleep 5; echo "v=$V" >> "$GITHUB_OUTPUT") &
+      - env:
+          W: ${{ steps.s.outputs.v }}
+        run: echo "$W"

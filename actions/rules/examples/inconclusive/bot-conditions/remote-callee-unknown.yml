@@ -1,0 +1,26 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/bot-conditions-unknown, whose content is the
+#   workflow of the true positive dependabot (dependabot.yml) of the rule,
+#   with on: workflow_call in place of the on of dependabot.yml. The linter
+#   asked the fact workflow.definition for the reusable workflow and got no
+#   answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], so the if is true and the
+#   job merge starts with contents: write and pull-requests: write; gh pr
+#   merge --auto --rebase turns on auto-merge for the attacker's pull
+#   request, which GitHub merges once its requirements are met.
+on: pull_request_target
+permissions: {}
+jobs:
+  c:
+    uses: example-org/bot-conditions-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

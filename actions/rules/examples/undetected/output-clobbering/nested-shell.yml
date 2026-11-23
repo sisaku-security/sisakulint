@@ -1,0 +1,22 @@
+# situation: on issues, a run writes the issue's title to $GITHUB_OUTPUT
+#   through eval, bash -c and python -c.
+# reason: a todo (the same file): reading what another shell or program
+#   writes to the environment file would find it.
+# cause: the tree does not read the code of eval or bash -c, and python
+#   reads the value from its environment itself.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: the echo that eval runs, the echo that bash -c runs (T
+#   is in its environment) and the print of python3 each write the lines a=x
+#   and PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs a and
+#   PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          eval 'echo "a=$T" >> "$GITHUB_OUTPUT"'
+          bash -c 'echo "a=$T" >> "$GITHUB_OUTPUT"'
+          python3 -c 'import os; print("a=" + os.environ["T"])' >> "$GITHUB_OUTPUT"

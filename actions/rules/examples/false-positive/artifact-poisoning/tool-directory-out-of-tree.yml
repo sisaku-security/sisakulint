@@ -1,0 +1,26 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace, and a later step runs npm ci with the
+#   working-directory ${{ runner.temp }}.
+# reason: a todo (the same file): npm ci runs in runner.temp, out of
+#   the artifact, and reads the package.json of runner.temp, so npm runs no
+#   code of the artifact.
+# cause: the rule also reads a tool whose directory is out of the tree as
+#   a tool that may run in the root of the workspace, so the rule reports
+#   artifact-poisoning.executed.
+# attack-value: the file package.json in the artifact = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm ci in runner.temp finds no package.json of the
+#   attacker and does not run the script preinstall, so PWNED is not
+#   printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: npm ci
+        working-directory: ${{ runner.temp }}

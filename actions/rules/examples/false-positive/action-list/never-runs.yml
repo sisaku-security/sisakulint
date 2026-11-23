@@ -1,0 +1,17 @@
+# situation: a step that uses untrusted/action@v1 has if: false;
+#   repo.action-list is * and patterns that start with !, among them
+#   !untrusted/*.
+# reason: the step never runs, so the code of untrusted/action does not run
+#   in the job.
+# cause: the rule does not read the if of the step.
+# attack: the maintainer of untrusted/action writes code that reads the
+#   job's secrets into the commit that v1 names.
+# attack-run-behavior: the runner skips the step, and the code does not run.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+      - if: false
+        uses: untrusted/action@v1

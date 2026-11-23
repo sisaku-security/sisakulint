@@ -1,0 +1,28 @@
+# situation: on pull_request_target opened, when the title of the pull
+#   request starts with ingest, a step echoes the title, written into the
+#   script by ${{ }}. This is link-to-checklist.yml of acl-org/acl-anthology
+#   (commit 8bfc321342667957210f0fc78986136a4d802e94, lines 3-19).
+#   print-info.yml of the same commit (GHSL-2025-103), on the same page of
+#   the advisory, is the example controlled.ghsl-2025-103.yml.
+#   In link-to-checklist.yml, the checkout, the other echo lines and the steps
+#   of actions/github-script are left out.
+# reason: anyone who opens a pull request writes its title, and the runner
+#   puts the title into the script before bash reads the script, so a double
+#   quote in the title ends the string of echo and what follows runs as
+#   commands, with the token of the base repository.
+# attack-value: github.event.pull_request.title = "ingest\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo "PR Title: ingest"; echo
+#   PWNED; echo "", and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-102_GHSL-2025-103_acl-anthology/
+on:
+  workflow_dispatch:
+  pull_request_target:
+    types: [opened]
+jobs:
+  add-review-checklist:
+    if : ${{ github.event_name == 'pull_request_target' && github.event.action == 'opened' && startsWith(github.event.pull_request.title, 'ingest') == true}}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print event details
+        run: |
+          echo "PR Title: ${{ github.event.pull_request.title }}"

@@ -1,0 +1,14 @@
+# situation: the job sets its env from a variable of the repository, as
+#   JSON.
+# reason: a limitation (run time): the keys are known when the workflow
+#   runs, and one of them may be GITHUB_SHA or have = in it.
+# cause: the rule reads the keys of an env written as a mapping.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env: ${{ fromJSON(vars.TEST_ENV) }}
+    steps:
+      - run: ./test.sh

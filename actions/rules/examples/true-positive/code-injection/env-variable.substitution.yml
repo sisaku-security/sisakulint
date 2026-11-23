@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs eval with it inside a command
+#   substitution.
+# reason: bash reads the script inside $( ) by the same rules as the script
+#   outside, and eval reads the expanded text as a command.
+# attack-value: github.event.issue.title = "$(echo PWNED >/proc/$$/fd/1)"
+# attack-run-behavior: eval reads the value as a part of a command and runs
+#   the command substitution, which writes PWNED to the standard output of
+#   the bash of the step ($$).
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: TITLE=$(eval "echo $ISSUE_TITLE")

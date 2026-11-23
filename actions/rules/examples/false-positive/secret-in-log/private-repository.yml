@@ -1,0 +1,21 @@
+# situation: on push, a step prints a substring of the secret DEPLOY_TOKEN,
+#   in a private repository.
+# reason: the repository is private or internal, so the value is
+#   secret-in-log.private, not .public: only those with read access, every
+#   member of the enterprise for an internal one, read the log.
+# cause: the rule takes the repository as public unless a file of facts
+#   says it is not (repo.public is assumed true, the worst case).
+# attack: anyone without access to the repository tries to read the run's
+#   log to take the substring of the token.
+# attack-run-behavior: GitHub does not show the log of a private or
+#   internal repository to those without read access; those with it read
+#   eight characters of the token.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: echo "token starts with ${DEPLOY_TOKEN:0:8}"

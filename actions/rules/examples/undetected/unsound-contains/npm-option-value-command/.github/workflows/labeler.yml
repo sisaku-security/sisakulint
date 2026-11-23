@@ -1,0 +1,16 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          persist-credentials: false
+      - run: npm --cache view ci
+      - uses: actions/labeler@v5
+        if: failure()
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

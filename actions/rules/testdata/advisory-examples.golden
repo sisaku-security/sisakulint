@@ -1,0 +1,238 @@
+ai-action-excessive-tools true-positive ai-action-excessive-tools.run-code run-code.ghsa-wpqr-6v78-jr5g.yml (GHSA-wpqr-6v78-jr5g)
+	finding ai-action-excessive-tools.send-network run-code.ghsa-wpqr-6v78-jr5g.yml:34
+	finding ai-action-excessive-tools.run-code run-code.ghsa-wpqr-6v78-jr5g.yml:34
+ai-action-excessive-tools true-positive ai-action-excessive-tools.write-token write-token.ghsa-63mx-j37w-gh59.yml (GHSA-63mx-j37w-gh59)
+	finding ai-action-excessive-tools.write-token write-token.ghsa-63mx-j37w-gh59.yml:29
+	finding ai-action-excessive-tools.write-token write-token.ghsa-63mx-j37w-gh59.yml:29
+ai-action-unrestricted-trigger true-positive ai-action-unrestricted-trigger.any-user any-user.ghsa-63mx-j37w-gh59.yml (GHSA-63mx-j37w-gh59)
+	finding ai-action-unrestricted-trigger.any-user any-user.ghsa-63mx-j37w-gh59.yml:29
+argument-injection undetected program-argument program-argument.ghsl-2026-229.yml (GHSL-2026-229_ipdxco_unified-github-workflows)
+argument-injection undetected shell-derived shell-derived.yml (GHSL-2024-294_Azure-cli)
+artifact-poisoning true-positive artifact-poisoning.executed executed.ghsa-5xr6-xhww-33m4.yml (GHSA-5xr6-xhww-33m4)
+	finding artifact-poisoning.executed executed.ghsa-5xr6-xhww-33m4.yml:20
+artifact-poisoning true-positive artifact-poisoning.executed executed.ghsl-2024-125.yml (GHSL-2024-124_GHSL-2024-125_quarkus)
+	finding artifact-poisoning.executed executed.ghsl-2024-125.yml:26
+artifact-poisoning true-positive artifact-poisoning.executed executed.ghsl-2024-178.yml (GHSL-2024-178_RSSHub)
+	finding artifact-poisoning.executed executed.ghsl-2024-178.yml:30
+artifact-poisoning true-positive artifact-poisoning.download download.ghsl-2026-204.yml (GHSL-2026-204_spiffe_spire_repository)
+	finding artifact-poisoning.download download.ghsl-2026-204.yml:45
+artifact-poisoning undetected github-script github-script.yml (GHSL-2025-087_PX4_PX4-Autopilot)
+artifact-poisoning undetected local-action local-action.yml (GHSL-2024-314_AWS_Karpenter_Provider)
+artifact-poisoning undetected read-as-data read-as-data.yml (GHSL-2024-124_GHSL-2024-125_quarkus, GHSL-2024-276_Ant-design-blazor, GHSL-2024-281_Ant-design-web3)
+artifact-poisoning undetected read-as-data read-as-data.ghsl-2026-225.yml (GHSL-2026-225_actions_attest)
+artipacked undetected other-upload other-upload.ghsa-x6gv-2rvh-qmp6.yml (GHSA-x6gv-2rvh-qmp6)
+code-injection true-positive code-injection.controlled controlled.ghsa-6q4m-7476-932w.action.yml (GHSA-6q4m-7476-932w, GHSL-2023-179_Home_Assistant)
+	finding code-injection.controlled controlled.ghsa-6q4m-7476-932w.action.yml:32
+code-injection true-positive code-injection.controlled controlled.ghsa-7x29-qqmq-v6qc.action.yml (GHSA-7x29-qqmq-v6qc)
+	finding code-injection.controlled controlled.ghsa-7x29-qqmq-v6qc.action.yml:20
+	finding code-injection.controlled controlled.ghsa-7x29-qqmq-v6qc.action.yml:21
+code-injection true-positive code-injection.controlled controlled.ghsa-8v8w-v8xg-79rf.action.yml (GHSA-8v8w-v8xg-79rf)
+	finding code-injection.controlled controlled.ghsa-8v8w-v8xg-79rf.action.yml:28
+	finding code-injection.controlled controlled.ghsa-8v8w-v8xg-79rf.action.yml:28
+code-injection true-positive code-injection.controlled called/action.yml of GHSA-9p44-j4g5-cfx5 (GHSA-9p44-j4g5-cfx5, GHSA-pwf7-47c3-mfhx, GHSA-f79p-9c5r-xg88, GHSL-2025-089_ydb-platform_ydb)
+	finding code-injection.controlled called/action.yml:56
+	finding code-injection.controlled called/action.yml:59
+	finding code-injection.controlled called/action.yml:65
+	finding code-injection.controlled called/action.yml:78
+code-injection true-positive code-injection.controlled controlled.ghsa-c3xh-98xp-6qhf.yml (GHSA-c3xh-98xp-6qhf, GHSA-6p2j-742g-835f, GHSA-f67f-hcr6-94mf)
+	finding code-injection.controlled controlled.ghsa-c3xh-98xp-6qhf.yml:43
+	finding code-injection.controlled controlled.ghsa-c3xh-98xp-6qhf.yml:50
+	finding code-injection.controlled controlled.ghsa-c3xh-98xp-6qhf.yml:59
+code-injection true-positive code-injection.controlled controlled.ghsa-hw6r-g8gj-2987.action.yml (GHSA-hw6r-g8gj-2987, GHSL-2023-181_Pytorch)
+	finding code-injection.controlled controlled.ghsa-hw6r-g8gj-2987.action.yml:32
+code-injection true-positive code-injection.controlled controlled.ghsa-r4fj-r33x-8v88.yml (GHSA-r4fj-r33x-8v88, GHSA-phf6-hm3h-x8qp, GHSL-2024-050_Cromwell, GHSL-2025-091_ansys_pymapdl)
+	finding code-injection.controlled controlled.ghsa-r4fj-r33x-8v88.yml:51
+	finding code-injection.controlled controlled.ghsa-r4fj-r33x-8v88.yml:58
+	finding code-injection.controlled controlled.ghsa-r4fj-r33x-8v88.yml:73
+code-injection true-positive code-injection.controlled controlled.ghsa-vxmw-7h4f-hqxh.action.yml (GHSA-vxmw-7h4f-hqxh, GHSA-2487-9f55-2vg9)
+	finding code-injection.controlled controlled.ghsa-vxmw-7h4f-hqxh.action.yml:46
+	finding code-injection.controlled controlled.ghsa-vxmw-7h4f-hqxh.action.yml:53
+	finding code-injection.controlled controlled.ghsa-vxmw-7h4f-hqxh.action.yml:53
+code-injection true-positive code-injection.controlled controlled.ghsl-2020-191.yml (GHSL-2020-191-KanCraft-kanColleWidget-workflow)
+	finding code-injection.controlled controlled.ghsl-2020-191.yml:54
+code-injection true-positive code-injection.controlled .github/workflows/called.yml of GHSL-2024-031_GHSL-2024-032_Fabric_js (GHSL-2024-031_GHSL-2024-032_Fabric_js)
+	finding code-injection.controlled .github/workflows/called.yml:24
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-058.yml (GHSL-2024-058_GHSL-2024-059_starrocks, GHSL-2024-057_infinispan, GHSL-2024-048_infinispan, GHSL-2024-049_EVE, GHSL-2024-145_Discord_js, GHSL-2024-053_Hedy, GHSL-2024-051_Misskey, GHSL-2024-041_GHSL-2024-042_KubeBlocks, GHSL-2023-100_Apache_Ignite, GHSL-2023-107_Jellyfin, GHSL-2020-240-scikit-learn-workflow, GHSL-2020-242-telegramdesktop-tdesktop-workflow, GHSL-2020-244-nonebot-nonebot2-workflow, GHSL-2021-007-dmlc-gluon-nlp-workflows, GHSL-2021-015-a2o-snoopy-workflows, GHSL-2021-017-teal-language-tl-workflows, GHSL-2021-016-Tautulli-workflows, GHSL-2023-027_Engine_for_Cocos_Creator, GHSL-2023-022_Cloudstack, GHSL-2023-099_Design_patterns_implemented_in_Java, GHSL-2023-101_Zcash, GHSL-2023-104_CDK_for_Terraform, GHSL-2023-110_Wing_Language)
+	finding code-injection.controlled controlled.ghsl-2024-058.yml:88
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-120.yml (GHSL-2024-120_Milvus)
+	finding code-injection.controlled controlled.ghsl-2024-120.yml:25
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-126.yml (GHSL-2024-126_Kong, GHSL-2024-052_AsyncAPI)
+	finding code-injection.controlled controlled.ghsl-2024-126.yml:42
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-209.yml (GHSL-2024-209_GHSL-2024-212_dream-num_univer, GHSL-2024-054_OpenIM, GHSL-2024-037_BioDrop, GHSL-2024-044_Simple_Icons, GHSL-2024-038_Kolibri, GHSL-2023-108_Stash, GHSL-2023-086_GHSL-2023-087_airbyte, GHSL-2023-109_TDesign_Vue_Next, GHSL-2023-050_Apache_Doris, GHSL-2020-233-ONSdigital-ras-frontstage-workflow, GHSL-2020-234-DataBiosphere-terra-workspace-manager-workflow, GHSL-2020-370-rhinstaller-anaconda-workflow, GHSL-2021-012-alan-turing-institute-binderhub-deploy-workflow, GHSL-2021-013-pythonpune-workflow, GHSL-2021-014-benjamin-maynard-kubernetes-cloud-mysql-backup-workflow, GHSL-2021-010-getsentry-onpremise-workflow, GHSL-2023-051_React_Native_OneSignal_SDK, GHSL-2023-106_Rich, GHSL-2020-171-ArduinoCli-workflow, GHSL-2020-182-JonathanGin52-workflow, GHSL-2020-184-awesome-black-developers-workflow, GHSL-2020-186-thomaseizinger-gitflow-workflow, GHSL-2020-189-chocolatey-package-requests-workflow, GHSL-2020-190-fortran-lang-fortran-lang-org-workflow, GHSL-2020-193-Ignitus-client-workflow, GHSL-2020-194-drewmullen-actions-playground-workflow, GHSL-2020-183-checkstyle-checkstyle-workflow, GHSL-2021-001-saagie-workflows, GHSL-2020-206-saagie-technologies-workflow, GHSL-2021-011-itpp-labs-workflows, GHSL-2020-229-allenevans-set-env-workflow)
+	finding code-injection.controlled controlled.ghsl-2024-209.yml:85
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-267.yml (GHSL-2024-266_GHSL-2024-267_Adobe_React_Spectrum_Charts)
+	finding code-injection.controlled controlled.ghsl-2024-267.yml:43
+	inconclusive env-unset controlled.ghsl-2024-267.yml:42
+	inconclusive env-unset controlled.ghsl-2024-267.yml:42
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-275.yml (GHSL-2024-274_GHSL-2024-275_Cilium)
+	finding code-injection.controlled controlled.ghsl-2024-275.yml:24
+code-injection true-positive code-injection.controlled .github/workflows/called.yml of GHSL-2024-277_Appsmith (GHSL-2024-277_Appsmith)
+	finding code-injection.controlled .github/workflows/called.yml:23
+code-injection true-positive code-injection.controlled controlled.ghsl-2024-319.yml (GHSL-2024-319_Trino_DB)
+	finding code-injection.controlled controlled.ghsl-2024-319.yml:38
+code-injection true-positive code-injection.controlled .github/workflows/called.yml of GHSL-2024-320_GHSL-2024-321_Eclipse (GHSL-2024-320_GHSL-2024-321_Eclipse)
+	finding code-injection.controlled .github/workflows/called.yml:28
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-090.yml (GHSL-2025-090_harvester_harvester)
+	finding code-injection.controlled controlled.ghsl-2025-090.yml:30
+code-injection true-positive code-injection.controlled called/action.yml of GHSL-2025-093_PraisonAI (GHSL-2025-093_PraisonAI)
+	finding code-injection.controlled called/action.yml:35
+	finding code-injection.controlled called/action.yml:36
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-099.yml (GHSL-2025-099_cross-platform-actions_action)
+	finding code-injection.controlled controlled.ghsl-2025-099.yml:33
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-101.yml (GHSL-2025-101_homeassistant-tapo-control)
+	finding code-injection.controlled controlled.ghsl-2025-101.yml:26
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-102.yml (GHSL-2025-102_GHSL-2025-103_acl-anthology)
+	finding code-injection.controlled controlled.ghsl-2025-102.yml:28
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-103.yml (GHSL-2025-102_GHSL-2025-103_acl-anthology, GHSL-2024-055_DuckDB)
+	finding code-injection.controlled controlled.ghsl-2025-103.yml:36
+	finding code-injection.controlled controlled.ghsl-2025-103.yml:37
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-104.yml (GHSL-2025-104_weaviate)
+	finding code-injection.controlled controlled.ghsl-2025-104.yml:31
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-105.yml (GHSL-2025-105_vets-api)
+	finding code-injection.controlled controlled.ghsl-2025-105.yml:36
+	finding code-injection.controlled controlled.ghsl-2025-105.yml:37
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-106.yml (GHSL-2025-106_esphome_esphome-docs)
+	finding code-injection.controlled controlled.ghsl-2025-106.yml:29
+code-injection true-positive code-injection.controlled controlled.ghsl-2025-111.yml (GHSL-2025-111_nrwl_nx)
+	finding code-injection.controlled controlled.ghsl-2025-111.yml:30
+code-injection true-positive code-injection.controlled called/action.yml of GHSA-65rg-554r-9j5x (GHSA-65rg-554r-9j5x)
+	finding code-injection.controlled called/action.yml:98
+	finding code-injection.controlled called/action.yml:99
+	finding code-injection.controlled called/action.yml:100
+	finding code-injection.controlled called/action.yml:103
+	finding code-injection.controlled called/action.yml:105
+	finding code-injection.controlled called/action.yml:108
+	inconclusive step-output-run called/action.yml:130
+code-injection undetected action-input-remote action-input-remote.ghsa-4xqx-pqpj-9fqw.yml (GHSA-4xqx-pqpj-9fqw, GHSL-2020-174-codacy-coverage-reporter-workflow, GHSL-2020-175-codacy-analysis-cli-workflow, GHSL-2020-176-codacy-scalameta-workflow, GHSL-2020-177-codacy-pylint-workflow, GHSL-2020-178-codacy-bitbucket-scala-client-workflow, GHSL-2020-179-codacy-coverage-reporter-action-workflow, GHSL-2020-180-codacy-helm-ssm-workflow, GHSL-2020-181-symless-synergy-core-workflow, GHSL-2020-207-hashicorp-boundary-ui-workflow, GHSL-2020-208-SourcePointUSA-android-cmp-app-workflow, GHSL-2020-209-ww-tech-primrose-workflow, GHSL-2020-210-hyperspacedev-starlight-workflow, GHSL-2020-211-namin2-dependabot_jira-workflow, GHSL-2020-206-saagie-technologies-workflow, GHSL-2020-323-geek-cookbook-workflow)
+code-injection undetected repository-program repository-program.yml (GHSL-2020-195-dd-center-vdb-workflow, GHSL-2020-185-homebridge-verified-workflow)
+code-injection undetected pull-request pull-request.yml (GHSL-2020-230-aws-aws-sam-cli-workflow, GHSL-2020-231-graphql-dotnet-workflow, GHSL-2020-232-wireapp-wire-webapp-workflow)
+code-injection undetected written-file written-file.ghsa-9p44-j4g5-cfx5.yml (GHSA-9p44-j4g5-cfx5)
+code-injection inconclusive step-output-run step-output-run.ghsl-2024-281.yml (GHSL-2024-281_Ant-design-web3, GHSL-2024-276_Ant-design-blazor)
+	inconclusive step-output-run step-output-run.ghsl-2024-281.yml:45
+code-injection inconclusive step-output-run .github/workflows/called.yml of GHSL-2024-320_GHSL-2024-321_Eclipse (GHSL-2024-320_GHSL-2024-321_Eclipse)
+	inconclusive step-output-run .github/workflows/called.yml:31
+code-injection inconclusive step-output-run step-output-run.ghsl-2024-327.yml (GHSL-2024-327_Microsoft_FluentUI, GHSL-2024-338_Angular_JA, GHSL-2024-322_Sympy, GHSL-2024-121_GHSL-2024-122_ant-design)
+	inconclusive step-output-run step-output-run.ghsl-2024-327.yml:60
+code-injection inconclusive step-output-run step-output-run.ghsl-2026-207.yml (GHSL-2026-207_kptdev_kpt_repository, GHSL-2021-044-homebrew-brew-workflows)
+	inconclusive step-output-run step-output-run.ghsl-2026-207.yml:53
+code-injection inconclusive step-output-remote-action step-output-remote-action.ghsa-mcph-m25j-8j63.yml (GHSA-mcph-m25j-8j63, GHSA-ghm2-rq8q-wrhc)
+	inconclusive step-output-remote-action step-output-remote-action.ghsa-mcph-m25j-8j63.yml:36
+	inconclusive step-output-remote-action step-output-remote-action.ghsa-mcph-m25j-8j63.yml:45
+code-injection inconclusive step-output-remote-action step-output-remote-action.ghsl-2024-312.yml (GHSL-2024-312_Azure_API_Management_Developer_Portal)
+	inconclusive step-output-remote-action step-output-remote-action.ghsl-2024-312.yml:38
+code-injection inconclusive step-output-remote-action step-output-remote-action.ghsl-2024-326.yml (GHSL-2024-325_GHSL-2024-326_Actual, GHSL-2020-239-NVIDIA-spark-rapids-workflow, GHSL-2021-046-TeamAmaze-AmazeFileManager-workflows, GHSL-2021-047-zwave-js-zwavejs2mqtt-workflows, GHSL-2021-031-hasura-graphql-engine-workflows)
+	inconclusive step-output-remote-action step-output-remote-action.ghsl-2024-326.yml:59
+code-injection inconclusive step-output-remote-action step-output-remote-action.ghsl-2025-087.yml (GHSL-2025-087_PX4_PX4-Autopilot, GHSA-gq52-6phf-x2r6, GHSL-2024-167_monkeytype)
+	inconclusive step-output-remote-action step-output-remote-action.ghsl-2025-087.yml:59
+	inconclusive step-output-remote-action step-output-remote-action.ghsl-2025-087.yml:67
+code-injection inconclusive job-output job-output.yml (GHSL-2020-183-checkstyle-checkstyle-workflow)
+	inconclusive job-output job-output.yml:31
+code-injection inconclusive job-output job-output.ghsa-f9qj-7gh3-mhj4.yml (GHSA-f9qj-7gh3-mhj4)
+	inconclusive job-output job-output.ghsa-f9qj-7gh3-mhj4.yml:55
+code-injection inconclusive input-call input-call.ghsa-rg3q-prf8-qxmp.action.yml (GHSA-rg3q-prf8-qxmp, GHSA-xj87-mqvh-88w2)
+	inconclusive input-call input-call.ghsa-rg3q-prf8-qxmp.action.yml:41
+	inconclusive input-call input-call.ghsa-rg3q-prf8-qxmp.action.yml:41
+code-injection inconclusive env-unset env-unset.ghsl-2024-205.yml (GHSL-2024-205_GHSL-2024-206_Stirling_PDF, GHSL-2024-169_Arduino-ESP32, GHSL-2020-232-wireapp-wire-webapp-workflow)
+	inconclusive env-unset env-unset.ghsl-2024-205.yml:59
+commit-sha true-positive commit-sha.unpinned unpinned.ghsa-f8q5-h5qh-33mh.yml (GHSA-f8q5-h5qh-33mh)
+	finding commit-sha.unpinned unpinned.ghsa-f8q5-h5qh-33mh.yml:22
+	finding commit-sha.unpinned unpinned.ghsa-f8q5-h5qh-33mh.yml:23
+envpath-injection undetected script-var script-var.yml (GHSL-2024-173_Feign)
+envpath-injection undetected add-path-command add-path-command.yml (GHSA-mfwh-5m23-j46w)
+envvar-injection undetected no-line-break no-line-break.yml (GHSL-2025-105_vets-api)
+envvar-injection undetected script-var script-var.yml (GHSL-2024-173_Feign)
+envvar-injection undetected file-content file-content.ghsl-2024-252.yml (GHSL-2024-252_Cloudflare_workers-sdk, GHSL-2024-255_docker-mailserver, GHSL-2024-253_Zephyr, GHSL-2024-177_Litestar)
+impostor-commit true-positive impostor-commit.fork-commit fork-commit.yml (GHSA-69fq-xp46-6x23)
+	finding impostor-commit.fork-commit fork-commit.yml:27
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-critical advisory-critical.ghsa-2qvg-qr73-mqxp.yml (GHSA-2qvg-qr73-mqxp, GHSA-x6gv-2rvh-qmp6)
+	finding known-vulnerable-actions.advisory-critical advisory-critical.ghsa-2qvg-qr73-mqxp.yml:34
+	finding known-vulnerable-actions.advisory-critical advisory-critical.ghsa-2qvg-qr73-mqxp.yml:44
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-critical advisory-critical.yml (GHSA-gq52-6phf-x2r6)
+	finding known-vulnerable-actions.advisory-critical advisory-critical.yml:19
+	finding known-vulnerable-actions.advisory-critical advisory-critical.yml:19
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-high advisory-high.ghsa-cxww-7g56-2vh6.yml (GHSA-cxww-7g56-2vh6)
+	finding known-vulnerable-actions.advisory-high advisory-high.ghsa-cxww-7g56-2vh6.yml:25
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-high advisory-high.ghsa-r79c-pqj3-577x.yml (GHSA-r79c-pqj3-577x, GHSA-5xq9-5g24-4g6f)
+	finding known-vulnerable-actions.advisory-high advisory-high.ghsa-r79c-pqj3-577x.yml:37
+	finding known-vulnerable-actions.advisory-high advisory-high.ghsa-r79c-pqj3-577x.yml:43
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-medium advisory-medium.ghsa-6f4g-xm8v-pgv6.yml (GHSA-6f4g-xm8v-pgv6)
+	finding known-vulnerable-actions.advisory-low advisory-medium.ghsa-6f4g-xm8v-pgv6.yml:39
+	finding known-vulnerable-actions.advisory-low advisory-medium.ghsa-6f4g-xm8v-pgv6.yml:39
+	finding known-vulnerable-actions.advisory-low advisory-medium.ghsa-6f4g-xm8v-pgv6.yml:39
+	finding known-vulnerable-actions.advisory-low advisory-medium.ghsa-6f4g-xm8v-pgv6.yml:39
+	finding known-vulnerable-actions.advisory-medium advisory-medium.ghsa-6f4g-xm8v-pgv6.yml:39
+known-vulnerable-actions true-positive known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml (GHSA-xcf7-88g6-7xr8, GHSA-rm8w-w798-g545, GHSA-whr6-fgpq-fpv9, GHSA-88f4-frh5-gmcr, GHSA-jf3h-8jvx-vcrg, GHSA-6wcv-rj3c-mhv3)
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:75
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:75
+	finding known-vulnerable-actions.advisory-medium advisory-low.ghsa-xcf7-88g6-7xr8.yml:75
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:75
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:75
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:78
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:78
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:78
+	finding known-vulnerable-actions.advisory-low advisory-low.ghsa-xcf7-88g6-7xr8.yml:81
+known-vulnerable-actions false-positive repository-workflow repository-workflow.yml (GHSA-6p2j-742g-835f)
+	finding known-vulnerable-actions.advisory-medium repository-workflow.yml:27
+output-clobbering undetected no-line-break no-line-break.yml (GHSL-2025-105_vets-api)
+output-clobbering undetected script-var script-var.ghsl-2026-229.yml (GHSL-2026-229_ipdxco_unified-github-workflows)
+request-forgery undetected workspace-config workspace-config.yml (GHSL-2026-208_kptdev_kpt_repository)
+secret-in-log undetected action-output action-output.yml (GHSA-26wh-cc3r-w6pj, GHSA-4mgv-m5cm-f9h7, GHSA-5wxr-w449-57cm, GHSA-c5qx-p38x-qf5w, GHSA-mj96-mh85-r574)
+secret-in-log undetected action-output action-output.ghsa-88f4-frh5-gmcr.yml (GHSA-88f4-frh5-gmcr)
+secrets-in-artifacts undetected action-code action-code.yml (GHSA-vqf5-2xx6-9wfm, GHSA-h3qr-39j9-4r5v)
+unsecure-commands true-positive unsecure-commands.controlled controlled.yml (GHSA-mfwh-5m23-j46w)
+	finding unsecure-commands.controlled controlled.yml:26
+unsound-contains true-positive unsound-contains.substring substring.yml (GHSL-2020-186-thomaseizinger-gitflow-workflow)
+	finding unsound-contains.substring substring.yml:21
+unsound-contains true-positive unsound-contains.superstring superstring.yml (GHSL-2020-276-nuxt-create-nuxt-app-workflow)
+	finding unsound-contains.superstring superstring.yml:19
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsa-gvh4-93cq-5xxp.yml (GHSA-gvh4-93cq-5xxp)
+	finding untrusted-checkout.executed executed.ghsa-gvh4-93cq-5xxp.yml:20
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsa-h25v-8c87-rvm8.yml (GHSA-h25v-8c87-rvm8)
+	finding untrusted-checkout.executed executed.ghsa-h25v-8c87-rvm8.yml:22
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2020-241.yml (GHSL-2020-241-getsentry-sentry-workflow)
+	finding untrusted-checkout.executed executed.ghsl-2020-241.yml:23
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2020-247.yml (GHSL-2020-247-redwoodjs-redwood-workflow, GHSL-2020-271-openzfs-zfs-workflow, GHSL-2020-278-stm32-rs-stm32-rs-workflow, GHSL-2020-279-is-a-dev-register-workflow, GHSL-2020-282-open-telemetry-opentelemetry-ruby-workflow, GHSL-2020-283-GoogleCloudPlatform-functions-framework-ruby-workflow, GHSL-2020-284-dazuma-toys-workflow, GHSL-2020-285-cloudevents-sdk-ruby-workflow, GHSL-2020-286-PureStake-moonbeam-workflow, GHSL-2020-288-awslabs-one-line-scan-preview-action, GHSL-2020-315-rux616-karabiner-windows-mode-workflow, GHSL-2020-318-popsim-consortium-stdpopsim-workflow, GHSL-2020-320-illright-attractions-workflow, GHSL-2020-330-akka-alpakka-kafka-forkflow, GHSL-2020-243-preslavmihaylov-todocheck-workflow, GHSL-2020-245-strimzi-strimzi-ui-workflow, GHSL-2020-274-v8-v8-dev-workflow, GHSL-2020-275-LedgerHQ-ledger-live-desktop-workflow, GHSL-2020-280-deislabs-akri-workflow, GHSL-2020-316-indico-newdle-workflow, GHSL-2020-319-pangeo-data-pangeo-climpred-workflow, GHSL-2020-328-GoogleCloudPlatform-microservices-demo-workflow, GHSL-2020-333-osohq-oso-forkflow, GHSL-2020-334-gsantner-forkflows, GHSL-2020-369-nrfconnect-sdk-nrf-workflow, GHSL-2021-004-aeraki-workflows, GHSL-2021-006-decathlon-workflows, GHSL-2020-329-Automattic-jetpack-workflow, GHSL-2020-335-libpasta-workflow, GHSL-2020-264-youzan-vant-workflow, GHSL-2020-265-didi-cube-ui-workflow, GHSL-2020-267-antvis-workflows, GHSL-2020-268-umijs-dumi-workflow, GHSL-2020-269-alibaba-hooks-workflow, GHSL-2020-270-ant-design-colorful-workflow, GHSL-2020-287-jdf2e-nutui-workflow, GHSL-2021-009-lijinke666-react-music-player-workflow, GHSL-2020-372-418sec-huntr-workflow, GHSL-2020-364-apache-incubator-superset-workflow, GHSL-2021-1032_Solana, GHSL-2020-313-BitByte-TPC-first-bit-workflow, GHSL-2020-314-s4u-pgpverify-maven-plugin-workflow, GHSL-2021-005-openrefine-workflows, GHSL-2020-367-android-password-store-workflow, GHSL-2020-246-ant-design-ant-design-workflow, GHSL-2020-266-afc163-surge-preview-action, GHSL-2020-248-rism-ch-verovio-workflow, GHSL-2020-249-aws-amazon-chime-sdk-js-workflow, GHSL-2020-281-tskit-dev-msprime-workflow, GHSL-2020-273-numworks-epsilon-workflow, GHSL-2020-331-appsmithorg-appsmith-workflow, GHSL-2020-327-dmlc-gluon-cv-workflow, GHSL-2020-332-a2o-snoopy-forkflow, GHSL-2020-244-nonebot-nonebot2-workflow, GHSL-2020-370-rhinstaller-anaconda-workflow, GHSL-2021-007-dmlc-gluon-nlp-workflows, GHSL-2021-003-alisw-workflows, GHSL-2020-371-tophat-networkjs-workflow, GHSL-2021-008-actions-cool-issues-helper-workflow)
+	finding untrusted-checkout.executed executed.ghsl-2020-247.yml:104
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2020-277.yml (GHSL-2020-277-w3c-aria-practices-workflow)
+	finding untrusted-checkout.executed executed.ghsl-2020-277.yml:23
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2021-033.yml (GHSL-2021-033-game-ci-workflows)
+	finding untrusted-checkout.executed executed.ghsl-2021-033.yml:22
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2024-017.yml (GHSL-2024-017_Redash, GHSL-2024-268_Hibernate_ORM, GHSL-2024-030_dotnet_docfx, GHSL-2024-025_GHSL-2024-026_AutoGen, GHSL-2024-163_cal_com)
+	finding untrusted-checkout.executed executed.ghsl-2024-017.yml:55
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2024-303.yml (GHSL-2024-303_Tribler, GHSL-2024-313_Marimo, GHSL-2024-207_k3s, GHSL-2024-148_GHSL-2024-149_Astro)
+	finding untrusted-checkout.executed executed.ghsl-2024-303.yml:43
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2025-084.yml (GHSL-2025-084_int128_datadog-actions-metrics, GHSL-2024-159_Element-Plus)
+	finding untrusted-checkout.executed executed.ghsl-2025-084.yml:41
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2026-166.yml (GHSL-2026-166_MongoDB_Node_js_Driver, GHSL-2026-167_mongodb_js-bson_repository, GHSL-2026-190_mongodb-js_mongodb-connection-string-url_repository, GHSL-2026-191_mongodb-js_kerberos_repository)
+	finding untrusted-checkout.executed executed.ghsl-2026-166.yml:44
+untrusted-checkout true-positive untrusted-checkout.executed executed.ghsl-2026-199.yml (GHSL-2026-199_DataDog_trivy_repository)
+	finding untrusted-checkout.executed executed.ghsl-2026-199.yml:35
+untrusted-checkout true-positive untrusted-checkout.checkout checkout.ghsa-g86g-chm8-7r2p.yml (GHSA-g86g-chm8-7r2p)
+	finding untrusted-checkout.checkout checkout.ghsa-g86g-chm8-7r2p.yml:34
+untrusted-checkout true-positive untrusted-checkout.checkout checkout.ghsa-pqwm-q9pv-ph8r.yml (GHSA-pqwm-q9pv-ph8r, GHSA-v53h-f6m7-xcgm, GHSA-wpqr-6v78-jr5g, GHSA-jj69-4grx-fqj5)
+	finding untrusted-checkout.checkout checkout.ghsa-pqwm-q9pv-ph8r.yml:44
+untrusted-checkout true-positive untrusted-checkout.checkout checkout.ghsl-2025-094.yml (GHSL-2025-094_ag2ai_faststream)
+	finding untrusted-checkout.checkout checkout.ghsl-2025-094.yml:28
+untrusted-checkout true-positive untrusted-checkout.checkout checkout.ghsl-2026-208.yml (GHSL-2026-208_kptdev_kpt_repository)
+	finding untrusted-checkout.checkout checkout.ghsl-2026-208.yml:32
+untrusted-checkout undetected git-in-run git-in-run.ghsl-2025-080.yml (GHSL-2025-080_nf-core_tools, GHSL-2025-078_nf-core_tools, GHSL-2024-144_JupyterLab, GHSL-2020-272-lampepfl-dotty-workflow, GHSL-2020-317-gpuweb-cts-workflow)
+untrusted-checkout undetected remote-action remote-action.yml (GHSA-8q5r-mmjf-575q)
+untrusted-checkout undetected remote-action remote-action.ghsl-2026-203.yml (GHSL-2026-203_jupyter_notebook_repository)
+untrusted-checkout undetected branch-name-ref branch-name-ref.yml (GHSL-2020-276-nuxt-create-nuxt-app-workflow)
+untrusted-checkout undetected guarded-checkout guarded-checkout.ghsl-2025-009.yml (GHSL-2025-009_Mesa, GHSL-2025-006_homeassistant-powercalc)
+untrusted-checkout inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-150.yml (GHSL-2024-150_GHSL-2024-157_Gradio)
+	inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-150.yml:32
+untrusted-checkout inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-168.yml (GHSL-2024-168_Stencil)
+	inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-168.yml:33
+untrusted-checkout inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-208.yml (GHSL-2024-208_Apache_Superset, GHSL-2024-226_GHSL-2024-227_Cilium, GHSL-2024-158_Excalidraw, GHSL-2021-047-zwave-js-zwavejs2mqtt-workflows)
+	inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-208.yml:66
+untrusted-checkout inconclusive checkout-ref-unknown .github/workflows/called.yml of GHSL-2024-254_Amplification (GHSL-2024-254_Amplification)
+	inconclusive checkout-ref-unknown .github/workflows/called.yml:22
+untrusted-checkout inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-325.yml (GHSL-2024-325_GHSL-2024-326_Actual, GHSL-2024-171_QGIS, GHSL-2021-048-linebender-druid-workflows)
+	inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2024-325.yml:51
+untrusted-checkout inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2025-082.yml (GHSL-2025-082_ag-grid_ag-grid)
+	inconclusive checkout-ref-unknown checkout-ref-unknown.ghsl-2025-082.yml:81
+untrusted-checkout inconclusive checkout-ref-unknown .github/workflows/called.yml of GHSL-2026-226_marimo-team_marimo_repository (GHSL-2026-226_marimo-team_marimo_repository)
+	inconclusive checkout-ref-unknown .github/workflows/caller.yml:10
+untrusted-checkout-toctou undetected sha-ref sha-ref.yml (GHSL-2025-077_beeware_beeware_github_io)
+untrusted-checkout-toctou undetected comment-approval comment-approval.yml (GHSL-2026-166_MongoDB_Node_js_Driver)

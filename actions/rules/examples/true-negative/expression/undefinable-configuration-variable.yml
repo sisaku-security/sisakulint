@@ -1,0 +1,11 @@
+# situation: the step prints vars.GITHUB and vars.GITHUBX.
+# reason: GITHUB and GITHUBX do not start with GITHUB_ (with the _), and
+#   have only letters, so a level can define them.
+on: push
+permissions: {contents: read}
+jobs:
+  print:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "[${{ vars.GITHUB }}] [${{ vars.GITHUBX }}]"

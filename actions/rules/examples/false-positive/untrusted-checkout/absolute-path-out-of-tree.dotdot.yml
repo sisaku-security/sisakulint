@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request into the directory pr and runs ./../other/x.sh.
+# reason: a todo (the same file): ./../other/x.sh names the file x.sh of a
+#   directory other beside the workspace, out of pr, so the step runs no
+#   code of the pull request.
+# cause: the rule reads a path that leaves the workspace by .. as a path
+#   that may come back into the workspace, so the rule reports
+#   untrusted-checkout.executed.
+# attack-value: the file other/x.sh in the pull request = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: ./../other/x.sh runs a file out of the workspace,
+#   not pr/other/x.sh of the attacker, so PWNED is not printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: ./../other/x.sh

@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs source with the variable as
+#   the file name.
+# reason: the value names the file whose text runs as code; whether an
+#   attacker can name a file that holds code on the runner was not checked.
+# cause: the rule reads source only where the file name is /dev/stdin.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: source looks for a file named $(echo PWNED), finds
+#   none and fails; nothing runs the command substitution.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: source "$ISSUE_TITLE"

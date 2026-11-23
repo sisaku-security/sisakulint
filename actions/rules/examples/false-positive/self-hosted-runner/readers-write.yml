@@ -1,0 +1,22 @@
+# situation: on pull_request, a job runs make on a runner labelled
+#   self-hosted and linux, in a private repository of a personal account
+#   that lets its collaborators fork it and runs the workflows of pull
+#   requests from forks.
+# reason: every collaborator of a private repository of a personal account
+#   has write access, so one who forks it can also push a branch of the
+#   repository and reach the runner that way; the rule does not count those
+#   who may write as attackers, and no one reads the repository without
+#   writing to it.
+# cause: no fact says whether a reader of the repository lacks write
+#   access.
+# attack: one who may read the repository forks it and opens a pull request
+#   whose copy of this workflow runs a step of their own in place of make.
+# attack-run-behavior: the pull request's run starts and runs the step on
+#   the runner, but its author is a collaborator with write access, who
+#   could push the same step to a branch of the repository.
+on: pull_request
+jobs:
+  a:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make

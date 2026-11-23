@@ -1,0 +1,8 @@
+name: y22
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ case('x', 'a', 'b') }}"
+      - run: echo after

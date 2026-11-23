@@ -1,0 +1,20 @@
+# situation: a workflow tests a project on each Node.js version of a matrix,
+#   18 among them.
+# reason: the support of Node.js 18 ended on 2025-04-30, so the tests of
+#   that version run on a Node.js version that no longer gets security
+#   fixes.
+# cause: the rule reads a node-version written as it is, and does not read
+#   the values of the matrix that the ${{ }} names.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 24]
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test

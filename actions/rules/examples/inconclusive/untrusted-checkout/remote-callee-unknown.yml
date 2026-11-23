@@ -1,0 +1,20 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/untrusted-checkout-unknown, whose content is
+#   the workflow of the true positive executed (executed.composer-test.yml)
+#   of the rule, with on: workflow_call in place of the on of
+#   executed.composer-test.yml. The linter asked the fact
+#   workflow.definition for the reusable workflow and got no answer.
+# reason: what the jobs of the reusable workflow do is in the file that the
+#   linter could not read; whoever changes the uses, such as the author of a
+#   pull request, can name a reusable workflow that the token that the
+#   linter uses cannot read.
+# attack-value: the file composer.json in the pull request's head = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the fork's commit, and
+#   composer test runs the script test of its composer.json, which prints
+#   PWNED, with the base repository's GITHUB_TOKEN, which the checkout left
+#   in .git/config, and its secrets.
+on: pull_request_target
+permissions: {}
+jobs:
+  c:
+    uses: example-org/untrusted-checkout-unknown/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
