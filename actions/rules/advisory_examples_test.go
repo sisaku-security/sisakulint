@@ -23,6 +23,9 @@ import (
 // rules of All: they are those of a registry of All alone but for the
 // skipped rules of each run, which it does not read.
 func TestAdvisoryExampleResults(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	var b strings.Builder
 	n := 0
 	for _, c := range sharedChecks(t).Of(securityRuleIDs()...) {

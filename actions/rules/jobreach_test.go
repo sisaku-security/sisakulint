@@ -3,6 +3,7 @@ package rules
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -56,6 +57,9 @@ func unrunBase(i int) int {
 // status function that is false after skipped jobs, read as one whose if
 // is false.
 func TestUnrunJobsReadAlike(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(All(), Quality()...)
 	if err != nil {
 		t.Fatal(err)
@@ -226,6 +230,9 @@ var unrunSteps = []string{
 // stops reads as one whose if is false. A rule that does not read the if of
 // a step gives the same findings in each.
 func TestUnrunStepsReadAlike(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(All(), Quality()...)
 	if err != nil {
 		t.Fatal(err)

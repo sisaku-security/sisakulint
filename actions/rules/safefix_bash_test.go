@@ -3,6 +3,7 @@ package rules
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -207,6 +208,9 @@ func codeInjectionFix(t *testing.T, reg *lint.Registry, e lint.Example) (lint.Fi
 // the comment and runs the rest, which is the injection the fix takes away.
 // With a review fix (EnvVarReviewID), the attack does not run after.
 func TestSafeFixWithBash(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	if testing.Short() {
 		t.Skip("runs bash")
 	}

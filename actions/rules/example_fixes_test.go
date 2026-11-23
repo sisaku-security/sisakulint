@@ -3,6 +3,7 @@ package rules
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -29,6 +30,9 @@ import (
 // the test does not pass on none. The examples run in parallel, a subtest
 // each (checkExampleFix).
 func TestExampleFixes(t *testing.T) {
+	if os.Getenv("ACTIONS_LONG") != "1" {
+		t.Skip("a long test; runs with ACTIONS_LONG=1")
+	}
 	reg, err := lint.NewRegistry(All())
 	if err != nil {
 		t.Fatal(err)
