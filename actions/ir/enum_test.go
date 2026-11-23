@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/enumtest"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/enumtest"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 // TestNoFixReason: the values of NoFixReason, the one type ir makes from

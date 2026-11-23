@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestKeyPathsParse: every key path the engine writes for an inconclusive

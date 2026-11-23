@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 var corpusReport = flag.String("corpus.report", "", "write the corpus files that have errors (path, code, line:col, message) to this file")

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 )
 
 // TestArgTypesOfAnalysis: the values of the types of actions/analysis that

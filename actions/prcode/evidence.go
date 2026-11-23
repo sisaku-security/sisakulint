@@ -1,15 +1,15 @@
 package prcode
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/calls"
 	"path"
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/shell"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // tool is a command that reads the files of the directories it reads and

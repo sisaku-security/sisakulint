@@ -1,13 +1,13 @@
 package taint
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/attacker"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // defaultTypes are the activity types an event runs on when its types are not

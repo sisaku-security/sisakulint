@@ -1,6 +1,6 @@
 package workflow
 
-import "github.com/sisaku-security/sisakulint/actions/expr"
+import "github.com/gh-intel/sisakulint/actions/expr"
 
 // StepOrder is when the steps of a job end, for the order of steps that
 // run alongside others: the steps of a parallel group and background

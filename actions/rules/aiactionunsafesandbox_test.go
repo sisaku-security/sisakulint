@@ -3,7 +3,7 @@ package rules
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestAIActionUnsafeSandbox: a finding on a run whose payload has what an

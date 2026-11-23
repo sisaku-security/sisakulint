@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // allFields are the fields of every summary type, in the order of Field.

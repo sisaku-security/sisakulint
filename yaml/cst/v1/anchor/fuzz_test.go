@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 // FuzzResolve checks that Build and Resolve on every Alias of any input do

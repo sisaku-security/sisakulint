@@ -3,7 +3,7 @@ package cli
 import (
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // directiveMarker is what a comment of a workflow has before the hosts

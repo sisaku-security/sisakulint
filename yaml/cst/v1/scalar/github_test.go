@@ -3,8 +3,8 @@ package scalar
 import (
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitewalk"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitewalk"
 )
 
 // TestGitHubQuotedValues: the values GitHub gave for quoted scalars whose continuation

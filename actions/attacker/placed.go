@@ -1,8 +1,8 @@
 package attacker
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // PlacedIf is an if with the place it stands in: the if of a step, with

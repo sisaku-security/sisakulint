@@ -3,7 +3,7 @@ package job
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // TestDispatchInputs: a ${{ }} that refers to an input of workflow_dispatch

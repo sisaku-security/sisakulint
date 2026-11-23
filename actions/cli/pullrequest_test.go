@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/githubtest"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/internal/githubtest"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // prFiles is the repository of the pull request tests: caller.yml gives

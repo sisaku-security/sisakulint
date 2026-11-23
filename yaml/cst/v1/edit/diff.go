@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // ChangeKind is what happened to a node of the logical tree.

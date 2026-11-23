@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/attackrun"
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/attackrun"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestExampleFixes applies the fixes of every true positive example, with

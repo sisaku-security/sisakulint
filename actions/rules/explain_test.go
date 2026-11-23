@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // goldenCommit is the commit the golden Markdown is written with.

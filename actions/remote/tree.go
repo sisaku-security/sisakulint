@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/internal/githubapi"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/internal/githubapi"
 )
 
 // Limits bound what a run reads of a repository: the files and the

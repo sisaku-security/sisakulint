@@ -3,8 +3,8 @@ package taint
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // runnerVariables are the environment variables the runner writes in every

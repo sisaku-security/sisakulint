@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // An Editor that has made other edits of a tree makes the same edit as a

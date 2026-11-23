@@ -3,8 +3,8 @@ package job
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // EventNamesOf are the events of w's on, each once, in the order written:

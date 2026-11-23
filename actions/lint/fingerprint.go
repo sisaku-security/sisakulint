@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/ir"
 )
 
 // fingerprint is sha256 of the canonical JSON of {rule, input, path,

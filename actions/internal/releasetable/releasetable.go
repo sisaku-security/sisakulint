@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // EnvVar turns the check on: it asks the network.

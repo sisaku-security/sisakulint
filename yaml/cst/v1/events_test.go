@@ -3,7 +3,7 @@ package cst
 import (
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 // events renders the tree as yaml-test-suite events without scalar values,

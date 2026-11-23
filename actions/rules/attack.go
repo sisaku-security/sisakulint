@@ -1,8 +1,8 @@
 package rules
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/internal/attackrun"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/internal/attackrun"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // AttackMarkers are the rules whose examples' attack values are run

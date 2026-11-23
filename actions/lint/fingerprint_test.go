@@ -1,13 +1,13 @@
 package lint
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 func stepFindings(t *testing.T, files map[string]string, anchor func(workflow.Step) string) Report {

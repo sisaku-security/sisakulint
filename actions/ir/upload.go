@@ -1,6 +1,6 @@
 package ir
 
-import "github.com/sisaku-security/sisakulint/actions/artifact"
+import "github.com/gh-intel/sisakulint/actions/artifact"
 
 func (x *IR) allUploads() []*Upload {
 	x.once(SummaryUpload, func() {

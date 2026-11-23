@@ -1,7 +1,7 @@
 package reportview
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // maxSnippet is the most lines of a step a node shows.

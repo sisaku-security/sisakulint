@@ -55,7 +55,7 @@ func TestDeprecatedCommandsObserved(t *testing.T) {
 }
 
 // TestDeprecatedCommandsUpstream runs the example workflow of
-// https://github.com/sisaku-security/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/deprecatedcommandsrule.md
+// https://github.com/gh-intel/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/deprecatedcommandsrule.md
 // and the script of the test of upstream sisakulint at the same commit.
 // Each of the four commands that echo prints has a finding. The script
 // "::set-output name=test::value" with no echo has no finding, though

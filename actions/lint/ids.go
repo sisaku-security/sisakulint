@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
 	"net/url"
 	"strings"
 )

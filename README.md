@@ -1,6 +1,6 @@
 # sisakulint
 
-> **Note:** The v1 linter is not released yet. The documents of the released 0.x versions are at the tag [`v0.3.8`](https://github.com/sisaku-security/sisakulint/tree/v0.3.8). The file `MIGRATION.md` at the repository root describes how to move from 0.x.
+> **Note:** The v1 linter is not released yet. The documents of the released 0.x versions are at the tag [`v0.3.8`](https://github.com/gh-intel/sisakulint/tree/v0.3.8). The file `MIGRATION.md` at the repository root describes how to move from 0.x.
 
 sisakulint reads GitHub Actions workflows and action.yml files, reports the writing patterns that are threats, and applies fixes.
 

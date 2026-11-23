@@ -1,5 +1,5 @@
 {
-  "imports": ["github.com/sisaku-security/sisakulint/actions/facts"],
+  "imports": ["github.com/gh-intel/sisakulint/actions/facts"],
   "values": [
     {
       "name": "Item",

@@ -3,7 +3,7 @@ package prcode
 import (
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // In the tables below, the commits are those the tags of the two actions pointed to on

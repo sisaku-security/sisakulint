@@ -1,6 +1,6 @@
 package lint
 
-//go:generate go run github.com/sisaku-security/sisakulint/actions/internal/enumgen -pkg lint -out enum_gen.go -skip no-fix-reason -skip side-effect -ref ../facts/schema/facts-v0.json schema/registry-v0.json schema/report-v0.json
+//go:generate go run github.com/gh-intel/sisakulint/actions/internal/enumgen -pkg lint -out enum_gen.go -skip no-fix-reason -skip side-effect -ref ../facts/schema/facts-v0.json schema/registry-v0.json schema/report-v0.json
 
 import (
 	"errors"
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // Threat is who can do what, and what they get (the threat model): the

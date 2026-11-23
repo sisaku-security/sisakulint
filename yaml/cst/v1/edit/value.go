@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // Value is what an operation writes: a Scalar, a Map or a Seq.

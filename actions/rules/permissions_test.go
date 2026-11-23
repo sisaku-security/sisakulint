@@ -3,8 +3,8 @@ package rules
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestPermissions: the kinds of permissions by the permissions of the

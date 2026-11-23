@@ -3,8 +3,8 @@ package job
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // DispatchInputs is whether a ${{ }} of s refers to an input of

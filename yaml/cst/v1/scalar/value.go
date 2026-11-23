@@ -3,7 +3,7 @@ package scalar
 import (
 	"sort"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Value is a scalar's value with the input range each part of it comes from.

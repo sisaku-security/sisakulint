@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/rules"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/rules"
 )
 
 // explainFlag is --explain: the rules asked, or all of them, or the terms.

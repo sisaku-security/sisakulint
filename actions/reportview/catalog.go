@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/attackrun"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/internal/attackrun"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // Catalog is what an example catalog shows: for each rule, the examples of

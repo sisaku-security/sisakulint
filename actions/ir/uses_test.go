@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // TestUses: the uses of other repositories, in order, a folded one among

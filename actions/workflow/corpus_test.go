@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/internal/corpus"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/internal/corpus"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // TestCorpusRobust reads every file of the corpus: Parse must not panic,

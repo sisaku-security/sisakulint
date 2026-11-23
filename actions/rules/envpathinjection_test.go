@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 func pathRule(t *testing.T, src string) lint.Report {
@@ -22,7 +22,7 @@ func TestEnvpathInjectionDetection(t *testing.T) {
 		// a branch name is enough on $GITHUB_PATH
 		{"on: pull_request_target\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.head_ref }}\" >> \"$GITHUB_PATH\"\n", "github.head_ref"},
 		// the example of
-		// https://github.com/sisaku-security/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/envpathinjectioncritical.md
+		// https://github.com/gh-intel/sisakulint/blob/17c2d82151a966e6e388a17619b060ae2919712e/docs/envpathinjectioncritical.md
 		// (line 69): its value ../../tmp/evil/tools is no branch name (git
 		// refuses ..), but a branch name alone is a path relative to the workspace
 		{"on: pull_request_target\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pull_request.head.ref }}/tools\" >> \"$GITHUB_PATH\"\n", "github.event.pull_request.head.ref"},

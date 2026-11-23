@@ -3,7 +3,7 @@ package ir
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/prcode"
 )
 
 const checkoutWorkflow = `on: pull_request_target

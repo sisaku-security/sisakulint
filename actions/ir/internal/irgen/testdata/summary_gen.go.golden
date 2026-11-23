@@ -5,7 +5,7 @@ package ir
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 var _ = slices.Equal[[]int]

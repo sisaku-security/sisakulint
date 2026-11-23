@@ -1,12 +1,12 @@
 package job
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // privileged are the attacker's privileged events: one without write

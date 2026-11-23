@@ -5,7 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"io"
 	"io/fs"
 	"net/url"
@@ -15,11 +15,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/githubapi"
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/remote"
-	"github.com/sisaku-security/sisakulint/actions/reportview"
-	"github.com/sisaku-security/sisakulint/actions/rules"
+	"github.com/gh-intel/sisakulint/actions/internal/githubapi"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/remote"
+	"github.com/gh-intel/sisakulint/actions/reportview"
+	"github.com/gh-intel/sisakulint/actions/rules"
 )
 
 // Env is what Main sees of the process. No field may be nil.

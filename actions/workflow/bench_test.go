@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/internal/corpus"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/internal/corpus"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // realWorkflows are the workflows of yaml/corpus/files/real-world/, all of

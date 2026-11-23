@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sisaku-security/sisakulint/actions/cvss4"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/cvss4"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // Explain is the rules and quality rules ids (all of them when ids is empty) as Markdown for

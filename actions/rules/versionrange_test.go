@@ -3,7 +3,7 @@ package rules
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // TestRangeHas: the ranges of the advisories of the actions ecosystem on

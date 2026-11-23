@@ -3,7 +3,7 @@ package lint
 import (
 	"testing/fstest"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // Inputs are e as the inputs of a run: one input, or the whole repository

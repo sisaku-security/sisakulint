@@ -11,8 +11,8 @@ import (
 // it back.
 func TestDependencies(t *testing.T) {
 	for pkg, bad := range map[string][]string{
-		".":        {"github.com/sisaku-security/sisakulint/actions/lint", "github.com/sisaku-security/sisakulint/actions/rules"},
-		"../taint": {"github.com/sisaku-security/sisakulint/actions/prcode"},
+		".":        {"github.com/gh-intel/sisakulint/actions/lint", "github.com/gh-intel/sisakulint/actions/rules"},
+		"../taint": {"github.com/gh-intel/sisakulint/actions/prcode"},
 	} {
 		out, err := exec.Command("go", "list", "-deps", pkg).Output()
 		if err != nil {

@@ -1,8 +1,8 @@
 package ir
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/taint"
 )
 
 // secretLeakOf is the projection of l, a leak of the run s.

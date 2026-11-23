@@ -1,8 +1,8 @@
 package ir
 
-//go:generate go run github.com/sisaku-security/sisakulint/actions/internal/enumgen -pkg ir -out enum_gen.go -only no-fix-reason -only side-effect -ref ../facts/schema/facts-v0.json ../lint/schema/registry-v0.json ../lint/schema/report-v0.json
+//go:generate go run github.com/gh-intel/sisakulint/actions/internal/enumgen -pkg ir -out enum_gen.go -only no-fix-reason -only side-effect -ref ../facts/schema/facts-v0.json ../lint/schema/registry-v0.json ../lint/schema/report-v0.json
 
-import "github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+import "github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 
 // FixPlan is what a fix's plan gives a place: the fix, or why none.
 type FixPlan struct {

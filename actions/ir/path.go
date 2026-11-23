@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/anchor"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/anchor"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // The path of an element is where a fingerprint of a finding (actions/lint)

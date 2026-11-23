@@ -21,7 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
 	"go/ast"
 	"go/format"
 	"go/parser"

@@ -1,7 +1,7 @@
 package facts
 
 //go:generate go run ./internal/factsgen
-//go:generate go run github.com/sisaku-security/sisakulint/actions/internal/enumgen -pkg facts -out enum_gen.go schema/facts-v0.json
+//go:generate go run github.com/gh-intel/sisakulint/actions/internal/enumgen -pkg facts -out enum_gen.go schema/facts-v0.json
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonschema"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonschema"
 )
 
 // State is what is known of a fact ($defs/state of schema/facts-v0.json).

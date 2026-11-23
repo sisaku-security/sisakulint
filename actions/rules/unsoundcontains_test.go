@@ -3,7 +3,7 @@ package rules
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestUnsoundContains: the findings and the fixes of unsound-contains on

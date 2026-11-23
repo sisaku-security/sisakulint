@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sisaku-security/sisakulint/actions/cli"
+	"github.com/gh-intel/sisakulint/actions/cli"
 )
 
 func main() {

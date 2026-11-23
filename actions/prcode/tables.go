@@ -3,8 +3,8 @@ package prcode
 import (
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // prCodeEvents are the events an attacker triggers whose run has the

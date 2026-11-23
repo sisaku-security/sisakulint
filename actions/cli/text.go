@@ -3,12 +3,12 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"io"
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // textOptions are how the text is written: --detail, whether to color it,

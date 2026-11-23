@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // variablePages is the most pages of 30 names a list of configuration

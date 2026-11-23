@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Decode reads the value of n, which must be a Scalar node. The parser has

@@ -3,8 +3,8 @@ package rules
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/ir"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // withRemoteCallee is fs and lint.RemoteCalleeForm, which each rule that

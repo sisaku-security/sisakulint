@@ -3,7 +3,7 @@ package taint
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/internal/copytest"
+	"github.com/gh-intel/sisakulint/internal/copytest"
 )
 
 // TestThirdPartyCopies keeps the copy of the test data of zizmor under

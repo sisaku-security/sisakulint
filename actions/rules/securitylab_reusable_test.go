@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // TestAdvisoryCallerForms: each example of an advisory (# advisory:) that is

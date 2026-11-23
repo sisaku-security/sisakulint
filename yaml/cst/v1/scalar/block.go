@@ -1,6 +1,6 @@
 package scalar
 
-import cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+import cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 
 // blockLine is one line after the header: its content, or none for an
 // empty line, and its line break, or none at the end of the input.

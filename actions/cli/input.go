@@ -2,11 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"io"
 	"io/fs"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // readInputs reads what o names in fsys: stdin, the PATHs, or the whole

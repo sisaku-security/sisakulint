@@ -3,7 +3,7 @@ package lint
 import (
 	"fmt"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/ident"
+	"github.com/gh-intel/sisakulint/actions/internal/ident"
 )
 
 // KindArgumentName is the name of an argument of a kind of finding: a key

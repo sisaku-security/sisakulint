@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Body writes text as the content of a scalar of style, without quotes or

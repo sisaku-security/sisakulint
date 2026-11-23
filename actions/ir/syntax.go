@@ -3,12 +3,12 @@ package ir
 import (
 	"errors"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/facts"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 // Handle is a handle on the YAML of a summary: an element, or a span in

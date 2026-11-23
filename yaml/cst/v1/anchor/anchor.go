@@ -3,7 +3,7 @@ package anchor
 import (
 	"sort"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Index holds, for each document, the nodes with an anchor by name.

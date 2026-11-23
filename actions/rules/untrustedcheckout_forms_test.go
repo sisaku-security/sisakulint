@@ -1,10 +1,10 @@
 package rules
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/ir"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // Forms of untrusted-checkout and untrusted-checkout-toctou that the rules

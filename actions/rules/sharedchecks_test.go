@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // madeChecks makes the checks of every example once for the tests of the

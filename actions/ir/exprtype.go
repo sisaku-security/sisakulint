@@ -1,8 +1,8 @@
 package ir
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/expr"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // contextTypes are the types of the contexts where a ${{ }} is read, for

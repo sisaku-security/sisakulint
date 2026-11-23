@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // EventActivity is an event that triggers a run, with one of its activity

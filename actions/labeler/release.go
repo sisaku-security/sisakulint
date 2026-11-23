@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // Release is how one release of actions/labeler reads its configuration

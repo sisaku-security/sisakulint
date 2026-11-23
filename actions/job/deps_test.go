@@ -16,9 +16,9 @@ func TestDependencies(t *testing.T) {
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		switch {
-		case dep == "github.com/sisaku-security/sisakulint/actions/lint", dep == "github.com/sisaku-security/sisakulint/actions/ir",
-			dep == "github.com/sisaku-security/sisakulint/actions/prcode", dep == "github.com/sisaku-security/sisakulint/actions/artifact",
-			strings.HasPrefix(dep, "github.com/sisaku-security/sisakulint/actions/rules"):
+		case dep == "github.com/gh-intel/sisakulint/actions/lint", dep == "github.com/gh-intel/sisakulint/actions/ir",
+			dep == "github.com/gh-intel/sisakulint/actions/prcode", dep == "github.com/gh-intel/sisakulint/actions/artifact",
+			strings.HasPrefix(dep, "github.com/gh-intel/sisakulint/actions/rules"):
 			t.Errorf("actions/job depends on %s", dep)
 		}
 	}

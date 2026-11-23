@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/releasetable"
+	"github.com/gh-intel/sisakulint/actions/internal/releasetable"
 )
 
 // blobPath is the part of a URL of a file on GitHub before its commit.

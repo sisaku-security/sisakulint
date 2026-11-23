@@ -3,9 +3,9 @@ package rules
 import (
 	"slices"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/boundary"
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/boundary"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // BarriersOf are the barriers that an attacker of any of vs gets past, as

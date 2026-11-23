@@ -1,6 +1,6 @@
 package boundary
 
-import "github.com/sisaku-security/sisakulint/actions/lint"
+import "github.com/gh-intel/sisakulint/actions/lint"
 
 // The observations of 2026-10-30, in a public repository with a harmless
 // secret, of what the runs of acts by accounts of no role in the

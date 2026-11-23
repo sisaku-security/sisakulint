@@ -3,7 +3,7 @@ package suitetest
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/internal/copytest"
+	"github.com/gh-intel/sisakulint/internal/copytest"
 )
 
 // TestThirdPartyCopies keeps the two copies of yaml-test-suite, which the

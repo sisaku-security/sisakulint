@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	"github.com/sisaku-security/sisakulint/actions/reportview"
-	"github.com/sisaku-security/sisakulint/actions/rules"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/reportview"
+	"github.com/gh-intel/sisakulint/actions/rules"
 )
 
 // serveFlag is --serve, alone (on reportview.DefaultServeAddr) or with

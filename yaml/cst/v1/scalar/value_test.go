@@ -3,7 +3,7 @@ package scalar
 import (
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // sample is "abc" copied from [10,13), a line break made from [13,19) and

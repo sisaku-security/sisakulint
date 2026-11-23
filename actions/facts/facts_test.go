@@ -246,7 +246,7 @@ func TestDependencies(t *testing.T) {
 		t.Skipf("go list: %v", err)
 	}
 	for _, dep := range strings.Fields(string(out)) {
-		for _, bad := range []string{"github.com/sisaku-security/sisakulint/actions/workflow", "github.com/sisaku-security/sisakulint/actions/lint", "github.com/sisaku-security/sisakulint/yaml/"} {
+		for _, bad := range []string{"github.com/gh-intel/sisakulint/actions/workflow", "github.com/gh-intel/sisakulint/actions/lint", "github.com/gh-intel/sisakulint/yaml/"} {
 			if strings.HasPrefix(dep, bad) {
 				t.Errorf("actions/facts or actions/facts/github depends on %s", dep)
 			}

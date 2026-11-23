@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
 )
 
 // The expected results in this file are what GitHub did with the same

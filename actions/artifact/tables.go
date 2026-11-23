@@ -3,7 +3,7 @@ package artifact
 import (
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // In the tables below, the commits are those the tags pointed to on 2026-09-30 (git ls-remote --tags,

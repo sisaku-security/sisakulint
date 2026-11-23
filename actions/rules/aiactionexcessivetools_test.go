@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/lint"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 type toolsCase struct {

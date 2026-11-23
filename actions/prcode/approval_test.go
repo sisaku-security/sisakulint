@@ -1,7 +1,7 @@
 package prcode
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"testing"
 )
 

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // legacyHost is an entry of secret-exfiltration.allowed-hosts of the

@@ -3,7 +3,7 @@ package lint
 import (
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/enumtest"
+	"github.com/gh-intel/sisakulint/actions/internal/enumtest"
 )
 
 // TestEnums: every type of enum_gen.go, by enumtest.Check.

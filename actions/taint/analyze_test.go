@@ -2,15 +2,15 @@ package taint
 
 import (
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // analyze reads src as a workflow (or an action.yml) and gives its

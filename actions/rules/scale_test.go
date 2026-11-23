@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/lint"
+	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
 // pairsWorkflow is a job of n pairs of a step that leaves a credential in a

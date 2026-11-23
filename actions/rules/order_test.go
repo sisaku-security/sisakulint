@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/internal/jsonorder"
+	"github.com/gh-intel/sisakulint/actions/internal/jsonorder"
 )
 
 // The lists that a new rule adds to are in the order of their keys, one

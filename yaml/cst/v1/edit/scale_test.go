@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // Making edits and applying them takes time linear in their number: a

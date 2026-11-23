@@ -1,6 +1,6 @@
 package prcode
 
-import "github.com/sisaku-security/sisakulint/actions/facts"
+import "github.com/gh-intel/sisakulint/actions/facts"
 
 // MissingCommit is a commit a pinned uses has to lack for a finding to
 // hold (git.commit-contains false): a release of the guard of

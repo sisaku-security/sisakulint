@@ -1,8 +1,8 @@
 package taint
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/shell"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/shell"
 )
 
 // AuthoredCommand is a workflow command whose name is in the text of a run

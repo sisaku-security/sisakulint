@@ -2,16 +2,16 @@ package lint
 
 import (
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/ir"
+	"github.com/gh-intel/sisakulint/actions/ir"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/workflow"
-	"github.com/sisaku-security/sisakulint/internal/corpus"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/edit"
+	"github.com/gh-intel/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/internal/corpus"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/edit"
 )
 
 // usesFixer reports every step not marked, and fixes those with uses.

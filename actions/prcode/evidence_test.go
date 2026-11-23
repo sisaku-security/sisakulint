@@ -1,7 +1,7 @@
 package prcode
 
 import (
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 	"slices"
 	"strings"
 	"testing"

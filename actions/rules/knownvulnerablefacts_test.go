@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // knownVulnerableFacts are the answers of the facts the examples of

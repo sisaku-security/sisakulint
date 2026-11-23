@@ -1,6 +1,6 @@
 package workflow
 
-import cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+import cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 
 // Permissions are the permissions of the GITHUB_TOKEN: All for read-all or
 // write-all, or else the scopes in the order written. The schema checks

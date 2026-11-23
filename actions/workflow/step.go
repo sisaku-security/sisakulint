@@ -3,7 +3,7 @@ package workflow
 import (
 	"strconv"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // StepKind is what a step does, by the definition of steps-item its keys

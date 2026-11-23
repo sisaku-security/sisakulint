@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sisaku-security/sisakulint/actions/facts"
+	"github.com/gh-intel/sisakulint/actions/facts"
 )
 
 // network is a fake of what git.commit-ref asks of GitHub: the

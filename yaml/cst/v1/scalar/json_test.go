@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/anchor"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/internal/suitetest"
-	"github.com/sisaku-security/sisakulint/yaml/cst/v1/scalar"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/anchor"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/internal/suitetest"
+	"github.com/gh-intel/sisakulint/yaml/cst/v1/scalar"
 )
 
 const suiteRoot = "../../../yaml-test-suite/data-2022-01-17"

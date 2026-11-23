@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // The time to read a workflow grows linearly with the number of keys of a

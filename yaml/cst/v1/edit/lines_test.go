@@ -3,7 +3,7 @@ package edit
 import (
 	"testing"
 
-	cst "github.com/sisaku-security/sisakulint/yaml/cst/v1"
+	cst "github.com/gh-intel/sisakulint/yaml/cst/v1"
 )
 
 // walk goes from the document's content: a string step goes to the value

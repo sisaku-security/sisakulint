@@ -2,13 +2,13 @@ package artifact
 
 import (
 	"fmt"
-	"github.com/sisaku-security/sisakulint/actions/prcode"
+	"github.com/gh-intel/sisakulint/actions/prcode"
 	"path"
 	"strings"
 
-	"github.com/sisaku-security/sisakulint/actions/analysis"
-	"github.com/sisaku-security/sisakulint/actions/taint"
-	"github.com/sisaku-security/sisakulint/actions/workflow"
+	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // InconclusiveUpload is an input the analysis does not evaluate: its value as written,

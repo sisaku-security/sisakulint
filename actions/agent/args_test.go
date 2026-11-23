@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/sisaku-security/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/expr"
 )
 
 // TestWords: quotes and a backslash as shell-quote's parse and string-argv
