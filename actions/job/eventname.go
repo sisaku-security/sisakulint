@@ -7,23 +7,6 @@ import (
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-// EventNamesOf are the events of w's on, each once, in the order written:
-// every event GitHub runs w on, workflow_call among them. A name GitHub
-// does not know is left out.
-func EventNamesOf(w *workflow.Workflow) []workflow.EventName {
-	if w == nil || w.On.Status != workflow.Present {
-		return nil
-	}
-	var out []workflow.EventName
-	for _, ev := range w.On.Value.Events {
-		name, err := workflow.ParseEventName(ev.Name.AsString())
-		if err == nil && !slices.Contains(out, name) {
-			out = append(out, name)
-		}
-	}
-	return out
-}
-
 // savesByDefault are the events on which a job that writes no cache-mode
 // saves to the cache; pull_request saves to
 // the scope of its merge ref, which counts toward the repository's

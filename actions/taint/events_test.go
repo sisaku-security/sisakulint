@@ -163,3 +163,29 @@ func TestFilterCode(t *testing.T) {
 		t.Errorf("Filter %v, FilterCode %v", Filter(attacker.Outsider, []analysis.EventActivity{syn}, attacker.StepIf(nil, nil, c)), FilterCode(attacker.Outsider, []analysis.EventActivity{syn}, attacker.StepIf(nil, nil, c)))
 	}
 }
+
+// TestEventNamesOf: the names of on, each once, with the callers' names, not
+// workflow_call, for a workflow that can be called.
+func TestEventNamesOf(t *testing.T) {
+	w, _ := workflow.Parse(cst.ParseMode([]byte("on: [push, pull_request, push]\njobs:\n  a:\n    runs-on: x\n    steps: [{run: a}]\n"), cst.ModeGitHub))
+	if got, want := EventNamesOf(w), []workflow.EventName{workflow.EventNamePush, workflow.EventNamePullRequest}; !slices.Equal(got, want) {
+		t.Errorf("%v, want %v", got, want)
+	}
+	w, _ = workflow.Parse(cst.ParseMode([]byte("on: [push, workflow_call]\njobs:\n  a:\n    runs-on: x\n    steps: [{run: a}]\n"), cst.ModeGitHub))
+	got := EventNamesOf(w)
+	if got[0] != workflow.EventNamePush || slices.Contains(got, workflow.EventNameWorkflowCall) || !slices.Contains(got, workflow.EventNameIssues) {
+		t.Errorf("workflow_call: %v", got)
+	}
+	if got := EventNamesOf(nil); len(got) != 0 {
+		t.Errorf("nil: %v", got)
+	}
+}
+
+// TestEventsAllNoWorkflowCall: a called run never carries workflow_call.
+func TestEventsAllNoWorkflowCall(t *testing.T) {
+	for _, e := range EventsAll(workflow.EventNames()) {
+		if e.Name() == workflow.EventNameWorkflowCall {
+			t.Errorf("%+v", e)
+		}
+	}
+}

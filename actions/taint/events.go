@@ -11,9 +11,12 @@ import (
 )
 
 // defaultTypes are the activity types an event runs on when its types are not
-// given, where that is not all of them: pull_request_target runs on
-// opened, synchronize and reopened (events-that-trigger-workflows).
-var defaultTypes = map[workflow.EventName][]workflow.ActivityType{workflow.EventNamePullRequestTarget: {workflow.ActivityTypeOpened, workflow.ActivityTypeSynchronize, workflow.ActivityTypeReopened}}
+// given, where that is not all of them: pull_request and pull_request_target
+// run on opened, synchronize and reopened (events-that-trigger-workflows).
+var defaultTypes = map[workflow.EventName][]workflow.ActivityType{
+	workflow.EventNamePullRequest:       {workflow.ActivityTypeOpened, workflow.ActivityTypeSynchronize, workflow.ActivityTypeReopened},
+	workflow.EventNamePullRequestTarget: {workflow.ActivityTypeOpened, workflow.ActivityTypeSynchronize, workflow.ActivityTypeReopened},
+}
 
 // writerOnlyTypes are the activity types only one who can write to the
 // repository causes: a stack has only branches of the same repository, not
@@ -51,10 +54,12 @@ func attackerTypes(e workflow.EventName) []workflow.ActivityType {
 func allActivityTypes() []analysis.EventActivity { return EventsAll(TableEvents()) }
 
 // EventsAll is each event of names with each of its activity types: the events a
-// workflow that can be called, or a composite action, may run on.
+// workflow that can be called, or a composite action, may run on. A called run
+// carries the event name of its caller's run, never workflow_call, which is
+// left out.
 func EventsAll(names []workflow.EventName) []analysis.EventActivity {
 	var out []analysis.EventActivity
-	for _, e := range names {
+	for _, e := range callerNames(names) {
 		for _, a := range attackerTypes(e) {
 			out = append(out, analysis.MustEventActivity(e, a))
 		}
@@ -62,61 +67,149 @@ func EventsAll(names []workflow.EventName) []analysis.EventActivity {
 	return out
 }
 
+// callerNames are the names of names a caller's run may have: all but
+// workflow_call and the unset name.
+func callerNames(names []workflow.EventName) []workflow.EventName {
+	return slices.DeleteFunc(slices.Clone(names), func(n workflow.EventName) bool {
+		return n == workflow.EventNameWorkflowCall || n == workflow.EventNameUnset
+	})
+}
+
 // attackerEvents are the attacker's events of w's on, each with the
 // activity types its types allow.
 func attackerEvents(w *workflow.Workflow) []analysis.EventActivity { return EventsOf(w, TableEvents()) }
 
 // EventsOf are the events of w's on whose names are in names, each with the
-// activity types its types allow. A workflow that can be called (workflow_call)
-// runs on its callers' events: any of names.
+// attacker's activity types its types allow. A workflow that can be called
+// (workflow_call) runs on its callers' events: any of names.
 func EventsOf(w *workflow.Workflow, names []workflow.EventName) []analysis.EventActivity {
-	return eventsOf(w, names, true)
+	evs, _ := runEvents(w, names, true, true)
+	return evs
 }
 
 // EventsOn is EventsOf without the callers' events: those of w's on itself.
 func EventsOn(w *workflow.Workflow, names []workflow.EventName) []analysis.EventActivity {
-	return eventsOf(w, names, false)
+	evs, _ := runEvents(w, names, true, false)
+	return evs
 }
 
-func eventsOf(w *workflow.Workflow, names []workflow.EventName, called bool) []analysis.EventActivity {
-	if w.On.Status != workflow.Present {
+// RunEvents are the events and activity types that the on of w may start a
+// run on, whoever starts it: those of its types, the default types of the
+// event (defaultTypes) without types, or else every activity type of the
+// event (workflow.ActivityTypesOf); workflow_call, whose callers may be in
+// other repositories, is every caller's event with every activity type.
+// known is false when on names an event or an activity type that
+// sisakulint does not know, has types: [], or the model does not read on:
+// GitHub may start a run on it. A workflow without on starts no run.
+func RunEvents(w *workflow.Workflow) (evs []analysis.EventActivity, known bool) {
+	return runEvents(w, workflow.EventNames(), false, true)
+}
+
+// EventNamesOf are the event names the runs of w's on carry, each once, in
+// the order written; a workflow on workflow_call runs with its callers'
+// event names, every one but workflow_call. A name GitHub does not know is
+// left out.
+func EventNamesOf(w *workflow.Workflow) []workflow.EventName {
+	if w == nil || w.On.Status != workflow.Present {
 		return nil
 	}
-	var out []analysis.EventActivity
+	var out []workflow.EventName
+	add := func(n workflow.EventName) {
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
 	for _, ev := range w.On.Value.Events {
 		name, err := workflow.ParseEventName(ev.Name.AsString())
 		if err != nil {
 			continue
 		}
 		if name == workflow.EventNameWorkflowCall {
+			for _, n := range callerNames(workflow.EventNames()) {
+				add(n)
+			}
+			continue
+		}
+		add(name)
+	}
+	return out
+}
+
+// runEvents is the one reading of w's on that EventsOf, EventsOn, RunEvents
+// share: the events of names it runs on, each with its activity types. With
+// attackerOnly the activity types are those an attacker may cause
+// (attackerTypes), and a type that is none of them matches none; else every
+// activity type of the event. With called, workflow_call is its callers'
+// events of names (EventsAll, or every activity type without attackerOnly).
+// known is false on what sisakulint does not know (see RunEvents); the
+// events it does know are still given.
+func runEvents(w *workflow.Workflow, names []workflow.EventName, attackerOnly, called bool) (evs []analysis.EventActivity, known bool) {
+	switch w.On.Status {
+	case workflow.Absent:
+		return nil, true
+	case workflow.Present:
+	default:
+		return nil, false // an on that the model does not read, such as one with an event name it does not know
+	}
+	known = true
+	typesOf := func(e workflow.EventName) []workflow.ActivityType {
+		if attackerOnly {
+			return attackerTypes(e)
+		}
+		if all := workflow.ActivityTypesOf(e); len(all) > 0 {
+			return all
+		}
+		return []workflow.ActivityType{workflow.ActivityTypeUnset}
+	}
+	for _, ev := range w.On.Value.Events {
+		name, err := workflow.ParseEventName(ev.Name.AsString())
+		if err != nil {
+			known = false
+			continue
+		}
+		if name == workflow.EventNameWorkflowCall {
 			if called {
-				out = append(out, EventsAll(names)...)
+				for _, n := range callerNames(names) {
+					for _, a := range typesOf(n) {
+						evs = append(evs, analysis.MustEventActivity(n, a))
+					}
+				}
 			}
 			continue
 		}
 		if !slices.Contains(names, name) {
 			continue
 		}
-		known := attackerTypes(name)
-		activityTypes := known
+		valid := typesOf(name)
+		activityTypes := valid
 		if d, ok := defaultTypes[name]; ok {
 			activityTypes = d
 		}
-		if ev.Types.Status == workflow.Present {
+		if ev.Types.Status == workflow.Present && len(workflow.ActivityTypesOf(name)) > 0 {
+			if len(ev.Types.Value.Items) == 0 {
+				known = false // types: [], whose runs were not observed: GitHub may start one
+			}
 			activityTypes = nil
 			for _, t := range ev.Types.Value.Items {
 				// A value that is no activity type of the event matches none,
 				// as GitHub reads it; case counts.
-				if a, err := workflow.ParseActivityType(t.AsString()); err == nil && slices.Contains(known, a) {
+				a, err := workflow.ParseActivityType(t.AsString())
+				if err != nil || !slices.Contains(workflow.ActivityTypesOf(name), a) {
+					known = false
+					continue
+				}
+				if slices.Contains(valid, a) {
 					activityTypes = append(activityTypes, a)
 				}
 			}
+		} else if ev.Types.Status == workflow.Present && attackerOnly {
+			activityTypes = nil // types on an event without activity types matches none
 		}
 		for _, a := range activityTypes {
-			out = append(out, analysis.MustEventActivity(name, a))
+			evs = append(evs, analysis.MustEventActivity(name, a))
 		}
 	}
-	return sortEvents(out)
+	return sortEvents(evs), known
 }
 
 func sortEvents(evs []analysis.EventActivity) []analysis.EventActivity {

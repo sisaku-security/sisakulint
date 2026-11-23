@@ -129,7 +129,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 	var out []DownloadSite
 	if w != nil {
 		evs := c.EventsOr(name, prCodeEvents, true, func() []analysis.EventActivity { return taint.EventsOf(w, prCodeEvents) })
-		all := taint.EventsOf(w, onNames(w))
+		all := taint.EventsOn(w, workflow.EventNames())
 		ups := sameRunUploads(c, w, AnalyzeIn(c, name, w, nil, m))
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
@@ -635,19 +635,6 @@ func (s *DownloadSite) narrow() {
 }
 
 // onNames are the names of the events of w's on.
-func onNames(w *workflow.Workflow) []workflow.EventName {
-	if w.On.Status != workflow.Present {
-		return nil
-	}
-	var out []workflow.EventName
-	for _, ev := range w.On.Value.Events {
-		if n, err := workflow.ParseEventName(ev.Name.AsString()); err == nil {
-			out = append(out, n)
-		}
-	}
-	return out
-}
-
 func slicesContainsName(ns []workflow.EventName, n workflow.EventName) bool {
 	for _, x := range ns {
 		if x == n {

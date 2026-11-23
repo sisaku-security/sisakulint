@@ -149,7 +149,7 @@ func (x *IR) allCacheRestoreSaves() []*CacheRestoreSave {
 		if w == nil {
 			return
 		}
-		events := job.EventNamesOf(w)
+		events := taint.EventNamesOf(w)
 		var out []*CacheRestoreSave
 		for _, je := range w.Jobs.Value.Entries {
 			if je.Value.Status != workflow.Present {

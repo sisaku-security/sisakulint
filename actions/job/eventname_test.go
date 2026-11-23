@@ -1,20 +1,45 @@
 package job
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-func TestEventNamesOf(t *testing.T) {
-	w := parse(t, "on: [push, pull_request, workflow_call, push]\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")
-	want := []workflow.EventName{workflow.EventNamePush, workflow.EventNamePullRequest, workflow.EventNameWorkflowCall}
-	if got := EventNamesOf(w); !slices.Equal(got, want) {
-		t.Errorf("%v, want %v", got, want)
+// TestAlwaysSkippedCalledEventName: github.event_name of a called run is
+// its caller's event, never workflow_call.
+func TestAlwaysSkippedCalledEventName(t *testing.T) {
+	for _, c := range []struct {
+		cond string
+		want bool
+	}{
+		{"github.event_name == 'workflow_call'", true},
+		{"github.event_name == 'push'", false},
+		{"github.event_name != 'workflow_call'", false},
+	} {
+		w := parse(t, "on: workflow_call\njobs:\n  a:\n    if: "+c.cond+"\n    runs-on: x\n    steps:\n      - run: a\n")
+		j := w.Jobs.Value.Entries[0].Value.Value
+		if got := AlwaysSkipped(w, &j); got != c.want {
+			t.Errorf("%s: %v, want %v", c.cond, got, c.want)
+		}
 	}
-	if got := EventNamesOf(parse(t, "jobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")); len(got) != 0 {
-		t.Errorf("no on: %v", got)
+}
+
+// TestAlwaysSkippedDefaultTypes: pull_request without types runs on opened,
+// synchronize and reopened alone.
+func TestAlwaysSkippedDefaultTypes(t *testing.T) {
+	for _, c := range []struct {
+		on   string
+		want bool
+	}{
+		{"pull_request", true},
+		{"{pull_request: {types: [closed]}}", false},
+	} {
+		w := parse(t, "on: "+c.on+"\njobs:\n  a:\n    if: github.event.action == 'closed'\n    runs-on: x\n    steps:\n      - run: a\n")
+		j := w.Jobs.Value.Entries[0].Value.Value
+		if got := AlwaysSkipped(w, &j); got != c.want {
+			t.Errorf("on %s: %v, want %v", c.on, got, c.want)
+		}
 	}
 }
 
