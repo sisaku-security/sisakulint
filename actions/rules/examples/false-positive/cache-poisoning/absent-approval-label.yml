@@ -1,0 +1,31 @@
+# situation: on pull_request_target with the activity type labeled, a job
+#   that runs only when the label safe-to-test is added checks out the head
+#   of the pull request, runs npm ci, and has a token that writes and a
+#   cache that the job may save to.
+# reason: in a run of the linter that adds triage-account, the rule reads
+#   the label safe-to-test as a label that the attacker can add; when the
+#   repository has no label safe-to-test, the attacker cannot add the
+#   label, because the triage role cannot create a label, and the job does
+#   not run on the attacker's pull request.
+# cause: the rule does not read the labels of the repository: it reads
+#   every label that the if of the job compares with as a label that the
+#   repository has.
+# attack-value: the file package.json in the head of the pull request = "{\"scripts\": {\"preinstall\": \"echo PWNED\"}}"
+# attack-run-behavior: the repository has no label safe-to-test, so the
+#   attacker cannot add the label safe-to-test, no run of the job starts,
+#   and npm never runs the preinstall script.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    cache-mode: write
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

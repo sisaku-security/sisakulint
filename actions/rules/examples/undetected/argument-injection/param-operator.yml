@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a step passes the pull request's title
+#   with a leading v taken away, "${TITLE#v}", to tar after the file names,
+#   through env and inside quotes.
+# reason: a todo (the same file): ${TITLE#v} is the title itself when it
+#   does not begin with v, and reading what the operator leaves would find
+#   it.
+# cause: the rule reads a variable only bare or with an operator that keeps
+#   its value (${TITLE:-x}); # changes the value, so it does not read it.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: the title does not begin with v, so the word is the
+#   title as it is; tar reads it as --to-command and runs echo PWNED for
+#   notes.txt as it extracts it, which prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar -xf archive.tar notes.txt "${TITLE#v}"

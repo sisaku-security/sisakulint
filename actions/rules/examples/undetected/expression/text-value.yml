@@ -1,0 +1,14 @@
+# situation: the job writes timeout-minutes as a configuration variable
+#   followed by the text 0, such as 3 and 0 for 30 minutes.
+# reason: the value is a string, which timeout-minutes of a job does not
+#   take, so GitHub likely does not start the job.
+# cause: the rule reads an expression in a text only for an object or an
+#   array in it, and what GitHub does with such a value was not tried.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ vars.BASE }}0
+    steps:
+      - run: make test

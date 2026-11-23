@@ -1,0 +1,23 @@
+# situation: the job on pull_request_target checks out the pull request's
+#   head and only counts the lines of a file of it.
+# reason: the job runs nothing of the tree it checks out, and no tool reads a
+#   file of the tree as settings.
+# cause: when no step is seen to run the tree, the rule takes it as run
+#   unless a file of facts writes checkout.executed false (it is assumed
+#   true, the worst case).
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha into pr, with the pull
+#   request's package.json, and the job only runs wc -l pr/README.md, which
+#   counts lines; nothing reads package.json, and the preinstall does not
+#   run.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+          path: pr
+      - run: wc -l pr/README.md

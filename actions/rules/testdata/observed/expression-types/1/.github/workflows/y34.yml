@@ -1,0 +1,8 @@
+name: y34
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ fromJSON(github.event) }}"
+      - run: echo after

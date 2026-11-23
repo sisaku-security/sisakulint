@@ -1,0 +1,10 @@
+name: w08
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    environment:
+      name: e
+      url: ${{ github.event }}
+    steps:
+      - run: echo ok

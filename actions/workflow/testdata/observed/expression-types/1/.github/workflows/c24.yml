@@ -1,0 +1,12 @@
+name: c
+on:
+  workflow_call:
+    inputs:
+      b:
+        type: number
+        default: ${{ github.event_name }}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "b=[${{ inputs.b }}] eq-true=${{ inputs.b == true }} json=${{ toJSON(inputs.b) }}"

@@ -1,0 +1,5 @@
+name: y23
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c23.yml

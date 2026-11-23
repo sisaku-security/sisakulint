@@ -1,0 +1,19 @@
+# situation: on pull_request_target, a job in the container alpine:3
+#   extracts an archive and passes the pull request's title to tar after
+#   the file names, through env and inside quotes.
+# reason: the tar of the container is the tar of BusyBox, which has no
+#   option --to-command, so the title runs nothing.
+# cause: the rule reads tar and sed as GNU tar and GNU sed, and does not
+#   read the container of the job.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: the tar of BusyBox stops with "unrecognized option:
+#   to-command=echo PWNED", and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    container: alpine:3
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar -xf archive.tar notes.txt "$TITLE"

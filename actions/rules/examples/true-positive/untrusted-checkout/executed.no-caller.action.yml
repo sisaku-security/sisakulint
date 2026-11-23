@@ -1,0 +1,26 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step checks out the head of a pull request, with the guard
+#   of actions/checkout taken away, and npm ci runs the code of the head.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, pull_request_target
+#   among the events. pull_request_target runs the job with the token and the
+#   secrets of the base repository, while head.sha is the commit the author of
+#   the fork pushed, and npm ci runs the install scripts of the package.json
+#   of the commit.
+# attack-value: the file package.json in the head of the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the commit of the
+#   fork, into the workspace, and npm ci runs the preinstall of the
+#   package.json, which prints PWNED, with the GITHUB_TOKEN of the base
+#   repository, which the checkout left in .git/config, and the secrets that
+#   the job of a workflow that calls the action gives the steps.
+name: test
+description: test the pull request
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        allow-unsafe-pr-checkout: true
+    - run: npm ci
+      shell: bash

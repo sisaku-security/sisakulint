@@ -1,0 +1,27 @@
+# situation: on push with write-all, a command writes the token into
+#   .git/config (git clone with it in the URL), and actions/upload-artifact
+#   uploads the workspace.
+# reason: a todo (the same file): reading the command would find the
+#   credential.
+# cause: the rule does not read the commands of a run.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the url of the remote origin in
+#   .git/config.
+# attack-run-behavior: git clone writes
+#   https://x-access-token:<token>@github.com/... as the url of the remote
+#   origin in .git/config; the upload, with include-hidden-files: true, puts
+#   it in the artifact, and while echo next runs, the token, which write-all
+#   lets write, pushes to the repository.
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" .
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        with: {path: ., include-hidden-files: true}
+      - run: echo next

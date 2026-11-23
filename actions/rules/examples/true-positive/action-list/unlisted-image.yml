@@ -1,0 +1,21 @@
+# situation: a step runs docker://aquasec/trivy:0.69.4, the form of the
+#   workflows of trivy-image-2026; repo.action-list is * and patterns that
+#   start with !, among them !docker://aquasec/trivy:*.
+# reason: the repository did not list the image as one that the repository
+#   trusts, and the image runs as the step with the step's environment and the
+#   job's workspace.
+# attack: the attacker of trivy-image-2026 pushed images that steal the
+#   secrets of CI to aquasec/trivy on Docker Hub as 0.69.4 to 0.69.6.
+# attack-run-behavior: the runner pulls aquasec/trivy:0.69.4 when the job
+#   runs and runs the image as the step, which reads the secrets in the
+#   environment of the step.
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://aquasec/trivy:0.69.4
+        with:
+          args: fs .
+        env:
+          TOKEN: ${{ secrets.SCAN_TOKEN }}

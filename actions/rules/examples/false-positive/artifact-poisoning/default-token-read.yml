@@ -1,0 +1,24 @@
+# situation: the job runs on workflow_run, writes no permissions, downloads
+#   the artifact of the run before it with github.token and runs npm ci.
+# reason: the repository's default token is read, which reads no artifact of
+#   another run.
+# cause: the rule takes the default token as one that may write unless a
+#   file of facts says it is read (repo.default-token-write is assumed true,
+#   the worst case).
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the job's github.token is the repository's default,
+#   read, which cannot read the artifacts of another run, so the download
+#   fails and the job stops before npm ci; the preinstall does not run.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci

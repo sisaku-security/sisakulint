@@ -1,0 +1,17 @@
+# situation: on issue_comment pinned, a run writes the pinned comment's body
+#   by ${{ }}.
+# reason: a maintainer may pin a comment an outsider wrote, and the run has
+#   that comment (a run seen on 2026-10-14 had a comment by another account
+#   than the one that pinned it), so its body reaches the shell.
+# attack-value: github.event.comment.body = "\"; echo PWNED; echo \""
+# attack-run-behavior: when the comment is pinned, the script becomes
+#   echo ""; echo PWNED; echo "", and bash runs the second echo as a
+#   command, which prints PWNED.
+on:
+  issue_comment:
+    types: [pinned]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.comment.body }}"

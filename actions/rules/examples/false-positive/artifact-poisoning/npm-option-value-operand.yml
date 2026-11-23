@@ -1,0 +1,22 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace and runs npm version --preid beta.
+# reason: a todo (the same file): npm version with no operand prints the
+#   version of the package.json and runs no script of the artifact; beta is the
+#   value of the option --preid.
+# cause: the rule reads beta as an operand of npm version, so the rule
+#   reports artifact-poisoning.executed.
+# attack-value: the file package.json in the artifact = "{\"scripts\":{\"preversion\":\"echo PWNED\"}}"
+# attack-run-behavior: npm version --preid beta prints the version and does
+#   not run the script preversion, so PWNED is not printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: npm version --preid beta

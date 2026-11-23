@@ -1,0 +1,10 @@
+name: outobj
+outputs:
+  o:
+    value: ${{ steps.s.outputs }}
+runs:
+  using: composite
+  steps:
+    - id: s
+      shell: bash
+      run: echo a=b >> "$GITHUB_OUTPUT"

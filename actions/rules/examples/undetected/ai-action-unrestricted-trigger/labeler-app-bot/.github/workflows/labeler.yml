@@ -1,0 +1,14 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LABELER_APP_ID }}
+          private-key: ${{ secrets.LABELER_APP_KEY }}
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ steps.app.outputs.token }}

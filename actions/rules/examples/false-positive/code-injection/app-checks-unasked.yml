@@ -1,0 +1,26 @@
+# situation: on status and push, the job runs only on status (its if), and
+#   writes the message of the commit of the status
+#   (github.event.commit.commit.message) where the rule reads it.
+# reason: no app outside GitHub Actions makes a commit status or a check run
+#   for a commit whose message an attacker writes in the repository: no app
+#   makes one for a commit of a pull request from a fork
+#   (repo.fork-pr-app-checks false), and no app makes one for a commit that
+#   the merge of a pull request puts in a branch
+#   (repo.merge-commit-app-checks false), so no run of status has such a
+#   commit, and the job does not run on push.
+# cause: the rule asks repo.fork-pr-app-checks and
+#   repo.merge-commit-app-checks only of a workflow whose on has no event
+#   other than status, check_suite and check_run, and the on of this
+#   workflow has push.
+# attack-value: github.event.commit.commit.message = "$(echo PWNED)"
+# attack-run-behavior: the author of a pull request from a fork writes the
+#   value in the message of a commit; no app makes a status for the commit,
+#   so no run of status starts with the value, and a push by one who can
+#   write runs no job.
+on: [status, push]
+jobs:
+  j:
+    if: github.event_name == 'status'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.commit.commit.message }}"

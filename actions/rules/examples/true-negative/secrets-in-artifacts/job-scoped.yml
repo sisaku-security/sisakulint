@@ -1,0 +1,26 @@
+# situation: google-github-actions/auth writes a Workload Identity
+#   Federation credential to gha-creds-*.json in the workspace, the upload
+#   takes only dist/, and a step comes after it.
+# reason: the upload's path is dist/, not the workspace, and
+#   gha-creds-*.json is at the top of the workspace, outside dist/, so the
+#   artifact does not hold the credential.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes from gha-creds-*.json its credential_source: the URL of
+#   the OIDC token request and the bearer token of its Authorization header.
+# attack-run-behavior: the upload takes dist/ only, and gha-creds-<hex>.json
+#   is at the top of the workspace, so the artifact holds no credential, and
+#   the reader takes none.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1/locations/global/workloadIdentityPools/p/providers/github
+          service_account: ci@p.iam.gserviceaccount.com
+      - uses: actions/upload-artifact@v4
+        with:
+          path: dist/
+      - run: echo after the upload

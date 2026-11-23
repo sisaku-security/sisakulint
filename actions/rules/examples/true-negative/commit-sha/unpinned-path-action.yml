@@ -1,0 +1,24 @@
+# situation: the first step uses actions/github-script by a full SHA; the
+#   second step names example-org/ci-tools by a full SHA, but its path goes
+#   with .. above the root of that repository, to the directory of
+#   actions/github-script at that full SHA.
+# reason: the second step runs what the first step downloads, which the
+#   full SHA of the first step pins; the full SHA after @ of the second
+#   step does not decide the code, and the rule reads the first step for
+#   the second.
+# attack: the owner of actions/github-script, or whoever has taken over a
+#   token that pushes to it, moves the tag v7 to a commit of theirs.
+# attack-run-behavior: the first step names the full SHA 60a0d830, so the
+#   runner downloads that commit, and the second step runs the same commit;
+#   the moved v7 does not change what either step runs.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: console.log("first")
+      - uses: example-org/ci-tools/../../../actions/github-script/60a0d83039c74a4aee543508d2ffcb1c3799cdea@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          script: console.log("second")

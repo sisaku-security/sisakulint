@@ -1,0 +1,20 @@
+# situation: on push, a step takes the password out of the JSON secret DB
+#   with fromJSON in its env, and prints the password.
+# reason: other-rule: the header of the step prints the env with the
+#   password before the script runs, which unmasked-secret-exposure reports.
+# cause: secret-in-log reads a value the shell makes, not one a ${{ }}
+#   takes out.
+# attack: one who may read the run's log opens the log and reads the
+#   password in the header of the step.
+# attack-run-behavior: the header prints PASSWORD with the password, and the
+#   step prints the password again.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PASSWORD: ${{ fromJSON(secrets.DB).password }}
+        run: |
+          echo "password: $PASSWORD"

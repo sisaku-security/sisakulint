@@ -1,0 +1,30 @@
+# situation: the workflow of the true positive mutable (mutable.yml) of the
+#   rule, with a job added whose step uses example-org/not-allowed-action,
+#   which the setting of allowed actions of GitHub (repo.allowed-actions)
+#   blocks with !example-org/not-allowed-action@*. In the true positive, the
+#   job runs its steps in the container ghcr.io/o/build:1, named by a tag
+#   and no digest.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: whoever can push to ghcr.io/o/build pushes an image of theirs
+#   under the tag 1, as in 2026 images that steal the secrets of CI were
+#   pushed to aquasec/trivy on Docker Hub as 0.69.4 to 0.69.6 and latest was
+#   re-pointed to them.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/o/build:1
+    steps:
+      - run: make
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

@@ -1,0 +1,25 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request and runs npm --cache view ci.
+# reason: a limitation (run time): npm reads view as the value of the
+#   option --cache, which takes a value, and runs npm ci, which runs the
+#   script preinstall of the package.json of the pull request; which options take
+#   a value is in the definitions of the npm release that the job uses,
+#   which is known when the job runs.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command as the npm command, so the rule reads npm --cache view ci as
+#   npm view, a step that runs no code of the tree, and reports untrusted-checkout.checkout, not
+#   untrusted-checkout.executed.
+# attack-value: the file package.json in the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm --cache view ci runs the script preinstall,
+#   which prints PWNED, in the job that has the base repository's token and
+#   secrets.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm --cache view ci

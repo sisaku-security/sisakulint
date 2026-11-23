@@ -1,0 +1,22 @@
+# situation: on workflow_run, actions/download-artifact@v3 downloads the
+#   artifact out of the current run into the workspace, and ./run.sh runs.
+# reason: actions/download-artifact v1 to v3 take the current run's
+#   artifacts only, and no job of the current run checks out the code of a
+#   pull request, so the artifact holds only what the jobs of this workflow
+#   made from the repository's code.
+# attack-value: the file run.sh in the artifact out of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: actions/download-artifact@v3 takes out from the
+#   current run only, which the ci run of the fork does not upload to, so
+#   the attacker's run.sh is not downloaded, and ./run.sh does not run the
+#   file of the attacker.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+        with: {name: out}
+      - run: ./run.sh

@@ -1,0 +1,33 @@
+# situation: on workflow_run, the job checks out the repository, downloads the
+#   artifact docker-image of the run that triggered the job with
+#   dawidd6/action-download-artifact v6 into the root of the workspace, and
+#   runs pnpm i. These are the steps of docker-test-cont.yml of DIYgod/RSSHub
+#   (commit e08733f94c81440d19ee6a5fd5e915e9a65395f5, lines 3-6 and 55-60, and
+#   the step pnpm i of the job); the if of the steps on the env TEST_CONTINUE
+#   is left out.
+# reason: the run that triggers the job can be a run of a pull request from a
+#   fork, whose author writes the files of the artifact, and the action writes
+#   the files of the artifact over the files of the checkout.
+# attack-value: the file package.json of the artifact docker-image = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the action writes package.json of the artifact over
+#   package.json of the checkout, and pnpm i runs the script preinstall, which
+#   prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-178_RSSHub/
+on:
+  workflow_run:
+    workflows: [PR - Docker build test]
+    types: [completed]
+jobs:
+  testRoute:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Docker image
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          run_id: ${{ github.event.workflow_run.id }}
+          name: docker-image
+      - name: Install dependencies (pnpm)
+        run: pnpm i

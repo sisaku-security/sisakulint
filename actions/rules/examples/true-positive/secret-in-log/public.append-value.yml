@@ -1,0 +1,21 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step sets KEY to the private key out of the secret GCP_SA_KEY, appends
+#   a suffix to KEY with KEY+=, and prints KEY.
+# reason: KEY+= keeps the value of KEY before it and adds the suffix after
+#   it, so the print writes the private key to the log, and the runner does
+#   not mask the private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints the private key and the suffix.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          KEY="$(echo "$GCP_SA_KEY" | jq -r '.private_key')"
+          KEY+=" (end)"
+          echo "key: $KEY"

@@ -1,0 +1,30 @@
+# situation: on pull_request, the pull request's head SHA is checked out,
+#   and npm ci runs.
+# reason: when only the pull requests of the repository run the workflow, the
+#   author of the pull request can change the workflow itself and gets what the
+#   run has without the flaw, so the flaw adds nothing to what the author gets;
+#   when a ruleset of the organization or the enterprise runs the workflow on
+#   the pull requests of its other repositories, the author cannot change the
+#   workflow, and what the run of the ruleset has beyond the author's own
+#   pull_request workflow is not known. The workflow does not say which case
+#   holds.
+# cause: the rule reads checkouts on pull_request_target, workflow_run and
+#   issue_comment only. The rule does not read whether a ruleset runs the
+#   workflow.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the fork's pull request runs this workflow on
+#   pull_request; the checkout fetches head.sha and npm ci runs the preinstall,
+#   which prints PWNED, with a read-only GITHUB_TOKEN and none of the base
+#   repository's secrets. When a ruleset of the organization runs the workflow
+#   on a pull request of another repository, the same steps run in the run of
+#   the ruleset; what the run of the ruleset has was not observed, so whether
+#   the steps do harm in the run of the ruleset is not known.
+on: pull_request
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

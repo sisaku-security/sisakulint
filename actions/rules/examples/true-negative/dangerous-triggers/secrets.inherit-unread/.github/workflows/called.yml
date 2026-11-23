@@ -1,0 +1,21 @@
+# situation: a reusable workflow that reads no secret, by name or without a
+#   name: the job label echoes a word. ci.yml calls the reusable workflow on
+#   issues with secrets: inherit and permissions: {}, and both files are
+#   given to the linter.
+# reason: GitHub passes the runner of a job of a called workflow only the
+#   secrets that the job reads, so no secret is passed to the runner of the
+#   job label; with permissions: {}, a flaw in the job label gives an
+#   attacker no secret and no token that writes.
+# attack: the attacker opens an issue, and a flaw in the job label (an
+#   injection of the issue's title, for example) runs the attacker's code in
+#   the job label.
+# attack-run-behavior: the issue starts ci.yml, which runs the job label
+#   with no secret in the runner of the job label; the attacker's code finds
+#   no secret in the runner.
+on:
+  workflow_call:
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo triage

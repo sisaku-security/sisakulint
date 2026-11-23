@@ -1,0 +1,18 @@
+# situation: on issue_comment created, a step runs only when the comment's
+#   body is /deploy or /test, and the step writes
+#   ${{ github.event.comment.body }} into its run: script.
+# reason: GitHub compares the strings ignoring case, so in the step the body
+#   is /deploy or /test, ignoring the case of its letters, and no character
+#   of the body is code to the shell.
+# attack-value: github.event.comment.body = "\"; echo PWNED; echo \""
+# attack-run-behavior: the step's if is false for a body that is neither
+#   string, and the runner skips the step, so no script runs.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  command:
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event.comment.body == '/deploy' || github.event.comment.body == '/test'
+        run: echo "${{ github.event.comment.body }}"

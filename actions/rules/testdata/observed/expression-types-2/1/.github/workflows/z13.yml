@@ -1,0 +1,5 @@
+name: z13
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c13.yml

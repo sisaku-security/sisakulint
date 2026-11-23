@@ -1,0 +1,28 @@
+# situation: the checkout sets persist-credentials: false, and the upload
+#   takes the workspace with its hidden files, with a step after it.
+# reason: with persist-credentials: false the checkout does not write the
+#   job's token to .git/config, so the hidden files the upload takes hold no
+#   token.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: with persist-credentials: false the checkout writes
+#   no extraheader, so the .git/config in the artifact holds no token, and
+#   the reader takes none.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+          include-hidden-files: true
+      - run: echo after the upload

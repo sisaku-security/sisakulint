@@ -1,0 +1,17 @@
+# situation: on gollum, a step extracts an archive and passes the name of
+#   the wiki page (page_name) to tar after --, through env and inside
+#   quotes.
+# reason: tar reads every word after -- as the name of a file, so a name of
+#   the page that begins with - is not an option of tar. The title
+#   ++to+command=id makes the name --to-command=id.
+# attack-value: github.event.pages[0].page_name = "--to-command=id"
+# attack-run-behavior: tar looks for a file named --to-command=id in the
+#   archive and runs no program.
+on: gollum
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PAGE: ${{ github.event.pages[0].page_name }}
+        run: tar -xf archive.tar notes.txt -- "$PAGE"

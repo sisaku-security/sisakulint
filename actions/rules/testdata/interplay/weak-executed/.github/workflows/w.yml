@@ -1,0 +1,17 @@
+# The matrix of fixes (interplay_test.go of actions/rules), and the check
+# of ApplyFixes that a fix makes no finding weaker:
+# actions/checkout@v4.3.0 is a release before the guard (guardedFrom of
+# actions/prcode, 4.4.0), so untrusted-checkout reports its checkout of the
+# pull request's head with no condition. commit-sha pins it to the commit
+# facts.json answers, which releaseCommits does not list (the SHA is made
+# up): the same finding then needs git.commit-contains, and is conditional.
+on: pull_request_target
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.3.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

@@ -1,0 +1,6 @@
+on: workflow_call
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo bare

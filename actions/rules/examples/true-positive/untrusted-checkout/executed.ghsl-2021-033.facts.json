@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"executed.ghsl-2021-033.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"0717577d45739eb3c851188b29f50ed6c0b2194e"},"state":"found","value":false},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"11d5960a326750d5838078e36cf38b85af677262"},"state":"found","value":false},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"},"state":"found","value":false},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"a37ce9120846195fa4ece8f58b268e6043cb2f26"},"state":"found","value":false},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"d23441a48e516b6c34aea4fa41551a30e30af803"},"state":"found","value":false},
+{"query":{"kind":"git.commit-contains","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683","commit":"fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09"},"state":"found","value":false},
+{"query":{"kind":"git.commit-ref","repo":"actions/checkout","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"absent"},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"executed.ghsl-2021-033.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

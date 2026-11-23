@@ -1,0 +1,34 @@
+# situation: on workflow_run, when the run of the workflow CI succeeds, a
+#   step assigns the name of the head branch of the run of CI
+#   (github.event.workflow_run.head_branch) to a variable inside single
+#   quotes, written into the script by ${{ }}. This is release.yml of
+#   cross-platform-actions/action (commit
+#   e8a7b572196ff79ded1979dc2bb9ee67d1ddb252, lines 3-23); CI runs on
+#   pull_request.
+#   The checkout, the line set -x and the steps after the step Validate
+#   version are left out,
+#   and the example echoes $tag in place of the lines 25-28 that check the
+#   version with grep.
+# reason: the run of CI can be the run of a pull request from a fork, whose
+#   author names the branch, and the runner puts the name into the script
+#   before bash reads the script, so a single quote in the name ends the
+#   string and what follows runs as commands, with the token of the base
+#   repository.
+# attack-value: github.event.workflow_run.head_branch = "x';echo${IFS}PWNED;#"
+# attack-run-behavior: the line becomes tag='x';echo${IFS}PWNED;#', and bash
+#   prints PWNED; the # makes the rest of the line a comment.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-099_cross-platform-actions_action/
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Validate version
+        id: version
+        run: |
+          tag='${{ github.event.workflow_run.head_branch }}'
+          echo "$tag"

@@ -1,0 +1,20 @@
+# situation: the step p prints env.NOWHERE, which no env of the workflow
+#   sets, and the release step writes the output tag of the step p into
+#   its script.
+# reason: a step before may set NOWHERE at run time through $GITHUB_ENV.
+# cause: the rule does not read what the steps write to $GITHUB_ENV at
+#   run time.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        run: echo "${{ env.NOWHERE }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

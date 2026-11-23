@@ -1,0 +1,22 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step takes clientId and clientSecret out of the JSON secret
+#   AZURE_CREDENTIALS into its env.
+# reason: the runner masks AZURE_CREDENTIALS whole, not the values fromJSON
+#   takes out of it, and prints the step's env in its header before it
+#   runs, so the client secret is in the log as it is.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   client secret in the env of the step's header.
+# attack-run-behavior: the header of the step prints CLIENT_ID and
+#   CLIENT_SECRET with their values; the log keeps them for 90 days by
+#   default.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: log in to azure
+        env:
+          CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}
+          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}
+        run: az login --service-principal -u "$CLIENT_ID" -p "$CLIENT_SECRET" --tenant contoso.onmicrosoft.com

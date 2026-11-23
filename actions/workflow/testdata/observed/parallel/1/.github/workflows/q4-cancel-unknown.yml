@@ -1,0 +1,7 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+      - cancel: nosuch

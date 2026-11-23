@@ -1,0 +1,21 @@
+# situation: on issue_comment, a step runs the comment's body, through env
+#   and outside quotes, as the command to which it passes -xf archive.tar
+#   notes.txt.
+# reason: a todo (the same file): the attacker names the command and puts
+#   its options before the script's words; reading the value at the place
+#   of the command's name would find it.
+# cause: the rule reads the words of a command it knows by its name, and
+#   the name here is a value not known until run time.
+# attack-value: github.event.comment.body = "tar --to-command=echo${IFS}PWNED"
+# attack-run-behavior: bash splits the value at the blank, so the command
+#   is tar --to-command=echo${IFS}PWNED -xf archive.tar notes.txt; tar runs
+#   echo${IFS}PWNED through the shell for notes.txt as it extracts it, which
+#   prints PWNED.
+on: issue_comment
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOOL: ${{ github.event.comment.body }}
+        run: $TOOL -xf archive.tar notes.txt

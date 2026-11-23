@@ -1,0 +1,19 @@
+# situation: on issue_comment, a job with cache-mode: write runs a composite
+#   action whose step (actions/cache/save) saves dist, and only then checks
+#   out the head of the pull request.
+# reason: the step saves before the checkout brings the pull request's
+#   files: what it saves is not the pull request's.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the step of the composite action saves the dist of
+#   the base's code, which the job has before the checkout; the checkout
+#   then fetches the pull request's head, and no step saves it.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: example-org/cache-composite@v1
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head

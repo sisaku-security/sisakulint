@@ -1,0 +1,18 @@
+# situation: on issues opened, a step writes to $GITHUB_ENV the word set
+#   when the variable that holds the issue's body is not empty
+#   (${V:+set}).
+# reason: ${V:+set} writes the word set or nothing, and does not write the
+#   value of V.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the step writes the line A=set, and the runner sets
+#   no environment variable PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: echo "A=${V:+set}" >> "$GITHUB_ENV"

@@ -1,0 +1,17 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/deprecated-node-runtime-remote, which the
+#   fact workflow.definition answers with the workflow of the true positive
+#   eol-node-version (eol-node-version.yml) of the rule, with on:
+#   workflow_call in place of the on of eol-node-version.yml. The job passes
+#   its secrets with secrets: inherit. In the true positive, a workflow
+#   builds and tests a project on Node.js 20 with actions/setup-node.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   support of Node.js 20 ended on 2026-04-30, so the build and the tests
+#   run on a Node.js version that no longer gets security fixes.
+on: push
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/deprecated-node-runtime-remote/.github/workflows/w.yml@v1
+    secrets: inherit

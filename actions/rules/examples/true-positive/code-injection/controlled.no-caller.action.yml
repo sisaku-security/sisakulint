@@ -1,0 +1,19 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a run step echoes the title of an issue, written in by ${{
+#   }}.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, issues among the
+#   events. Anyone who opens an issue writes its title, and ${{ }} puts the
+#   title into the script before the shell parses the script, so a double
+#   quote in the title ends the echo's string and what follows runs as
+#   commands.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo ""; echo PWNED; echo "", and
+#   the shell runs the second echo as a command, which prints PWNED.
+name: echo title
+description: echo the title of the issue
+runs:
+  using: composite
+  steps:
+    - run: echo "${{ github.event.issue.title }}"
+      shell: bash

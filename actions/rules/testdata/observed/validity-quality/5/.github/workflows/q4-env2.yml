@@ -1,0 +1,25 @@
+on: push
+env:
+  "W=X": w
+jobs:
+  container-steps:
+    runs-on: ubuntu-latest
+    container: alpine:3.20
+    env:
+      "J=X": j
+    steps:
+      - env:
+          "S=X": s
+        run: env | grep -E '^(W|J|S)' || echo none
+  node-action:
+    runs-on: ubuntu-latest
+    env:
+      "J=X": j
+      GITHUB_SHA: job-sha
+    steps:
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          "S=X": s
+        with:
+          script: |
+            console.log(JSON.stringify(Object.entries(process.env).filter(([k]) => /^(W|J|S|GITHUB_SHA)/.test(k))))

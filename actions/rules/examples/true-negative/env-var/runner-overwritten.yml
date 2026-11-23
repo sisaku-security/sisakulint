@@ -1,0 +1,15 @@
+# situation: a step sets CI, HOME and GITHUB_TOKEN in env.
+# reason: the runner does not write these variables after env, and the step
+#   gets the written values.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - env:
+          CI: "false"
+          HOME: /tmp/home
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build

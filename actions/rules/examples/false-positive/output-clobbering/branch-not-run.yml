@@ -1,0 +1,28 @@
+# situation: on issues opened, the step s sets out to $GITHUB_OUTPUT in an
+#   if whose condition is false, writes v= and the issue's body to "$out",
+#   and goes on when the write fails (|| true); the next step reads the
+#   output v.
+# reason: bash does not run the branch, so out is empty when echo runs, and
+#   the body does not go to $GITHUB_OUTPUT.
+# cause: the rule does not read the value of the condition of an if, and
+#   reads the assignment in the branch as one that may run.
+# attack-value: github.event.issue.body = "x\npwned=1"
+# attack-run-behavior: bash cannot open the file of the empty name and
+#   writes nothing, || true keeps the step going, and the runner sets no
+#   output of the step s.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          if false; then out=$GITHUB_OUTPUT; fi
+          echo "v=$V" >> "$out" || true
+      - env:
+          W: ${{ steps.s.outputs.v }}
+        run: echo "$W"

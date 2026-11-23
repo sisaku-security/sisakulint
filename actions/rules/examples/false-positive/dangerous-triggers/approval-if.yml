@@ -1,0 +1,21 @@
+# situation: the job runs on issue_comment with contents: write, only for
+#   the owner's comment, and reads nothing but that comment.
+# reason: the owner's comment on an attacker's issue runs the job too, but
+#   with nothing of the attacker's.
+# cause: the rule does not tell apart a job that reads nothing of the issue
+#   the comment is on.
+# attack-value: github.event.comment.body = "\"; echo PWNED; echo \""
+# attack-run-behavior: the attacker's comment has author_association NONE,
+#   FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR, so the if is false
+#   and the job a is skipped; a comment of the owner, on the attacker's
+#   issue too, runs it, and the script echoes the owner's body, nothing of
+#   the attacker's.
+on: issue_comment
+jobs:
+  a:
+    if: github.event.comment.author_association == 'OWNER'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo "${{ github.event.comment.body }}"

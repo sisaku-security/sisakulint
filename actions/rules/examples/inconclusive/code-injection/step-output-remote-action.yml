@@ -1,0 +1,19 @@
+# situation: the step s uses some/action@v1, an action of another
+#   repository, and the next step writes steps.s.outputs.o into its run
+#   script by ${{ }}.
+# reason: the output is what that action sets, and its action.yml is not in
+#   the input, so whether an attacker controls the output is not known.
+# cause: the rule does not yet ask for the action.yml of another repository
+#   as a fact.
+# attack-value: steps.s.outputs.o = "\"; echo PWNED; echo \""
+# attack-run-behavior: when some/action@v1 sets the output o to the value,
+#   the script of the next step becomes echo ""; echo PWNED; echo "", and
+#   bash runs the second echo as a command, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        uses: some/action@v1
+      - run: echo "${{ steps.s.outputs.o }}"

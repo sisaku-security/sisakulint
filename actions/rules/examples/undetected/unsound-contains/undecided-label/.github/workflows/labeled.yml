@@ -1,0 +1,30 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label test to a pull request only when every file that the pull request
+#   changes is under site/; labeled.yml runs on pull_request_target on labeled
+#   when contains('safe-to-test', github.event.label.name) is true, and the
+#   job checks out the head of the pull request and runs npm ci.
+# reason: the attacker gets the label only with files under site/, so the job
+#   runs the code of the attacker only when the job runs code from files under
+#   site/, which the rule does not read.
+# cause: the rule reports a label that is a part of the string of the
+#   comparison only when the attacker gets the label whatever files the pull
+#   request changes, and the rule cannot decide the paths of the
+#   configuration.
+# attack-value: the file site/package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes only files under site/; actions/labeler adds the label test, which
+#   starts labeled.yml; the job runs the code of the attacker only if the job
+#   runs code from files under site/.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

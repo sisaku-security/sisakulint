@@ -1,0 +1,23 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step extracts an archive and passes the name of the head
+#   branch of a pull request to tar after the file names, through env and
+#   inside quotes.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, pull_request_target
+#   among the events. tar reads a word that begins with - as an option even
+#   after the file names, and GitHub takes a branch whose name begins with -:
+#   the attacker names the branch --to-command=<a program>, and tar runs the
+#   program for each file tar extracts, in a job with the token of the
+#   repository.
+# attack-value: github.head_ref = "--to-command=sh${IFS}-c${IFS}id"
+# attack-run-behavior: tar reads the word as --to-command and runs sh -c id
+#   in the step, with what the step can reach.
+name: unpack
+description: unpack the archive
+runs:
+  using: composite
+  steps:
+    - env:
+        HEAD_REF: ${{ github.head_ref }}
+      run: tar -xf archive.tar notes.txt "$HEAD_REF"
+      shell: bash

@@ -1,0 +1,20 @@
+# situation: on pull_request_target, the workflow's cache-mode is write and
+#   the job's is read, and the job saves node_modules to the cache.
+# reason: the job's cache-mode wins over the workflow's, and read lets the
+#   job restore only: nothing is saved to the default branch's scope.
+# attack: a flaw of the job runs the attacker's code, which tries to save an
+#   entry under the key of the release workflow.
+# attack-run-behavior: the job runs with Cache mode: read; its post step of
+#   actions/cache logs that saving is denied.
+on: pull_request_target
+cache-mode: write
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ hashFiles('package-lock.json') }}

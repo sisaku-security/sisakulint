@@ -1,0 +1,37 @@
+# situation: a workflow on issues opened calls the composite action
+#   claude-issue-triage-action of the same repository, which calls the
+#   composite action claude-code-action; a run step of claude-code-action
+#   assigns the body and the title of the issue to variables, written into
+#   the script by ${{ }}. These are .github/workflows/claude-issue-triage.yml
+#   (lines 4-23), .github/actions/claude-issue-triage-action/action.yml
+#   (line 80) and .github/actions/claude-code-action/action.yml (lines
+#   144-146) of MervinPraison/PraisonAI (commit
+#   9ccd71563fdecc6b01f2a134281322463902e705); the workflow reads the secret
+#   ANTHROPIC_API_KEY. In this example, the directory named called stands for the directory
+#   claude-code-action.
+#   The inputs and the lines of the run step other than the lines of the body
+#   and the title are left out, and the steps of the two actions other than
+#   those named here are left out.
+# reason: anyone who opens an issue writes its body and its title, and the
+#   runner puts each value into the script before bash reads the script, so
+#   a double quote in the title ends the string and what follows runs as
+#   commands, with the secrets of the job.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the line becomes ISSUE_TITLE=""; echo PWNED; echo "",
+#   and bash prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2025-093_PraisonAI/
+name: Claude Code Action
+description: run Claude Code
+inputs:
+  anthropic_api_key:
+    description: the key of the Anthropic API
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Find the request
+      shell: bash
+      run: |
+        ISSUE_BODY="${{ github.event.issue.body }}"
+        ISSUE_TITLE="${{ github.event.issue.title }}"
+        echo "$ISSUE_TITLE"

@@ -1,0 +1,20 @@
+# situation: after a checkout of the pull request's head, a job with
+#   cache-mode: write runs an action of another repository whose
+#   action.definition was asked and has no answer (the archive is larger
+#   than the limit).
+# reason: whether a step of the action saves the checked out tree is in
+#   the file the run could not read; the author of the action can make the
+#   archive large to leave it unread.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: when the action saves dist to the cache, the
+#   attacker's index.js is saved to the default branch's scope.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: example-org/unreachable-composite@v1

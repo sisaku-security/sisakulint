@@ -1,0 +1,21 @@
+# situation: the step s uses the local action ./.github/actions/a, and the
+#   next step writes steps.s.outputs.o to $GITHUB_ENV by ${{ }}.
+# reason: the output is what the local action sets; that action is in the
+#   workspace of the job (the repository the job checks out), not in this
+#   workflow, so whether an attacker controls the output is not known.
+# cause: the rule does not read the outputs a local action sets: it gives
+#   this kind to steps.<id>.outputs of any step that uses a local action,
+#   whether its action.yml is among the files read or not.
+# attack-value: steps.s.outputs.o = "x\nPWNED=1"
+# attack-run-behavior: when ./.github/actions/a sets o to an attacker's text
+#   such as this value, the script becomes echo "v=x<line break>PWNED=1" >>
+#   "$GITHUB_ENV", which appends v=x and PWNED=1; the runner sets v to x and
+#   PWNED to 1.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        uses: ./.github/actions/a
+      - run: echo "v=${{ steps.s.outputs.o }}" >> "$GITHUB_ENV"

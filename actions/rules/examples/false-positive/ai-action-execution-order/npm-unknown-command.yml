@@ -1,0 +1,26 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the workspace; a later step runs
+#   npm web ci.
+# reason: a todo (the same file): npm stops with an error at web, the
+#   first word that is not an option, because web is not the name, an alias
+#   name or the beginning of exactly one name of an npm command, and npm
+#   runs no code of the workspace, which the agent may edit.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command, ci, as the npm command, so the rule reports ai-action-execution-order.edited-code.
+# attack-value: the file package.json in the workspace = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm web ci stops with the error Unknown command and
+#   does not run the script preinstall, so PWNED is not printed.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+      - run: npm web ci

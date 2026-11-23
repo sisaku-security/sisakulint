@@ -1,0 +1,26 @@
+# situation: on workflow_run, the artifact is downloaded under runner.temp,
+#   and a step reads a file of it into its shell by the source command.
+# reason: a todo (the same file): reading the source command would find
+#   that the file runs.
+# cause: a command that names $RUNNER_TEMP/... or ${{ runner.temp }}/... is
+#   read as running the file only as a program or as the file of an
+#   interpreter, and the source command is neither.
+# attack-value: the file x.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts x.sh under runner.temp/a, and
+#   source $RUNNER_TEMP/a/x.sh runs it in the shell of the step, printing
+#   PWNED, with the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/a
+      - run: source $RUNNER_TEMP/a/x.sh

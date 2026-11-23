@@ -1,0 +1,16 @@
+# situation: the workflow runs on workflow_call only, no workflow of the
+#   repository calls it, and its step reads vars.PUBLISH_TARGET, which the
+#   repository does not define.
+# reason: a limitation: GitHub uses the configuration variables of the
+#   repository of the caller, which another repository decides.
+# cause: the rule compares only the names of the repository that the
+#   linter checks.
+on:
+  workflow_call:
+permissions: {contents: read}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./publish.sh "${{ vars.PUBLISH_TARGET }}"

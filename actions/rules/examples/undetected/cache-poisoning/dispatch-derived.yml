@@ -1,0 +1,30 @@
+# situation: on workflow_dispatch with the input pr, the step k writes
+#   build-<the input pr> to its output key, and actions/cache/save saves build
+#   under the key steps.k.outputs.key.
+# reason: the one who dispatches the workflow chooses the input, and the env
+#   or the output of a step makes the value from the input, so the one who
+#   dispatches the workflow chooses the value too.
+# cause: the rule reports an input of workflow_dispatch that a value refers
+#   to directly (input-dispatch), and does not follow a value that an env or
+#   the output of a step makes from the input in a job that runs only on
+#   workflow_dispatch.
+# attack-value: inputs.pr = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when the one who dispatches the workflow gives the
+#   value, the job saves build to the cache of the scope of the ref of the run
+#   under build-<value>, a key that the one who dispatches the workflow chose.
+on:
+  workflow_dispatch:
+    inputs:
+      pr: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: k
+        env:
+          V: ${{ inputs.pr }}
+        run: echo "key=build-$V" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ steps.k.outputs.key }}

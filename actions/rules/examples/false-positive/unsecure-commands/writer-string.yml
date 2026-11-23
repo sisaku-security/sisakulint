@@ -1,0 +1,19 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints the name of the label of the event.
+# reason: only those who can write to the repository name a label, so no
+#   outside attacker writes the printed value.
+# cause: the webhook schema leaves the name free, and the table reads it as
+#   arbitrary.
+# attack: an outside attacker cannot name a label.
+# attack-run-behavior: the step prints the name of the label; nothing an
+#   outsider wrote is read.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - run: echo "${{ github.event.label.name }}"
+      - run: echo next

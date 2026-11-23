@@ -1,0 +1,59 @@
+# the workflows of two observed runs of the commands in the log, with the
+# literal command in each line put as the title
+# of an issue (TITLE of env, or the ${{ }} itself): the observed runs printed
+# literals, which have no attacker.
+on: issues
+permissions: {}
+env:
+  TITLE: ${{ github.event.issue.title }}
+jobs:
+  unsecure:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - name: print
+        run: |
+          echo "$TITLE"
+          echo "   $TITLE"
+          echo "pre $TITLE"
+          echo "$TITLE" >&2
+          printf 'line1 %s\n' "$TITLE"
+          echo "${{ github.event.issue.title }}"
+          echo "::stop-commands::tok1234567"
+          echo "$TITLE"
+          echo "::tok1234567::"
+      - name: after
+        run: echo "C02=[$C02]"
+  stepflag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: flagged
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+        run: echo "$TITLE"
+      - name: unflagged
+        run: echo "$TITLE"
+      - name: after
+        run: echo "S1=[$S1]"
+  flagforms:
+    runs-on: ubuntu-latest
+    steps:
+      - name: upper
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: "TRUE"
+        run: echo "$TITLE"
+      - name: one
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: "1"
+        run: echo "$TITLE"
+      - name: spaced
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: " true "
+        run: echo "$TITLE"
+      - name: viaenvfile
+        run: echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> "$GITHUB_ENV"
+      - name: afterenvfile
+        run: echo "$TITLE"
+      - name: after
+        run: echo done

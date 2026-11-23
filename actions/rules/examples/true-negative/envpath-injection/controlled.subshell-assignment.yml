@@ -1,0 +1,21 @@
+# situation: on issues opened, a step sets p to $GITHUB_PATH inside
+#   ( ... ), and after the ( ... ) writes the issue's title to "$p", and goes
+#   on when the write fails (|| true).
+# reason: bash runs ( ... ) in a subshell, so after the subshell p is empty,
+#   and the title does not go to $GITHUB_PATH.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: p is empty when echo runs, so bash cannot open the
+#   file and writes nothing, || true keeps the step going, and the runner
+#   adds no directory to PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          ( p=$GITHUB_PATH )
+          echo "$T" >> "$p" || true

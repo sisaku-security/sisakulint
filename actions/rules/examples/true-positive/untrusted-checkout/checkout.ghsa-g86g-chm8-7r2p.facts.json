@@ -1,0 +1,18 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"v2.0.0"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"check-spelling/check-spelling","ref":"08f08a6ff6b9ebae06cb8fe463374a8a5a37e03c"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"v2.0.0"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"check-spelling/check-spelling","ref":"08f08a6ff6b9ebae06cb8fe463374a8a5a37e03c"},"state":"found","value":"node24"},
+{"query":{"kind":"checkout.executed","input_path":"checkout.ghsa-g86g-chm8-7r2p.yml","step":"jobs.build.steps[0]"},"state":"found","value":true},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"checkout.ghsa-g86g-chm8-7r2p.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"check-spelling/check-spelling","sha":"08f08a6ff6b9ebae06cb8fe463374a8a5a37e03c"},"state":"absent"},
+{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v2.0.0"},"state":"found","value":{"ref":"refs/tags/v2.0.0","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"check-spelling/check-spelling"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"check-spelling/check-spelling"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"checkout.ghsa-g86g-chm8-7r2p.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

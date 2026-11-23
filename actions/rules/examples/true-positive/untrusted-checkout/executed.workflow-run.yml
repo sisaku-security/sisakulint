@@ -1,0 +1,24 @@
+# situation: workflow_run checks out head_sha of the run that started it,
+#   and npm ci runs its code.
+# reason: a pull request from a fork can add a pull_request workflow named
+#   labeler, which starts this workflow_run, and then head_sha is the pull
+#   request's head.
+# attack-value: the file package.json at the head_sha of the pull request's run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the fork's pull request adds a pull_request workflow
+#   named labeler; when its run completes, this workflow_run checks out
+#   workflow_run.head_sha, the pull request's head, and npm ci runs the
+#   preinstall of its package.json, which prints PWNED, with the base
+#   repository's GITHUB_TOKEN in .git/config and its secrets.
+on:
+  workflow_run:
+    workflows: [labeler]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

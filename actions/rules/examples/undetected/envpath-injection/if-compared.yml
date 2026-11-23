@@ -1,0 +1,22 @@
+# situation: on issue_comment, a job runs only when the comment's body is
+#   bin, and a step writes ${{ github.event.comment.body }} as a line of
+#   $GITHUB_PATH.
+# reason: the job's if lets the body be only the string bin, ignoring the
+#   case of its letters, so the line is a relative path that the workflow
+#   names; the attacker still chooses the case, and on a file system that
+#   tells names apart by their case (the default file system of a Linux
+#   runner), BIN is another directory than bin.
+# cause: the rule does not treat a value that the if of the job compares
+#   with such a string as written by the attacker.
+# attack-value: github.event.comment.body = "BIN"
+# attack-run-behavior: the if passes, and the step writes the line BIN to
+#   $GITHUB_PATH.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    if: github.event.comment.body == 'bin'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.comment.body }}" >> "$GITHUB_PATH"

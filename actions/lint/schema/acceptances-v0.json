@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A file of acceptances of sisakulint (sisakulint/acceptances/v0), which --accept of the CLI reads. An entry matches a finding of a report whose certainty is inconclusive when the rule, the kind (args.kind_id, <rule>.<kind>), the input, key_path, span_text and span_lines of the finding are equal to those of the entry. A matched finding does not set bit 8 of the exit code, and the report keeps the matched finding with the reason of the entry (acceptance in report-v0.json). The line and the column of the place are not compared: lines added above the place do not end the match. These changes do not end the match either: a change of the indentation that all the lines of span_lines have in common, a change of the spaces and tabs at the ends of the lines, and a change of the kind of the line breaks. Any other change of span_text or span_lines, and any change of the key path or of the input of the place, ends the match, and the finding counts toward bit 8 again. A change outside the lines of span_lines that keeps the key path and the input of the place does not end the match.",
+  "type": "object",
+  "properties": {
+    "schema": {"const": "sisakulint/acceptances/v0"},
+    "inconclusive": {"description": "The accepted places of findings whose certainty is inconclusive. Two entries with equal values of the six fields (rule, kind_id, input, key_path, span_text and span_lines) are an error.", "type": "array", "items": {"$ref": "#/$defs/inconclusive"}}
+  },
+  "required": ["schema", "inconclusive"],
+  "additionalProperties": false,
+  "$defs": {
+    "inconclusive": {
+      "type": "object",
+      "properties": {
+        "rule": {"description": "The ID of a rule that declares kind_id (inconclusive_kinds in the registry of rules).", "type": "string", "minLength": 1},
+        "kind_id": {"description": "The kind of the inconclusive finding: args.kind_id of the inconclusive finding in report-v0.json, <rule>.<kind>, where <rule> is the value of rule and <kind> is an inconclusive kind of the rule.", "type": "string", "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*\\.[a-z][a-z0-9]*(-[a-z0-9]+)*$"},
+        "input": {"description": "The name of the input of the place, as location.file.input of the inconclusive finding in report-v0.json.", "type": "string", "minLength": 1},
+        "key_path": {"description": "As key_path of the inconclusive finding in report-v0.json.", "type": "string"},
+        "span_text": {"description": "As span_text of the inconclusive finding in report-v0.json.", "type": "string"},
+        "span_lines": {"description": "As span_lines of the inconclusive finding in report-v0.json.", "type": "string"},
+        "reason": {"description": "Why a person accepts the place: why the value at the place is not an attacker's, for example. A reason that is empty or white space alone is an error.", "type": "string", "minLength": 1}
+      },
+      "required": ["rule", "kind_id", "input", "key_path", "span_text", "span_lines", "reason"],
+      "additionalProperties": false
+    }
+  }
+}

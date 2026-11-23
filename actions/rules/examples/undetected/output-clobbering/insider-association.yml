@@ -1,0 +1,27 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER writes the issue's body to $GITHUB_OUTPUT.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the job's token and secrets past what the Read role
+#   gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's author_association
+#   (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR), for which it
+#   is false, so no attacker's event runs the job.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: for an issue whose author_association is MEMBER, echo
+#   writes the lines body=x and PWNED=1 to $GITHUB_OUTPUT, and the runner sets
+#   the outputs body and PWNED; for an issue of NONE, FIRST_TIMER,
+#   FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR the job's if is false and the job is
+#   skipped.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "body=$BODY" >> "$GITHUB_OUTPUT"

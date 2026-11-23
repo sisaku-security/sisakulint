@@ -1,0 +1,9 @@
+name: y09
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+        continue-on-error: ${{ github.event_name }}
+      - run: echo after

@@ -1,0 +1,30 @@
+# situation: on push, a step of the job `read` registers the password of
+#   the JSON secret DB with ::add-mask::, and an output of the job `read`
+#   has the same password; the later job `print` prints the output.
+# reason: the runner drops an output whose value contains a value that the
+#   runner masks, and the step registered the password, so the job `print`
+#   gets an empty value.
+# cause: the rule does not inspect the script of the step that registers
+#   the value.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` to read the password.
+# attack-run-behavior: the job `read` warns that it skips the output
+#   password since the output may contain a secret; the header of the step
+#   of the job `print` shows the run: script of the step with an empty
+#   value.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    outputs:
+      password: ${{ fromJSON(secrets.DB).password }}
+    steps:
+      - env:
+          DB: ${{ secrets.DB }}
+        run: echo "::add-mask::$(jq -r .password <<<"$DB")"
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.password }}"

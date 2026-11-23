@@ -1,0 +1,11 @@
+# situation: a step prints the names of the labels of the pull request with
+#   join() of github.event.pull_request.labels.*.name.
+# reason: join() gives a string, which the text holds.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo "labels=${{ join(github.event.pull_request.labels.*.name, ', ') }}"

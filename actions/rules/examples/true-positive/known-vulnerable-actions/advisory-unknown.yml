@@ -1,0 +1,14 @@
+# situation: a step uses example-org/example-action pinned to the commit of
+#   v1.0.0.
+# reason: an advisory GitHub has not rated says the versions before 1.0.1
+#   are vulnerable. No advisory of the actions ecosystem was unrated on
+#   2026-10-15, so the repository, its commits, the advisory and its ID are
+#   made up for this example.
+# attack: someone uses the vulnerability the advisory describes.
+# attack-run-behavior: v1.0.0 runs the vulnerable code in the job.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/example-action@1111111111111111111111111111111111111111 # v1.0.0

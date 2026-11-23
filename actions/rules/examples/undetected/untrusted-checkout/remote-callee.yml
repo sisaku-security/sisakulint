@@ -1,0 +1,21 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/untrusted-checkout-unanswered, whose content
+#   is the workflow of the true positive executed
+#   (executed.composer-test.yml) of the rule, with on: workflow_call in
+#   place of the on of executed.composer-test.yml. The linter has no answer
+#   of the fact workflow.definition for the reusable workflow.
+# reason: a todo (a fact): the jobs of a reusable workflow run on the event
+#   that started the run of the calling job, and the linter does not read
+#   the reusable workflow.
+# cause: the rule reads a reusable workflow of another repository only from
+#   the answer of workflow.definition.
+# attack-value: the file composer.json in the pull request's head = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the fork's commit, and
+#   composer test runs the script test of its composer.json, which prints
+#   PWNED, with the base repository's GITHUB_TOKEN, which the checkout left
+#   in .git/config, and its secrets.
+on: pull_request_target
+permissions: {}
+jobs:
+  c:
+    uses: example-org/untrusted-checkout-unanswered/.github/workflows/w.yml@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

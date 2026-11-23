@@ -1,0 +1,15 @@
+# situation: the setting of allowed actions of GitHub allows the actions of
+#   the verified creators of GitHub Marketplace, and no pattern; a step uses
+#   example-creator/deploy-action.
+# reason: when GitHub has not verified example-creator, the setting does not
+#   allow the uses, and GitHub does not start the run.
+# cause: whether GitHub verified the creator of an action is not in the
+#   workflow, and no fact answers it.
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: example-creator/deploy-action@ed408507eac070d1f99cc633dbcf757c94c7933a

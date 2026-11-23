@@ -1,0 +1,24 @@
+# situation: the setting of allowed actions of GitHub allows gradle/* and
+#   docker://alpine:*, and blocks gradle/actions/setup-gradle@*. One step,
+#   whose if is false, uses gradle/actions/setup-gradle. Another step uses
+#   the Docker image busybox, which no pattern allows. Another step uses
+#   actions/cache, which no pattern allows.
+# reason: GitHub checks each uses before the run starts, also the uses of a
+#   step whose if is false, and does not start the run: no job of the run
+#   runs (in runs that the authors of the rule made on GitHub, such runs
+#   ended as startup_failure).
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - if: false
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - uses: docker://busybox:1.36
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache
+          key: cache-${{ github.sha }}

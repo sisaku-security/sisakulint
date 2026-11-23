@@ -1,0 +1,21 @@
+# situation: the workflow runs on workflow_dispatch with the input x, and a
+#   step writes inputs.x and github.event.inputs.x to $GITHUB_PATH by ${{
+#   }}.
+# reason: whoever dispatches the workflow chooses the value, and the
+#   workflow does not tell who that is, so whether an attacker controls it
+#   is not known; nothing the rule could read is expected to tell it.
+# attack-value: inputs.x = "x\n/tmp/PWNED"
+# attack-run-behavior: when an attacker with a credential whose only write
+#   access is to the permission Actions dispatches the workflow and gives the
+#   value as x, both expressions hold it, and the script writes the lines v=x,
+#   "/tmp/PWNED x" and /tmp/PWNED to $GITHUB_PATH; the steps after it get
+#   /tmp/PWNED first in PATH.
+on:
+  workflow_dispatch:
+    inputs:
+      x: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ inputs.x }} ${{ github.event.inputs.x }}" >> "$GITHUB_PATH"

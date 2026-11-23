@@ -1,0 +1,15 @@
+# situation: a step of a workflow has an if written as a block scalar
+#   (if: |), which keeps a line break after the ${{ }}.
+# reason: GitHub drops the white space around the one ${{ }} of an if of a
+#   workflow and reads the if as the expression: the step runs only for a
+#   push.
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - if: |
+          ${{ github.event_name == 'push' }}
+        run: make release

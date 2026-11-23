@@ -1,0 +1,23 @@
+# situation: pull_request_target checks out the head of a pull request from
+#   a fork, with the guard of actions/checkout taken away, and composer test runs
+#   its code.
+# reason: pull_request_target runs the job with the base repository's token
+#   and secrets, while head.sha is the commit the fork's author pushed, and
+#   composer runs the script test of that commit's
+#   composer.json as a command of composer, and the script pre-command-run
+#   before any command.
+# attack-value: the file composer.json in the pull request's head = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the fork's commit,
+#   and composer test runs the script test of its composer.json, which prints
+#   PWNED, with the base repository's GITHUB_TOKEN, which the checkout
+#   left in .git/config, and its secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: composer test

@@ -1,0 +1,17 @@
+# situation: on watch, a job with write-all gives a secret to a run.
+# reason: a todo (the same file): a star triggers it on the default branch
+#   with the repository's secrets, but carries no value of the attacker's.
+# cause: it is not read as one of the privileged events.
+# attack: the attacker stars the repository.
+# attack-run-behavior: the star starts the job a on the default branch with
+#   a token that writes every scope; ./deploy runs with K set to
+#   DEPLOY_KEY's value, and no value of the attacker's reaches the step.
+on: watch
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy
+        env:
+          K: ${{ secrets.DEPLOY_KEY }}

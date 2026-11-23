@@ -1,0 +1,20 @@
+# situation: the job starts the service container redis:7, named by a tag
+#   and no digest.
+# reason: the runner pulls the image the tag 7 names when the job starts and
+#   runs it on the job's network as redis, so the image pushed last as
+#   redis:7 is what runs beside make; 7 is a tag of a version series, which
+#   moves with each 7.x release.
+# attack: whoever can push to redis on Docker Hub pushes an image of theirs
+#   under the tag 7.
+# attack-run-behavior: the runner pulls redis:7, which is now that image,
+#   when the job starts and runs it as the service redis on the job's
+#   network; it gets its own env and what make sends it, not the workspace
+#   or the docker socket.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    services:
+      redis: redis:7
+    steps:
+      - run: make

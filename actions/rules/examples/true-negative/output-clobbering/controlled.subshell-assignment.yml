@@ -1,0 +1,21 @@
+# situation: on issues opened, a step sets out to $GITHUB_OUTPUT inside
+#   ( ... ), and after the ( ... ) writes v= and the issue's body to "$out",
+#   and goes on when the write fails (|| true).
+# reason: bash runs ( ... ) in a subshell, so after the subshell out is
+#   empty, and the body does not go to $GITHUB_OUTPUT.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: out is empty when echo runs, so bash cannot open the
+#   file and writes nothing, || true keeps the step going, and the runner
+#   sets no output.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          ( out=$GITHUB_OUTPUT )
+          echo "v=$V" >> "$out" || true

@@ -1,0 +1,18 @@
+# situation: on push, a job runs on a runner group.
+# reason: a todo (a fact): the group may be of self-hosted runners or of
+#   larger runners.
+# cause: a group is not a label, and the rule reads the label self-hosted
+#   only.
+# attack: the attacker, once a contributor, opens a pull request from a fork
+#   whose workflow runs a step of their own on runs-on: group: big-runners.
+# attack-run-behavior: where big-runners is a group of self-hosted runners
+#   that the repository's pull requests may use, a runner of it picks up the
+#   job of the pull request, and the step runs on its machine, where what it
+#   leaves stays for the jobs after it, the push's job a among them.
+on: push
+jobs:
+  a:
+    runs-on:
+      group: big-runners
+    steps:
+      - run: echo

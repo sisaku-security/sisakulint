@@ -1,0 +1,21 @@
+# situation: in a job a label approves (pull_request_target, labeled), the
+#   with of the checkout is a whole ${{ }}, and npm ci runs after it.
+# reason: with is a whole ${{ }}, so the ref and the repository of the
+#   checkout are not known.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: when vars.CHECKOUT gives a ref the author moves after
+#   the label (refs/pull/<n>/head, say) and allow-unsafe-pr-checkout, the
+#   checkout fetches the pushed commit, and npm ci runs its preinstall, with
+#   the base repository's GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with: ${{ fromJSON(vars.CHECKOUT) }}
+      - run: npm ci

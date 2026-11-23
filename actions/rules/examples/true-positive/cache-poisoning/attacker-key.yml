@@ -1,0 +1,20 @@
+# situation: on issue_comment, a job with cache-mode: write saves build
+#   with actions/cache/save under a key that has the comment's body.
+# reason: issue_comment runs on the default branch with no approval, and
+#   cache-mode: write lets the job save to the cache of its scope; the key
+#   is what the commenter writes, so they choose the key it saves under.
+# attack-value: github.event.comment.body = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: the comment starts the job, which saves build under
+#   deps-Linux-5f4dcc3b…, the key a later run computes from a lock file not
+#   merged yet; when that run looks it up, it restores this entry.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ github.event.comment.body }}

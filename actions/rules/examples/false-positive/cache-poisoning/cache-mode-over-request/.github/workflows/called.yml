@@ -1,0 +1,29 @@
+# situation: on pull_request_target, a job calls a reusable workflow with
+#   cache-mode: write-only; the job of the reusable workflow writes
+#   cache-mode: write, checks out the head of the pull request and saves
+#   dist to the cache.
+# reason: cache-mode: write-only of the calling job limits the reusable
+#   workflow, and write asks for more than the limit (write-only grants no
+#   restore, and write grants restore and save): GitHub does not start a run
+#   whose called workflow asks for more than the limit, so nothing of the
+#   pull request's is saved.
+# cause: the rule reads cache-mode: write-only of the calling job as a mode
+#   that lets the job save to the cache, and does not compare it with the
+#   cache-mode of the reusable workflow.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the pull request starts ci.yml; the reusable workflow
+#   asks for write past the limit write-only, and the run does not start.
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}

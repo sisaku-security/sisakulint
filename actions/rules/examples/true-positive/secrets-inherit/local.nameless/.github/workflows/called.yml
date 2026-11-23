@@ -1,0 +1,27 @@
+# situation: on issues, the job report of ci.yml calls this reusable
+#   workflow, called.yml, with secrets: inherit. The job report of
+#   called.yml puts toJSON(secrets) in the env of a step and echoes the
+#   issue's title, written in by ${{ }}. The finding is reported on the
+#   secrets: of the job report of ci.yml, with the toJSON(secrets) of
+#   called.yml as a related location.
+# reason: secrets: inherit lets called.yml reference every secret of the
+#   repository and the organization, and toJSON(secrets) names no secret, so
+#   GitHub passes every one of those secrets to the runner of the job
+#   report; the title written in by ${{ }} is a flaw that runs the opener's
+#   code in the job report.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts ci.yml, which runs
+#   the job report of called.yml with every secret in the runner of the
+#   job report; the script becomes echo ""; echo PWNED; echo "", and a
+#   command that the attacker writes where echo PWNED is reads every secret
+#   from ALL.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.issue.title }}"
+        env:
+          ALL: ${{ toJSON(secrets) }}

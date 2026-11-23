@@ -1,0 +1,25 @@
+# situation: on pull_request_target labeled, the job checks out
+#   refs/pull/<n>/head and runs npm ci, only if the pull request's head
+#   repository is this repository.
+# reason: the if skips a pull request from a fork, whose head repository is
+#   the fork, so the head branch is in this repository, and only those who
+#   may push to it can move refs/pull/<n>/head after the label.
+# attack: after a maintainer reads the pull request and adds a label, its
+#   author pushes to the fork's branch a commit whose package.json has a
+#   preinstall that prints PWNED, before the job's checkout fetches.
+# attack-run-behavior: for the fork's pull request, head.repo.full_name is
+#   the fork, not github.repository, so the if is false and the job is
+#   skipped: nothing is checked out, and the pushed preinstall does not run.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  a:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

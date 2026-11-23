@@ -1,0 +1,8 @@
+name: y18
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON('["a"]') }}
+    steps:
+      - run: echo ok

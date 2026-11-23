@@ -1,0 +1,19 @@
+# situation: on issues, a step prints the title of the issue, and nothing
+#   sets ACTIONS_ALLOW_UNSECURE_COMMANDS.
+# reason: without the flag the runner refuses set-env and add-path, and
+#   fails the step instead of setting anything.
+# attack: the attacker opens an issue titled ##[set-env
+#   name=BASH_ENV;]$(id).
+# attack-run-behavior: the runner prints "The set-env command is disabled"
+#   and fails the step; the next step runs as written.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: echo next

@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step puts the issue's title into a run by
+#   ${{ }}; the step's if is ${{ 'false' }}, a string literal alone in
+#   ${{ }}.
+# reason: the runner reads the string of a string literal alone in ${{ }}
+#   as the expression of the if, so the if of the step is the expression
+#   false, and the runner skips the step: no title reaches the shell.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the if of the step is false, and the runner skips
+#   the step, so no script runs.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ 'false' }}
+        run: echo "${{ github.event.issue.title }}"

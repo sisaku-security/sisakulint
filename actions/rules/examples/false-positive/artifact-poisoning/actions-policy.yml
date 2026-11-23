@@ -1,0 +1,31 @@
+# situation: on pull_request_target, a job downloads the artifact of the ci
+#   run of the pull request, from forks too, into the workspace with
+#   dawidd6/action-download-artifact, and then reads ./build.sh into its shell
+#   by source.
+# reason: an actor rule of the Actions policies of the repository allows
+#   only the repository roles with write access to trigger the workflow, so a
+#   run that a pull request from an account without write access triggers
+#   fails. GitHub's documents say that GitHub evaluates the policies before a
+#   run, and that a run that a policy does not allow fails with an error; the
+#   documents do not say whether a job of such a run starts before the run
+#   fails, and the rule assumes that no job starts.
+# cause: the rule does not take the actor rules of the Actions policies into
+#   account: repo.pull-request-target-allowed is one value for all the runs of
+#   the workflow file on pull_request_target, and an actor rule blocks a run
+#   by the account that starts the run.
+# attack-value: the file build.sh in the artifact of the ci run of the pull request = "echo PWNED\n"
+# attack-run-behavior: the account of the attacker is not an allowed actor,
+#   so the run on pull_request_target fails with an error, and no job of the
+#   run starts (the assumption of the reason), so source never reads build.sh.
+name: policy
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ci.yml
+          pr: ${{ github.event.pull_request.number }}
+          allow_forks: true
+      - run: source ./build.sh

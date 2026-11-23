@@ -1,0 +1,6 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    uses: ./.github/workflows/label-reusable.yml
+    secrets: inherit

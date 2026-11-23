@@ -1,0 +1,29 @@
+# situation: the job runs on workflow_run, downloads the artifact of the run
+#   before it and runs npm ci, but only when the head repository of that run
+#   is the repository itself, so not for a run of a fork's pull request,
+#   whose head repository is the fork.
+# reason: when the run before it is a pull_request run, no run of an
+#   attacker's passes the if.
+# cause: a run of pull_request_target or issue_comment that an attacker
+#   triggers has the repository as its head too, and which it is is in the
+#   workflow before it, which the rule does not read; so it does not take
+#   the if as keeping the attacker out.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: for a ci run of the fork's pull request,
+#   workflow_run.head_repository is the fork, so the if is false and the job
+#   is skipped: nothing is downloaded, and npm ci does not run.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci

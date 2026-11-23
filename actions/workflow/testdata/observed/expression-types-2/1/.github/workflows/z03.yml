@@ -1,0 +1,11 @@
+name: z03
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: ${{ format('{0}', 'true') }}
+      matrix:
+        x: [a]
+    steps:
+      - run: echo ok

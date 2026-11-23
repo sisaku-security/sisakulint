@@ -1,0 +1,9 @@
+name: w03
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ github.event }}
+    steps:
+      - run: echo ok

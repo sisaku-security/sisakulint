@@ -1,0 +1,24 @@
+# situation: actions/cache/restore restores by restore-keys, the build adds
+#   files to the path, and actions/cache/save saves the path under the key of
+#   the commit, on push and on pull_request.
+# reason: no cache has the key of the commit, so the restore takes an older
+#   cache by the prefix, and the save stores the content of the older cache,
+#   with the files of the build, under a new key. On pull_request the new
+#   cache goes to the scope of the merge ref, which also counts toward the
+#   cache limit of the repository.
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/build
+          key: build-${{ github.sha }}
+          restore-keys: build-
+      - run: make
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/build
+          key: build-${{ github.sha }}

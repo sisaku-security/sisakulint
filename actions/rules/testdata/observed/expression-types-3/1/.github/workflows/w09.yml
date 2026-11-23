@@ -1,0 +1,7 @@
+name: w09
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c09.yml
+    secrets:
+      s: ${{ github.event }}

@@ -1,0 +1,13 @@
+# situation: a step sets its output version in the file $GITHUB_OUTPUT.
+# reason: the environment file is what GitHub asks for, and the runner adds
+#   no warning.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - run: echo "building ${{ steps.version.outputs.version }}"

@@ -1,0 +1,16 @@
+# situation: the boolean input dry-run of the reusable workflow has the
+#   default vars.DRY_RUN == 'true'.
+# reason: the comparison gives a boolean, the type of the input.
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        type: boolean
+        default: ${{ vars.DRY_RUN == 'true' }}
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh

@@ -1,0 +1,16 @@
+# situation: a workflow makes a GitHub release with
+#   actions/create-release@v1, whose action.yml declares runs.using: node12.
+# reason: the runner runs the action on Node.js 24, not on Node.js 12, and
+#   adds a warning to the job; code of the action that depends on Node.js
+#   12 may behave differently.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-release@v1
+        with:
+          tag_name: v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

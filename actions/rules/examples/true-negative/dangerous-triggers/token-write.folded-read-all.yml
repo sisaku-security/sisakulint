@@ -1,0 +1,17 @@
+# situation: on issues, the job's permissions are ${{ 'read-all' }}, a
+#   folded string, and a step writes the issue's title into a run by ${{ }}.
+# reason: GitHub reads the folded ${{ 'read-all' }} as read-all, so every
+#   scope of the job's token only reads, and the job reads no secret: code
+#   run through the title gets no token that writes.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: opening the issue starts the job a, and the script
+#   becomes echo ""; echo PWNED; echo "", so echo PWNED runs as a command;
+#   the job's token reads every scope and writes none, and the job reads no
+#   secret.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions: ${{ 'read-all' }}
+    steps:
+      - run: echo "${{ github.event.issue.title }}"

@@ -1,0 +1,23 @@
+# situation: the step s uses an action of another repository, and the next
+#   step prints its output o. The job sets ACTIONS_ALLOW_UNSECURE_COMMANDS
+#   to true, and a step comes after.
+# reason: the output is what the action writes at run time. Whether an
+#   attacker controls the printed value is not known.
+# cause: the rule does not read the action of another repository.
+# attack: an attacker who controls the value writes ##[set-env
+#   name=BASH_ENV;]$(id) in it.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's ##[set-env name=BASH_ENV;]$(id), the runner would set
+#   BASH_ENV, and the bash of the next step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - id: s
+        uses: some/action@v1
+      - run: echo "${{ steps.s.outputs.o }}"
+      - run: echo next

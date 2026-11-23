@@ -1,0 +1,24 @@
+# situation: on gollum, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
+#   and a step prints the title of a wiki page with printf, which reads the
+#   title as its format; a step comes after.
+# reason: a todo (the same file): printf turns \055 in the title into -, so
+#   the printed line holds ##[set-env name=BASH_ENV;], which the title as
+#   written cannot hold.
+# cause: the rule reads the title of a wiki page as holding no -, and does
+#   not read which commands decode escapes.
+# attack: an attacker who may edit the wiki titles a page
+#   ##[set\055env name=BASH_ENV;]$(id).
+# attack-run-behavior: printf prints ##[set-env name=BASH_ENV;]$(id), the
+#   runner sets BASH_ENV, and the bash of the next step runs id.
+on: gollum
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          T: ${{ github.event.pages[0].title }}
+        run: printf "$T\n"
+      - run: echo next

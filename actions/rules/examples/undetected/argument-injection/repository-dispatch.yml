@@ -1,0 +1,20 @@
+# situation: on repository_dispatch, a step passes the value title of the
+#   client_payload to tar after the file names, by ${{ }} inside quotes.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.title = "--to-command=echo PWNED"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, tar reads the word as --to-command and
+#   runs echo PWNED for notes.txt as it extracts the file, which prints PWNED.
+on: repository_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt "${{ github.event.client_payload.title }}"

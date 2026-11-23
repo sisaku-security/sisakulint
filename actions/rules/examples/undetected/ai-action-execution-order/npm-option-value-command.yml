@@ -1,0 +1,30 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the workspace; a later step runs
+#   npm --cache view ci.
+# reason: a limitation (run time): npm reads view as the value of the
+#   option --cache, which takes a value, and runs npm ci, which runs the
+#   script preinstall of the package.json of the workspace, which the agent may edit; which options take
+#   a value is in the definitions of the npm release that the job uses,
+#   which is known when the job runs.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command as the npm command, so the rule reads npm --cache view ci as
+#   npm view, a step that runs no code of the tree, and reports no
+#   ai-action-execution-order.edited-code.
+# attack-value: the file package.json in the workspace = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm --cache view ci runs the script preinstall,
+#   which prints PWNED, on the runner, with the network and the token actions/checkout left in
+#   .git/config.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+      - run: npm --cache view ci

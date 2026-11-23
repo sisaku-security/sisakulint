@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step passes to tar, after the file
+#   names, a word of the variable ARCHIVE_PREFIX followed by the pull
+#   request's title, through env and inside quotes.
+# reason: a todo (the same file): the variable ARCHIVE_PREFIX may be unset,
+#   and then the word begins with the title; reading whether what is before
+#   the value may be empty would find it.
+# cause: the rule reads a value inside quotes only at the head of its word,
+#   and here ${PREFIX} is before it.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: with the variable ARCHIVE_PREFIX unset, PREFIX is
+#   empty, so tar gets the word --to-command=echo PWNED, reads it as
+#   --to-command, and runs echo PWNED for notes.txt as it extracts it, which
+#   prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          PREFIX: ${{ vars.ARCHIVE_PREFIX }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar -xf archive.tar notes.txt "${PREFIX}$TITLE"

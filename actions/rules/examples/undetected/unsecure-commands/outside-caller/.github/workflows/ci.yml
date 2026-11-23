@@ -1,0 +1,5 @@
+on: push
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/called.yml

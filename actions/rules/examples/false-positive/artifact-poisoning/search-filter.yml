@@ -1,0 +1,30 @@
+# situation: on push, the job downloads with
+#   dawidd6/action-download-artifact v20, with the input event push, the
+#   artifact named out, from the newest push run of its own workflow into
+#   the workspace, and then runs build.sh with bash.
+# reason: the input event push makes the search list only the push runs of
+#   the workflow, which run the workflow of a commit pushed to the
+#   repository; no run of a pull request from a fork, and no run of a review
+#   of such a pull request, is in the list.
+# cause: the rule does not read the inputs event and commit, by which the
+#   search lists the runs.
+# attack-value: the file build.sh in the artifact named out, from the fork's pull_request run of the workflow = "echo PWNED\n"
+# attack-run-behavior: the pull request from a fork changes the workflow to
+#   run on pull_request too, and the pull_request run uploads build.sh in
+#   the artifact named out; the next push run lists only the push runs,
+#   takes the artifact of the newest push run, which a push to the
+#   repository made, and bash build.sh runs that build.sh, not the
+#   attacker's.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v20
+        with:
+          name: out
+          event: push
+      - run: bash build.sh

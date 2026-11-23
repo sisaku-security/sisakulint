@@ -1,0 +1,28 @@
+# situation: workflow_run downloads, with actions/download-artifact and the
+#   id of the run that started it, that run's artifact into the workspace,
+#   and then runs npm ci.
+# reason: npm ci reads the package.json and package-lock.json of the
+#   workspace and runs their install scripts, so the files the artifact puts
+#   there decide the code that runs, in this workflow_run, with the base
+#   repository's token, not in the run that made the artifact.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the fork's pull request changes ci so its run uploads
+#   package.json; when that run completes, the download takes its artifact
+#   by workflow_run.id with the token into the workspace, and npm ci runs
+#   its preinstall, which prints PWNED, with the base repository's secrets
+#   and a token of actions: read.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  actions: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci

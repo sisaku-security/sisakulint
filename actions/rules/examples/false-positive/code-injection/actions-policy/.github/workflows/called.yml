@@ -1,0 +1,31 @@
+# situation: the called workflow writes inputs.t into a run by ${{ }}; the
+#   caller ci.yml runs on pull_request_target alone and gives the title of
+#   the pull request as t, and no other workflow calls the called workflow.
+# reason: the Actions policies of the repository block the runs of ci.yml on
+#   pull_request_target (the default policy that GitHub adds to a public
+#   repository without an applicable event policy, from the time when GitHub
+#   enforces the default policy on the repository, or an event policy that
+#   an administrator sets without pull_request_target among the allowed
+#   events), so no run calls the called workflow. GitHub's documents say that
+#   GitHub evaluates the policies before a run, and that a run that a policy
+#   does not allow fails with an error; the documents do not say whether a
+#   job of such a run starts before the run fails, and the rule assumes that
+#   no job starts.
+# cause: the rule asks repo.pull-request-target-allowed only of a workflow
+#   whose on has pull_request_target, and the on of the called workflow has
+#   workflow_call, so the finding in the called workflow is still reported
+#   when the policies block the runs of the caller.
+# attack-value: inputs.t = "\"; echo PWNED; echo \""
+# attack-run-behavior: the pull request of the attacker triggers
+#   pull_request_target, and the run of ci.yml fails with an error, and no job
+#   of the run starts (the assumption of the reason), so the job of ci.yml
+#   never calls the called workflow, and the echo never runs.
+on:
+  workflow_call:
+    inputs:
+      t: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.t }}"

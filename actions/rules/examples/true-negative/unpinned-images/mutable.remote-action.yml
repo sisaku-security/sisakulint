@@ -1,0 +1,14 @@
+# situation: a step runs example-org/pinned-docker-action@v1, a Docker
+#   container action of another repository whose runs.image names
+#   ghcr.io/o/scan by its digest.
+# reason: a digest names one image, which no push changes.
+# attack: whoever can push to ghcr.io/o/scan pushes an image of theirs
+#   under a tag.
+# attack-run-behavior: the runner pulls the image of the digest, not the
+#   pushed one.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/pinned-docker-action@v1

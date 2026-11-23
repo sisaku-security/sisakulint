@@ -1,0 +1,18 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/deprecated-commands-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   deprecated-command (deprecated-command.yml) of the rule, with on:
+#   workflow_call in place of the on of deprecated-command.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive, a step
+#   sets its output version with the workflow command ::set-output.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   runner adds a warning to every run of the step, and the step sets no
+#   output once GitHub disables set-output, which GitHub planned and
+#   postponed.
+on: push
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/deprecated-commands-remote/.github/workflows/w.yml@v1
+    secrets: inherit

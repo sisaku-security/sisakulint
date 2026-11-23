@@ -1,0 +1,23 @@
+# The quality rule expression: a ${{ }} that GitHub accepts in the file and
+# that fails, or writes Object or Array into a text, when the workflow runs.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ vars.TIMEOUT }}
+    steps:
+      - run: make test
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env: ${{ vars.BUILD_ENV }}
+    steps:
+      - run: echo "outcomes=${{ steps.*.outcome }}"
+      - run: echo "${{ fromJSON(steps) }}"
+      - id: flaky
+        run: echo "allow=true" >> "$GITHUB_OUTPUT"
+      - run: make flaky-test
+        continue-on-error: ${{ steps.flaky.outputs.allow }}
+  deploy:
+    uses: ./.github/workflows/expression-called.yml

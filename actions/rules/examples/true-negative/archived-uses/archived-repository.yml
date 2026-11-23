@@ -1,0 +1,13 @@
+# situation: a workflow checks out its repository with actions/checkout@v5,
+#   whose repository is not archived.
+# reason: the repository of the action is maintained, so an error found in
+#   the action can be fixed in a later version.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false

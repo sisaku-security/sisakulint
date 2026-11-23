@@ -1,0 +1,24 @@
+# situation: on workflow_dispatch, a step that reads the secret DEPLOY_TOKEN
+#   runs when github.actor is a part of a string of names.
+# reason: the actor of a run of workflow_dispatch is the holder of the
+#   credential that dispatches the workflow; a credential whose only write
+#   access is to the permission Actions can dispatch the workflow, and the
+#   credential premise keeps the holder of such a credential as a possible
+#   attacker, so whether the name of the actor is a part of a name in the
+#   string is decided by who holds such a credential.
+# cause: the rule reads the if on the privileged events, and workflow_dispatch
+#   is not one.
+# attack: the attacker dispatches the workflow with a credential of the
+#   account longuser whose only write access is to the permission Actions.
+# attack-run-behavior: the run of workflow_dispatch has github.actor
+#   longuser, a part of longusername, so the step runs ./deploy.sh with the
+#   secret DEPLOY_TOKEN in its env.
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains('longusername anotherlongusername', github.actor)
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: ./deploy.sh

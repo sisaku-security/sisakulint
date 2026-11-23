@@ -1,0 +1,23 @@
+# situation: the job on pull_request_target checks out the pull request's
+#   head and runs npm ci, in the environment production.
+# reason: the environment production has required reviewers, who approve the
+#   job before it runs (then it is untrusted-checkout-toctou's).
+# cause: the rule takes the environment as one that approves nothing unless
+#   a file of facts says it has required reviewers
+#   (repo.environment-protected is assumed false, the worst case).
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the job waits until a required reviewer of production
+#   approves it; a reviewer who reads the pull request's package.json does
+#   not approve, and the checkout and npm ci do not run. An approval
+#   followed by a push is untrusted-checkout-toctou's.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

@@ -1,0 +1,25 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the workspace; a later step runs
+#   pnpm --dir /opt/tool install.
+# reason: a todo (the same file): pnpm runs in /opt/tool, out of the workspace, and loads the
+#   .pnpmfile.cjs and the package.json of /opt/tool, so pnpm runs no code
+#   of the workspace.
+# cause: the rule reads the absolute path /opt/tool as a path that may name
+#   a directory of the tree, so the rule reports ai-action-execution-order.edited-code.
+# attack-value: the file .pnpmfile.cjs in the workspace = "console.log('PWNED')"
+# attack-run-behavior: pnpm --dir /opt/tool install does not load the .pnpmfile.cjs
+#   of the attacker, so PWNED is not printed.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+      - run: pnpm --dir /opt/tool install

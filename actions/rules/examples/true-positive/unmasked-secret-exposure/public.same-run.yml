@@ -1,0 +1,19 @@
+# situation: on push, in a public repository (repo.public, assumed true),
+#   the env of the job has the password of the JSON secret DB under
+#   PASSWORD, and the run of a step writes env.PASSWORD twice.
+# reason: the runner prints the env of the job and the run with each ${{ }}
+#   evaluated in the header of the step, and the runner does not mask the
+#   password that fromJSON takes out of DB.
+# attack: anyone signed in to GitHub opens the log of the run and reads the
+#   password in the header of the step.
+# attack-run-behavior: the header of the step prints PASSWORD with the
+#   password, and the run with the password in the two places.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      PASSWORD: ${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: ./migrate.sh '${{ env.PASSWORD }}' && ./check.sh '${{ env.PASSWORD }}'

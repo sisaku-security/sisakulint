@@ -1,0 +1,23 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/secret-in-log-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   private (private.yml) of the rule, with on: workflow_call in place of
+#   the on of private.yml. The job passes its secrets with secrets: inherit.
+#   In the true positive, on push, in a private repository (repo.public
+#   answered false), a step prints the first characters of the secret
+#   DEPLOY_TOKEN to check which token is set.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   runner masks DEPLOY_TOKEN where the whole token is in the log, not a
+#   substring of the token, so the first eight characters of the token are
+#   in the log as they are.
+# attack: one with read access to the repository opens the run's log and
+#   reads the first characters of the token.
+# attack-run-behavior: the step prints "token starts with" and eight
+#   characters of the token; the log keeps them for 90 days by default.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: example-org/secret-in-log-remote/.github/workflows/w.yml@v1
+    secrets: inherit

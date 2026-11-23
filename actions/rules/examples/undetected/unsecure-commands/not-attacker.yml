@@ -1,0 +1,31 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true.
+#   A step prints the variable RELEASE_TAG and the secret RELEASE_NOTE,
+#   which reach the step through env, and prints runner.os.
+# reason: no added gain in a run that adds no attacker: no attacker writes
+#   vars, secrets or runner.os, and one who may change the repository's
+#   settings sets the variable and the secret. A run of the linter that adds
+#   variables-writer (--add-attacker) reports the variable, a run that adds
+#   secrets-writer reports the secret, and no run reports runner.os.
+# cause: the rule does not count vars, secrets and runner as values of an
+#   attacker.
+# attack: one who may change the repository's settings sets RELEASE_TAG to
+#   a line that starts with ::set-env; in a run that adds no attacker, no
+#   attacker can set the variable.
+# attack-run-behavior: the step prints the values; no attacker sets an
+#   environment variable.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TAG: ${{ vars.RELEASE_TAG }}
+          NOTE: ${{ secrets.RELEASE_NOTE }}
+        run: |
+          echo "tag: $TAG"
+          echo "note: $NOTE"
+          echo "${{ runner.os }}"
+      - run: echo next

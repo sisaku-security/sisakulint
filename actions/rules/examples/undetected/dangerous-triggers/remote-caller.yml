@@ -1,0 +1,26 @@
+# situation: a reusable workflow with write-all gives a secret to a run.
+# reason: a limitation (decided by remote-caller): the rule reads the
+#   events that each workflow given to the linter names in on, and a
+#   workflow_call run has the event of the run of the caller. A caller in
+#   the repository is a job of a workflow given to the linter, and the rule
+#   reads the job of that caller. A caller of another repository is not in
+#   the files given to the linter, so the events, the token and the secrets
+#   that the caller gives are not known.
+# cause: workflow_call is none of the privileged events, and no
+#   caller in the input calls it.
+# attack: a workflow of another repository calls this one on an event the
+#   attacker triggers, such as issues, and a flaw in that run executes their
+#   code.
+# attack-run-behavior: the call runs the job a with the caller's token,
+#   which permissions: write-all does not raise past what the caller gave,
+#   and with DEPLOY_KEY as the caller passes it; ./deploy runs with it in
+#   K.
+on: workflow_call
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy
+        env:
+          K: ${{ secrets.DEPLOY_KEY }}

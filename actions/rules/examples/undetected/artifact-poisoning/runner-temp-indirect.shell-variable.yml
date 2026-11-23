@@ -1,0 +1,27 @@
+# situation: on workflow_run, the artifact is downloaded under runner.temp,
+#   and a step runs its file by a shell variable that holds the path.
+# reason: a todo (the same file): reading the value of the shell variable,
+#   which the env of the step sets, would find that the file runs.
+# cause: only a command that names $RUNNER_TEMP/... or ${{ runner.temp
+#   }}/... is read as running the files; the value of $S is not read.
+# attack-value: the file x.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts x.sh under runner.temp/a; the
+#   step runs bash $S with S set to $RUNNER_TEMP/a/x.sh, which prints PWNED,
+#   with the base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/a
+      - run: bash $S
+        env:
+          S: ${{ runner.temp }}/a/x.sh

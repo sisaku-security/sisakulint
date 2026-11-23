@@ -1,0 +1,14 @@
+# situation: a workflow runs example-org/release-action@v1, a composite
+#   action of another repository, and the steps of that composite action
+#   use an action of an archived repository.
+# reason: the archived action runs in the job, and nobody fixes an error
+#   found in the archived action.
+# cause: the rule reads the uses of the inputs only, and does not fetch the
+#   action.yml of a composite action of another repository.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/release-action@v1

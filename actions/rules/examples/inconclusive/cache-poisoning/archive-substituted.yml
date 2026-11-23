@@ -1,0 +1,20 @@
+# situation: after a checkout of the pull request's head, a job with
+#   cache-mode: write runs a composite action of another repository whose
+#   step saves dist to the cache, and the archive the runner downloads has
+#   the file of the action unlike its blob (export-subst).
+# reason: placeholders such as %d and %(describe) take the names of refs
+#   made after the run (seen on 2026-10-31), so the step the runner runs
+#   may differ from the step read.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: when the step the runner runs saves dist, the
+#   attacker's index.js is saved to the default branch's scope.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: example-org/substituted-composite@v1

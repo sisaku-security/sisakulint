@@ -1,0 +1,25 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace and runs pnpm
+#   --config.ignore-pnpmfile=true store prune.
+# reason: a todo (the same file): pnpm loads no .pnpmfile.cjs of the tree
+#   when the pnpm setting ignore-pnpmfile is true, and the pnpm command
+#   store prune runs no script of the package.json, so pnpm runs no code of
+#   the artifact; the job still puts the files of the artifact in the
+#   workspace, which the finding artifact-poisoning.download says.
+# cause: the rule reads every run of pnpm as a run that runs code of the
+#   tree, so the rule reports artifact-poisoning.executed.
+# attack-value: the file .pnpmfile.cjs in the artifact out = "console.log('PWNED')"
+# attack-run-behavior: pnpm --config.ignore-pnpmfile=true store prune does
+#   not load the .pnpmfile.cjs of the artifact, so PWNED is not printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: pnpm --config.ignore-pnpmfile=true store prune

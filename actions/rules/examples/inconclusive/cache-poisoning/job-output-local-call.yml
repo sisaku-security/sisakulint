@@ -1,0 +1,21 @@
+# situation: on issues, a job with cache-mode: write saves build with
+#   actions/cache/save under a key that has ${{ needs.a.outputs.o }}.
+# reason: the output is set in that reusable workflow, another file, so
+#   whether an attacker controls it is not known from this one.
+# attack-value: needs.a.outputs.o = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+# attack-run-behavior: when ${{ needs.a.outputs.o }} holds the value, the job
+#   saves build to the cache of the default branch's scope under build-<value>,
+#   a key the attacker chose.
+on: issues
+cache-mode: write
+jobs:
+  a:
+    uses: ./.github/workflows/w.yml
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ needs.a.outputs.o }}

@@ -1,0 +1,34 @@
+# situation: labeler.yml runs, on pull_request_target, actions/checkout of
+#   the head of the pull request into the workspace, then npm tes, then
+#   actions/labeler with if: failure() and a personal access token; the
+#   configuration .github/labeler.yml adds the label test to a pull request
+#   that changes a file under site/; labeled.yml runs on pull_request_target
+#   on labeled when contains('safe-to-test', github.event.label.name) is
+#   true, which the label test makes true.
+# reason: a limitation (run time): npm reads tes as the npm command test,
+#   because tes is the beginning of no other command name or alias name of
+#   the npm release that the job uses, and npm test runs the script test of
+#   the package.json of the pull request, which can fail the step, so that
+#   actions/labeler adds the label test; which names the npm release has is
+#   known when the job runs.
+# cause: the rule does not read abbreviations of npm command names, so the
+#   rule reads npm tes as a step that runs no code of the pull request and
+#   that the attacker cannot make fail, and reads the label as one that a
+#   person adds.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"test\":\"exit 1\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; npm tes runs the script test, which fails
+#   the step, actions/labeler adds the label test, and labeled.yml starts
+#   for the pull request with no person approving it.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

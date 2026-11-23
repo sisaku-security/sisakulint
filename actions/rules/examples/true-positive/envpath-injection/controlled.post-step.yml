@@ -1,0 +1,21 @@
+# situation: on issues opened, a job checks out the repository, and its last
+#   step writes the body of the issue to $GITHUB_PATH.
+# reason: the post step of actions/checkout runs after the last step with
+#   that PATH, and runs git: a body whose lines include a directory that
+#   holds the attacker's git makes the post step run the attacker's git.
+# attack-value: github.event.issue.body = "/tmp/PWNED"
+# attack-run-behavior: echo writes /tmp/PWNED to $GITHUB_PATH; the post
+#   step of actions/checkout looks up git in a PATH that starts with
+#   /tmp/PWNED. On 2026-10-22, on ubuntu-latest, the post step ran the git
+#   and the sed of such a directory.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY" >> "$GITHUB_PATH"

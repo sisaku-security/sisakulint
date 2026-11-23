@@ -1,0 +1,13 @@
+# situation: the job sets timeout-minutes to a configuration variable,
+#   vars.TIMEOUT.
+# reason: a configuration variable is a string, and timeout-minutes of a
+#   job takes a number: GitHub does not start the job, even when the value
+#   is 5.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ vars.TIMEOUT }}
+    steps:
+      - run: make test

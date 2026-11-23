@@ -1,0 +1,26 @@
+# situation: on issue_comment, a job with cache-mode: write checks out the
+#   head of the pull request the comment is on, and actions/cache saves
+#   dist, a directory of the tree.
+# reason: issue_comment runs on the default branch with no approval, and
+#   cache-mode: write lets the job save to the cache of its scope; the
+#   files of dist are the pull request's as its author wrote them, and the
+#   post step of actions/cache saves them with no code of theirs run.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the attacker comments on their pull request; the
+#   checkout fetches its head into the workspace, and at the end of the job
+#   actions/cache saves dist, with the attacker's index.js, to the default
+#   branch's scope under dist-<sha of the lock file>, which a later run
+#   restores and runs.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}

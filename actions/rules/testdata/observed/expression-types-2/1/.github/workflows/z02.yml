@@ -1,0 +1,8 @@
+name: z02
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ format('{0}', 'false') }}
+    steps:
+      - run: echo ok

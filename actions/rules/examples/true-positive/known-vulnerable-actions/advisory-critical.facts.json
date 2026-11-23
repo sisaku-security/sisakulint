@@ -1,0 +1,17 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"tj-actions/branch-names","ref":"ab304d8562e2f137165e1d930e6d22d431189074"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tj-actions/branch-names","ref":"e497ceb8ccd43fd9573cf2e375216625bc411d1f"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"tj-actions/branch-names","ref":"ab304d8562e2f137165e1d930e6d22d431189074"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"advisory-critical.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"tj-actions/branch-names","sha":"ab304d8562e2f137165e1d930e6d22d431189074"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"tj-actions/branch-names","sha":"ab304d8562e2f137165e1d930e6d22d431189074"},"state":"found","value":["refs/tags/v7.0.6"]},
+{"query":{"kind":"git.commit-tags","repo":"tj-actions/branch-names","sha":"e497ceb8ccd43fd9573cf2e375216625bc411d1f"},"state":"found","value":["refs/tags/v9.0.0"]},
+{"query":{"kind":"git.ref-commit","repo":"tj-actions/branch-names","ref":"v9.0.0"},"state":"found","value":{"ref":"refs/tags/v9.0.0","sha":"e497ceb8ccd43fd9573cf2e375216625bc411d1f"}},
+{"query":{"kind":"package.advisories","package":"tj-actions/branch-names","version":"v7.0.6"},"state":"found","value":[{"first_patched_version":"9.0.0","ghsa_id":"GHSA-gq52-6phf-x2r6","severity":"critical","vulnerable_version_range":"<= 8.2.1"},{"first_patched_version":"7.0.7","ghsa_id":"GHSA-8v8w-v8xg-79rf","severity":"critical","vulnerable_version_range":"< 7.0.7"}]},
+{"query":{"kind":"package.advisories","package":"tj-actions/branch-names","version":"v9.0.0"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"tj-actions/branch-names"},"state":"found","value":[{"first_patched_version":"9.0.0","ghsa_id":"GHSA-gq52-6phf-x2r6","severity":"critical","vulnerable_version_range":"<= 8.2.1"},{"first_patched_version":"7.0.7","ghsa_id":"GHSA-8v8w-v8xg-79rf","severity":"critical","vulnerable_version_range":"< 7.0.7"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"tj-actions/branch-names"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":"advisory-critical.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

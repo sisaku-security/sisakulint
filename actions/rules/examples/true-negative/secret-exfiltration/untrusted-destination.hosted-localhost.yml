@@ -1,0 +1,18 @@
+# situation: on push, a job on a GitHub-hosted runner sends the secret
+#   API_KEY with curl to localhost:9200.
+# reason: a GitHub-hosted runner is a machine of the job alone, so only what
+#   the job starts listens on localhost.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the request goes to a process the job started on the
+#   runner.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -fsS -u "admin:$API_KEY" http://localhost:9200/_cluster/health

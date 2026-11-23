@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a run writes a SHA, a number, a date, a
+#   username, URLs GitHub builds from a username or from the repository and a
+#   number, and what GitHub or the repository sets.
+# reason: no added gain: an attacker cannot shape them into code.
+# cause: the rule's table of contexts marks them as values an attacker does
+#   not write freely.
+# attack-value: github.event.pull_request.head.sha = ";echo PWNED;"
+# attack-run-behavior: the step folds its lines into one, echo followed by
+#   the 17 values unquoted; GitHub sets head.sha to the 40 hex digits of a
+#   commit's SHA, so it is never the value; were it, the script would become
+#   echo ;echo PWNED; <the other values>, and bash would run echo PWNED as a
+#   command.
+on: pull_request_target
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >-
+          echo ${{ github.event.pull_request.head.sha }} ${{ github.event.pull_request.number }}
+          ${{ github.event.pull_request.created_at }} ${{ github.run_id }} ${{ github.repository }}
+          ${{ github.sha }} ${{ github.workspace }} ${{ github.event.action }}
+          ${{ github.actor }} ${{ github.triggering_actor }} ${{ github.event.sender.login }}
+          ${{ github.event.pull_request.user.login }} ${{ github.event.pull_request.head.repo.owner.login }}
+          ${{ github.event.sender.html_url }} ${{ github.event.sender.gravatar_id }} ${{ github.event.pull_request.user.html_url }} ${{ github.event.pull_request.html_url }}

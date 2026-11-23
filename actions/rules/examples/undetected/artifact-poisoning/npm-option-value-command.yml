@@ -1,0 +1,26 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow into the workspace and runs npm --cache view ci.
+# reason: a limitation (run time): npm reads view as the value of the
+#   option --cache, which takes a value, and runs npm ci, which runs the
+#   script preinstall of the package.json of the artifact; which options take
+#   a value is in the definitions of the npm release that the job uses,
+#   which is known when the job runs.
+# cause: the rule reads the first word after npm that is the name of an
+#   npm command as the npm command, so the rule reads npm --cache view ci as
+#   npm view, a step that runs no code of the tree, and reports artifact-poisoning.download, not
+#   artifact-poisoning.executed.
+# attack-value: the file package.json in the artifact = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm --cache view ci runs the script preinstall,
+#   which prints PWNED, in the job.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+      - run: npm --cache view ci

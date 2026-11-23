@@ -1,0 +1,22 @@
+# situation: on issues opened, a step defines a function f that writes V=
+#   and the issue's body to its standard output, points the standard output
+#   of the script to $GITHUB_ENV with exec, and calls f.
+# reason: a todo (the same file): f runs after the exec, so the body goes
+#   to $GITHUB_ENV.
+# cause: the rule reads the commands that run after the exec by their place
+#   in the text of the script, and the body of f comes before the exec.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          f() { echo "V=$V"; }
+          exec >>"$GITHUB_ENV"
+          f

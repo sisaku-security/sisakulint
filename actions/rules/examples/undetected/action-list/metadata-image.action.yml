@@ -1,0 +1,18 @@
+# situation: the action.yml of a Docker container action of the repository
+#   names the image docker://aquasec/trivy:0.69.4 in runs.image;
+#   repo.action-list is * and patterns that start with !, among them
+#   !docker://aquasec/trivy:*.
+# reason: the image runs as the action in each job that uses the action,
+#   with the environment and the inputs of the step.
+# cause: the rule does not compare the runs.image of an action metadata file
+#   in the repository that the linter checks with repo.action-list.
+# attack: the publisher of aquasec/trivy pushes an image that reads the
+#   secrets of CI under the tag 0.69.4.
+# attack-run-behavior: the runner pulls the image when a job uses the action
+#   and runs the image as the step.
+name: scan
+description: scan the workspace
+runs:
+  using: docker
+  image: docker://aquasec/trivy:0.69.4
+  args: [fs, .]

@@ -1,0 +1,19 @@
+# situation: a step puts the body of the issue in the env B, sends the
+#   output of its script to $GITHUB_PATH by exec, and then runs echo "b=$B".
+# reason: after exec, what each later command writes goes to the file; the
+#   rule does not analyze what the script writes after the exec.
+# attack-value: github.event.issue.body = "x\n/tmp/PWNED"
+# attack-run-behavior: exec sends the output of the rest of the script to
+#   $GITHUB_PATH, and echo "b=$B" writes the lines b=x and /tmp/PWNED there;
+#   the steps after it get /tmp/PWNED first in PATH, and the relative path
+#   b=x after it.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: |
+          exec >> "$GITHUB_PATH"
+          echo "b=$B"

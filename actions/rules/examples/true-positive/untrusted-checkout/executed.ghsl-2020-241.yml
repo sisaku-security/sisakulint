@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job checks out the head branch of the
+#   pull request from the head repository with actions/checkout v4.2.2, a
+#   release older than the first release of actions/checkout that refuses to
+#   check out the code of a pull request without the input
+#   allow-unsafe-pr-checkout, and runs yarn install --frozen-lockfile. This is
+#   acceptance.yml of getsentry/sentry (commit
+#   f325d54b5e0a06be52edef85e6e0781191b0984a, lines 19, 36-37 and 59).
+# reason: yarn install runs the scripts of package.json of the checkout, which
+#   the author of the pull request writes, in a job with the secrets and the
+#   write token of the base repository.
+# attack: the author of the pull request writes a script preinstall in
+#   package.json of the head branch.
+# attack-run-behavior: yarn install runs the script of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-241-getsentry-sentry-workflow/
+on: pull_request_target
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+      - run: yarn install --frozen-lockfile

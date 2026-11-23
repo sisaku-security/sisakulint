@@ -1,0 +1,19 @@
+# situation: on push, a step removes the line breaks of the secret
+#   DEPLOY_TOKEN with tr and prints the result; the secret is one line.
+# reason: for a secret of one line, tr -d '\n' gives the value of the
+#   secret as the value was, which the runner masks, so the log has ***.
+# cause: the rule reads tr as a command that changes the input, and does
+#   not know that a value of one line comes out of tr -d '\n' as the value
+#   was.
+# attack: one who may read the run's log opens the log to read the token.
+# attack-run-behavior: the step prints "token: ***".
+on: push
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          echo "token: $(echo "$DEPLOY_TOKEN" | tr -d '\n')"

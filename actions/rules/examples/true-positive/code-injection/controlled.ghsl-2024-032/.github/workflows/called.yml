@@ -1,0 +1,24 @@
+# situation: on pull_request_target, caller.yml calls the reusable workflow
+#   called.yml, whose step of actions/github-script sets the env log from the
+#   title of the pull request and puts ${{ env.log }} into its script. This
+#   is changelog.yml of fabricjs/fabric.js (commit
+#   649a7c3d74dce1c805a43b9ecea3c10db9797765, line 59) and its caller
+#   changelog_update.yml.
+# reason: the runner puts the title into the script before
+#   actions/github-script runs the script, so the author of the pull request
+#   writes code that runs with the token of the job.
+# attack-value: github.event.pull_request.title = "x'; console.log('PWNED'); '"
+# attack-run-behavior: the script becomes const log = '- x';
+#   console.log('PWNED'); '\n';, and actions/github-script prints PWNED.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-031_GHSL-2024-032_Fabric_js/
+on: workflow_call
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          log: '- ${{ github.event.pull_request.title }}\n'
+        with:
+          script: |
+            const log = '${{ env.log }}';

@@ -1,0 +1,17 @@
+# situation: the step s runs the Docker image docker://alpine:3, and the
+#   next step writes steps.s.outputs.o into its run script by ${{ }}.
+# reason: the image writes the output at run time; nothing the rule could
+#   read is expected to tell what it writes, so whether an attacker controls
+#   it is not known.
+# attack-value: steps.s.outputs.o = "\"; echo PWNED; echo \""
+# attack-run-behavior: when the image sets the output o to the value, the
+#   script of the next step becomes echo ""; echo PWNED; echo "", and bash
+#   runs the second echo as a command, which prints PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        uses: docker://alpine:3
+      - run: echo "${{ steps.s.outputs.o }}"

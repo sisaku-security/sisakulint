@@ -1,0 +1,21 @@
+# situation: on issues, a run writes the issue's title to $GITHUB_PATH by
+#   sudo tee, command tee and /usr/bin/tee.
+# reason: a todo (the same file): reading tee through another command or by
+#   its path would find it.
+# cause: the rule reads tee by its name alone.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: sudo tee -a, command tee -a and /usr/bin/tee -a each
+#   print /tmp/PWNED and append the line /tmp/PWNED to $GITHUB_PATH; the
+#   runner keeps one of the same lines, and the steps after it get
+#   /tmp/PWNED first in PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          echo "$T" | sudo tee -a "$GITHUB_PATH"
+          echo "$T" | command tee -a "$GITHUB_PATH"
+          echo "$T" | /usr/bin/tee -a "$GITHUB_PATH"

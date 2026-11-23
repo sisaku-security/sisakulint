@@ -1,0 +1,15 @@
+# situation: on issue_comment, a job on a self-hosted runner sends a request
+#   with curl to status.example.com, with the comment's body in the query.
+# reason: the workflow writes the host, so the request goes to
+#   status.example.com whatever the comment is.
+# attack: the attacker comments 10.0.0.5:8500.
+# attack-run-behavior: curl sends the request to status.example.com with the
+#   comment in the query; 10.0.0.5 gets nothing.
+on: issue_comment
+jobs:
+  probe:
+    runs-on: [self-hosted, linux]
+    steps:
+      - shell: bash
+        run: |
+          curl -fsS "https://status.example.com/check?name=${{ github.event.comment.body }}"

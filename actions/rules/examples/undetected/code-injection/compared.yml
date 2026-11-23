@@ -1,0 +1,18 @@
+# situation: on issues, a run writes the issue's title and body compared,
+#   negated, or given to contains, startsWith, endsWith or hashFiles.
+# reason: no added gain: what is written out is a bool or a hash.
+# cause: the rule reads the value of such an expression as not the
+#   attacker's text.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: each expression gives true or false, and hashFiles
+#   gives a hash or an empty string, so the value's text is not in the
+#   script, and echo prints only those words.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: >-
+          echo ${{ github.event.issue.title == 'x' }} ${{ !github.event.issue.body }}
+          ${{ contains(github.event.issue.title, 'x') }} ${{ startsWith(github.event.issue.title, 'x') }}
+          ${{ endsWith(github.event.issue.title, 'x') }} ${{ hashFiles(github.event.issue.title) }}

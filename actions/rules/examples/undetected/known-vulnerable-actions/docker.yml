@@ -1,0 +1,14 @@
+# situation: a step runs a Docker image.
+# reason: the actions ecosystem of the GitHub Advisory Database names
+#   packages by repository; an image is not one, and its vulnerabilities are
+#   not advisories of an action.
+# cause: the rule reads only the uses that name another repository
+#   (owner/repo), as the packages of the actions ecosystem are named.
+# attack: none of this rule's threat.
+# attack-run-behavior: the step runs the image the tag names.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3.18

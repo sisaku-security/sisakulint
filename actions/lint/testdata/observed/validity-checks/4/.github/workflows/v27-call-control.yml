@@ -1,0 +1,10 @@
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/callee.yml
+    with:
+      req: r
+      flag: true
+      num: 3
+    secrets:
+      shh: x

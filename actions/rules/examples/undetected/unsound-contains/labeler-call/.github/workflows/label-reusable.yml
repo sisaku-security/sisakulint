@@ -1,0 +1,8 @@
+on: workflow_call
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

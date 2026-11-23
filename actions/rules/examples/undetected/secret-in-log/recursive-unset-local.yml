@@ -1,0 +1,29 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step defines f, which calls h on the first call of f and calls g on the
+#   second call of f; h sets s to the secret DEPLOY_TOKEN without the first
+#   character of the secret, makes s local with safe, and calls f. g unsets s
+#   and prints "token: " and $s.
+# reason: a todo (the same file): in the second call of f, the unset in g
+#   takes away the local that h made, and s holds the value that h set before
+#   h made s local: the token without the first character, which the runner
+#   does not mask.
+# cause: the rule reads the second call of f, which f makes through h, where
+#   the first call of f runs, without the call of h, so the rule does not read
+#   the value that the unset reveals.
+# attack: anyone who can read the run opens the log of the run and reads
+#   the token without the first character.
+# attack-run-behavior: the step prints "token: " and the token without the
+#   first character.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          f() { if [ -z "$inner" ]; then inner=1; h; else g; fi; }
+          g() { unset s; echo "token: $s"; }
+          h() { s="${DEPLOY_TOKEN:1}"; local s=safe; f; }
+          f

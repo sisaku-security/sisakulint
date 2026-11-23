@@ -1,0 +1,30 @@
+on: push
+jobs:
+  job-flag:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - id: a
+        continue-on-error: true
+        uses: ./.github/actions/setenv
+      - run: echo "outcome=${{ steps.a.outcome }} FROM_ACTION=${FROM_ACTION-unset}"
+  step-flag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - id: a
+        continue-on-error: true
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+        uses: ./.github/actions/setenv
+      - run: echo "outcome=${{ steps.a.outcome }} FROM_ACTION=${FROM_ACTION-unset}"
+  no-flag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - id: a
+        continue-on-error: true
+        uses: ./.github/actions/setenv
+      - run: echo "outcome=${{ steps.a.outcome }} FROM_ACTION=${FROM_ACTION-unset}"

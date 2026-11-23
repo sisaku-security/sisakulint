@@ -1,0 +1,18 @@
+# situation: on pull_request_target, actions/checkout checks out gh-pages, a
+#   branch of the repository written out, and make runs.
+# reason: no added gain: the ref is the repository's, not the pull
+#   request's.
+# cause: the rule reads a ref written out as the base's code.
+# attack-value: the file Makefile in the pull request's head = "all:\n	echo PWNED\n"
+# attack-run-behavior: the checkout fetches gh-pages of the base repository,
+#   not the pull request's head, so make runs the base's Makefile, and the
+#   pull request's does not run.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: gh-pages
+      - run: make

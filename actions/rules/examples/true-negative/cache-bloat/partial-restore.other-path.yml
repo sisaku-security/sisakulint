@@ -1,0 +1,20 @@
+# situation: the job restores the npm cache directory by restore-keys, and
+#   saves the build output directory dist under a new key.
+# reason: the save stores dist, which no restore wrote: the content of the
+#   older npm cache does not go into the new cache.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+      - run: npm ci && npm run build
+      - uses: actions/cache/save@v4
+        with:
+          path: dist
+          key: dist-${{ github.sha }}

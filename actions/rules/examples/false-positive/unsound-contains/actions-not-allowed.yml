@@ -1,0 +1,34 @@
+# situation: the workflow of the true positive substring (substring.yml) of
+#   the rule, with a job added whose step uses
+#   example-org/not-allowed-action, which the setting of allowed actions of
+#   GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on
+#   issue_comment, the job runs ./deploy.sh with secrets.DEPLOY_TOKEN only
+#   if contains('alice bob', the commenter's login) holds.
+#   draft-new-release.yml of
+#   thomaseizinger/github-action-gitflow-release-workflow (commit
+#   4eec5c972a744f1da50b9fc9485f39d12f95d400, GHSL-2020-186) runs its job on
+#   issues only if contains('thomaseizinger,yourusername',
+#   github.event.issue.user.login) holds (line 14).
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack-value: github.event.comment.user.login = "ali"
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: issue_comment
+jobs:
+  deploy:
+    if: contains('alice bob', github.event.comment.user.login)
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

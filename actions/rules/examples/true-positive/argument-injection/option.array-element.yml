@@ -1,0 +1,20 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   the name of the pull request's head branch to tar after the file names,
+#   as the element 0 of the variable of env (${HEAD_REF[0]}), inside quotes.
+# reason: the element 0 of a variable that is not an array is the value of
+#   the variable, and tar reads a word that begins with - as an option even
+#   after its file names: the attacker names the branch --to-command=<a
+#   program>, and tar runs that program for each file it extracts.
+# attack-value: github.head_ref = "--to-command=sh${IFS}-c${IFS}id"
+# attack-run-behavior: tar reads the word as --to-command and runs sh -c id
+#   in the step, with what the step can reach.
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: tar -xf archive.tar notes.txt "${HEAD_REF[0]}"

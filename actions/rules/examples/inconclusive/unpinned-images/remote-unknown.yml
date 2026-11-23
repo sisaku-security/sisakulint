@@ -1,0 +1,14 @@
+# situation: a step runs example-org/unreachable-composite@v1, an action of another repository;
+#   action.definition was asked and has no answer (the archive is larger than the limit).
+# reason: whether the runs.image of the action is pinned by its digest is
+#   in a file the run could not read, or one the runner may read otherwise.
+# attack: whoever can push to the image the action names pushes an image
+#   of theirs under its tag.
+# attack-run-behavior: when the runs.image is named by a tag, the runner
+#   pulls the attacker's image and runs the step inside it.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/unreachable-composite@v1

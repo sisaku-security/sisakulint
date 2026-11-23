@@ -1,0 +1,26 @@
+# situation: on issues, the step p, which has an id and whose shell: is
+#   bash -x {0}, passes the title of the issue to git log, and the release
+#   step writes the output tag of the step p into its script.
+# reason: bash -x starts the script with the trace on, as set -x does, so
+#   the trace prints the command with the title on the standard error,
+#   where the runner reads ##[set-output name=NAME;] anywhere in a line as a
+#   command that sets the output NAME of a step with an id; the title is
+#   the attacker's.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the trace prints the git log command with the title,
+#   the runner sets the output tag of the step to $(id), and the release
+#   step writes the output into its script and runs id, with the token and
+#   the secrets of the job.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        shell: bash -x {0}
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: git log --grep "$TITLE" > log.txt
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

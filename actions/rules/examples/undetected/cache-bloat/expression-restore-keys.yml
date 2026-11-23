@@ -1,0 +1,24 @@
+# situation: a workflow that other workflows call passes the restore-keys
+#   of actions/cache as an input, which a caller sets to npm-.
+# reason: with npm-, the step restores the newest npm- cache on a miss and
+#   saves the content of the older cache under the new key, as with
+#   restore-keys written as npm-.
+# cause: the rule does not know the value of ${{ inputs.restore-keys }}:
+#   the value is empty when a caller does not set the input, and then the
+#   step restores no cache of another key.
+on:
+  workflow_call:
+    inputs:
+      restore-keys:
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ inputs.restore-keys }}
+      - run: npm ci

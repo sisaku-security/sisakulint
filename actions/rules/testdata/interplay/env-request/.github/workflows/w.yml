@@ -1,0 +1,13 @@
+# code-injection's fix moves the ${{ }} into the step's env; the host curl
+# sends the secret to is still the value, so request-forgery's finding stays
+# with the same fingerprint
+on: issue_comment
+permissions: {}
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.comment.body }}/status"

@@ -1,0 +1,11 @@
+name: z04
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: ${{ format('{0}', '1') }}
+      matrix:
+        x: [a]
+    steps:
+      - run: echo ok

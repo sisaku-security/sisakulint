@@ -1,0 +1,22 @@
+# situation: on push, a step gets the JSON secret DB whole, takes its
+#   password out with jq and registers it with ::add-mask::; a later step
+#   puts fromJSON(secrets.DB).password in its env.
+# reason: the runner masks what a step registers in every later step, so
+#   the later step's header prints PASSWORD as ***.
+# cause: the rule does not read the script of the earlier step, where the
+#   value is registered.
+# attack: one who may read the run's log opens it to read the password.
+# attack-run-behavior: the first step's header prints DB as ***, and the
+#   second step's header prints PASSWORD as ***.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DB: ${{ secrets.DB }}
+        run: echo "::add-mask::$(jq -r .password <<<"$DB")"
+      - env:
+          PASSWORD: ${{ fromJSON(secrets.DB).password }}
+        run: ./migrate.sh

@@ -1,0 +1,26 @@
+# situation: on push with contents: read, actions/checkout leaves the
+#   GITHUB_TOKEN in .git/config, and actions/upload-artifact uploads it.
+# reason: no added gain: the job's token writes nothing. The true negative
+#   github-token.folded-read of the kind artipacked.github-token is a job
+#   of the same kind.
+# cause: the rule leaves out the GITHUB_TOKEN of a job whose permissions
+#   write no scope.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: the upload puts .git/config with the job's token in
+#   the artifact, and the reader takes it while echo next runs, but
+#   permissions gives it contents: read only, so it pushes nothing.
+on: push
+permissions:
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with: {path: ., include-hidden-files: true}
+      - run: echo next

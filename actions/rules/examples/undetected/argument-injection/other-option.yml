@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step diffs the work tree and passes
+#   the name of the pull request's head branch to git diff, through env and
+#   inside quotes.
+# reason: a todo (the same file): git diff reads a word that begins with -
+#   as an option, and its option --output writes the diff to the file named
+#   in it, over what is there; declaring options that do harm other than
+#   running a program would find it.
+# cause: the rule reports only an option seen to run a program, and the
+#   table of commands declares none for git diff.
+# attack-value: github.head_ref = "--output=scripts/build.sh"
+# attack-run-behavior: git diff reads the word as --output and writes the
+#   diff into scripts/build.sh in place of the script, which a later step
+#   that runs it then runs as it is.
+on: pull_request_target
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: git diff "$HEAD_REF"

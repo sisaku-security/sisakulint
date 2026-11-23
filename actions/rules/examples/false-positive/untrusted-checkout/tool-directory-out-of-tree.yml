@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request into the workspace, and a later step runs npm ci with the
+#   working-directory ${{ runner.temp }}.
+# reason: a todo (the same file): npm ci runs in runner.temp, out of
+#   the pull request, and reads the package.json of runner.temp, so npm runs no
+#   code of the pull request.
+# cause: the rule also reads a tool whose directory is out of the tree as
+#   a tool that may run in the root of the workspace, so the rule reports
+#   untrusted-checkout.executed.
+# attack-value: the file package.json in the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: npm ci in runner.temp finds no package.json of the
+#   attacker and does not run the script preinstall, so PWNED is not
+#   printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci
+        working-directory: ${{ runner.temp }}

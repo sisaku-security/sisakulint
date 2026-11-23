@@ -1,0 +1,21 @@
+# situation: on issue_comment, a job with cache-mode: write checks out the
+#   head of the pull request the comment is on, and then runs a composite
+#   action of another repository whose step (actions/cache/save) saves
+#   dist, a directory of the tree.
+# reason: the step of the composite action saves to the cache as a step of
+#   the job does; action.definition answers the file of the action, as the
+#   archive the runner downloads has it.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the attacker comments on their pull request; the
+#   checkout fetches its head, and the step of example-org/cache-composite
+#   saves dist, with the attacker's index.js, to the default branch's scope.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - uses: example-org/cache-composite@v1

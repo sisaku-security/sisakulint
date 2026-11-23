@@ -1,0 +1,20 @@
+# situation: a step uses tj-actions/changed-files pinned to the commit of
+#   v44.5.1.
+# reason: GHSA-mrrh-fwg8-r2c3 is of the tags of tj-actions/changed-files
+#   moved to a malicious commit in March 2025; its range, <= 45.0.7, is of
+#   the versions whose tags were moved. The advisory says: "If you are using
+#   tagged versions (e.g., v35, v44.5.1), no action is required as these
+#   tags have been updated and are now safe to use." The commit of v44.5.1
+#   is not the malicious one.
+# cause: the rule reads only the range of an advisory, not what it says of
+#   the commits.
+# attack: the attacker of 2025 moves the tags again; this workflow names a
+#   commit, which no tag moves.
+# attack-run-behavior: the runner runs the commit 03334d09, which was not
+#   the malicious one.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: tj-actions/changed-files@03334d095e2739fa9ac4034ec16f66d5d01e9eba # v44.5.1

@@ -1,0 +1,23 @@
+# situation: on pull_request_target of an activity type added_later, the
+#   pull request's head SHA is checked out, and npm ci runs.
+# reason: a todo (a pin update): an activity type GitHub added after the
+#   pinned schemas is missed until the pins are updated.
+# cause: the analysis drops a value of types it does not know, as GitHub
+#   does for a value it has no such activity type for, so the job has no
+#   attacker's event.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: when GitHub sends pull_request_target with the
+#   activity type added_later, the job checks out head.sha and npm ci runs
+#   the preinstall, which prints PWNED, with the base repository's
+#   GITHUB_TOKEN in .git/config and its secrets.
+on:
+  pull_request_target:
+    types: [added_later]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

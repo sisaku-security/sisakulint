@@ -1,0 +1,9 @@
+on:
+  workflow_run:
+    workflows: ['Pull-Request Checks']
+    types: [completed]
+jobs:
+  p:
+    uses: ./.github/workflows/called.yml
+    secrets:
+      githubBotPAT: ${{ secrets.JDT_BOT_PAT }}

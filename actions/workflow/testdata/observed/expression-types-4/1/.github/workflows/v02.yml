@@ -1,0 +1,7 @@
+name: v02
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/cin.yml
+    with:
+      n: ${{ format('{0}', '3') }}

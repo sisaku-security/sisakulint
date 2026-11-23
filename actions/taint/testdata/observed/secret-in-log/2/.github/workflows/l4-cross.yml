@@ -1,0 +1,32 @@
+name: l4-cross
+on:
+  push:
+    branches: [probe/secret-in-log]
+permissions: {}
+jobs:
+  cross:
+    runs-on: ubuntu-latest
+    outputs:
+      d: ${{ steps.w.outputs.o }}
+    env:
+      B: ${{ secrets.PROBE_B }}
+    steps:
+      - name: w
+        id: w
+        run: |
+          echo "DERB=${B:6}" >> "$GITHUB_ENV"
+          echo "o=${B:7}" >> "$GITHUB_OUTPUT"
+          Q=${B:0:13}; echo "::add-mask::$Q"; echo "q1=$(echo "$Q" | base64)"; echo "q2=$(echo -n "$Q" | base64)"
+          R=${B:0:14}; echo "::add-mask::$R"; echo "r1=$(echo "$R" | base64)"; echo "r2=$(echo -n "$R" | base64)"
+      - name: r
+        env:
+          OUT: ${{ steps.w.outputs.o }}
+        run: |
+          echo "n22=$DERB"
+          echo "n23=${{ steps.w.outputs.o }}"
+  next2:
+    needs: cross
+    runs-on: ubuntu-latest
+    steps:
+      - name: n
+        run: echo "n24=${{ needs.cross.outputs.d }}"

@@ -1,0 +1,14 @@
+# situation: on push, a job calls a reusable workflow of another repository
+#   pinned to a full SHA.
+# reason: no added gain: GitHub refuses a reusable workflow whose commit no
+#   branch or tag of the repository has: the run never starts.
+# cause: the rule reads the uses of steps only.
+# attack: someone pushes a commit to their fork of owner/repo and gets its
+#   SHA, b3154b95, written as the job's uses.
+# attack-run-behavior: GitHub refuses a reusable workflow whose commit no
+#   branch or tag of owner/repo has, and fails the whole run before any job
+#   starts, so the fork's workflow does not run.
+on: push
+jobs:
+  call:
+    uses: owner/repo/.github/workflows/r.yml@b3154b9543ce6392fe65a19ce523c4d4adabca7b

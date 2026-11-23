@@ -1,0 +1,9 @@
+name: x04
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          H: ${{ hashFiles('x') }}
+        run: echo "$H"

@@ -1,0 +1,27 @@
+# situation: on an opened issue, a step appends the issue's title to
+#   ~/.bash_profile, and a later step runs a script whose shell: is
+#   bash -l {0}.
+# reason: a todo (the same file): bash -l runs the startup files of a login
+#   shell, ~/.bash_profile among them, before the script of the later step,
+#   so the title runs as code in the later step.
+# cause: the rule does not read the write to the startup file as a write of
+#   code.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: the first step appends echo $(echo PWNED) to
+#   ~/.bash_profile, and bash -l runs the line before the script of the
+#   second step, which prints PWNED. On 2026-11-16, on ubuntu-latest and
+#   macos-latest, a step with shell: bash -l {0} ran the line that an earlier
+#   step had appended to ~/.bash_profile, and a step with shell: bash {0} did
+#   not.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: echo "echo $ISSUE_TITLE" >> ~/.bash_profile
+      - shell: bash -l {0}
+        run: echo hi

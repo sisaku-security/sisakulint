@@ -1,0 +1,10 @@
+name: z31
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - if: ${{ case('x', true, false) }}
+        run: echo ran
+      - run: echo after

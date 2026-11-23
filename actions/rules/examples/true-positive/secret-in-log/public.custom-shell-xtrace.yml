@@ -1,0 +1,19 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step whose shell: is bash -x {0} assigns a substring of the secret TOKEN.
+# reason: bash -x starts the script with the trace on, as set -x does, so
+#   the trace prints the assignment with the substring, which the runner
+#   does not mask.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   substring in the trace.
+# attack-run-behavior: the trace prints "+ PREFIX=" and the substring; the
+#   log keeps the substring for 90 days by default.
+on: push
+permissions: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash -x {0}
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+        run: PREFIX=${TOKEN:0:12}

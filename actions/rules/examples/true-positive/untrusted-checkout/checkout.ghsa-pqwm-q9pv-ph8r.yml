@@ -1,0 +1,52 @@
+# situation: on pull_request_target, actions/checkout checks out the head of
+#   the pull request into the root of the workspace, and three steps use actions
+#   that read files of the checkout: shivammathur/setup-php 2.37.0, which reads
+#   the version of PHP from .php-version, composer.lock or composer.json;
+#   psf/black 26.1.0 with use_pyproject true, which reads the version of black
+#   from pyproject.toml; and google-github-actions/run-gemini-cli v0.1.21, whose
+#   gemini-cli reads .gemini/.env of the workspace. The advisories describe the
+#   form and name no workflow: GHSA-pqwm-q9pv-ph8r says "a privileged workflow
+#   such as pull_request_target that checks out untrusted pull request code
+#   before invoking setup-php", GHSA-v53h-f6m7-xcgm "A malicious pull request
+#   could edit pyproject.toml", and GHSA-wpqr-6v78-jr5g "CI workflows that
+#   review user-submitted pull requests". The checkout is pinned to v4.2.2, a
+#   release that does not stop the checkout of the code of a fork on
+#   pull_request_target; the tag v4 now names a release (v4.4.0) that fails with
+#   an error there.
+# reason: pull_request_target runs the job with the base repository's token
+#   and secrets, while head.sha is the commit the author of the pull request,
+#   from a fork too, pushed, so the files that the three actions read are the
+#   author's. The finding does not say what runs after the checkout: the linter
+#   assumes that a step after the checkout runs the files of the checkout unless
+#   a file of facts answers otherwise (the fact checkout.executed); here each of
+#   the three actions runs the files of the checkout.
+# attack: the author of a pull request from a fork commits .php-version, a
+#   pyproject.toml whose version of black is a direct URL to a repository of
+#   theirs, and .gemini/.env, and opens the pull request.
+# attack-run-behavior: setup-php 2.37.0 writes the version from .php-version
+#   into the script it generates and runs, black installs the package of the URL
+#   and runs it, and gemini-cli loads the environment of .gemini/.env before its
+#   sandbox starts; each runs the author's code with the base repository's
+#   token, which the checkout left in .git/config, and the secrets of the job.
+# advisory: https://github.com/advisories/GHSA-pqwm-q9pv-ph8r
+# advisory: https://github.com/advisories/GHSA-v53h-f6m7-xcgm
+# advisory: https://github.com/advisories/GHSA-wpqr-6v78-jr5g
+# advisory: https://github.com/advisories/GHSA-jj69-4grx-fqj5
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: shivammathur/setup-php@accd6127cb78bee3e8082180cb391013d204ef9f # 2.37.0
+      - uses: psf/black@6305bf1ae645ab7541be4f5028a86239316178eb # 26.1.0
+        with:
+          use_pyproject: true
+      - uses: google-github-actions/run-gemini-cli@9dbec29a20fab3f35017a40ad0eb798a257d4d51 # v0.1.21
+        with:
+          prompt: Review the pull request.
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}

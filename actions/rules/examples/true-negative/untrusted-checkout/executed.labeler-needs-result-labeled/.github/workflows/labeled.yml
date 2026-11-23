@@ -1,0 +1,35 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file under site/;
+#   labeled.yml runs on pull_request_target on labeled, and the job build,
+#   which needs the job pre and runs when the label is safe-to-test and
+#   needs.pre.result is failure, checks out the head of the pull request and
+#   runs npm ci.
+# reason: the if of the job build calls no status function, so GitHub
+#   evaluates the if only when the job pre succeeded, where needs.pre.result
+#   is success, and the if is false; when the job pre fails or is skipped,
+#   GitHub skips the job build; so the job build does not run
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/expressions.md,
+#   status check functions).
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; actions/labeler adds the label safe-to-test,
+#   which starts labeled.yml; GitHub runs the job pre, and the if of the job
+#   build is false, so the job build does not run.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  pre:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo pre
+  build:
+    needs: pre
+    if: github.event.label.name == 'safe-to-test' && needs.pre.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

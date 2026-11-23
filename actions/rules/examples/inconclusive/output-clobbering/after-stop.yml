@@ -1,0 +1,19 @@
+# situation: a step puts the body of the issue in the env B; its script
+#   first runs an echo with a case inside $( ), and then writes "b=$B" to
+#   $GITHUB_OUTPUT.
+# reason: the rule stops following the script where it cannot read it (the
+#   case), so what the script writes to the file after that is not analyzed.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the case in $( ) matches nothing, so the first echo
+#   prints a=; the second writes the lines b=x and PWNED=1 to $GITHUB_OUTPUT,
+#   and the runner sets the outputs b and PWNED.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: |
+          echo "a=$(case x in a) b;; esac)"
+          echo "b=$B" >> "$GITHUB_OUTPUT"

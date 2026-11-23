@@ -1,0 +1,23 @@
+# situation: caller.yml runs on workflow_dispatch with the input x, and
+#   calls called.yml with the input x of the dispatch as the input x of
+#   called.yml; called.yml writes the input x to $GITHUB_PATH.
+# reason: the one who dispatches caller.yml chooses the value:
+#   input-dispatch reports such a value where a workflow on workflow_dispatch
+#   refers to its input directly, but through the call the value is the input
+#   x of called.yml.
+# cause: the rule reads the events of a called workflow from the table of
+#   the callers, and does not follow the value of an input of
+#   workflow_dispatch that a caller gives in with.
+# attack-value: inputs.x = "/tmp/PWNED"
+# attack-run-behavior: when the one who dispatches caller.yml gives the
+#   value as x, the script writes the line /tmp/PWNED to $GITHUB_PATH, and the
+#   steps after it get /tmp/PWNED first in PATH.
+on:
+  workflow_call:
+    inputs:
+      x: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.x }}" >> "$GITHUB_PATH"

@@ -1,0 +1,14 @@
+# situation: a pull request runs actions/dependency-review-action with
+#   license-check: false and no license policy.
+# reason: no policy is written that the setting would turn off: the
+#   workflow does not use the license check.
+on: pull_request
+permissions: {contents: read}
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          license-check: false

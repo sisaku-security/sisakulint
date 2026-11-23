@@ -1,0 +1,23 @@
+# situation: on pull_request_target, a job checks out the head branch of the
+#   pull request from the head repository with actions/checkout v4.2.2, a
+#   release older than the first release of actions/checkout that refuses to
+#   check out the code of a pull request without the input
+#   allow-unsafe-pr-checkout, and runs pip install on the directory of the
+#   checkout. This is integration_tests.yml of spotipy-dev/spotipy, reduced to
+#   the checkout and the step that runs the code of the checkout (commit
+#   6bc91ecf982230473dbec40540c9d776cc304321).
+# reason: pip install runs setup.py of the checkout, which the author of the
+#   pull request writes, in a job with the secrets of the base repository.
+# attack: the author of the pull request writes setup.py in the head branch.
+# attack-run-behavior: pip install runs setup.py of the author.
+# advisory: https://github.com/spotipy-dev/spotipy/security/advisories/GHSA-h25v-8c87-rvm8
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+      - run: pip install .

@@ -1,0 +1,8 @@
+name: setenv
+description: a literal set-env in a composite step
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        echo "::set-env name=FROM_ACTION::v"

@@ -1,0 +1,64 @@
+# situation: on pull_request_target, the job frontend-unit-tests checks out
+#   the head of the pull request and runs yarn test over the checkout, with
+#   the repository's default token. This is ci.yml of getredash/redash
+#   (commit 939bec21142aeb2adc8c659ef2cbc3ad8f9df973, 2024-02-10, lines 1-11
+#   and 101-123); the other jobs, the needs of the job, the check of
+#   mergeable, the cache of setup-node and the step after yarn test are left
+#   out. The checkout is pinned to v4.1.1, the release that the tag v4 named
+#   then; the tag v4 now names a release that fails with an error when it
+#   checks out the code of a fork on pull_request_target.
+#   contributor-build.yml of hibernate/hibernate-orm (commit
+#   a0162f3ee52534251b7e4a3ef7905e0955d8927c, GHSL-2024-268) has the same
+#   form: on pull_request_target, actions/checkout@v4 checks out
+#   refs/pull/<number>/head and a step runs .github/ci-prerequisites.sh of the
+#   checkout.
+#   ci.yml of dotnet/docfx (commit 495fca5b8ccd85af0b1b8338b1310e30f480ed60,
+#   GHSL-2024-030) and contrib-openai.yml of microsoft/autogen (commit
+#   d797d267e4df9c584f3729f242738e42b9bfd093, GHSL-2024-025_GHSL-2024-026,
+#   with actions/checkout@v3) have the same form; the major tags v3 and v4 now
+#   name releases that refuse the code of a fork there. unit-tests.yml of
+#   calcom/cal.com (commit 492304fe1d672f6130524d54c357183cceabec70,
+#   GHSL-2024-163), which pr.yml calls on pull_request_target, checks out
+#   github.event.pull_request.head.sha with actions/checkout@v4 inside the
+#   local composite action .github/actions/dangerous-git-checkout and runs
+#   yarn test.
+# reason: pull_request_target runs the job with the base repository's token
+#   (which wrote at the time, as the advisory lists) and its secrets, while
+#   head.sha is the commit the author of the pull request, from a fork too,
+#   pushed; yarn and yarn test run the package.json of the checkout.
+# attack: the author of a pull request from a fork changes the script test of
+#   package.json and opens the pull request against master.
+# attack-run-behavior: yarn test runs the author's script with the base
+#   repository's token, which the checkout left in .git/config, and the
+#   secrets of the job.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-017_Redash/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-268_Hibernate_ORM/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-030_dotnet_docfx/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-025_GHSL-2024-026_AutoGen/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-163_cal_com/
+on:
+  push:
+    branches:
+      - master
+  pull_request_target:
+    branches:
+      - master
+env:
+  NODE_VERSION: 16.20.1
+jobs:
+  frontend-unit-tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install Dependencies
+        run: |
+          npm install --global --force yarn@1.22.19
+          yarn cache clean && yarn --frozen-lockfile --network-concurrency 1
+      - name: Run App Tests
+        run: yarn test

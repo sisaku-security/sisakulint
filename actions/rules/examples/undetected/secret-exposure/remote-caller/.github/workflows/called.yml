@@ -1,0 +1,26 @@
+# situation: a reusable workflow, run only when called, passes
+#   toJSON(secrets) to an action. ci.yml of the repository calls it passing
+#   DEPLOY_TOKEN by name; a workflow of another repository of the
+#   organization calls it with secrets: inherit.
+# reason: a limitation (decided by remote-caller): the caller in the other
+#   repository passes every secret it has, and the job's toJSON(secrets)
+#   reads them all, so GitHub sends that run's job every one.
+# cause: the rule reads the callers in the repository only, which all pass
+#   by name, and so reports nothing.
+# attack: the maintainer of some/deploy-action, or one who took over their
+#   account, moves the tag v1 to code that reads the step's env.
+# attack-run-behavior: in the run the other repository starts, the
+#   runner of the job gets every secret of that repository, and the
+#   action's code reads them in ALL.
+on:
+  workflow_call:
+    secrets:
+      DEPLOY_TOKEN:
+        required: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/deploy-action@v1
+        env:
+          ALL: ${{ toJSON(secrets) }}

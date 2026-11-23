@@ -1,0 +1,27 @@
+# situation: on fork, the step p prints the description of the fork that
+#   the fork event is about, and the release step writes the output tag of
+#   the step p into its script.
+# reason: the account that makes the fork writes the description of the
+#   fork, and whether GitHub takes ##[ and ] in the description of a fork
+#   was not checked; GitHub refused a line break in the description of a
+#   fork.
+# cause: the table of what an attacker controls reads the description of
+#   a fork as structured, and the characters that GitHub takes in the
+#   description of a fork were not checked on GitHub.
+# attack: an attacker forks the repository and writes x ##[set-output
+#   name=tag;]$(id) as the description of the fork.
+# attack-run-behavior: the step prints the description of the fork; were
+#   the description the attacker's x ##[set-output name=tag;]$(id), the
+#   runner would set the output tag of the step p, and the release step
+#   would run id.
+on: fork
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          DESCRIPTION: ${{ github.event.forkee.description }}
+        run: echo "forked as $DESCRIPTION"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

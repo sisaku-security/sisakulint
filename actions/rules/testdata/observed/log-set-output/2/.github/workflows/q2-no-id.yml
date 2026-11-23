@@ -1,0 +1,25 @@
+name: q2-no-id
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: n1 no id
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: echo "$M"
+      - id: bg
+        name: bg a background step
+        background: true
+        env:
+          M: ${{ github.event.head_commit.message }}
+        run: echo "$M"
+      - name: before the wait
+        env:
+          B: ${{ toJSON(steps.bg.outputs) }}
+        run: printf 'Z before=%s\n' "$(printf '%s' "$B" | tr -d '\n ')"
+      - wait: [bg]
+      - name: read all steps
+        env:
+          ALL: ${{ toJSON(steps) }}
+        run: printf 'Z all=%s\n' "$(printf '%s' "$ALL" | tr -d '\n ')"

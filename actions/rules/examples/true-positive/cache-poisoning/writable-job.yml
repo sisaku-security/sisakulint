@@ -1,0 +1,25 @@
+# situation: on pull_request_target, a job with cache-mode: write checks
+#   out the base and saves node_modules to the cache.
+# reason: pull_request_target runs the job for a pull request from a fork
+#   with no approval, and cache-mode: write lets it save to the cache of
+#   the default branch's scope, which GitHub otherwise keeps read-only on
+#   that event: a flaw that runs the author's code in the job lets them
+#   save what later runs restore.
+# attack: a flaw of the job (a later change that checks out the pull
+#   request's code, or an injection) runs the attacker's code, which saves
+#   an entry under the key of the release workflow.
+# attack-run-behavior: the job runs with Cache mode: write; code run in it
+#   saves to the default branch's scope, and the next run that restores
+#   that key runs what the attacker put there.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: deps-${{ hashFiles('package-lock.json') }}
+      - run: npm ci

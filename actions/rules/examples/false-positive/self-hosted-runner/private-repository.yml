@@ -1,0 +1,19 @@
+# situation: a pull request runs the job on a self-hosted runner.
+# reason: the repository is private or internal, so not anyone forks it and
+#   opens a pull request: one who may read it and fork it is
+#   self-hosted-runner.private.
+# cause: the rule takes the repository as public unless a file of facts says
+#   it is not (repo.public is assumed true, the worst case).
+# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
+#   that was merged), then opens a pull request from a fork whose copy of
+#   this workflow runs a step of their own in place of make.
+# attack-run-behavior: the repository is private or internal, so only those
+#   who may read it, every member of the enterprise for an internal one, fork
+#   it and open a pull request; an outsider cannot, and the job a runs on the
+#   self-hosted runner only the steps of those people's pull requests.
+on: pull_request
+jobs:
+  a:
+    runs-on: [self-hosted, linux]
+    steps:
+      - run: make

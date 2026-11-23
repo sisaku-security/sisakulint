@@ -1,0 +1,28 @@
+# situation: a reusable workflow whose job writes cache-mode: write checks
+#   out the head of the pull request and saves dist to the cache. mid.yml
+#   calls it with no cache-mode, and ci.yml calls mid.yml on
+#   pull_request_target with cache-mode: read.
+# reason: the read of ci.yml limits every workflow it calls, mid.yml's and
+#   through it this one's: GitHub does not start a run whose called
+#   workflow asks for more than the limit, so nothing of the pull request's
+#   is saved.
+# cause: the rule reads the cache-mode of the caller that calls this
+#   workflow, mid.yml, which writes none, and not of the caller of that
+#   caller.
+# attack-value: the file dist/index.js in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: the pull request starts ci.yml; the called workflow
+#   asks for write past the limit read, and the run does not start.
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}

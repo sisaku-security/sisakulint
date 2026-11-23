@@ -1,0 +1,29 @@
+# situation: on issues with the activity type assigned, which an account
+#   with the read role or no role in the repository cannot start,
+#   claude-code-action runs with the variable CLAUDE_ARGS as its
+#   claude_args.
+# reason: an attacker who can write the variables of the repository (the
+#   added attacker variables-writer) chooses the options of the agent; the
+#   next workflow run that one who can assign issues starts runs the agent
+#   with the options of the attacker, and the agent holds the token of the
+#   job.
+# attack-value: vars.CLAUDE_ARGS = "--allowedTools Bash"
+# attack-run-behavior: one who can assign issues assigns the issue, the
+#   workflow run starts, and the agent may run any command with Bash; the
+#   token of the job has write access to contents.
+# added-attacker: variables-writer
+on:
+  issues:
+    types: [assigned]
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: Triage the issue
+          claude_args: ${{ vars.CLAUDE_ARGS }}

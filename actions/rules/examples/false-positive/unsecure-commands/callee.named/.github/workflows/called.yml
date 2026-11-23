@@ -1,0 +1,31 @@
+# situation: ci.yml of the repository o/r calls this reusable workflow on
+#   push only, by the name o/r/.github/workflows/called.yml@main, not by the
+#   path ./.github/workflows/called.yml.
+# reason: when the run of the linter names the repository (--repo o/r), the
+#   call by the name is a call of this file, and the only caller runs on
+#   push, which no attacker of the finding kind triggers. A run without
+#   --repo reads the call by the name o/r/.github/workflows/called.yml@main
+#   as a call that may name a file of the repository, because the run does
+#   not know which repository the inputs are; the rule does not resolve the
+#   call to this file, so the rule reads this file on every event and reports
+#   the same finding.
+# cause: the rule does not resolve a call by the name of the repository to
+#   the file, so the rule reads this workflow on every event.
+# attack: the attacker opens an issue, a pull request or a comment with a
+#   value that would reach this workflow on an event of the attacker.
+# attack-run-behavior: only a push to the repository runs ci.yml, which
+#   calls this workflow on push; the run of the push reads no value of the
+#   attacker's issue, pull request or comment.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY"
+      - run: echo next

@@ -1,0 +1,11 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+  b:
+    needs: Build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "needs=${{ toJSON(needs) }}"

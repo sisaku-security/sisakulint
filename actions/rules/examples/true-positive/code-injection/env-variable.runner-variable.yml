@@ -1,0 +1,18 @@
+# situation: on pull_request_target, a step runs eval with the variable
+#   GITHUB_HEAD_REF, which the runner writes in every step.
+# reason: GITHUB_HEAD_REF holds github.head_ref, the name of the branch of
+#   the pull request, which its author writes. Git's check-ref-format does
+#   not forbid $, ( and { in the name of a branch, and GitHub accepted a
+#   branch named with $( ) and ${IFS} in a test on 2026-09-25; eval reads
+#   the expanded text as a command.
+# attack-value: github.head_ref = "$(echo${IFS}PWNED>/proc/$$/fd/1)"
+# attack-run-behavior: eval reads the value as a part of the command git
+#   checkout and runs the command substitution, which writes PWNED to the
+#   standard output of the bash of the step ($$); git checkout then runs with
+#   no argument.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: eval "git checkout $GITHUB_HEAD_REF"

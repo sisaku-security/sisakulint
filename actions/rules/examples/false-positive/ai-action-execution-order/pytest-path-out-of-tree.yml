@@ -1,0 +1,25 @@
+# situation: on issues opened, codex-action lets anyone start the agent,
+#   in its default sandbox, which edits the workspace; a later step runs
+#   pytest /opt/tests.
+# reason: a todo (the same file): pytest collects the tests of /opt/tests only, and loads no
+#   conftest.py and no test of the directory it runs in, so pytest runs no
+#   code of the workspace.
+# cause: the rule reads the directory that pytest runs in as a directory
+#   whose tests pytest collects, so the rule reports ai-action-execution-order.edited-code.
+# attack-value: the file conftest.py in the workspace = "import os; os.system('echo PWNED')"
+# attack-run-behavior: pytest /opt/tests does not import the conftest.py of the
+#   attacker, so PWNED is not printed.
+on:
+  issues:
+    types: [opened]
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          allow-users: "*"
+          prompt: "Fix issue #${{ github.event.issue.number }}"
+      - run: pytest /opt/tests

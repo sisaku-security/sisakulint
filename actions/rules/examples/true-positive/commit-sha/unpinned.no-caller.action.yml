@@ -1,0 +1,21 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step uses actions/checkout by the tag v4.
+# reason: the runner resolves @v4 to the commit the tag names when the job
+#   runs, not to a commit the action chose, and v4 is a major tag, which the
+#   maintainers of actions/checkout move to each new v4 release.
+# attack: the owner of actions/checkout, or whoever has taken over a token
+#   that pushes to actions/checkout, moves the tag v4 to a commit of their
+#   own, as the tags v1 to v45.0.7 of tj-actions/changed-files were moved in
+#   2025 to a commit that prints secrets to the log.
+# attack-run-behavior: when the job of a caller runs, the runner resolves
+#   @v4 to the moved commit instead of 11d5960a (the commit that v4 named when
+#   the example was written), downloads the commit and runs the action of the
+#   commit as the step, in the workspace and environment of the job, with the
+#   GITHUB_TOKEN actions/checkout takes by default; the moved commit of
+#   tj-actions/changed-files printed the secrets of the job to the log.
+name: checkout
+description: check out the repository
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4

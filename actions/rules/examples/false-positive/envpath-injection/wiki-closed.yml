@@ -1,0 +1,18 @@
+# situation: the job runs on gollum and reads the title of a wiki page.
+# reason: the wiki is off, or only collaborators may edit it (GitHub's
+#   default), so no outsider writes the title of a page.
+# cause: the rule takes the wiki as one anyone may edit unless a file of
+#   facts says it is not (repo.wiki-open is assumed true, the worst case).
+# attack-value: github.event.pages[0].title = "/tmp/PWNED"
+# attack-run-behavior: a run with this title writes the line /tmp/PWNED to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. With
+#   the wiki off, no gollum run comes; with editing kept to collaborators,
+#   the page's title is a collaborator's, not the attacker's.
+on: gollum
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.pages[0].title }}
+        run: echo "$V" >> "$GITHUB_PATH"

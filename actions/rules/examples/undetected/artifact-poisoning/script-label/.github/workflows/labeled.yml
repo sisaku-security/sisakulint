@@ -1,0 +1,36 @@
+# situation: labeler.yml runs on pull_request_target and adds the label
+#   safe-to-test with gh and a personal access token to a pull request whose
+#   title has [site]; labeled.yml runs on pull_request_target on labeled when
+#   the label is safe-to-test, and the job downloads the artifact out of the
+#   run that the output of a step names, and runs ./out/publish.sh.
+# reason: the attacker writes the title of the pull request, and a label that
+#   a personal access token adds starts the labeled run, so no person approves
+#   the run before the label starts the run.
+# cause: the rule reads the steps of actions/labeler, and does not read the
+#   scripts that add labels.
+# attack-value: the title of the pull request = "[site] fix"
+# attack-run-behavior: the attacker opens a pull request from a fork whose
+#   title has [site]; gh adds the label safe-to-test, which starts
+#   labeled.yml, and when the step names a run of the workflow build.yml of
+#   the pull request, the download puts the out/publish.sh of the attacker in
+#   out, and the step runs the file, which prints PWNED, with the secrets of
+#   the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - id: run
+        run: echo "id=$(gh run list --workflow build.yml --json databaseId -q '.[0].databaseId')" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: out
+          path: out
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+      - run: ./out/publish.sh

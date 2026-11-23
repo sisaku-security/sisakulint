@@ -1,0 +1,23 @@
+# situation: on pull_request_target, a job checks out the head branch of the
+#   pull request from the head repository with actions/checkout v4.2.2, a
+#   release older than the first release of actions/checkout that refuses to
+#   check out the code of a pull request without the input
+#   allow-unsafe-pr-checkout, and runs the action of the root of the checkout
+#   (uses: ./). This is the form of the workflows of game-ci that the advisory
+#   names.
+# reason: uses: ./ runs action.yml of the checkout, which the author of the
+#   pull request writes.
+# attack: the author of the pull request writes action.yml at the root of the
+#   head branch, with a step that runs a command of the author.
+# attack-run-behavior: the job runs the action of the author.
+# advisory: https://securitylab.github.com/advisories/GHSL-2021-033-game-ci-workflows/
+on: pull_request_target
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+      - uses: ./

@@ -1,0 +1,17 @@
+# situation: a reusable workflow that reads the title of an issue, and that
+#   only the repository's own workflows call, all of them on push.
+# reason: the issue it reads is never an outsider's.
+# cause: a callee is read in the worst case, as if a caller ran on issues.
+# attack-value: github.event.issue.title = "x\nPWNED=1"
+# attack-run-behavior: called by the repository's workflows on push, the
+#   event has no issue, so V is empty and echo appends the one line v= to
+#   $GITHUB_ENV. Were the title this value (a caller on issues), echo would
+#   append v=x and PWNED=1, and the runner would set PWNED to 1.
+on: workflow_call
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: echo "v=$V" >> "$GITHUB_ENV"

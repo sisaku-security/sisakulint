@@ -1,0 +1,24 @@
+# situation: the workflow is a reusable workflow with the input host, and a
+#   step sends a request with curl and the secret DEPLOY_TOKEN to the host
+#   inputs.host names.
+# reason: the value of inputs.host is what the caller gives, and no file
+#   read here calls this workflow.
+# cause: the rule decides an input only when the files read are the whole
+#   repository and every caller is resolved.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on:
+  workflow_call:
+    inputs:
+      host:
+        type: string
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ inputs.host }}/status"

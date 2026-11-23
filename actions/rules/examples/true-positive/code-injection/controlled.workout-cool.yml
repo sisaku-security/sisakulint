@@ -1,0 +1,24 @@
+# situation: a reduced copy of the workflow of Snouzy/workout-cool, which
+#   Radware's report of 2026-10 (case study B) shows running a command that
+#   the title of an issue held
+#   (https://github.com/Snouzy/workout-cool/blob/3e65987f4f11bb86483ff9dfc82b831b9a94cb6d/.github/workflows/notify-discord-issues.yml,
+#   line 89): on issues, a run assigns the issue's title, written in by
+#   ${{ }}, to a shell variable.
+# reason: anyone who opens an issue writes its title, and ${{ }} puts it
+#   into the script before the shell parses it, so a command substitution in
+#   the title runs in the assignment.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: the script becomes ISSUE_TITLE="$(echo PWNED)", and
+#   bash runs the command substitution; ISSUE_TITLE holds the output PWNED,
+#   and echo prints PWNED.
+on:
+  issues:
+    types: [opened, reopened, closed]
+jobs:
+  Discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification
+        run: |
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          echo "$ISSUE_TITLE"

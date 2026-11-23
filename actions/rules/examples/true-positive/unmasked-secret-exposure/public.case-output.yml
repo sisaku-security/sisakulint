@@ -1,0 +1,26 @@
+# situation: on push, in a public repository (repo.public, assumed true),
+#   an output of the job `read` is the whole secret TOKEN on the main branch
+#   and the password of the JSON secret DB on other branches; the later job
+#   `print` prints the output.
+# reason: on a branch other than main, the output has only the password,
+#   which the runner does not mask, so the runner keeps the output and the
+#   job `print` prints the password in the header of its step.
+# attack: anyone signed in to GitHub opens the log of the job `print` in a
+#   run on another branch.
+# attack-run-behavior: in a run on a branch other than main, the header of
+#   the step of the job `print` shows the run: script of the step with the
+#   password in it, unmasked.
+on: push
+permissions: {}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    outputs:
+      credential: ${{ case(github.ref == 'refs/heads/main', secrets.TOKEN, fromJSON(secrets.DB).password) }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.credential }}"

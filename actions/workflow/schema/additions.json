@@ -1,0 +1,77 @@
+{
+  "definitions": {
+    "cache-mode": {
+      "description": "The cache access of the jobs: read, write, write-only or none.",
+      "allowed-values": ["read", "write", "write-only", "none"],
+      "basis": [
+        {
+          "url": "https://github.com/github/docs/blob/484d6eae00bf31f731eeada8ebc2d3b6a46e3145/content/actions/reference/workflows-and-actions/workflow-syntax.md#L523",
+          "quote": "The accepted values are `read`, `write`, `write-only`, and `none`, with the same meanings as the top-level key.",
+          "language": "en",
+          "retrieved": "2026-10-13"
+        },
+        {
+          "date": "2026-10-13",
+          "runner": "2.337.0",
+          "observed": "bogus, WRITE, null and an expression reading github were rejected as workflow file issues; ${{ 'none' }} was taken, and Set up job logged Cache mode: none"
+        }
+      ]
+    }
+  },
+  "properties": [
+    {
+      "definition": "workflow-root-strict",
+      "name": "cache-mode",
+      "type": "cache-mode",
+      "basis": [
+        {
+          "url": "https://github.com/github/docs/blob/484d6eae00bf31f731eeada8ebc2d3b6a46e3145/content/actions/reference/workflows-and-actions/workflow-syntax.md#L411",
+          "quote": "Setting `cache-mode` at the top level applies to every job in the workflow, unless a job overrides it with [`jobs.<job_id>.cache-mode`](#jobsjob_idcache-mode).",
+          "language": "en",
+          "retrieved": "2026-10-13"
+        },
+        {
+          "date": "2026-10-13",
+          "runner": "2.337.0",
+          "observed": "a workflow with cache-mode: read at the top level ran"
+        }
+      ]
+    },
+    {
+      "definition": "job-factory",
+      "name": "cache-mode",
+      "type": "cache-mode",
+      "basis": [
+        {
+          "url": "https://github.com/github/docs/blob/484d6eae00bf31f731eeada8ebc2d3b6a46e3145/content/actions/reference/workflows-and-actions/workflow-syntax.md#L521",
+          "quote": "Use `jobs.<job_id>.cache-mode` to set the level of {% data variables.product.prodname_actions %} cache access for a single job.",
+          "language": "en",
+          "retrieved": "2026-10-13"
+        },
+        {
+          "date": "2026-10-13",
+          "runner": "2.337.0",
+          "observed": "a job with cache-mode: write-only ran, and Set up job logged Cache mode: write-only"
+        }
+      ]
+    },
+    {
+      "definition": "workflow-job",
+      "name": "cache-mode",
+      "type": "cache-mode",
+      "basis": [
+        {
+          "url": "https://github.com/github/docs/blob/484d6eae00bf31f731eeada8ebc2d3b6a46e3145/content/actions/reference/workflows-and-actions/workflow-syntax.md#L528",
+          "quote": "You can also set `cache-mode` on a job that calls a reusable workflow to limit the cache access granted to the called workflow.",
+          "language": "en",
+          "retrieved": "2026-10-13"
+        },
+        {
+          "date": "2026-10-13",
+          "runner": "2.337.0",
+          "observed": "a job with cache-mode: write that calls a reusable workflow ran, and the called job logged Cache mode: write"
+        }
+      ]
+    }
+  ]
+}

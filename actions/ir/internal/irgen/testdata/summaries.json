@@ -1,0 +1,34 @@
+{
+  "imports": ["github.com/sisaku-security/sisakulint/actions/facts"],
+  "values": [
+    {
+      "name": "Item",
+      "doc": "Item is a value for the test of irgen.",
+      "fields": [
+        {"name": "Text", "type": "string", "doc": "its text"},
+        {"name": "At", "type": "Handle", "doc": "where it is", "compare": false},
+        {"name": "index", "type": "int", "doc": "for this package", "compare": false}
+      ]
+    }
+  ],
+  "summaries": [
+    {
+      "name": "Thing",
+      "list": "Things",
+      "slug": "thing",
+      "doc": "Thing is a summary for the test of irgen.",
+      "handles": [{"name": "at", "doc": "where the thing is"}],
+      "fields": [
+        {"name": "name", "type": "string", "doc": "its name", "display": true},
+        {"name": "sha", "type": "facts.SHA", "doc": "its commit"},
+        {"name": "tags", "type": "[]string", "doc": "its tags"},
+        {"name": "items", "type": "[]Item", "doc": "its items"},
+        {"name": "main", "type": "Item", "doc": "its main item"},
+        {"name": "plan", "type": "*Plan", "doc": "not compared", "compare": false}
+      ],
+      "fixes": [
+        {"name": "Fix", "params": "i int, why string", "result": "Outcome", "doc": "the fix of its item i", "reads": ["thing.plan"]}
+      ]
+    }
+  ]
+}

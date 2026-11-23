@@ -1,0 +1,21 @@
+# situation: pull_request_target checks out the head of a pull request from
+#   a fork, with the guard of actions/checkout taken away, and npm ci runs
+#   its code.
+# reason: pull_request_target runs the job with the base repository's token
+#   and secrets, while head.sha is the commit the fork's author pushed, and
+#   npm ci runs the install scripts of that commit's package.json.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the checkout fetches head.sha, the fork's commit,
+#   into the workspace, and npm ci runs the preinstall of its package.json,
+#   which prints PWNED, with the base repository's GITHUB_TOKEN, which the
+#   checkout left in .git/config, and its secrets.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

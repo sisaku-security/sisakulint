@@ -1,0 +1,36 @@
+# situation: on push, a job `read` runs on Windows by a matrix, the env of
+#   the job `read` has the whole secret TOKEN under the name token, and an
+#   output of the job `read` is env.TOKEN and the password of the JSON
+#   secret DB; the later job `print` prints the output.
+# reason: on Windows, the runner matches the names of the env context in
+#   any case, so env.TOKEN is the whole secret TOKEN, which the runner
+#   masks; the runner drops the output, and the job `print` gets an empty
+#   value.
+# cause: the runs-on of the job `read` is a ${{ }} of the matrix, so the
+#   rule does not know that the job runs on Windows, and does not read
+#   env.TOKEN as the variable token.
+# attack: one who may read the log of the run opens the log of the job
+#   `print` to read the password.
+# attack-run-behavior: the job `read` warns that it skips the output
+#   credential since the output may contain a secret; the header of the
+#   step of the job `print` shows the run: script of the step with an empty
+#   value.
+on: push
+permissions: {}
+jobs:
+  read:
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      token: ${{ secrets.TOKEN }}
+    outputs:
+      credential: ${{ env.TOKEN }}-${{ fromJSON(secrets.DB).password }}
+    steps:
+      - run: echo read
+  print:
+    needs: read
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ needs.read.outputs.credential }}"

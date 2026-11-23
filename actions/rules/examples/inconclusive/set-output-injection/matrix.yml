@@ -1,0 +1,23 @@
+# situation: the step p prints a value of the matrix that comes from
+#   vars, and the release step writes the output tag of the step p into
+#   its script.
+# reason: the value of the matrix is not written out in the workflow.
+# cause: the rule does not read vars.
+# attack: an attacker who controls the value writes x ##[set-output
+#   name=tag;]$(id) in the value.
+# attack-run-behavior: the step prints the value; were the value an
+#   attacker's x ##[set-output name=tag;]$(id), the runner would set the
+#   output tag of the step, and the release step would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - v: ${{ vars.V }}
+    steps:
+      - id: p
+        run: echo "${{ matrix.v }}"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

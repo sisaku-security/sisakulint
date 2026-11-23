@@ -1,0 +1,25 @@
+# situation: on issues, the step p, which has an id, prints the title of
+#   the issue, and the release step writes the output tag of the step p
+#   into its script.
+# reason: the runner reads ##[set-output name=NAME;] anywhere in a
+#   printed line as a command that sets the output NAME of a step with
+#   an id, with no ACTIONS_ALLOW_UNSECURE_COMMANDS, and the title is the
+#   attacker's.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the step prints the value, the runner sets the
+#   output tag of the step to $(id), and the release step writes the
+#   output into its script and runs id, with the token and the secrets
+#   of the job.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

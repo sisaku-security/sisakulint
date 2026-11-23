@@ -1,0 +1,23 @@
+# situation: on push with write-all, actions/checkout leaves the credential,
+#   and actions/upload-pages-artifact uploads the workspace.
+# reason: a todo (the same file): actions/upload-pages-artifact makes the
+#   workspace readable.
+# cause: the rule reads actions/upload-artifact only.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: actions/upload-pages-artifact@v3 tars the path . with
+#   --exclude=.git, so the artifact github-pages holds no .git/config, and
+#   the reader takes no token.
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: .}
+      - run: echo next

@@ -1,0 +1,54 @@
+# situation: on workflow_run, a step downloads runtime-versions.md, a file of
+#   the artifact of the triggering run, and the script of the next step writes
+#   it to $GITHUB_ENV between the lines RUNTIME_VERSIONS<<EOF and EOF, with
+#   cat. This is write-prerelease-comment.yml of cloudflare/workers-sdk (commit
+#   ce7db9d9cb4f5bcd5a326b86dde051cb54b999fb, lines 1-14 and 39-54); the step
+#   with actions/github-script, the second download and the steps after line
+#   54 are left out. docs-preview-deploy.yml of docker-mailserver/docker-mailserver
+#   (commit c29fe3ff0bc888016720536228878b3f19131056, GHSL-2024-255) has the
+#   form without the heredoc: it extracts the artifact and runs cat pr.env >>
+#   "${GITHUB_ENV}". doc-publish-pr.yml of zephyrproject-rtos/zephyr (commit
+#   9c0f92db475f0e27673ac366276026eddf1a150c, GHSL-2024-253) runs echo
+#   "PR_NUM=$(<pr_num/pr_num)" >> $GITHUB_ENV (line 31), and docs-preview.yml of
+#   litestar-org/litestar (commit ffaf5616b19f6f0f4128209c8b49dbcb41568aa2,
+#   GHSL-2024-177) runs echo "PR_NUMBER=$(cat docs-preview/.pr_number)" >>
+#   $GITHUB_ENV.
+# reason: a todo (the same file): reading, in the workflow, the command that
+#   copies the file and the step that downloads the file would find it.
+#   artifact-poisoning reports the download of the artifact, and this rule
+#   reports nothing.
+# cause: the rule reads the text of the script, and does not follow where
+#   the file comes from (the step that downloads the file).
+# attack-value: the file runtime-versions.md of the artifact runtime-versions.md = "x\nEOF\nLD_PRELOAD=/home/runner/work/r/r/inject.so\nPWNED=1"
+# attack-run-behavior: the author of a pull request from a fork makes the
+#   triggering run upload runtime-versions.md with the value; the line EOF in
+#   the file ends the value of RUNTIME_VERSIONS, and the runner sets
+#   LD_PRELOAD and PWNED for the steps after the step of cat.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-252_Cloudflare_workers-sdk/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-255_docker-mailserver/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-253_Zephyr/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-177_Litestar/
+on:
+  workflow_run:
+    workflows: ["Create Pull Request Prerelease"]
+    types:
+      - completed
+jobs:
+  comment:
+    if: ${{ github.repository_owner == 'cloudflare' }}
+    runs-on: ubuntu-latest
+    name: Write comment to the PR
+    steps:
+      - name: "Download runtime versions"
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          name: runtime-versions.md
+      - name: "Put runtime versions on the environment"
+        id: runtime_versions
+        run: |
+          {
+            echo 'RUNTIME_VERSIONS<<EOF'
+            cat runtime-versions.md
+            echo EOF
+          } >> "$GITHUB_ENV"

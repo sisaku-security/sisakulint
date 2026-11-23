@@ -1,0 +1,26 @@
+# situation: the bundle-size workflow of the TanStack incident (2026-05-11):
+#   pull_request_target checks out the merge of the pull request, a
+#   composite action of another repository sets up pnpm, and pnpm nx runs
+#   a build.
+# reason: pull_request_target runs the job with the base repository's token
+#   for a pull request from a fork with no approval, and refs/pull/<n>/merge
+#   is the pull request's code, which the build runs: in the incident it
+#   ran the attacker's vite_setup.mjs. pnpm nx runs the script nx of the
+#   tree, or else the binary nx: nx is no command of pnpm.
+# attack-value: the file packages/history/vite_setup.mjs in the pull request = "console.log('PWNED')"
+# attack-run-behavior: the checkout fetches refs/pull/<n>/merge, and the
+#   build runs the pull request's vite_setup.mjs with the job's token.
+on:
+  pull_request_target:
+    paths: ['packages/**']
+permissions:
+  contents: read
+jobs:
+  benchmark-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      - uses: TanStack/config/.github/setup@main
+      - run: pnpm nx run @benchmarks/bundle-size:build

@@ -1,0 +1,18 @@
+# situation: a step prints a file of notes between ::stop-commands:: and
+#   the token that ends the stop, and a line of the notes is
+#   ::set-output name=a::b.
+# reason: the runner reads no workflow command between the two, and the
+#   line is text of the log.
+# cause: the rule does not read ::stop-commands::.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          token=$(uuidgen)
+          echo "::stop-commands::$token"
+          echo "::set-output name=a::b"
+          echo "::$token::"

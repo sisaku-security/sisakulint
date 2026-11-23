@@ -1,0 +1,19 @@
+# situation: a step writes toJSON(env) to $GITHUB_ENV by ${{ }}, the whole
+#   env.
+# reason: the whole env has what steps set at run time, so whether an
+#   attacker controls a part of it is not known.
+# attack-value: toJSON(env) = "{\n  \"B\": \"x\\nPWNED=1\"\n}"
+# attack-run-behavior: the value is toJSON(env) when a step before set B to
+#   x, a line break and PWNED=1. toJSON writes the line break in a string as
+#   the two characters \n, so the lines appended to $GITHUB_ENV are v={,
+#   then "B": "x\nPWNED=1" after two spaces, and }; the runner sets v to {,
+#   then a variable whose name is the second line up to its first =, two
+#   spaces and "B": "x\nPWNED, and fails the step at the line }, which has
+#   neither = nor <<. No variable PWNED is set: no text of a value starts a
+#   line of its own.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ toJSON(env) }}" >> "$GITHUB_ENV"

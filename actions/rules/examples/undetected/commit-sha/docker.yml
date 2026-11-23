@@ -1,0 +1,19 @@
+# situation: on push, steps use docker://alpine:3 and docker://alpine pinned
+#   by a digest.
+# reason: another rule's: a Docker image's tag can be moved too;
+#   unpinned-images reports it.
+# cause: the rule's scope is uses of other repositories; unpinned-images
+#   reads docker://.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: the runner pulls alpine:3 when the job runs, which is
+#   now that image, and runs it as the first step with the workspace and the
+#   step's environment; the second step pulls by its digest and runs the
+#   same image whatever 3 names.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3
+      - uses: docker://alpine@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

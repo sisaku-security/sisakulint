@@ -1,0 +1,26 @@
+# situation: the job a sets its output o from the output of its step s,
+#   which a script writes to $GITHUB_OUTPUT; the job b writes
+#   needs.a.outputs.o to $GITHUB_OUTPUT by ${{ }}.
+# reason: the value is what another job computes at run time, so whether an
+#   attacker controls it is not known.
+# cause: the rule does not yet follow the output of a job back to what sets
+#   it.
+# attack-value: needs.a.outputs.o = "x\nPWNED=1"
+# attack-run-behavior: when o holds an attacker's text such as this, ${{ }}
+#   puts its two lines inside the double quotes of the echo, which writes the
+#   lines v=x and PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v
+#   and PWNED. As the step s is written here, o is x.
+on: issues
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs.o }}
+    steps:
+      - id: s
+        run: echo "o=x" >> "$GITHUB_OUTPUT"
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ needs.a.outputs.o }}" >> "$GITHUB_OUTPUT"

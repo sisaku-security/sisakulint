@@ -1,0 +1,8 @@
+name: z05c
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    cancel-timeout-minutes: 5
+    steps:
+      - run: echo ok

@@ -1,0 +1,17 @@
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+permissions: {}
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LABELER_APP_ID }}
+          private-key: ${{ secrets.LABELER_APP_KEY }}
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          LABELER_TOKEN: ${{ steps.app.outputs.token }}
+        run: gh secret set BOT_TOKEN --repo "$GITHUB_REPOSITORY" --body "$LABELER_TOKEN"

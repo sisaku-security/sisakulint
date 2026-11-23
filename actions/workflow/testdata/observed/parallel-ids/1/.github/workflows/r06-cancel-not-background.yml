@@ -1,0 +1,9 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: c
+        run: echo c-done
+      - cancel: c
+      - run: echo after

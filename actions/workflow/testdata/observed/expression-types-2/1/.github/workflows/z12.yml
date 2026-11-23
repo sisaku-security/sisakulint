@@ -1,0 +1,5 @@
+name: z12
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/c12.yml

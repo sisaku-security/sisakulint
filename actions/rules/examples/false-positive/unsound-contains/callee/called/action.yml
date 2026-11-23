@@ -1,0 +1,29 @@
+# situation: ci.yml of the repository runs on push alone; the job of ci.yml
+#   checks out the branch main with ref: main and then calls this composite
+#   action by ./called. No other workflow calls this composite action. A step
+#   of this composite action runs ./deploy.sh with the token of the job only
+#   if the if of the step, contains(github.actor, 'alice'), is true.
+# reason: a run of push starts only when a user who can push to the
+#   repository pushes, so the actor of every run of this composite action is
+#   a user who can write to the repository, and an attacker with a login such as alice-x
+#   starts no run of this composite action.
+# cause: the last checkout step before the step that calls this composite
+#   action by a ./ path has the ref input, so the rule does not know which
+#   action.yml the workspace holds, does not know all of the callers of this
+#   composite action, and reads this composite action on every event,
+#   issue_comment among the events.
+# attack-value: github.actor = "alice-x"
+# attack-run-behavior: a comment by the account alice-x on an issue starts no
+#   run of ci.yml. A run of ci.yml starts only on a push to the repository.
+#   So the step of this composite action never runs with github.actor
+#   alice-x.
+name: deploy
+description: deploy for alice
+runs:
+  using: composite
+  steps:
+    - if: contains(github.actor, 'alice')
+      run: ./deploy.sh
+      shell: bash
+      env:
+        TOKEN: ${{ github.token }}

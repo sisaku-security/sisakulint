@@ -1,0 +1,23 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow under runner.temp and runs pnpm --dir /opt/tool install.
+# reason: a todo (the same file): pnpm runs in /opt/tool, out of the artifact, and loads the
+#   .pnpmfile.cjs and the package.json of /opt/tool, so pnpm runs no code
+#   of the artifact, which the download puts under runner.temp.
+# cause: the rule reads the absolute path /opt/tool as a path that may name
+#   a directory of the tree, so the rule reports artifact-poisoning.executed.
+# attack-value: the file .pnpmfile.cjs in the artifact = "console.log('PWNED')"
+# attack-run-behavior: pnpm --dir /opt/tool install does not load the .pnpmfile.cjs
+#   of the attacker, so PWNED is not printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+          path: ${{ runner.temp }}/out
+      - run: pnpm --dir /opt/tool install

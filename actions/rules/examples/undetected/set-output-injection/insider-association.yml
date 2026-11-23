@@ -1,0 +1,33 @@
+# situation: on issues opened, a job whose if lets in an issue whose
+#   author_association is MEMBER prints the body of the issue in the
+#   step p, and the release step writes the output tag of the step p
+#   into its script.
+# reason: a todo (a fact): a member of the organization, who may have read
+#   access only, passes this if (in an organization that lets anyone become a
+#   member, such as by a bot that invites whoever asks, an outsider becomes such
+#   a member), and gets the token and the secrets of the job past what the Read
+#   role gives; who is a member, and with what role, is not in the workflow.
+# cause: the rule evaluates the if with the attacker's
+#   author_association (NONE, FIRST_TIMER, FIRST_TIME_CONTRIBUTOR or
+#   CONTRIBUTOR), for which the if is false, so no attacker's event runs
+#   the job.
+# attack: a member whose role is read opens an issue whose body is x
+#   ##[set-output name=tag;]$(id).
+# attack-run-behavior: on an issue a member opens, the job runs, the
+#   runner sets the output tag, and the release step runs id. On an
+#   issue whose author_association is NONE, FIRST_TIMER,
+#   FIRST_TIME_CONTRIBUTOR or CONTRIBUTOR, the if skips the job.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  a:
+    if: github.event.issue.author_association == 'MEMBER'
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

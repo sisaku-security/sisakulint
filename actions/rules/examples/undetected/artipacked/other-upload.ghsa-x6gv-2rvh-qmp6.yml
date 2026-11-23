@@ -1,0 +1,42 @@
+# situation: on push, actions/checkout checks out the repository with a
+#   personal access token in its input token, and
+#   BoldestDungeon/steam-workshop-deploy v1.0.1 uploads the root of the
+#   workspace (its input path empty) as an item of the Steam Workshop. The
+#   advisory (GHSA-x6gv-2rvh-qmp6) names no workflow: it says that the action
+#   "does not exclude the `.git` directory when packaging content for
+#   deployment" and that the package may hold "github personal access tokens
+#   (PATs) embedded in `.git/config`", in particular when the workflow checks
+#   out the repository with actions/checkout.
+# reason: actions/checkout v1 to v5, with persist-credentials true (the
+#   default), leaves the credential of its input token in .git/config of the
+#   workspace (v6 and later leave the credential in a file of RUNNER_TEMP), and
+#   the action is a Docker action that puts every file of the path, .git among
+#   them, in the item it publishes on the Steam Workshop, where its subscribers
+#   download it.
+# cause: the rule checks only the steps that use actions/upload-artifact.
+# attack: one who subscribes to the item of the Steam Workshop downloads it
+#   and takes the token from the line http.https://github.com/.extraheader
+#   (AUTHORIZATION: basic, the base64 of x-access-token:<token>) of .git/config.
+# attack-run-behavior: steam_deploy.sh of the action writes a manifest whose
+#   contentfolder is the root of the workspace ($(pwd)/ and the empty path, line
+#   7) and runs steamcmd +workshop_build_item with fileExclusion "*.psd" (line
+#   114), which leaves .git in, so the published item holds .git/config with the
+#   personal access token given as the input token, which does not expire when
+#   the job ends.
+# advisory: https://github.com/advisories/GHSA-x6gv-2rvh-qmp6
+on: push
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MOD_REPOSITORY_TOKEN }}
+      - uses: BoldestDungeon/steam-workshop-deploy@a6e5b5fa5963fb5b9e22c7e0dfa046a1481c4974 # v1.0.1
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          configVdf: ${{ secrets.STEAM_CONFIG_VDF }}
+          appId: 763890
+          publishedFileId: 1234567890

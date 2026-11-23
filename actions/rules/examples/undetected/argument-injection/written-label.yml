@@ -1,0 +1,21 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   the label of the pull request's head (owner:branch) to tar after the
+#   file names, written into the script with ${{ }} and outside quotes.
+# reason: another rule's: code-injection reports the same ${{ }}. The
+#   attacker writes ${IFS} in the name of the branch, so the shell splits
+#   the label into words, and a word after the first word begins with -.
+#   The attacker can also write $( ) in the name of the branch and run code
+#   without an option.
+# cause: the rule reads the label as one word that begins with the login,
+#   and does not read the words after the shell splits the label.
+# attack-value: github.event.pull_request.head.label = "attacker:x${IFS}--to-command=id"
+# attack-run-behavior: the shell splits the label into attacker:x and
+#   --to-command=id; tar reads --to-command=id as an option and, while tar
+#   extracts notes.txt, runs id with the content of notes.txt as the input
+#   of id, and id prints the user and the groups of the runner.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - run: tar -xf archive.tar notes.txt ${{ github.event.pull_request.head.label }}

@@ -1,0 +1,10 @@
+on:
+  workflow_call:
+    secrets:
+      DEPLOY_KEY:
+        required: true
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/called.yml
+    secrets: inherit

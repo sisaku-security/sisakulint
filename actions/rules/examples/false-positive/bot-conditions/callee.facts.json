@@ -1,0 +1,8 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"git.ref-commit","repo":"o/r","ref":"main"},"state":"found","value":{"ref":"refs/tags/main","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"o/r"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"o/r/.github/workflows/b.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"o/r"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

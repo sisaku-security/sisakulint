@@ -1,0 +1,3 @@
+test:
+  - changed-files:
+      - all-globs-to-any-file: ['site/**', '!site/**']

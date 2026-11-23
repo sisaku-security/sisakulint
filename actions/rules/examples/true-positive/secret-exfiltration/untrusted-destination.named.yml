@@ -1,0 +1,20 @@
+# situation: on push, a step sends the secret API_KEY in a form to the URL
+#   that the secret UPLOAD_API holds; no file of facts answers for the pair
+#   of API_KEY and ${{ secrets.UPLOAD_API }}.
+# reason: the URL of the destination is a secret, so the fact names it by
+#   its origin, ${{ secrets.UPLOAD_API }}; whoever holds that server
+#   receives API_KEY.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the workflow sends the request as it always does, and
+#   the server, now the attacker's, logs the value of API_KEY.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -fsS -F "token=$API_KEY" "${{ secrets.UPLOAD_API }}"

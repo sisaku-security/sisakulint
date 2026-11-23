@@ -1,0 +1,16 @@
+# situation: on push, a step uses example-org/pinned-substituted-action
+#   pinned to a full SHA; action.definition answers that the file of the
+#   action in the archive is unlike its blob (export-subst).
+# reason: whether the difference is a placeholder that takes the names of
+#   refs made later (%d, %(describe)), so that the action that runs can
+#   change after the pin, is not decided.
+# attack-value: the name of a tag the maintainer of the action makes on the pinned commit = "v9';echo${IFS}PWNED;'"
+# attack-run-behavior: when the action.yml has $Format:%d$ in a step, the
+#   runner downloads the archive with the tag's name in the step, and the
+#   step runs echo PWNED.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/pinned-substituted-action@0123456789abcdef0123456789abcdef01234567

@@ -1,0 +1,23 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step sets X to safe, then assigns the secret DEPLOY_TOKEN without the
+#   first character of the secret to X in a compound command whose redirect
+#   copies file descriptor 9, which is not open, goes on when the compound
+#   command fails (|| true), and prints X.
+# reason: the copy of file descriptor 9 fails, so bash does not run the
+#   compound command, X keeps safe, and the step prints no part of the
+#   secret.
+# attack: anyone who can read the run opens the log of the run and reads
+#   the secret.
+# attack-run-behavior: the step prints "token: safe".
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          X=safe
+          { X="${DEPLOY_TOKEN:1}"; } 3>&9 || true
+          echo "token: $X"

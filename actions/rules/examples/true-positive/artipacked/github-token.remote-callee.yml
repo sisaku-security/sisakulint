@@ -1,0 +1,31 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/artipacked-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   github-token (github-token.last-step.yml) of the rule, with on:
+#   workflow_call in place of the on of github-token.last-step.yml. The job
+#   passes its secrets with secrets: inherit. In the true positive,
+#   actions/checkout leaves the job's token in .git/config, and
+#   actions/upload-artifact, the last step, uploads the workspace with its
+#   hidden files.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds:
+#   include-hidden-files: true puts .git/config, with the token, in the
+#   artifact; v4 artifacts can be downloaded while the run goes on, and the
+#   token, which may write contents, still works through the post steps; the
+#   fixed workflow of quay/clair, whose token was taken this way, had its
+#   upload as the last step.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: the checkout writes the job's GITHUB_TOKEN, which may
+#   write contents, into .git/config; the upload, with include-hidden-files:
+#   true, puts .git/config in the artifact, which can be downloaded once the
+#   upload ends; the post steps still run after it, and until the job ends
+#   the token pushes to the repository.
+on: push
+jobs:
+  c:
+    uses: example-org/artipacked-remote/.github/workflows/w.yml@v1
+    secrets: inherit

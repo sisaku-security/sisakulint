@@ -1,0 +1,20 @@
+# situation: the workflow runs on workflow_dispatch with the input x, and a
+#   step writes inputs.x and github.event.inputs.x into its run script by
+#   ${{ }}.
+# reason: whoever dispatches the workflow chooses the value, and the
+#   workflow does not tell who that is, so whether an attacker controls it
+#   is not known; nothing the rule could read is expected to tell it.
+# attack-value: inputs.x = "\"; echo PWNED; echo \""
+# attack-run-behavior: when the one who dispatches the workflow gives the
+#   value as x, which inputs.x and github.event.inputs.x both hold, the
+#   script becomes echo ""; echo PWNED; echo " "; echo PWNED; echo "", and
+#   bash runs both echo PWNED as commands.
+on:
+  workflow_dispatch:
+    inputs:
+      x: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ inputs.x }} ${{ github.event.inputs.x }}"

@@ -1,0 +1,24 @@
+# situation: on push, a job writes id-token write and nothing else, and
+#   assumes a role of AWS.
+# reason: a todo (the same file): code there takes an OIDC token for the
+#   clouds that trust the repository.
+# cause: the rule does not report id-token write as a written scope.
+# attack: the maintainer of aws-actions/configure-aws-credentials, or
+#   whoever takes over their account or moves its tag v4, makes the action
+#   send out what it gets.
+# attack-run-behavior: id-token: write puts ACTIONS_ID_TOKEN_REQUEST_URL and
+#   ACTIONS_ID_TOKEN_REQUEST_TOKEN in the job's environment; the action
+#   requests an OIDC token for the repository with them, assumes
+#   arn:aws:iam::123456789012:role/deploy with it and holds that role's AWS
+#   credentials, which it can send out.
+on: push
+permissions:
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/deploy
+          aws-region: us-east-1

@@ -1,0 +1,19 @@
+# situation: on issues, a step uses the composite action
+#   example-org/title-composite at a full commit SHA, and a step of that
+#   composite action runs echo "${{ github.event.issue.title }}". The fact
+#   action.definition gives the action.yml of the composite action.
+# reason: a todo (a fact): the answer of action.definition gives the steps
+#   of the composite action, and the rule could read the run of the step.
+# cause: the rule does not read the steps of a composite action of another
+#   repository.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script of the step of the composite action
+#   becomes echo ""; echo PWNED; echo "", and bash runs the second echo as
+#   a command, which prints PWNED.
+on: issues
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/title-composite@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

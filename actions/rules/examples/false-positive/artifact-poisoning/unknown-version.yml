@@ -1,0 +1,28 @@
+# situation: on workflow_run, the job downloads with the branch releases/v2
+#   of actions/download-artifact, with the input run-id
+#   github.event.workflow_run.id (the run that started this workflow) and a
+#   token, into the workspace, and then runs npm ci.
+# reason: the branch releases/v2 is a version before v4, whose inputs are
+#   name and path only: the download takes the artifacts of the current run,
+#   which no pull request from a fork drives, whatever the input run-id is.
+# cause: the version of a branch is not known, and the rule reads it as v4
+#   or later, which reads the inputs run-id and github-token.
+# attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the branch releases/v2 reads no input run-id, so the
+#   download takes no artifact of the fork's ci run, and npm ci reads no
+#   package.json of the pull request.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions:
+  actions: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@releases/v2
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - run: npm ci

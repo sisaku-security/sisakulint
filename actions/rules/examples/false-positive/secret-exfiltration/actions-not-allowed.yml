@@ -1,0 +1,31 @@
+# situation: the workflow of the true positive untrusted-destination
+#   (untrusted-destination.yml) of the rule, with a job added whose step
+#   uses example-org/not-allowed-action, which the setting of allowed
+#   actions of GitHub (repo.allowed-actions) blocks with
+#   !example-org/not-allowed-action@*. In the true positive, on push, a step
+#   uploads a build to VirusTotal with curl and the secret API_KEY in a
+#   header; no file of facts answers for the pair.
+# reason: GitHub checks each uses of the workflow before the run starts, and
+#   does not start the run because of the uses of
+#   example-org/not-allowed-action: no job of the run runs, so what the
+#   reason of the true positive says does not happen (in runs that the
+#   authors of the rule made on GitHub, such runs ended as startup_failure).
+# cause: the rule does not read repo.allowed-actions.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: GitHub does not start the run, so no step of the run
+#   runs, and the attack does nothing.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -fsS -H "x-apikey: $API_KEY" https://www.virustotal.com/api/v3/files -F file=@dist/app.zip
+  not-allowed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/not-allowed-action@eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee

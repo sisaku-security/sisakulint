@@ -1,0 +1,16 @@
+# situation: on issues, a run writes the issue's body to $GITHUB_PATH.
+# reason: another rule's: envpath-injection reports a value written to
+#   $GITHUB_PATH.
+# cause: the rule reads writes to $GITHUB_ENV only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo appends the lines x and PWNED=1 to $GITHUB_PATH,
+#   and the runner puts both before the PATH of the steps after it; nothing
+#   is written to $GITHUB_ENV, and no variable PWNED is set.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: echo "$B" >> "$GITHUB_PATH"

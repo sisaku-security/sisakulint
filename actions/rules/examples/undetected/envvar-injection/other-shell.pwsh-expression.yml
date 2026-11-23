@@ -1,0 +1,20 @@
+# situation: on issues, a run of pwsh writes the issue's body to
+#   $GITHUB_ENV with a ${{ }} in the script.
+# reason: reading pwsh would find the write to $GITHUB_ENV. code-injection
+#   reports the ${{ }}, and the fix of the step reads $env:ISSUE_BODY in
+#   place of the ${{ }}. The fix of the step does not take the line breaks
+#   out of the issue's body, because no rule reports the write to
+#   $GITHUB_ENV in a run of pwsh, so the run after the fix still writes the
+#   line breaks of the issue's body to $GITHUB_ENV.
+# cause: the rule reads runs of bash and sh only.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: pwsh's echo writes b=x, a line break and PWNED=1 to
+#   $GITHUB_ENV, appending the lines b=x and PWNED=1; the runner sets b to x
+#   and PWNED to 1.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh
+        run: echo "b=${{ github.event.issue.body }}" >> $env:GITHUB_ENV

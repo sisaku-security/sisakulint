@@ -1,0 +1,6 @@
+name: build
+description: builds
+runs:
+  using: composite
+  steps:
+    - uses: inner/action@v2

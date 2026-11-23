@@ -1,0 +1,5 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"outside-actions-directory.yml"},"state":"found","value":true},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.allowed-actions"},"state":"found","value":{"allowed_actions":"selected","github_owned_allowed":false,"verified_allowed":false,"patterns_allowed":["*","!example-org/*"],"sha_pinning_required":false}}
+]}

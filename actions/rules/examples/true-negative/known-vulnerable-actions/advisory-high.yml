@@ -1,0 +1,13 @@
+# situation: the step uses actions/download-artifact pinned to the commit
+#   of v4.1.3.
+# reason: GHSA-cxww-7g56-2vh6 says 4.1.3 fixes the path traversal; GitHub
+#   gives no advisory for 4.1.3.
+# attack: someone who makes the artifact puts in it a file whose name
+#   climbs out of the path.
+# attack-run-behavior: v4.1.3 does not write the file outside the path.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85 # v4.1.3

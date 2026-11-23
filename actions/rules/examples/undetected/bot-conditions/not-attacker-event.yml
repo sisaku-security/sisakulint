@@ -1,0 +1,28 @@
+# situation: on push, a job merges when github.actor is dependabot[bot].
+# reason: no added gain: push runs it, which no attacker's pull request
+#   triggers; Dependabot's push to the attacker's branch does not reach it.
+# cause: push is none of the attacker's events the rule reads the if on.
+# attack: the attacker enables Dependabot in their fork, opens a pull
+#   request to this repository from the branch of a pull request Dependabot
+#   opened in the fork, then comments @dependabot recreate on Dependabot's
+#   pull request there, so that Dependabot pushes to that branch (Synacktiv
+#   did so against a copy of spring-projects/spring-security in 2024, and
+#   their file evil.txt was merged).
+# attack-run-behavior: Dependabot's push goes to the branch in the fork and
+#   runs this repository's workflows of pull_request and
+#   pull_request_target, not this one; push runs it only for pushes to this
+#   repository, where github.actor is dependabot[bot] only for Dependabot's
+#   own branches.
+on: push
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - run: gh pr merge --auto --rebase "$PR"
+        env:
+          PR: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

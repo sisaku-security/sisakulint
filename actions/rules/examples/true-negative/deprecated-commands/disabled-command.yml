@@ -1,0 +1,15 @@
+# situation: a step writes the text ::set-env name=A::b to a file, and a
+#   comment of the run has ::add-path::.
+# reason: neither reaches the log of the step, and the runner reads no
+#   workflow command in them.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          # ::add-path:: is disabled, so this step writes $GITHUB_PATH
+          echo "::set-env name=A::b" > notes.txt
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"

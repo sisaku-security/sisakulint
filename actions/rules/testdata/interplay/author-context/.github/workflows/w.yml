@@ -1,0 +1,16 @@
+# AuthorContext of bot-conditions makes the if compare the author of the
+# pull request, which keeps the attacker out: the findings of
+# dangerous-triggers and untrusted-checkout in the job close with it.
+on: pull_request_target
+jobs:
+  merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

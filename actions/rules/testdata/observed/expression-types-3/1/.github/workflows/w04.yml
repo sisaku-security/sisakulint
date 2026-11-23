@@ -1,0 +1,11 @@
+name: w04
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      env:
+        X: ${{ github.event }}
+    steps:
+      - run: printf 'X=[%s]\n' "$X"

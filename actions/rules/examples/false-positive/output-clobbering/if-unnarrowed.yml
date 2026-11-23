@@ -1,0 +1,28 @@
+# situation: on issue_comment created, a step that has the comment's body in
+#   env.BODY runs only when env.BODY is deploy, and the step writes
+#   ${{ github.event.comment.body }} as the value, the part of a line of
+#   $GITHUB_OUTPUT after the =; the step has an id, so the runner keeps
+#   the outputs of the step.
+# reason: the step's if compares env.BODY, which holds the comment's body,
+#   with deploy, so in the step the body is deploy, ignoring the case of its
+#   letters: the body has no character that the shell reads as code, no
+#   line break, no word that starts with - and no workflow command.
+# cause: the rule limits a value by an if only under the name that the if
+#   compares: the if compares env.BODY, and the script writes
+#   ${{ github.event.comment.body }}; the rule does not check that env.BODY
+#   holds the comment's body.
+# attack-value: github.event.comment.body = "x\nPWNED=1"
+# attack-run-behavior: on GitHub, the step's if is false for such a body,
+#   and the runner skips the step.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: s
+        if: env.BODY == 'deploy'
+        env:
+          BODY: ${{ github.event.comment.body }}
+        run: echo "v=${{ github.event.comment.body }}" >> "$GITHUB_OUTPUT"

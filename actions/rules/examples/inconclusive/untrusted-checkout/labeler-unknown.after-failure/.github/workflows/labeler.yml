@@ -1,0 +1,11 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.title }}"
+      - uses: actions/labeler@v5
+        if: failure()
+        with:
+          repo-token: ${{ secrets.LABELER_PAT }}

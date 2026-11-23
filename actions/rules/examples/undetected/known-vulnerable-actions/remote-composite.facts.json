@@ -1,0 +1,9 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.runs-using","repo":"example-org/composite-action","ref":"4444444444444444444444444444444444444444"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"remote-composite.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"example-org/composite-action","sha":"4444444444444444444444444444444444444444"},"state":"absent"},
+{"query":{"kind":"package.advisories","package":"example-org/composite-action"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"example-org/composite-action"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

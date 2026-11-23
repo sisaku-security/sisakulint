@@ -1,0 +1,26 @@
+# situation: on issues, the step p prints the title of the issue and
+#   then writes tag to $GITHUB_OUTPUT on every path of its script, and
+#   the release step reads the output tag alone.
+# reason: the runner sets the outputs of $GITHUB_OUTPUT after the step,
+#   over the outputs of the log, so the release step gets the tag of the
+#   file.
+# cause: the rule does not read which output names the steps after the
+#   step read, nor what the step writes to $GITHUB_OUTPUT.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the runner sets the output tag to $(id) from the
+#   log, then to v1 from $GITHUB_OUTPUT, and the release step runs with
+#   v1.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "issue: $TITLE"
+          echo "tag=v1" >> "$GITHUB_OUTPUT"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

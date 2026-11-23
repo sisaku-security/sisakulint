@@ -1,0 +1,33 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step runs only on pull_request_target when the actor is
+#   dependabot[bot], and then has gh pr merge --auto --rebase merge the pull
+#   request with the token of the job.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, pull_request_target
+#   among the events. github.actor names whoever caused the event, not who
+#   wrote the pull request, so the if also lets in a pull request whose last
+#   push Dependabot made, and gh pr merge then merges the code of that pull
+#   request with the token of the job.
+# attack: the attacker enables Dependabot in the attacker's fork, opens a
+#   pull request to this repository from the branch of a pull request
+#   Dependabot opened in the fork, then comments @dependabot recreate on the
+#   pull request of Dependabot in the fork, so that Dependabot pushes to the
+#   branch of the pull request (Synacktiv did so against a copy of
+#   spring-projects/spring-security in 2024, and the file evil.txt of
+#   Synacktiv was merged).
+# attack-run-behavior: the push of Dependabot runs pull_request_target on
+#   synchronize with github.actor dependabot[bot], so the if is true and gh pr
+#   merge --auto --rebase turns on auto-merge for the attacker's pull request
+#   with the token of the job, which GitHub merges once the requirements of
+#   the pull request are met.
+name: merge dependabot
+description: merge the pull requests of Dependabot
+runs:
+  using: composite
+  steps:
+    - if: github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]'
+      run: gh pr merge --auto --rebase "$PR"
+      shell: bash
+      env:
+        PR: ${{ github.event.pull_request.html_url }}
+        GH_TOKEN: ${{ github.token }}

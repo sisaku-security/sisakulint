@@ -1,0 +1,29 @@
+# situation: the workflow is called; the step p prints
+#   github.event.issue.body, and the release step writes the output tag of
+#   the step p into its script. The one caller of the workflow in the
+#   repository, ci.yml, runs on push.
+# reason: no added gain for this repository: ci.yml calls the workflow on
+#   push alone, and github.event of a push has no issue, so the value that the
+#   run reads is not a value that an attacker wrote. Another repository may
+#   call the workflow on an event whose payload has what an attacker wrote,
+#   but that run has the token and the secrets of the other repository.
+# cause: the rule reads a called workflow on the events of its callers in
+#   the repository, and ci.yml runs on push alone.
+# attack: an attacker opens an issue in another repository whose workflow
+#   calls this one, with the body x ##[set-output name=tag;]$(id).
+# attack-run-behavior: called by ci.yml on push, the event has no issue, so
+#   the step prints an empty line. Called on issues by another repository,
+#   the runner sets the output tag in that run, and the release step runs
+#   id there.
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "$BODY"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

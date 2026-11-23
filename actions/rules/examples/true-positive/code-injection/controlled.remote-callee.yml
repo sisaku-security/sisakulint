@@ -1,0 +1,23 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/code-injection-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   controlled (controlled.parallel.yml) of the rule, with on: workflow_call
+#   in place of the on of controlled.parallel.yml. The job passes its
+#   secrets with secrets: inherit. In the true positive, on issues opened, a
+#   step of a parallel group echoes the issue's title, written in by ${{ }}.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: the
+#   steps of a parallel group run as the job's steps, alongside each other,
+#   and ${{ }} puts the title into the script before the shell parses it, so
+#   a double quote in the title ends the echo's string and what follows runs
+#   as commands.
+# attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
+# attack-run-behavior: the script becomes echo ""; echo PWNED; echo "", and
+#   the shell runs the second echo as a command, which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  c:
+    uses: example-org/code-injection-remote/.github/workflows/w.yml@v1
+    secrets: inherit

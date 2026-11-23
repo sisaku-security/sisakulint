@@ -1,0 +1,12 @@
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: a
+        run: |
+          sleep 5
+          echo "o=from-a" >> "$GITHUB_OUTPUT"
+        background: true
+      - wait-all: true
+      - run: echo "after-wait-all-true o=[${{ steps.a.outputs.o }}]"

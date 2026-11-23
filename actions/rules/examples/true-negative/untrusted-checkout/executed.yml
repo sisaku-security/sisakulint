@@ -1,0 +1,18 @@
+# situation: on pull_request_target, the checkout, with no ref, fetches the
+#   workspace, and npm ci runs in it.
+# reason: without a ref of the pull request, the checkout on
+#   pull_request_target fetches the base branch's commit, so npm ci runs the
+#   base's code, not the pull request's.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: with no ref, the checkout fetches the commit of the
+#   base branch, so npm ci reads the base's package.json, and the pull
+#   request's preinstall does not run.
+on: pull_request_target
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          allow-unsafe-pr-checkout: true
+      - run: npm ci

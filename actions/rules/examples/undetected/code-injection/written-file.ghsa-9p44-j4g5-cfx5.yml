@@ -1,0 +1,32 @@
+# situation: on pull_request_target, a step writes an export line of an input
+#   of the job into trivy_envs.txt, with the value in the env of the step and no
+#   escaping, and a later step sources the file. This is the second place that
+#   GHSA-9p44-j4g5-cfx5 names in aquasecurity/trivy-action v0.33.1 (commit
+#   b6643a29fecd7f34b3597bc6acb0a98b03d33ff8): the function
+#   set_env_var_if_provided of action.yaml (lines 181-190) writes "export
+#   $var_name=$input_value", and entrypoint.sh line 9 sources ./trivy_envs.txt.
+#   Here the input is in the env, as after the fix that the rule code-injection
+#   gives to the ${{ }} of the input (line 201), and the example is a workflow
+#   in place of the composite action, with the title of the pull request in
+#   place of the input named output.
+# reason: the value that echo writes as data becomes the code of
+#   trivy_envs.txt, which source runs in the later step: an export line with
+#   a$(…) or a;… in the value runs the command.
+# cause: the rule finds where bash takes a value as code inside the script of
+#   each run: step, and does not follow a value through a file that a later step
+#   runs.
+# attack-value: github.event.pull_request.title = "x; echo PWNED"
+# attack-run-behavior: the first step writes export TRIVY_OUTPUT=x; echo PWNED
+#   into trivy_envs.txt, and source ./trivy_envs.txt in the later step runs echo
+#   PWNED as a command, which prints PWNED.
+# advisory: https://github.com/advisories/GHSA-9p44-j4g5-cfx5
+on: pull_request_target
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          INPUTS_OUTPUT: ${{ github.event.pull_request.title }}
+        run: |
+          echo "export TRIVY_OUTPUT=$INPUTS_OUTPUT" >> trivy_envs.txt
+      - run: source ./trivy_envs.txt

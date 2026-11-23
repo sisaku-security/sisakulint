@@ -1,0 +1,66 @@
+# situation: on workflow_run of a run from a pull request, a job downloads the
+#   artifact pr-number of the triggering run, a step writes the content of
+#   pr.txt to its output id, a later step writes that output into its run by
+#   ${{ }}, and a step after it logs in to Azure with the secrets of the
+#   repository. This is pr-website-deploy-comment.yml of microsoft/fluentui
+#   (commit 18f41fc58e2a5280d9e5291063f6be7cc4d9c0eb, lines 1-6, 17-57); the
+#   concurrency, the env, the outputs of the job, the download of the website
+#   and the steps after the login are left out. adev-preview-deploy.yml of
+#   angular/angular-ja (commit 8d2ac08bfae9f68b909bf7a57fb47977bc9450a3,
+#   GHSL-2024-338) has the same form: it reads the number of the pull request
+#   from __metadata__pull_number.txt of the artifact into the output value and
+#   echoes the output in a run (line 50), and comment-on-pr.yml of sympy/sympy
+#   (commit a1c630f8041c40a833e2a52e4aa533f6e6ff8b20, GHSL-2024-322) reads
+#   pr_number.txt of the artifact into the output pr_number and echoes it in a
+#   run (line 39).
+#   preview-deploy.yml of ant-design/ant-design (commit
+#   41fba82b39ff8664c63c173f1265f56891338fd5, GHSL-2024-121_GHSL-2024-122)
+#   saves the number of the pull request from a file of the artifact to the
+#   output id and writes it into a run (line 88).
+# reason: the output is what the step reads from pr.txt, a file of the
+#   artifact that the run of the pull request uploads, so the author of the
+#   pull request writes it; the rule does not follow the output of a step back
+#   to the file that the step reads.
+# cause: the rule does not read what a run step writes to $GITHUB_OUTPUT from
+#   a file.
+# attack-value: steps.pr_number.outputs.id = "1$(echo${IFS}PWNED>/proc/$$/fd/1)"
+# attack-run-behavior: the author of a pull request from a fork makes the run
+#   of the pull request upload pr.txt with the value. The script of the step
+#   Load WEBSITE URL becomes echo "id=…pull/1$(echo PWNED>/proc/$$/fd/1)/", and bash runs
+#   the command substitution, which prints PWNED, with the token of the job;
+#   the Azure login comes in the next step.
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-327_Microsoft_FluentUI/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-338_Angular_JA/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-322_Sympy/
+# advisory: https://securitylab.github.com/advisories/GHSL-2024-121_GHSL-2024-122_ant-design/
+on:
+  workflow_run:
+    workflows: ['PR Website Deploy']
+    types:
+      - completed
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-number
+          path: ./results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Load PR number
+        id: pr_number
+        run: echo "id=$(cat pr.txt)" >> $GITHUB_OUTPUT
+        working-directory: ./results
+      - name: Load WEBSITE URL
+        id: website_url
+        run: echo "id=https://fluentuipr.z22.web.core.windows.net/pull/${{steps.pr_number.outputs.id}}/" >> $GITHUB_OUTPUT
+      - name: Login via Azure CLI
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

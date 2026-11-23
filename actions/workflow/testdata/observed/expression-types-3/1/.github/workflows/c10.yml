@@ -1,0 +1,13 @@
+name: c10
+on:
+  workflow_call:
+    outputs:
+      o:
+        value: ${{ jobs.j.outputs }}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    outputs:
+      a: b
+    steps:
+      - run: echo ok

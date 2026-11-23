@@ -1,0 +1,22 @@
+# situation: runs-on is self-hosted and a value of a matrix, whose only
+#   value has a space before it.
+# reason: no runner label has a space before it, so no job runs.
+# cause: a label written as a literal that no runner has makes the rule
+#   take the job as running on none, but a value of the matrix that no
+#   runner has drops only that value; when every value is dropped, the
+#   self-hosted label is still left and is reported.
+# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
+#   that was merged), then opens a pull request from a fork whose copy of
+#   this workflow runs a step of their own in place of make.
+# attack-run-behavior: with runs-on as this file writes it, the one job asks
+#   for a runner with the labels self-hosted and " x", which no runner has,
+#   so no runner picks it up and the attacker's step does not run.
+on: pull_request
+jobs:
+  a:
+    strategy:
+      matrix:
+        os: [" x"]
+    runs-on: [self-hosted, "${{ matrix.os }}"]
+    steps:
+      - run: make

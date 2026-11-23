@@ -1,0 +1,9 @@
+name: y06
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          X: ${{ null }}
+        run: printf 'X=[%s]\n' "$X"

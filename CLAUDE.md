@@ -1,35 +1,71 @@
 # CLAUDE.md
 
-sisakulint is a static analysis tool for GitHub Actions workflow files under .github/workflows. It implements checks aligned with the OWASP Top 10 CI/CD Security Risks, and most rules support auto-fix and SARIF output.
+sisakulint is a static analysis tool for GitHub Actions workflow files and action.yml files. README.md describes the rules, the flags, and the output. MIGRATION.md describes the differences from the 0.x versions.
 
 ## Commands
 
 ```bash
 go build ./cmd/sisakulint
-go test -race ./...                    # CI also runs tests with the race detector
-sisakulint script/actions/<file>.yaml  # manual fixture verification
-sisakulint -fix dry-run                # preview fixes
-sisakulint -debug
+go test ./...                           # the default tests; CI runs go test -race -timeout 30m ./...
+gofmt -l .                              # CI fails when gofmt lists a file
+go run ./cmd/sisakulint --help          # the flags
+go run ./cmd/sisakulint --explain all   # every rule, as Markdown
 ```
 
-## Architecture
+CI also runs govulncheck v1.6.0. Keep gofmt, the tests, and govulncheck green locally before committing.
 
-Scan workflows → build the AST in pkg/ast and pkg/core/parse_*.go → apply rules in pkg/core through a depth-first visitor ordered WorkflowPre → JobPre → Step → JobPost → WorkflowPost → report → auto-fix on request. The ${{ }} expression parser lives in pkg/expressions, shell taint analysis in pkg/shell, and GitHub API access in pkg/remote. Package-specific conventions live in each directory's CLAUDE.md.
+## Package layout
 
-The source of truth for the rule inventory is the slice returned by makeRules in pkg/core/linter.go plus the per-rule docs in docs/. This file intentionally carries no rule list — a duplicated list always goes stale.
+| Path | Contents |
+|---|---|
+| `yaml/cst/v1` | A lossless syntax tree of YAML 1.2.2. `scalar` (values and tags), `anchor` (alias resolution), `edit` (byte rewrites) |
+| `actions/workflow` | Reads workflows and action.yml files into typed elements (including job `container` and `services` and image strings) |
+| `actions/analysis` | Shared analysis, and the enumerations and `Event` that rules read |
+| `actions/expr`, `actions/shell` | Parsers of `${{ }}` expressions and of bash and sh scripts |
+| `actions/taint` | Analysis shared by the injection rules: attacker-controlled contexts, the places where those contexts are written into code or into the words of a `run` command, and the requests that a `run` script sends |
+| `actions/prcode` | Analysis shared by the checkout rules and the artifact-poisoning rules |
+| `actions/artifact` | Analysis shared by the artifact rules |
+| `actions/agent` | Analysis shared by the rules for AI agent actions |
+| `actions/job` | Analysis shared by the job rules (privileged events, approvals, token writes, secrets, `runs-on` labels) |
+| `actions/ir` | The intermediate representation (IR) that rules read, and the per-group `View` readers generated from `views.json`. Rules read only the IR |
+| `actions/cvss4` | CVSS v4.0 scoring, a port of the FIRST reference implementation |
+| `actions/facts`, `actions/facts/github` | The external facts that rules ask about, and the answers from the GitHub API |
+| `actions/repofile` | Answers facts from repository files that are not inputs (`.github/dependabot.yml`, Renovate configuration) |
+| `actions/remote` | `--remote` runs: reads the tree of a commit of a GitHub repository as an `fs.FS` |
+| `actions/internal/githubapi` | The GitHub API client (token, base URL, redirects, rate limit) |
+| `actions/boundary` | Permission boundaries, with the evidence (quotes of GitHub documentation and observations) for each table row |
+| `actions/lint` | Runs the rules, builds the Report, and applies fixes |
+| `actions/rules` | The rules, one rule per file |
+| `actions/reportview` | The HTML report view and the example catalog |
+| `actions/internal/releasetable` | The drift check of the release tables of `actions/prcode` and `actions/artifact` |
+| `actions/cli`, `cmd/sisakulint` | The command |
+| `yaml/1.2.2`, `yaml/yaml-test-suite` | The YAML specification and the yaml-test-suite (third-party files that tests read) |
+| `internal/regexpcalls` | Counts the regular-expression calls per file and compares the counts with `allowed.tsv` |
+| `internal/copytest` | Counts and hashes the copies of third-party files that tests read |
+| `internal/corpus` | Where tests look for a corpus of workflow files (`CORPUS_DIR`). This repository has no corpus, so the corpus tests skip |
 
-## Project-wide facts that are easy to misread but correct
+## Regenerating generated files
 
-- CI enforces gofmt, runs go test with the race detector, and checks reachable vulnerabilities with govulncheck. Keep the same checks green locally before committing.
-- Adding a rule is a multi-file sync contract: register in makeRules, add docs/<slug>.md, update the manually tallied severity counts table in docs/_index.md, add script/actions/<rule>.yaml and <rule>-safe.yaml, and update the table in script/README.md. Code plus tests alone is incomplete.
-- The effective config file is .github/sisakulint.yaml or .yml. The .github/action.yaml that -init generates is never read by the loader; this mismatch is known and the file is gitignored.
-- Two GitHub API token resolution paths coexist. The primary CLI path is ResolveGitHubToken in pkg/core/github_token.go with priority -github-token > SISAKULINT_GITHUB_TOKEN > GITHUB_TOKEN > GH_TOKEN and no subprocess probing per #484. getToken in pkg/remote/fetcher.go is the legacy path that still probes gh auth token and git credential fill; it serves -remote scans and the RemoteActionsMetadataCache. Identify which path you are on before touching auth.
-- Exit codes: 0 = clean / 1 = findings / 2 = invalid options / 3 = fatal error, which also covers a GitHub API rate limit hit during -fix on per #474.
-- The missing-timeout-minutes rule is opt-in: it stays registered but disabled until -enable-rule missing-timeout-minutes is passed.
-- The authoritative Go version is go.mod and .go-version, currently 1.26.10. CI and release workflows read go.mod.
-- Releases fire only on a v*.*.* tag push. A push to main deploys nothing.
-- Some documents still reference docs/RULES_GUIDE.md, docs/ARCHITECTURE.md, and script/github_to_aws/; none of these exist. Do not go looking for them.
+Run the steps in this order after changing a schema, a table, or a rule:
 
-## Minimal steps for a new rule
+```bash
+go generate ./...
+go test -update ./actions/cli ./actions/internal/jsonschema ./actions/ir/internal/irgen ./actions/lint ./actions/rules ./internal/regexpcalls
+go test ./...
+```
 
-Create pkg/core/myrule.go with a struct embedding BaseRule and call rule.Errorf from the Visit* methods. Register it in makeRules in pkg/core/linter.go, add pkg/core/myrule_test.go, and complete the sync contract above. Implementation conventions are in pkg/core/CLAUDE.md.
+`go test -update` rewrites the golden files of those packages. Review the golden file diff before committing.
+
+## Checks in the tests
+
+- `internal/regexpcalls`: `allowed.tsv` may only shrink. Read `${{ }}` expressions with `actions/expr` and scripts with `actions/shell`. A regular expression only checks the form of one token that the parser took out. `TestNoGrowth` compares `allowed.tsv` with the `allowed.tsv` of the merge base with `main`, and skips when git has no `main` branch, as in the pull request checkout of CI. Reviewers look at any growth of `allowed.tsv` in a pull request.
+- `TestThirdPartyCopies` (in `actions/workflow`, `actions/taint`, and `yaml/cst/v1/internal/suitetest`): the copies of third-party files must stay as the copies were made. The README.md at the top of each copy gives the origin, the license, the number of files, and the hash.
+- `TestContractHasNoRepoPaths` (`actions/lint`), and `TestRegistry` and the e2e test in `actions/rules`: the JSON schemas, the comments in the Go files of `actions/lint`, `actions/facts`, and `actions/facts/github`, the registry JSON, and the Report JSON must not point to `docs/` paths. Point to public `https://` URLs instead.
+- Drift check: `ACTIONS_UPSTREAM=1` (with `GH_TOKEN`) runs the tests that compare the data taken from other projects with those projects. `.github/workflows/upstream-drift.yaml` runs the same tests every week.
+
+## Conventions in the code
+
+- Give strings a real type. Rule IDs, fact kinds, and input names are not plain `string` values or `type X string` values. A closed set is an enumeration type. An open set is a struct with unexported fields and one constructor that checks the value.
+- Read `${{ }}` expressions and shell scripts with their parsers (`actions/expr`, `actions/shell`), not with string comparison. String comparison misses other spellings of the same meaning, such as `always ()`.
+- When a change adds, removes, or renames a type, a file, a layer, or a step that the `doc.go` of a package names, update that `doc.go` in the same commit.
+- Releases fire only on a `v*.*.*` tag push. `go build` takes the version that `--version` prints from the VCS tag.

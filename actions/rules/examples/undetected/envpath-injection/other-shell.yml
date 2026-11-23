@@ -1,0 +1,17 @@
+# situation: on issues, a run of pwsh writes the issue's body to
+#   $GITHUB_PATH.
+# reason: a todo (the same file): reading pwsh would find it.
+# cause: the rule reads runs of bash and sh only.
+# attack-value: github.event.issue.body = "/tmp/PWNED"
+# attack-run-behavior: pwsh's echo writes the line /tmp/PWNED to the file
+#   $env:GITHUB_PATH names, and the steps after it get /tmp/PWNED first in
+#   PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh
+        env:
+          B: ${{ github.event.issue.body }}
+        run: echo "$env:B" >> $env:GITHUB_PATH

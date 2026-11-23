@@ -1,0 +1,28 @@
+# situation: on repository_dispatch, dawidd6/action-download-artifact takes
+#   the artifact of the run that the value run of the client_payload names,
+#   and ./out/publish.sh runs.
+# reason: the form adds nothing to what the attacker gets (the disposition
+#   no-added-gain): only a credential with write access to the permission
+#   Contents of the repository can send repository_dispatch, and the
+#   credential premise assumes that no attacker holds such a credential; the
+#   sender chooses the whole client_payload.
+# cause: the table of the attacker's events that the rule reads leaves out
+#   repository_dispatch on purpose: the credential premise leaves the sender
+#   of repository_dispatch out of the threat model.
+# attack-value: github.event.client_payload.run = "1234"
+# attack-run-behavior: when a repository_dispatch with the value in its
+#   client_payload runs the workflow, the download takes the artifact of the
+#   run 1234, a pull_request run of a pull request from a fork whose workflow
+#   uploads out/publish.sh that prints PWNED, and ./out/publish.sh runs the
+#   file, which prints PWNED, with the secrets of the repository.
+on: repository_dispatch
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event.client_payload.run }}
+          name: out
+          path: out
+      - run: ./out/publish.sh

@@ -1,0 +1,19 @@
+# situation: on pull_request_target, a step extracts from an archive the
+#   members that match the pull request's title as a pattern, passing the
+#   title to tar after --wildcards, through env and inside quotes.
+# reason: the table of commands does not declare --wildcards, so whether it
+#   takes the next word as its value (and tar then does not read the title
+#   as an option) or takes none (and tar reads the title as an option) is
+#   not known.
+# attack-value: github.event.pull_request.title = "--to-command=echo PWNED"
+# attack-run-behavior: --wildcards of GNU tar takes no value, so tar reads
+#   the title as --to-command and runs echo PWNED for each member it
+#   extracts, which prints PWNED.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: tar -xf archive.tar --wildcards "$TITLE"

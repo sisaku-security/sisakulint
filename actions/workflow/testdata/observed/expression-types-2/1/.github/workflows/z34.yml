@@ -1,0 +1,11 @@
+name: z34
+on: push
+jobs:
+  call:
+    strategy:
+      matrix:
+        n: [3]
+    uses: ./.github/workflows/c33.yml
+    with:
+      b: true
+      n: ${{ matrix.n }}

@@ -1,0 +1,41 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request with actions/checkout v4.2.2, writes a secret into the .env file
+#   beside the Compose file, and runs tmatens/compose-lint pinned to the
+#   commit of v0.24.0 with the input whose name is version set to latest.
+#   The action tmatens/compose-lint from v0.18.0 installs the newest version
+#   of the compose-lint package in PyPI when the input whose name is version
+#   is latest (lines 88 to 97 of action.yml at the commit of v0.24.0); on
+#   2026-11-13, the newest version of compose-lint in PyPI is 1.4.0.
+# reason: the rule reports five advisories on the step, because v0.24.0, the
+#   version tag of the action, is in the ranges of the five advisories; the
+#   step installs the newest version of compose-lint, which is in the range
+#   of no advisory when the newest version is 0.33.0 or later.
+# cause: the rule compares the ranges of the advisories with the version tag
+#   of the action, and does not read the code of the action, though the code
+#   of the action decides the version of compose-lint that the step
+#   installs.
+# attack: the author of a pull request from a fork changes the image of a
+#   service of the Compose file to "${DB_PASSWORD}", and commits
+#   .compose-lint.yml as a symlink to a file on the runner.
+# attack-run-behavior: the step runs a version of compose-lint that the
+#   advisories say is fixed: compose-lint quotes the reference ${DB_PASSWORD}
+#   in place of the value, and refuses .compose-lint.yml that resolves
+#   outside the working directory.
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD" > .env
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      - uses: tmatens/compose-lint@d6e1817352200adbd0a72893fd7ea7880874759b # v0.24.0
+        with:
+          version: latest
+          sarif-file: results.sarif

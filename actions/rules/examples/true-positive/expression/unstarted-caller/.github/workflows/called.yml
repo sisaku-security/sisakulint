@@ -1,0 +1,18 @@
+# situation: the boolean input dry-run of the reusable workflow has the
+#   default vars.DRY_RUN, a configuration variable.
+# reason: a configuration variable is a string, which is not the type of
+#   the input: GitHub does not start a job that calls the workflow, with or
+#   without the input.
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        type: boolean
+        default: ${{ vars.DRY_RUN }}
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: ./deploy.sh

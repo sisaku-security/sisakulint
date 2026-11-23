@@ -1,0 +1,18 @@
+# situation: a job calls the reusable workflow .github/workflows/w.yml of
+#   the repository example-org/cond-remote, which the fact
+#   workflow.definition answers with the workflow of the true positive
+#   mixed-text (mixed-text.yml) of the rule, with on: workflow_call in place
+#   of the on of mixed-text.yml. The job passes its secrets with secrets:
+#   inherit. In the true positive, the job deploy has an if of two ${{ }}
+#   joined by && outside them, meant to run the job only for a push to main.
+# reason: the jobs of a reusable workflow run on the event that started the
+#   run of the calling job, so the reason of the true positive holds: GitHub
+#   reads the if as the string "true && false" or "false && false", which is
+#   not empty and so true: the job runs for every push and every pull
+#   request of every branch.
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  c:
+    uses: example-org/cond-remote/.github/workflows/w.yml@v1
+    secrets: inherit

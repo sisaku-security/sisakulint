@@ -1,0 +1,11 @@
+name: echo
+inputs:
+  v:
+    description: v
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        V: ${{ inputs.v }}
+      run: printf 'v=[%s]\n' "$V"

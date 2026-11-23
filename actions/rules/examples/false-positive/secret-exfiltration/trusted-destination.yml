@@ -1,0 +1,20 @@
+# situation: on push, a step uploads a build to VirusTotal with curl and the
+#   secret API_KEY, which VirusTotal issued for this API.
+# reason: no harm: the destination is the service the key is for.
+# cause: the rule does not know the service of a key, and assumes the
+#   destination is not trusted until a file of facts says so
+#   (request.destination-trusted).
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: the request goes to VirusTotal as the key is meant
+#   to; only a breach of VirusTotal gives the key to another.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -fsS -H "x-apikey: $API_KEY" https://www.virustotal.com/api/v3/files -F file=@dist/app.zip

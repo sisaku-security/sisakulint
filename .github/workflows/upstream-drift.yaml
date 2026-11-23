@@ -1,0 +1,31 @@
+name: upstream drift
+# Checks the data that the linter takes from other projects, over the network:
+# the release tables of actions include every newer release, the GitHub-hosted
+# runner labels are in the github/docs table, and each quoted source text is
+# still found in its source.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  drift:
+    name: Upstream tables
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Compare the upstream tables
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ACTIONS_UPSTREAM=1 go test -run 'TestUpstreamTables|TestHostedLabelsUpstream|TestCommandSources|TestQuotesInSource' ./actions/...
+      - name: Compare the action release table
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ACTIONS_UPSTREAM=1 go test ./actions/internal/releasetable

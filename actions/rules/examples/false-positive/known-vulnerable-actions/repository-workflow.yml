@@ -1,0 +1,27 @@
+# situation: on push, a step uses Tiryoh/actions-mkdocs pinned to the
+#   commit of v0.24.0, whose package GHSA-6p2j-742g-835f names with the
+#   range <= 0.24.0. The vulnerability of the advisory is in a workflow of
+#   the repository Tiryoh/actions-mkdocs (.github/workflows/release-candidate.yaml
+#   writes the title of an issue into run), not in the action: "This issue
+#   is limited to the repository's internal workflow configuration and does
+#   not directly affect downstream users of the published `actions-mkdocs`
+#   GitHub Action."
+# reason: the step runs action.yml of Tiryoh/actions-mkdocs, which the
+#   vulnerability is not in; the workflows of the repository of the action
+#   run only in that repository, not in the workflow that uses the action.
+# cause: the rule reads every advisory of the package of the uses as an
+#   advisory of the action; the answer of the GitHub Advisory Database does
+#   not say where the vulnerability is (the field vulnerable_functions of
+#   the package is empty).
+# attack: none: the vulnerable workflow is not in the repository of this
+#   workflow.
+# attack-run-behavior: the step builds the documentation with mkdocs; no
+#   step reads the title of an issue.
+# advisory: https://github.com/advisories/GHSA-6p2j-742g-835f
+on: push
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Tiryoh/actions-mkdocs@14d3fd544b7a2bcffcdd86b05d558f20c244c9fc # v0.24.0

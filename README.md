@@ -1,683 +1,263 @@
-<div align="center">
-
-<img src="https://github.com/sisaku-security/homebrew-sisakulint/assets/67861004/e9801cbb-fbe1-4822-a5cd-d1daac33e90f" alt="sisakulint logo" width="160" height="160"/>
-
 # sisakulint
 
-**A fast, security-first static analyzer with heuristic auto-fix for GitHub Actions workflows.**
+> **Note:** The v1 linter is not released yet. The documents of the released 0.x versions are at the tag [`v0.3.8`](https://github.com/sisaku-security/sisakulint/tree/v0.3.8). The file `MIGRATION.md` at the repository root describes how to move from 0.x.
 
-Find injection, credential leakage, supply-chain, and pipeline-poisoning bugs in `.github/workflows/` — and let `-fix` repair most of them for you.
+sisakulint reads GitHub Actions workflows and action.yml files, reports the writing patterns that are threats, and applies fixes.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/sisaku-security/sisakulint.svg)](https://pkg.go.dev/github.com/sisaku-security/sisakulint)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sisaku-security/sisakulint)](https://goreportcard.com/report/github.com/sisaku-security/sisakulint)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/sisaku-security/sisakulint)](https://github.com/sisaku-security/sisakulint/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/sisaku-security/sisakulint?style=social)](https://github.com/sisaku-security/sisakulint/stargazers)
-[![BlackHat Arsenal 2025](https://img.shields.io/badge/BlackHat%20Arsenal-2025-black)](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)
+## Rules
 
-</div>
+| ID | severity | What the rule reports |
+|---|---|---|
+| `action-list` | high | The `uses` of a step runs an action, a reusable workflow, or a Docker image that is not in the policy list of the repository (the facts file, `--fact`, `facts` or `fact` in `--config`, or the patterns of the fact `repo.action-list`). Or a job makes an image that is not in the list a container or a service (an image is compared with the `docker://` prefix added). The maintainer of an action that is not in the list, or the publisher of an image that is not in the list, decides the code that runs with the secrets and the token of the job. The rule does not run in a run that has no answer for the list (`DefaultRun` is `given-facts`) |
+| `ai-action-excessive-tools` | critical | The tools allowed to an AI agent give an agent hijacked by attacker text the ability to run arbitrary code, to write with a token on a target the attacker chooses, or to send data to a destination the attacker chooses. An attacker value enters a configuration input (`claude_args`, `settings`, and so on) and can add flags or tools |
+| `ai-action-execution-order` | high | After a step of an AI agent that attacker text reaches, a step in the same job runs something the agent left behind (a process, `$GITHUB_ENV` or `$GITHUB_PATH`, the source of another action, code in the workspace, `.git`), and the step has more privileges than the agent step. Two forms exist: a step that holds secrets after an agent that runs arbitrary code without sudo (`later-secrets`), and a step that runs code in the workspace or `git` after an agent that only edits (`edited-code`) |
+| `ai-action-prompt-injection` | high | A value written by an attacker reaches an AI agent through a prompt input of the action or through the env of the step (in a run that passes the check of the user who started the action; a run in which a maintainer labels or comments on an attacker issue also passes) |
+| `ai-action-unrestricted-trigger` | high | An action of an AI agent (claude-code-action, codex-action, and so on) lets an outside person who opens an issue or writes a comment start the agent (`allowed_non_write_users: '*'`, `allow-users: '*'`, `allowed_bots: '*'`, or an action that does not check the user who started the agent) |
+| `ai-action-unsafe-sandbox` | high | The configuration of an AI agent action removes the sandbox (`bypassPermissions` of claude, `danger-full-access` or `safety-strategy: unsafe` of codex). Nothing stops an agent hijacked by attacker text |
+| `argument-injection` | critical | A value the attacker decides comes at the start of a word passed to a command in `run`. The command reads a word that starts with `-` as an option, and the option runs a program written in the value (tar `--to-command`, sed `--expression`, and so on; only the options confirmed to run through the spelling of an attacker value) |
+| `artifact-poisoning` | critical | A privileged job fetches into the workspace an artifact of a run that a fork PR can drive (the original run of `workflow_run`, or dawidd6/action-download-artifact, which also searches runs of forks), or a later step executes what was fetched |
+| `artipacked` | critical | `actions/upload-artifact` puts into an artifact the git credentials that an earlier step (such as `actions/checkout` v1 to v5) left in `.git/config`, and a person who can read the repository can fetch the artifact |
+| `bot-conditions` | critical | An `if` that runs on an event of an outside person compares `github.actor` with `dependabot[bot]` and intends to let only Dependabot pass. The attacker makes Dependabot in the attacker fork push to the branch of the attacker PR, the actor of the run becomes `dependabot[bot]`, and the attacker passes |
+| `cache-poisoning` | high | A job that an event of the attacker runs, and that nobody approves, uses a cache mode that saves to the cache of the scope of the default branch. What the attacker saves to that cache (through a flaw that runs the code of the attacker, or through the steps of the job) is restored and run by later runs of the repository |
+| `code-injection` | critical | A value the attacker decides is written with `${{ }}` in `run` or in the `script` of actions/github-script, and runs as code |
+| `commit-sha` | high | The ref of a `uses` for another repository is not a full commit SHA (a tag or a branch can be moved) |
+| `credentials` | critical | `credentials.password` of a `container` or of `services` of a job is written in plain text in the workflow. A person who can read the repository can use the registry account (high in a private repository) |
+| `dangerous-triggers` | high | A job that runs without approval on a privileged event that an outside person can cause (`issues`, `pull_request_target`, and so on) holds a writable token or a secret. When the job has one flaw that lets the attacker run code, the attacker gets the token or the secret (the flaw itself is not examined) |
+| `envpath-injection` | high | A value the attacker decides is written to a line of `$GITHUB_PATH`, and the attacker can decide a directory in the PATH of later steps (a newline is not needed. When an executable file of the attacker is in the directory, later commands and the shell of `run` resolve to the file) |
+| `envvar-injection` | critical | A value that the attacker can write including a newline is written to `$GITHUB_ENV`, and the attacker can add environment variables to later steps |
+| `impostor-commit` | high | The SHA of a `uses` is in no branch and no tag of the repository (for example, a commit that exists only in a fork). `DefaultRun` is `facts` (see the paragraph about `--rule` in "Usage" below) |
+| `known-vulnerable-actions` | critical | A `uses` of another repository runs a version that an advisory of the GitHub Advisory Database reports as vulnerable. `DefaultRun` is `facts` (see the paragraph about `--rule` in "Usage" below) |
+| `output-clobbering` | critical | The same kind of value is written to `$GITHUB_OUTPUT`, and the attacker can add outputs to the step |
+| `permissions` | high | The `GITHUB_TOKEN` of a job can write more than the job needs (`write-all`, or the default of the repository when no `permissions` is written). Every action, reusable workflow, and package that the job runs holds the token. When the maintainer of one of them turns malicious or is taken over, that action, workflow, or package writes to the repository with the token |
+| `request-forgery` | critical | A value the attacker decides determines the destination host of a request: a curl, wget, or `gh api` request in `run`, or a request of an action that takes the destination from an input (the scanner of SonarSource, `octokit/request-action`). When the request carries a secret or the token of the job, the server of the attacker receives the secret or the token (`credential-host`, `action-input`). In a job on a self-hosted runner, the request reaches the network of the runner (`runner-network`) |
+| `secret-exfiltration` | medium | A request in `run` carries a secret or the token of the job to a destination written in the workflow. The person who controls the destination (a compromised vendor, or a person who took over an expired domain) receives the secret or the token. The rule reports until the facts file answers that the destination is trusted (`request.destination-trusted`; an assumption does not count as trust). The rule does not report for GitHub hosts, for services of the job, or for `localhost` on a GitHub-hosted runner |
+| `secret-exposure` | high | `${{ }}` reads `secrets` without writing a name (`toJSON(secrets)`, `secrets[format(...)]`, `secrets.*`). GitHub sends all the secrets of the repository to the runner of the job, and code that runs in the job (a compromised action, or attacker code that a flaw runs) can read the secrets |
+| `secret-in-log` | critical | The shell outputs a value derived from a secret (a substring, an extraction with `jq`, a base64 with newlines, and so on) to stdout, to stderr, to `set -x`, to the job summary, to `$GITHUB_ENV` (the `env:` at the start of a later step), or to the outputs that a later step reads. The runner masks only the places where the secret appears as is, and a person who can read the log can read the derived value (high in a private repository) |
+| `secrets-in-artifacts` | critical | `actions/upload-artifact` puts into an artifact a credential file, other than `.git/config`, that an earlier step (such as `google-github-actions/auth`) left in the workspace |
+| `secrets-inherit` | high | A job lets the reusable workflow that the job calls reference every secret of the organization and the repository that the job has, not only the secrets that the reusable workflow needs |
+| `self-hosted-runner` | high | A job runs on a self-hosted runner. In a public repository, anyone can run a workflow of a fork PR. In a private or internal repository that runs workflows of fork PRs, a reader who can fork (all members of the enterprise can read an internal repository) can put code on the runner with the own workflow of the fork PR |
+| `set-output-injection` | critical | A step that has an `id` prints a value of the attacker (the title of an issue, a commit message, and so on) to the log. Regardless of `ACTIONS_ALLOW_UNSECURE_COMMANDS`, the runner reads `##[set-output name=…;]` in a log line, and `::set-output` at the start of a line, as a command, and writes an output of the step (an output written in the `run` of a later step runs the code of the attacker) |
+| `unmasked-secret-exposure` | critical | A value extracted from a secret, such as `fromJSON(secrets.X).y`, is written in `env`, `run`, `with`, or the name of a step. The runner masks only the whole secret, the value is printed to the log at the start of the step, and a person who can read the log can read the value (high in a private repository) |
+| `unpinned-images` | high | The image of a `container` or `services` of a job, or a `docker://` image of a step or of action.yml, is not pinned by digest. A person who can push to the repository of the image can change the image that a tag points to (low for a service, because a service does not reach the secrets of the job) |
+| `unsecure-commands` | critical | In a step where `ACTIONS_ALLOW_UNSECURE_COMMANDS` is true, a value of the attacker (the title of an issue, the email of a commit, and so on) is printed to the log. The runner reads `##[set-env name=…;]` in a log line, and `::set-env` at the start of a line, as a command, and writes the env and the PATH of later steps (through `BASH_ENV`, the bash of a later step runs the code of the attacker) |
+| `unsound-contains` | high | An `if` that runs on an event of an outside person compares values with `contains('<a sequence of names>', x)`, and a part of a name (for example, a login that an attacker can register) also passes |
+| `untrusted-checkout` | critical | A privileged job that nobody approves (`pull_request_target`, `workflow_run`, `issue_comment`) brings the code of a PR in with `actions/checkout`, and a later step can execute the code (pwn request) |
+| `untrusted-checkout-toctou` | medium | A job that a person approves (a label, a reviewer of an environment) checks out a ref that the author of the PR can move after the approval |
 
----
+The explanation of each rule (`Threat`, `UndetectedForm`, the kinds of `Inconclusive`, `Fix`) can be read with `--explain=all`.
 
-## Why sisakulint
+### Quality rules
 
-- **Security-first by design.** Full coverage of the [OWASP Top 10 CI/CD Security Risks](https://owasp.org/www-project-top-10-ci-cd-security-risks/) — code/env/path/output injection, untrusted checkouts, artifact & cache poisoning, ref confusion, impostor commits, and more.
-- **Semantic, not regex.** A real AST + expression parser + shell taint analyzer (`mvdan.cc/sh`) — not string matching. Cross-step and cross-file taint propagation through `$GITHUB_ENV`, reusable workflow boundaries, and shell function arguments.
-- **Auto-fix that ships PRs.** 27+ rules carry an auto-fixer. `sisakulint -fix on` rewrites the YAML in place; `-fix dry-run` previews the diff first.
-- **Built for CI.** SARIF output drops straight into [reviewdog](https://github.com/reviewdog/reviewdog) for inline PR review comments.
-- **AI-agent aware.** Detects prompt injection, dangerous tool exposure, unsafe sandbox flags, and execution-order issues in claude-code-action and similar AI agent integrations (the *Clinejection* attack class).
+A quality rule reports reliability and maintainability findings. A finding alone gives the attacker nothing (no `Gain`), and an attack needs another flaw. However, a flaw found by a quality rule can increase what an attack through another flaw gives the attacker, or can prolong a state in which a vulnerability stays unfixed (`archived-uses`, `deprecated-node-runtime`, and so on). A quality rule has no `Threat`, no CVSS, and no severity. The findings appear in `quality_findings` of the Report, in the section "quality" of the text output, and in the report view (`--html`, `--serve`; after the cards of the security `Finding`). A quality finding sets no bit of the exit code (the bits set by the findings of other rules, by `Inconclusive`, and by the inputs are the same as without the quality rule). The ID can be selected with `--rule` and `--skip-rule`, in the same way as the ID of a rule. A quality rule whose `DefaultRun` is `named` (`missing-timeout-minutes`) runs only when `--rule` names the rule. A quality rule whose `DefaultRun` is `facts` (`archived-uses`, `deprecated-node-runtime`) runs in a run where `--online`, a facts file, or `--fact` answers the facts that ask GitHub about the target of `uses` (`repo.archived`, `action.runs-using`), and in a run that names the rule (see the paragraph about `--rule` in "Usage" below).
 
-### How it compares
+| ID | What the rule reports |
+|---|---|
+| `allowed-actions` | A `uses` names an action, a reusable workflow, or a Docker image that the allowed actions setting of GitHub does not permit (the fact `repo.allowed-actions`; `--online` reads the setting with a token that has the Administration read permission of the repository, and `GITHUB_TOKEN` cannot read the setting). Or the setting requires a full commit SHA, and the `uses` names an action by a tag or a branch. GitHub does not start the run, or fails the job in Set up job. In a run without `--repo`, the rule reads an action of the owner of the repository as also not permitted by the setting. The rule does not run in a run that has no answer for the setting (`DefaultRun` is `given-facts`) |
+| `archived-uses` | The repository of the action or of the reusable workflow that a `uses` names is archived (read-only, and not maintained). `DefaultRun` is `facts` |
+| `cache-bloat` | A step restores the cache of a previous generation with `restore-keys`, and can save the content under a new key. The content of the previous generation stays in the new cache, and the cache grows |
+| `cond` | An `if` has characters outside `${{ }}`, or has two or more `${{ }}`. GitHub reads the `if` as a string, and the condition becomes true regardless of the expression |
+| `dependabot-github-actions` | Neither the version updates of Dependabot nor Renovate update a `uses` (a ref that is a SHA or a version name) of a workflow or of action.yml (`no-update-tool`). Or, in a file that Renovate handles, Renovate does not update a `uses` whose ref is a SHA without a version comment (`unversioned-sha`). `.github/dependabot.yml` and the configuration of Renovate are read as facts from the files under `--root` |
+| `dependency-review-settings` | The configuration of `actions/dependency-review-action` turns the check off (`warn-only: true`, `vulnerability-check: false`, `license-check: false` with a policy written), or asks for a PR comment that the `GITHUB_TOKEN` of the job cannot write |
+| `deprecated-commands` | Among the workflow commands that `run` prints to the log: `set-output` and `save-state`, which GitHub deprecated (a warning appears in every run), and `set-env` and `add-path`, which GitHub stopped (the step fails unless `ACTIONS_ALLOW_UNSECURE_COMMANDS` is true) |
+| `deprecated-node-runtime` | An action declares a Node.js version older than `node24` (`node12`, `node16`, `node20` in `runs.using`; the runner runs with Node.js 24). An env sets a Node.js version that the runner of GitHub does not follow. The `node-version` of `actions/setup-node` points to a version whose support has ended. `DefaultRun` is `facts` |
+| `env-var` | A key of `env` has `=` (the runner creates a different variable whose name is the part before `=`). Or a key is a name that the runner writes after the env of each step (`GITHUB_SHA` and so on), and the written value does not reach the step |
+| `expression` | The type of the value of `${{ }}` does not match the type that the key takes (for example, a string in `timeout-minutes: ${{ vars.T }}`). Or a call of `format`, `case`, or `fromJSON` fails when the run executes. The consequences are: a job or a run does not start, a job or a step fails, or the `timeout-minutes` or `continue-on-error` of a step has no effect. Or the value of a `${{ }}` inside a sentence is an object or an array, and `Object` or `Array` enters the sentence. Or the rule reads `vars.<name>` for a name that cannot be defined at any level (starts with `GITHUB_`, contains a character other than alphanumerics and `_`, or starts with a digit), and the value is an empty string in every run |
+| `missing-timeout-minutes` | A job that runs on a runner does not write `timeout-minutes`. A stuck job keeps running for 360 minutes. `DefaultRun` is `named` (for many repositories the GitHub default of 360 minutes is enough, and whether to fix is decided for each workflow) |
+| `unset-configuration-variable` | A `${{ }}` of a workflow reads, as a value, a configuration variable (`vars.<name>`) that is defined at no level (repository, organization, environment), or passes the variable to `fromJSON`. GitHub makes the value an empty string without an error, and `fromJSON` fails. The rule does not report for the left side of `vars.X \|\| 'default'`, or for a comparison (`if: vars.X == 'true'`). The defined names are answered by the facts `repo.configuration-variables` and `repo.environment-configuration-variables` (the facts file, `--fact`, `facts` or `fact` in `--config`, or `--online` with a token that has the Variables read permission; `GITHUB_TOKEN` cannot read them). `DefaultRun` is `given-facts` (the rule does not run in a run that has no answer) |
+| `uses-path` | The `uses` of a step is not read as written. A path that has an empty element, `.`, `..`, or `\` (GitHub discards or resolves the element when reading), and a path that goes above the root of the repository or of the workspace with `..` (an action outside the named repository runs). The other rules read the action that runs as GitHub reads it |
 
-|                                                | sisakulint  | actionlint | zizmor  | StepSecurity   | CodeQL  |
-| ---------------------------------------------- | :---------: | :--------: | :-----: | :------------: | :-----: |
-| Workflow syntax / shell linting                | ✅          | ✅         | partial | —              | —       |
-| OWASP CI/CD Top-10 coverage                    | full        | —          | partial | runtime only   | partial |
-| Cross-file taint for reusable workflows        | ✅          | —          | —       | —              | ✅      |
-| Cross-step / cross-job taint via `$GITHUB_ENV` | ✅          | —          | —       | runtime        | ✅      |
-| Shell-aware taint (incl. function args)        | ✅          | —          | —       | —              | partial |
-| AI agent action rules (Clinejection)           | ✅          | —          | —       | —              | —       |
-| Auto-fix                                       | 27+ rules   | —          | —       | N/A            | ⚠️      |
-| SARIF + reviewdog                              | ✅          | —          | ✅      | ✅             | ✅      |
+## Usage
 
-Static-analysis tools sit upstream of runtime tools — sisakulint catches bugs at PR review time, before any workflow runs.
-
----
-
-## Table of contents
-
-- [Quick start](#quick-start)
-- [Remote pull request scans](#remote-pull-request-scans)
-- [Installation](#installation)
-- [What it detects](#what-it-detects)
-- [Rule reference](#rule-reference)
-- [Example: detecting real vulnerabilities](#example-detecting-real-vulnerabilities)
-- [Auto-fix](#auto-fix)
-- [SARIF + reviewdog integration](#sarif--reviewdog-integration)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [BlackHat Arsenal 2025](#blackhat-arsenal-2025)
-- [Contributing](#contributing)
-- [License](#license)
-- [Citation](#citation)
-
----
-
-## Quick start
-
-```bash
-# macOS
-brew tap sisaku-security/homebrew-sisakulint
-brew install sisakulint
-
-# Run in any repo with a .github/workflows/ directory
-sisakulint
-```
-
-Other ways to run:
+Go 1.26.11 is required. Run the commands from the root of this repository (the sisakulint source). `<repository>` is the directory of the repository to check.
 
 ```bash
-sisakulint .github/workflows/release.yml   # one file
-sisakulint -fix dry-run                    # preview auto-fixes
-sisakulint -fix on                         # apply auto-fixes
-sisakulint -format "{{sarif .}}"           # SARIF for CI
-sisakulint -enable-rule missing-timeout-minutes   # opt-in rule
+# Read all workflows and action.yml files of the repository to check (no network)
+go run ./cmd/sisakulint --root <repository>
+
+# Ask the GitHub API for the facts that have no answer. Also read the inside of composite actions and reusable workflows of other repositories (see "Inside actions and reusable workflows of other repositories" below)
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --root <repository> --online
+
+# Also ask the API for the facts of the repository (whether the repository is public, whether an environment has reviewers, whether the default token can write)
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --root <repository> --online --repo <owner>/<name>
+
+# Give facts one by one (the value is JSON). These answers take precedence over the facts file and the API
+go run ./cmd/sisakulint --root <repository> --fact repo.public=false --fact 'repo.environment-protected[environment=prod]=true'
+
+# Show the fixes as a diff without applying them. --fix applies only the safe fixes, and --fix=review applies all fixes
+# For a review fix, the side effects (changes other than the removal of the Finding) are printed below the fix line of the text output and in fix.side_effects of the Report
+go run ./cmd/sisakulint --root <repository> --fix=review --dry-run
+
+# Exclude the files under testdata and vendor. The action.yml files under them are not read, and appear in the Report as excluded
+go run ./cmd/sisakulint --root <repository> --exclude testdata --exclude vendor
+
+# Read the whole repository, and print only the places that relate to the input PATH (to look at only the workflows changed in a PR)
+# A Finding is also printed when an unchanged called workflow writes, in a run, a value that the caller in PATH passes (the Evidence has a location in PATH)
+go run ./cmd/sisakulint --root <repository> --read-all .github/workflows/ci.yml
+
+# Read a GitHub repository without cloning (see "Reading a GitHub repository and a pull request" below)
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --remote <owner>/<name>
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --remote <owner>/<name>@v1.2.3
+
+# Read the head of a pull request, and print only the places that relate to the workflows and action.yml files that the PR changed
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --remote <owner>/<name> --pull-request 42 --pull-request-head <SHA>
+
+# Write the files that were read to DIR, and apply the fixes to DIR (DIR is a path that does not exist)
+GITHUB_TOKEN=$(gh auth token) go run ./cmd/sisakulint --remote <owner>/<name> --pull-request 42 --write-snapshot fixed --fix=review
+
+# Write SARIF 2.1.0 for code scanning of GitHub (see "Uploading to code scanning" below). --sarif writes the file regardless of --format
+go run ./cmd/sisakulint --root <repository> --format sarif > sisakulint.sarif
+go run ./cmd/sisakulint --root <repository> --sarif sisakulint.sarif
+
+# The version, the commit, the Go version, and the JSON schemas that this binary writes and reads (go run shows the version and the commit as unknown, so use a binary made by go build)
+go build -o sisakulint ./cmd/sisakulint && ./sisakulint --version
+
+# Remove from bit 8 an Inconclusive that a person reviewed and accepted, by using an acceptance file (see "Accepting an Inconclusive" below)
+go run ./cmd/sisakulint --root <repository> --accept accept.json
+
+# Write an HTML file (the report view) that draws the path of the Evidence of each Finding. The findings of quality rules are also printed after the Findings, with their locations. --serve serves the page on 127.0.0.1 (stop it with Ctrl-C)
+# The HTML contains lines of the workflows. When the HTML of a private repository is shared, the lines leak
+go run ./cmd/sisakulint --root <repository> --html report.html
+go run ./cmd/sisakulint --root <repository> --serve
+
+# Serve, with a table of contents, the results of running the Example of every rule and of every quality rule with the fact answers of each Example (the facts file next to the Example). A rule row of the table of contents also shows the whole Meta of the rule (--examples=RULE writes only that rule or quality rule, with --html). The quality rules are in the last section of the table of contents, "quality rules"
+# Each Example shows the result of its own rule by default. A click on "other rules (N)" shows the result of running all rules with the same answers (no-added-gain is a judgment only about the Threat of the rule)
+# "group by" above the table of contents divides and orders the rules into sections by the value of an axis of Facets (Weakness: the kind of flaw, AttackMeans: what the attacker puts in). The browser remembers the selected order
+# "boundary" above the table of contents shows, when the values of the attacker, the role, the run, and the facts are selected, the boundary (Crossing) of each Gain and the rows of evidence (quotations from GitHub documents and observations on real machines). The screen of a rule shows the table of Gain x role of each Actor of the rule. For an Actor without an event (a person who reads an artifact or a log, a person who controls the called target or the image, and so on), the table is made for each set of runs with the same requirement (Holding), called a run group. A cell for a role that cannot use the way (Pathway) shows no pathway. The Gain in the table has its requirement (Holding) attached, and a click on a cell shows the facts, the rows, what the actor holds, and the diagram of the Crossing. A fact that has no effect on the present values shows no effect
+# "terms" above the table of contents shows the definitions of --explain=terms (item names, words in the texts, values). On the screen of a rule and in the declaration section of an Example, a click on the ? of a heading that has an item name opens the definition below the heading. A value that has a definition (no-added-gain, artifact-reader, and so on) also opens the definition on a click (both also appear on hover)
+go run ./cmd/sisakulint --examples --serve
+
+# The JSON of the registry of rules. --registry=full also prints the fact answers of each Example
+go run ./cmd/sisakulint --registry=full
+
+# The explanation of rules, and the list of flags
+go run ./cmd/sisakulint --explain=all
+go run ./cmd/sisakulint --help
 ```
 
-Exit codes: `0` = clean, `1` = findings, `2` = bad CLI args, `3` = fatal error.
+The output format is selected with `--format` (text (default), line, json, sarif). The exit code is a combination of bits. Bit 1 is set when a `confirmed` `Finding` exists. Bit 2 is set when a `conditional` `Finding` exists, or when the run has no input other than excluded inputs. Bit 8 is set when an `inconclusive` `Finding` (`Inconclusive`, a place that a rule could not decide) exists (an `Inconclusive` accepted with `--accept` is not counted). Bit 16 is set when an unreadable or invalid input exists, or when an unreadable or invalid input that an input calls (`uses: ./x`) exists (the run could not read something that GitHub may run; a `--pull-request` run also adds the two cases in the sections below). To make a gate that accepts `conditional` but still closes on an unreadable input, check bits 1 and 16. The `Severity` of an `Inconclusive` is the heaviest `Severity` of the rule, and the value is compared with `--fail-on`. An input excluded with `--exclude` is not counted in the bits. A `--read-all` run counts, for the state of the inputs, only the inputs in PATH (bit 16 is not set when another input is unreadable or invalid), and counts, for the places, the places printed in the Report (a `Finding` whose location, `Evidence`, or `Related` is in PATH, regardless of `certainty`). Internal errors are all counted as before. The `reported_inputs` of the Report holds the names of the printed inputs (for a run that does not narrow the output, the names of all inputs). When `--read-all` and `--fix` are combined, the `Fix` of the printed `Finding` is applied. The `Fix` of a `Finding` of a caller in PATH can write a called workflow that is not in PATH. The findings of quality rules set no bit. `.github/workflows` cannot be excluded, because GitHub always runs the workflows there. The exit code 64 means a usage error. The exit code 66 means that an input or a repository is unreadable (nothing is written to stdout). The exit code 75 means that `--pull-request-head` differs from the head of the PR.
 
----
+The rules to run are selected with `--rule ID` (only the rule) or `--skip-rule ID` (excluding the rule). Both can be repeated, or can take several IDs separated by commas. The specification is an exact match with the ID of a rule only, and a `FindingKind` (`commit-sha.unpinned`) is not accepted. A skipped rule does not run, and the `Finding` of the rule is not counted in any bit of the exit code. A skipped rule appears in `skipped_rules` of the Report and in the summary of the text output. A rule declares with `DefaultRun` whether the rule runs in a run that does not name the rule (`default_run` in the JSON of the registry). A rule whose `DefaultRun` is `named` (`missing-timeout-minutes`) runs only when `--rule` names the rule. A rule whose `DefaultRun` is `facts` (`known-vulnerable-actions`) runs when `--online` is given, when `--facts` or `--fact` answers `package.advisories` with `found` or `absent`, or when the rule is named (the quality rule `archived-uses` runs in the same way with `repo.archived`, and `deprecated-node-runtime` with `action.runs-using`). The rule `impostor-commit` also has a `DefaultRun` of `facts`, and runs in the same way with the fact `git.commit-ref`. A facts file that has a `found` answer of `git.ref-commit` with a ref (a tag or a branch) also makes the rule `impostor-commit` run, because the facts file derives answers of `git.commit-ref` from the `git.ref-commit` answer. `--fact` derives no answer. A rule whose `DefaultRun` is `given-facts` (`action-list`) runs only when `--facts` or `--fact` (including `facts` and `fact` of the configuration file) answers `repo.action-list` with `found` or `absent`, or when the rule is named; `--online` alone does not run the rule (`--online` does not answer the fact). In a CI without a network, write `fact: ['repo.action-list=["actions/checkout@*","actions/setup-go@*"]']` in the configuration file (`repo.action-list` has no `repo` argument, so the fact is the same regardless of the `repo` key). A rule that did not run because of `DefaultRun` is also put in `skipped_rules`. The rule does not appear as a row in the summary of the text output, and a `not run` row appears for a rule whose `DefaultRun` is `facts` or `given-facts`. The offline `--write-facts` does not run `known-vulnerable-actions` and `impostor-commit`, so the output does not have `package.advisories` and `git.commit-ref`. To get a template of these facts, write the template with `--rule known-vulnerable-actions,impostor-commit --write-facts <file>` (or with one `--rule` for each rule). The check of `--fix` is made only with the rules that ran. When an applied `Fix` changes a `SummaryField` that a skipped rule reads, the rule is reported as `not checked:`, together with the changed `SummaryField`, the location, and the `Fix`. A `Fix` that changes the `Certainty` or the `Condition` of a `Finding` that existed before the `Fix` becomes an error of `--fix`.
 
-## Remote pull request scans
+A default run counts only the attacks by outside people, in accordance with the `Threat` of each rule and with the `credential premise`. `--add-attacker VALUE` also runs a run to which an attacker that the default run does not count (an added attacker) is added. Each value is one credential: `read-member` (a member or collaborator whose role is read), `triage-account` (an account whose role is triage), `writer-pull-requests-token` and `writer-issues-token` (a token of an account whose role is write or higher, with only the Pull requests write permission or only the Issues write permission), `required-reviewer` (a required reviewer of an environment), `app-installation-token` (the token of an installation of a GitHub App that has the Issues and Pull requests write permissions), `variables-writer` and `secrets-writer` (a credential that can write variables or secrets). The flag can be repeated, or can take several values separated by commas (the key in the configuration file is `add-attacker`). Each value is treated as a separate attacker, and a run with only that value added is executed. A place that appears only for one attacker who has two or more values is not reported (`combined-credentials`, an `UndetectedForm` of untrusted-checkout). Which approval, gate, or `if` (`Barrier`) each value passes is decided by the table of `actions/boundary`, and each row has evidence. A `Finding` that appears only with an added attacker (including `Inconclusive`) has a mark: `added_attackers` in the Report, the `added attacker:` line in the text output, and `properties.added_attackers` in SARIF. A place that the default run reports appears as is, without the mark. A place with the mark sets the same exit code bit as a place without the mark. The severity and the sentences are those of the attack by an outside person that the `FindingKind` declares. `--add-attacker` and `--fix` cannot be used together (exit code 64).
 
-Scan the exact PR head without cloning it yourself:
+The facts of the repository (`repo.*`) have the name of the repository, and can be asked of the API, only when `--repo` is given. In CI, write `--repo "$GITHUB_REPOSITORY"`. The name is not inferred from an environment variable or from git, because when `actions/checkout` checks out a different repository and the repository is linted, the inferred name differs from the checked-out repository. When `--repo` is given, an entry of a repository fact in the facts file that has no `repo` does not match. The default permissions of the workflow can be read only with a token that can read the Actions settings of the repository (the `GITHUB_TOKEN` of a run cannot read them), and the fact stays an assumption. `repo.pull-request-target-allowed` (whether the Actions policies start the `pull_request_target` run of the workflow) is not asked of the API. For a workflow that the default policy of GitHub that stops `pull_request_target` in a public repository (enforced on 2026-12-02), or an event policy of an administrator, stops, answer with `--fact 'repo.pull-request-target-allowed[input_path=.github/workflows/<file>]=false'` or with the facts file. Then the `Finding` of a workflow whose attacker event is only `pull_request_target` is no longer reported. When the fact is not answered, the rule assumes that the run starts.
+
+### Inside actions and reusable workflows of other repositories
+
+A run with `--online` (or a run with a facts file that has the answers) reads, for the actions of other repositories that a step calls, the composite action and the steps inside the composite action (up to depth 4) as the fact `action.definition`. The run reads, for the reusable workflows of other repositories that a job calls, the reusable workflow and the jobs of the reusable workflow (up to depth 3) as the fact `workflow.definition`. The rules then also look at the inside. The rules that look inside an action are `cache-poisoning`, `deprecated-node-runtime`, `archived-uses`, `known-vulnerable-actions`, `unpinned-images`, `cache-bloat`, the five AI rules, and `commit-sha`. For the inside of a reusable workflow, all the rules that read workflows (except `dependabot-github-actions`) read the inside with the event, the `with`, and the secrets of the calling job, in the same way as for a reusable workflow in the local repository (the `on` of the called side starts a run of the repository of the called side, and is not read).
+
+- A `Finding` appears at the `uses` of the calling side, and the location inside appears at the start of the `Evidence` (for `Inconclusive`, in the line of the detected sentence). A file of another repository cannot be fixed, so a `Finding` inside has no `Fix`, and `NoFix` (manual) is attached.
+- An action is read from the archive that the runner fetches, and a reusable workflow is read from the blob of the commit (GitHub runs an action from the archive, and runs a reusable workflow as the commit). The inside of an action whose archive content differs from the blob (`export-subst` of `.gitattributes`; the name of a tag created later can enter a step) becomes `Inconclusive` `archive-substituted`.
+- The inside of an action or a reusable workflow that has no answer (a run without `--online` and without an answer in the facts file) is not read, and each rule declares the case with an `UndetectedForm` (`remote-callee` for a reusable workflow). What was asked and could not be answered (a private repository that the token cannot read, the size limit of an archive or a file, the limit of requests, beyond the depth to read) becomes `Inconclusive` `remote-unknown` for an action, and for a reusable workflow becomes `Inconclusive` `remote-callee-unknown` of each rule that is not a quality rule. Bit 8 is set in both cases.
+- The file of `--write-facts` holds the content of the actions and the reusable workflows that were read. A repository that calls an action of a private repository exposes the content of the action to the outside.
+
+### Reading a GitHub repository and a pull request
+
+`--remote` reads a GitHub repository instead of `--root`. The value is `owner/name`, `owner/name@ref` (a branch, a tag, or a commit SHA), or the URL of a repository (`https://github.com/owner/name`, `…/tree/<ref>`, `…/pull/<N>`). The host of the URL must be the same as the web host of `--github-api` (`https://HOST/api/v3` for GitHub Enterprise Server). The run first resolves the ref to a commit, and afterwards reads only the commit. Files are read one by one with the git tree API and the git blob API (an archive is not read; an archive applies `export-ignore` and `export-subst` of `.gitattributes`, but GitHub runs a workflow as the commit), and nothing is written to the disk. `remote_revision` of the Report shows the repository, the ref, the commit, the tree, and the files whose content was read (`read_files`: the inputs, and the files that are not inputs, such as the configuration of the labeler; with the blob SHA and the mode). The content can be fetched again with `git/blobs/<blob>`.
+
+- The token is read only from `GITHUB_TOKEN`, and is sent only to the host of the API. A private repository needs the contents read permission (and the pull requests read permission to read a PR). Without a token, the limit is 60 requests per hour, and one file costs one request, so only a small repository can be read. An input that cannot be read because of a limit (1000 requests per run, 1 MiB per file) becomes `unreadable`, and bit 16 is set. When a file that is not an input cannot be read, the exit code is 66.
+- When the repository, the ref, the commit, or the PR cannot be read (does not exist, is not visible, or the tree exceeds 100,000 entries), or on a rate limit or a network error, the exit code is 66, and nothing is written to stdout.
+- `--pull-request N` reads the whole repository at the commit of the head of the PR, and makes only the inputs that the PR changed (changed input) the reported inputs. The changed inputs are decided by the difference between the tree of the merge base and the tree of the head (an input whose symlink target changed, and an input that calls, with `uses: ./`, a submodule whose commit changed, are also included). When the PR changes a file that is read but is not an input (the configuration of the labeler, `.github/dependabot.yml`), all inputs are printed. When the PR changes no input, `reported_inputs` is an empty array, and bit 2 is not set. A PR from a fork can also be read, because the head is read through the API of the base repository.
+- When `--pull-request` is combined with PATH, only PATH (exit code 64 when PATH is not a changed input) becomes the reported input. The places that PATH excluded are not printed in the Report, are counted in `remote_revision.pull_request.unreported_count`, and are counted in the bits of the exit code (the gate closes also for a `Finding` of a changed input outside PATH).
+- A `--pull-request` run reads the head, and does not read the test merge commit that GitHub runs for `pull_request`. When the base is ahead of the merge base, the amount appears in `remote_revision.pull_request.behind_by` and in the first line of the text output. When the part where the base moved ahead touches an input or a file that was read (`base_change_count`), bit 16 is set. Bit 16 is also set when the PR changes an input under `--exclude`.
+- A consumer that attaches the result to a commit (a status check and so on) passes `--pull-request-head <SHA>`, or attaches the result only to `remote_revision.commit`. When the head differs from `--pull-request-head`, the exit code is 75, and the run made no judgment about that head.
+- Notes for using the run as a CI gate of PRs:
+  - Make the protection of the branch Strict (a branch must be up to date with the base before merging), or use a merge queue. The author of a PR can make a PR that causes harm only in combination with a workflow that entered the base later, by branching from an old commit. In a merge queue, read the commit SHA of the `merge_group` run with `--remote owner/name@<SHA>`.
+  - The exit code 66 makes the status check fail. The author of a PR can cause 66, for example by making the tree large.
+  - Run the gate in an outside service, or in a workflow on the base side that does not run the code of the PR. When the gate runs in a `pull_request` workflow of the same repository, the PR can rewrite the workflow of the gate itself.
+  - The acceptance of `--accept` matches only by the span and the line of the place, and does not become invalid even when the PR changes something outside them (for example, the `uses:` of the step that creates the value). The number of `Inconclusive` accepted inside the changed inputs appears in `accepted_count` and in the first line of the text output.
+  - What runs in a `pull_request_target` run is the workflow of the default branch, not the workflow of the head (the workflow of the head runs after the merge). For a PR to a branch other than the default branch, read separately the workflow that runs in `pull_request_target` with `--remote owner/name` (the default branch).
+- `--write-snapshot DIR` writes the files whose content was read to DIR, as the blobs, with the paths of the repository (DIR must be a path that does not exist, and the exit code is 64 when DIR already exists. For a symlink, the content of the target is written at the path of the link, and no symlink and no submodule is created). When combined with `--fix`, the files in DIR are fixed, and `fix.written` of the Report lists the fixed files. A fix to an input that is a symlink in the repository is refused with exit code 70. To run again, add `--root DIR --repo owner/name` and the same `--exclude`. `--remote` can also write the diff of `--fix --dry-run`.
+- The content and the paths of a private repository enter `read_files` and `Evidence` of the Report, the facts file, and DIR. Putting them in an artifact of CI or in an issue exposes the content of the private repository.
+
+### Configuration file
+
+To pass the same flags in CI and on a local machine, write the flags in a configuration file (YAML) and pass the file with `--config`. `--init` writes to stdout a template that lists all keys with explanatory comments, and copies the values of the flags passed together into the keys.
 
 ```bash
-sisakulint -remote sisaku-security/sisakulint-agent -pr 18
-
-# Service/CI callers should pin the webhook revision to prevent stale jobs from
-# scanning a newer head. Repeat -remote-target to limit report/fix scope while
-# every workflow in the snapshot remains available for cross-file analysis.
-sisakulint \
-  -remote sisaku-security/sisakulint-agent \
-  -pr 18 \
-  -expected-head-sha 0123456789abcdef0123456789abcdef01234567 \
-  -remote-target .github/workflows/deploy.yml \
-  -format "{{sarif .}}"
+# Move the flags of the present CI to a configuration file
+go run ./cmd/sisakulint --init --exclude testdata --fail-on high > .github/sisakulint-config.yaml
+go run ./cmd/sisakulint --root <repository> --config .github/sisakulint-config.yaml
 ```
 
-Pull request URLs are recognized as well (`-remote https://github.com/owner/repo/pull/18`).
-The command downloads an archive at the resolved immutable head SHA, safely
-materializes the complete repository, analyzes all workflows with local project
-context, and reports only workflows changed in the PR. Private repositories can
-authenticate with `-github-token`, `SISAKULINT_GITHUB_TOKEN`, `GITHUB_TOKEN`,
-`GH_TOKEN`, an existing `gh auth` session, or Git credentials. Remote scanning
-currently supports GitHub.com only; GitHub Enterprise Server and custom GitHub
-API base URLs are not supported.
+- The keys that can be written are `exclude`, `fail-on`, `rule`, `skip-rule`, `accept`, `facts`, `repo`, `fact`, `add-attacker`, and `no-assumptions`, and each key has the same effect as the flag with the same name. The flags that select the output (`--format` and so on) and the flags that are decided for each run (`--root`, PATH, `--fix`, and so on) cannot be written.
+- A flag on the command line replaces the key with the same name. However, `--exclude`, `--fact`, and `--add-attacker` are added to the values of the file (when both answer the same fact, the value on the command line is used), and `--rule` and `--skip-rule` replace both `rule` and `skip-rule` of the file. A PATH run (without `--read-all`) and a `--stdin-name` run do not use `exclude` of the file.
+- A relative path in `accept` and `facts` is read from the directory of the configuration file. For this reason, `--init` does not take `--accept` and `--facts` (when the template is written, the location of the file is not known).
+- No fixed path is searched. Without `--config`, no file is read even if a file exists. The reason is that, when the repository of another person is checked with `--root`, a file of that repository must not remove rules and silence `Finding`.
+- An error in the configuration file (unreadable, not YAML, an unknown key, the same key twice, a value of the wrong type, or a value that would be exit code 64 as a flag) gives exit code 66.
+- A PR that changes the configuration file can remove rules and pass the gate. When lint runs in a workflow that the author of the PR cannot change (for example, a workflow run by a ruleset of an organization), read the configuration file from the base branch, or protect the file with CODEOWNERS, in the same way as for the acceptance file.
 
-`-fix dry-run` can preview remote fixes. Applying `-fix on` requires a new,
-explicit `-remote-checkout-dir`; sisakulint never writes directly to GitHub.
-PR-mode fixes are limited to workflows changed in the PR and, when provided,
-the `-remote-target` selection. Fixers which mutate repository files such as
-`.github/dependabot.yaml` remain enabled for local scans but are disabled for
-this workflow-only response contract.
-
----
-
-## Installation
-
-### Homebrew (macOS / Linuxbrew)
+When moving from the configuration file of sisakulint 0.x (the legacy configuration file), `--init --legacy-configuration` writes a configuration file whose key `fact` has the entries of the legacy configuration file as values.
 
 ```bash
-brew tap sisaku-security/homebrew-sisakulint
-brew install sisakulint
+# At the root of the repository
+go run ./cmd/sisakulint --init --legacy-configuration .github/sisakulint.yaml --root . > .github/sisakulint-config.yaml
 ```
 
-### `go install`
+- `action-list` is copied to `repo.action-list`, and `config-variables` is copied to `repo.configuration-variables`. `secret-exfiltration.allowed-hosts` and the directive of a workflow (`# sisakulint:secret-exfiltration.allowed-hosts: …`) are copied to `request.destination-trusted` only for the pairs of a secret and a destination to which a workflow under `--root` now sends the secret and whose host matches an entry. When, after the copy, a workflow sends a different secret to the same host, a `Finding` appears (0.x allowed by host). A directive is copied only from a comment line at column 0 (the first line after the comment line that is neither a blank line nor a comment line must be a line of a top-level key) and from a comment at the end of a line of a top-level key.
+- An entry that cannot be copied (`self-hosted-runner.labels`, an unknown key, a pattern that starts with `!` or `./`, a host that matches no present pair, a directive outside the two places above, and so on) is written in a comment of the output and to stderr (one line for each entry). A difference in the reading from 0.x is written only in a comment of the output. The exit code is 0 even when an entry cannot be copied.
+- The expected use is that a maintainer runs the command once in the own repository, reads the output, and then commits the output. The author of a PR can add a directive to a workflow under `--root`, so when the command runs on the tree of a PR, the destination that the author of the PR chose becomes a fact.
 
-```bash
-go install github.com/sisaku-security/sisakulint/cmd/sisakulint@latest
-```
+### Accepting an Inconclusive
 
-Requires Go 1.26 or newer.
-
-### Pre-built binary (Linux / Windows)
-
-Download from the [releases page](https://github.com/sisaku-security/sisakulint/releases/latest) and place it on `$PATH`:
-
-```bash
-# Linux example
-curl -sSL -o sisakulint https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
-chmod +x sisakulint
-sudo mv sisakulint /usr/local/bin/
-```
-
-### Build from source
-
-```bash
-git clone https://github.com/sisaku-security/sisakulint.git
-cd sisakulint
-go build ./cmd/sisakulint
-```
-
-### As a GitHub Action
-
-The easiest way to wire sisakulint into CI is the official [`sisaku-security/sisakulint-action`](https://github.com/sisaku-security/sisakulint-action). It installs the binary, runs the scan, renders findings as inline PR annotations, and (optionally) uploads SARIF to GitHub Code Scanning.
-
-```yaml
-name: sisakulint
-on:
-  pull_request:
-    paths: [".github/workflows/**"]
-  push:
-    branches: [main]
-    paths: [".github/workflows/**"]
-
-permissions:
-  contents: read
-  pull-requests: write    # inline PR annotations
-  security-events: write  # only if upload-sarif: true
-
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          persist-credentials: false
-
-      - uses: sisaku-security/sisakulint-action@596af4ab15e8c5b232c74aa97525a0302e7b7af4 # v1.0.0
-        with:
-          fail-on: high        # none | low | medium | high | critical
-          upload-sarif: true   # send SARIF to GitHub Code Scanning
-```
-
-Useful inputs: `version`, `working-directory`, `args`, `config-file`, `autofix` (`off` / `on` / `dry-run`), `fail-on`, `upload-sarif`, `sarif-file`. See the action's [README](https://github.com/sisaku-security/sisakulint-action) for the full list.
-
-<details>
-<summary><b>Alternative: pipe SARIF into reviewdog</b></summary>
-
-If you'd rather use reviewdog for inline PR review comments instead of GitHub annotations:
-
-```yaml
-- uses: reviewdog/action-setup@v1
-
-- name: sisakulint + reviewdog
-  env:
-    REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    curl -sSL -o sisakulint \
-      https://github.com/sisaku-security/sisakulint/releases/latest/download/sisakulint-linux-amd64
-    chmod +x sisakulint
-    ./sisakulint -format "{{sarif .}}" \
-      | reviewdog -f=sarif -reporter=github-pr-review -filter-mode=nofilter
-```
-
-</details>
-
----
-
-## What it detects
-
-### OWASP Top 10 CI/CD Security Risks coverage
-
-| OWASP Risk | Description | sisakulint Rules |
-|:-----------|:------------|:-----------------|
-| [CICD-SEC-01][owasp-01] | Insufficient Flow Control Mechanisms | [improper-access-control][r-iac], [bot-conditions][r-bot], [unsound-contains][r-uc], [ai-action-unrestricted-trigger][r-aaut] |
-| [CICD-SEC-02][owasp-02] | Inadequate Identity and Access Management | [permissions][r-perm] |
-| [CICD-SEC-03][owasp-03] | Dependency Chain Abuse | [known-vulnerable-actions][r-kva], [archived-uses][r-au], [impostor-commit][r-ic], [ref-confusion][r-rc], [reusable-workflow-taint][r-rwt] |
-| [CICD-SEC-04][owasp-04] | Poisoned Pipeline Execution (PPE) | [dangerous-triggers-*][r-dt-c], [code-injection-*][r-ci], [envvar-injection-*][r-evi], [envpath-injection-*][r-epi], [output-clobbering-*][r-oc], [argument-injection-*][r-ai], [untrusted-checkout-*][r-uco], [request-forgery-*][r-rf], [ai-action-prompt-injection][r-aapi] |
-| [CICD-SEC-05][owasp-05] | Insufficient PBAC | [self-hosted-runners][r-shr], [ai-action-excessive-tools][r-aaet], [ai-action-unsafe-sandbox][r-aaus], [ai-action-execution-order][r-aaeo] |
-| [CICD-SEC-06][owasp-06] | Insufficient Credential Hygiene | [credentials][r-cred], [artipacked][r-ap], [secrets-in-artifacts][r-sia], [secret-exfiltration][r-sef], [secret-exposure][r-se], [unmasked-secret-exposure][r-use], [secrets-inherit][r-si], [secret-in-log][r-sil] |
-| [CICD-SEC-07][owasp-07] | Insecure System Configuration | [timeout-minutes][r-tm], [deprecated-commands][r-dc], [cache-bloat][r-cb] |
-| [CICD-SEC-08][owasp-08] | Ungoverned Usage of 3rd Party Services | [action-list][r-al], [commit-sha][r-sha], [unpinned-images][r-ui], [dependabot-github-actions][r-dga] |
-| [CICD-SEC-09][owasp-09] | Improper Artifact Integrity Validation | [artifact-poisoning-*][r-apc], [cache-poisoning-*][r-cp] |
-| [CICD-SEC-10][owasp-10] | Insufficient Logging and Visibility | [obfuscation][r-ob] |
-
-**Full documentation:** <https://sisaku-security.github.io/lint/>
-
----
-
-## Rule reference
-
-50+ rules across syntax, configuration, credentials, injection, checkout, supply chain, poisoning, access control, and AI-agent action security.
-
-<details>
-<summary><b>Click to expand the full rule list</b></summary>
-
-| Category | Rule | Severity | Description | Fix | Docs |
-|:---------|:-----|:--------:|:------------|:---:|:----:|
-| **Syntax** | id | Low | ID collision detection for jobs/env vars | | [docs][r-id] |
-| | env-var | Low | Environment variable name validation | | [docs][r-env] |
-| | permissions | High | Permission scopes and values validation | Yes | [docs][r-perm] |
-| | workflow-call | Medium | Reusable workflow call validation | | [docs][r-wc] |
-| | job-needs | Low | Job dependency validation | | [docs][r-jn] |
-| | expression | Medium | Expression syntax validation | | [docs][r-expr] |
-| | cond | Medium | Conditional expression validation | Yes | [docs][r-cond] |
-| | deprecated-commands | High | Deprecated workflow commands detection | | [docs][r-dc] |
-| **Config** | timeout-minutes | Low | Ensures timeout-minutes is set (opt-in) | Yes | [docs][r-tm] |
-| | cache-bloat | Low | Cache bloat with restore/save pair | Yes | [docs][r-cb] |
-| **Credentials** | credentials | High | Hardcoded credentials detection | Yes | [docs][r-cred] |
-| | secret-exposure | High | Excessive secrets exposure detection | Yes | [docs][r-se] |
-| | unmasked-secret-exposure | High | Unmasked derived secrets detection | Yes | [docs][r-use] |
-| | artipacked | Critical | Credential leakage via persisted checkout | Yes | [docs][r-ap] |
-| | secrets-in-artifacts | High | Sensitive data in artifact uploads | Yes | [docs][r-sia] |
-| | secrets-inherit | High | Excessive secrets inheritance | Yes | [docs][r-si] |
-| | secret-exfiltration | Critical | Secret exfiltration via network commands | | [docs][r-sef] |
-| | secret-in-log | Critical | Secret values printed to build logs (taint-tracked) | Yes | [docs][r-sil] |
-| **Injection** | code-injection-critical | Critical | Untrusted input in privileged triggers | Yes | [docs][r-ci] |
-| | code-injection-medium | Medium | Untrusted input in normal triggers | Yes | [docs][r-cim] |
-| | envvar-injection-critical | Critical | Untrusted input to $GITHUB_ENV (privileged) | Yes | [docs][r-evi] |
-| | envvar-injection-medium | Medium | Untrusted input to $GITHUB_ENV (normal) | Yes | [docs][r-evim] |
-| | envpath-injection-critical | Critical | Untrusted input to $GITHUB_PATH (privileged) | Yes | [docs][r-epi] |
-| | envpath-injection-medium | Medium | Untrusted input to $GITHUB_PATH (normal) | Yes | [docs][r-epim] |
-| | output-clobbering-critical | Critical | Untrusted input to $GITHUB_OUTPUT (privileged) | Yes | [docs][r-oc] |
-| | output-clobbering-medium | Medium | Untrusted input to $GITHUB_OUTPUT (normal) | Yes | [docs][r-oc] |
-| | argument-injection-critical | Critical | Command-line argument injection (privileged) | Yes | [docs][r-ai] |
-| | argument-injection-medium | Medium | Command-line argument injection (normal) | Yes | [docs][r-ai] |
-| **Checkout** | untrusted-checkout | Critical | Untrusted PR code in privileged contexts | Yes | [docs][r-uco] |
-| | untrusted-checkout-toctou-critical | Critical | TOCTOU with labeled events | Yes | [docs][r-toctou-c] |
-| | untrusted-checkout-toctou-high | High | TOCTOU with deployment environment | Yes | [docs][r-toctou-h] |
-| **Supply Chain** | commit-sha | High | Action version pinning validation | Yes | [docs][r-sha] |
-| | action-list | Low | Organization allowlist/blocklist enforcement | | [docs][r-al] |
-| | impostor-commit | Critical | Fork network impostor commit detection | Yes | [docs][r-ic] |
-| | ref-confusion | High | Branch/tag name collision detection | Yes | [docs][r-rc] |
-| | known-vulnerable-actions | Varies | Known CVE detection via GitHub Advisories | Yes | [docs][r-kva] |
-| | archived-uses | Medium | Archived action/workflow detection | | [docs][r-au] |
-| | unpinned-images | Medium | Container image digest pinning | | [docs][r-ui] |
-| | dependabot-github-actions | Medium | Missing github-actions ecosystem in dependabot.yaml | Yes | [docs][r-dga] |
-| | reusable-workflow-taint | Critical | Untrusted inputs in reusable workflow calls | Yes | [docs][r-rwt] |
-| **Poisoning** | artifact-poisoning-critical | Critical | Artifact poisoning and path traversal | Yes | [docs][r-apc] |
-| | artifact-poisoning-medium | Medium | Third-party artifact download in untrusted triggers | Yes | [docs][r-apm] |
-| | cache-poisoning | High | Unsafe cache patterns with untrusted inputs | Yes | [docs][r-cp] |
-| | cache-poisoning-poisonable-step | High | Untrusted code execution after unsafe checkout | Yes | [docs][r-cpp] |
-| **Access Control** | improper-access-control | High | Label-based approval and synchronize events | Yes | [docs][r-iac] |
-| | bot-conditions | High | Spoofable bot detection conditions | Yes | [docs][r-bot] |
-| | unsound-contains | Medium | Bypassable contains() in conditions | Yes | [docs][r-uc] |
-| | dangerous-triggers-critical | Critical | Privileged triggers without mitigations | Yes | [docs][r-dt-c] |
-| | dangerous-triggers-medium | Medium | Privileged triggers with partial mitigations | Yes | [docs][r-dt-m] |
-| **Other** | obfuscation | High | Obfuscated workflow pattern detection | Yes | [docs][r-ob] |
-| | self-hosted-runners | High | Self-hosted runner security risks | | [docs][r-shr] |
-| | request-forgery-critical | Critical | SSRF vulnerabilities (privileged) | Yes | [docs][r-rf] |
-| | request-forgery-medium | Medium | SSRF vulnerabilities (normal) | Yes | [docs][r-rf] |
-| **AI Actions** | ai-action-unrestricted-trigger | High | AI agent actions with `allowed_non_write_users: "*"` | | [docs][r-aaut] |
-| | ai-action-excessive-tools | High | Dangerous tools (Bash/Write/Edit) under untrusted triggers | | [docs][r-aaet] |
-| | ai-action-prompt-injection | High | Untrusted input interpolated into AI agent prompts | | [docs][r-aapi] |
-| | ai-action-unsafe-sandbox | High | Unsafe sandbox / safety-strategy settings | | [docs][r-aaus] |
-| | ai-action-execution-order | Medium | AI agent action not the last step in a job | | [docs][r-aaeo] |
-
-</details>
-
----
-
-## Example: detecting real vulnerabilities
-
-Given a workflow with several common security mistakes:
-
-```yaml
-name: PR Comment Handler
-
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-  issue_comment:
-    types: [created]
-
-jobs:
-  process-pr:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Echo PR title
-        run: |
-          echo "Processing PR: ${{ github.event.pull_request.title }}"
-
-      - name: Run build
-        run: npm install && npm run build
-```
-
-`sisakulint -enable-rule missing-timeout-minutes` flags every line that matters, with a code snippet and a link to the rule docs:
-
-```text
-.github/workflows/demo.yaml:1:1: workflow does not have explicit 'permissions' block.
-Follow the principle of least privilege.
-See https://sisaku-security.github.io/lint/docs/rules/permissions/ [permissions]
-   1 👈| name: PR Comment Handler
-
-.github/workflows/demo.yaml:4:3: dangerous trigger (critical): pull_request_target +
-issue_comment without any security mitigations.
-See https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/ [dangerous-triggers-critical]
-   4 👈|   pull_request_target:
-
-.github/workflows/demo.yaml:13:9: the action ref should be a full length commit SHA. [commit-sha]
-  13 👈|       - uses: actions/checkout@v4
-
-.github/workflows/demo.yaml:15:16: untrusted PR code checked out in pull_request_target context.
-See https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/ [untrusted-checkout]
-  15 👈|           ref: ${{ github.event.pull_request.head.sha }}
-
-.github/workflows/demo.yaml:19:35: code injection (critical): github.event.pull_request.title
-is interpolated into an inline script.
-See https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/ [code-injection-critical]
-  19 👈|           echo "Processing PR: ${{ github.event.pull_request.title }}"
-
-[sisaku:🤔] Detected 7 errors in 1 file checked
-```
-
-| Finding | OWASP | Severity | Auto-fix |
-|:--------|:------|:---------|:--------:|
-| Missing permissions block | CICD-SEC-02 | High | Yes |
-| Dangerous privileged triggers | CICD-SEC-01 | Critical | Yes |
-| Action not pinned to SHA | CICD-SEC-08 | High | Yes |
-| Credential exposure (persist-credentials) | CICD-SEC-06 | Critical | Yes |
-| Untrusted checkout | CICD-SEC-04 | Critical | Yes |
-| Code injection | CICD-SEC-04 | Critical | Yes |
-| Cache poisoning | CICD-SEC-09 | High | Yes |
-
-Run `sisakulint -fix on` and most of these are repaired in place.
-
----
-
-## Auto-fix
-
-27+ rules ship with an auto-fixer. Two modes:
-
-```bash
-sisakulint -fix dry-run   # show diff, don't write
-sisakulint -fix on        # apply changes to YAML files
-```
-
-Auto-fix-capable rules currently include: `timeout-minutes`, `commit-sha`, `credentials`, `code-injection-*`, `envvar-injection-*`, `envpath-injection-*`, `output-clobbering-*`, `argument-injection-*`, `request-forgery-*`, `untrusted-checkout`, `untrusted-checkout-toctou-*`, `artifact-poisoning-*`, `cache-poisoning`, `cache-poisoning-poisonable-step`, `cache-bloat`, `artipacked`, `secrets-in-artifacts`, `secrets-inherit`, `secret-in-log`, `secret-exposure`, `unmasked-secret-exposure`, `improper-access-control`, `bot-conditions`, `unsound-contains`, `obfuscation`, `ref-confusion`, `impostor-commit`, `known-vulnerable-actions`, `dangerous-triggers-*`, `cond`, `permissions`, `dependabot-github-actions`, `reusable-workflow-taint` (cross-file `ChainFixer` lifts callee `${{ inputs.X }}` into a step-level `env:`).
-
-A few representative fixes:
-
-<details>
-<summary><b>Code injection — move untrusted input into <code>env:</code></b></summary>
-
-Before:
-
-```yaml
-- run: echo "Processing PR: ${{ github.event.pull_request.title }}"
-```
-
-After:
-
-```yaml
-- env:
-    PR_TITLE: ${{ github.event.pull_request.title }}
-  run: echo "Processing PR: $PR_TITLE"
-```
-
-</details>
-
-<details>
-<summary><b>commit-sha — pin action tags to full SHA, preserve original tag as comment</b></summary>
-
-Before:
-
-```yaml
-- uses: actions/checkout@v4
-- uses: actions/setup-node@v3
-```
-
-After:
-
-```yaml
-- uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
-- uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v3
-```
-
-</details>
-
-<details>
-<summary><b>untrusted-checkout — add explicit ref in privileged contexts</b></summary>
-
-Before:
-
-```yaml
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-jobs:
-  build:
-    steps:
-      - uses: actions/checkout@v4
-```
-
-After:
-
-```yaml
-on:
-  pull_request_target:
-    types: [opened, synchronize]
-jobs:
-  build:
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.ref }}
-```
-
-</details>
-
-> **Notes**
-> - Always review the diff (or use `-fix dry-run`) before committing.
-> - `commit-sha` calls the GitHub API to resolve tags; unauthenticated requests are limited to 60/hr.
-> - A handful of rules (e.g. `expression`, `secret-exfiltration`, `self-hosted-runners`, `action-list`, AI-action rules) are warning-only because the right fix depends on the user's policy.
-
----
-
-## SARIF + reviewdog integration
-
-```bash
-sisakulint -format "{{sarif .}}"                  # stdout
-sisakulint -format "{{sarif .}}" > results.sarif  # to file
-sisakulint -format "{{sarif .}}" | reviewdog -f=sarif -reporter=github-pr-review
-```
-
-<div align="center">
-  <img width="700" alt="reviewdog showing sisakulint findings inline on a GitHub PR" src="https://github.com/user-attachments/assets/66e34b76-63f9-4d30-95b5-206bec0f7d41" />
-  <p><i>sisakulint findings rendered inline on a GitHub PR via reviewdog</i></p>
-</div>
-
-A complete GitHub Actions recipe is in [Installation → As a GitHub Action](#as-a-github-action-with-reviewdog).
-
----
-
-## Configuration
-
-Generate a starter config:
-
-```bash
-sisakulint -init   # writes .github/action.yaml
-```
-
-The config file lets you set per-repo allowlists, block lists, and rule overrides. Useful flags:
-
-```bash
-sisakulint -ignore "permissions" -ignore "SC2086"   # mute specific rules / patterns
-sisakulint -enable-rule missing-timeout-minutes     # enable an opt-in rule
-sisakulint -boilerplate                             # print a hardened workflow skeleton
-sisakulint -debug                                   # dump AST traversal + rule decisions
-```
-
-### JSON schema for editor autocompletion
-
-Add to your VS Code `settings.json`:
+An `Inconclusive` (a `Finding` whose `certainty` is `inconclusive`) for which a person looked at the place and decided that the value is not the value of an attacker is written in an acceptance file (`actions/lint/schema/acceptances-v0.json`) and passed with `--accept`. Then the `Inconclusive` is not counted in bit 8. The `Inconclusive` stays in `findings[]` of the Report, and the reason is attached in `acceptance.reason`. The text output prints the number of accepted entries in a separate line (with `-v`, the entries one by one with the reasons), and `--format line` prints `accepted by --accept:` and the reason in the mark of the line.
 
 ```json
-"yaml.schemas": {
-  "https://github.com/sisaku-security/homebrew-sisakulint/raw/main/settings.json": "/.github/workflows/*.{yml,yaml}"
+{
+  "schema": "sisakulint/acceptances/v0",
+  "inconclusive": [
+    {
+      "rule": "code-injection",
+      "kind_id": "code-injection.step-output-run",
+      "input": ".github/workflows/triage.yml",
+      "key_path": "jobs.triage.steps[1].run",
+      "span_text": "steps.label.outputs.name",
+      "span_lines": "- run: echo '${{ github.event.issue.body }}' \"${{ steps.label.outputs.name }}\"",
+      "reason": "the step label writes one of the names of our labels"
+    }
+  ]
 }
 ```
 
----
+- An entry matches an `Inconclusive` whose six values are equal: the rule, the `kind_id`, the input, the `key_path`, the `span_text`, and the `span_lines`. The `kind_id` is the `args.kind_id` of the Report as is (`<rule>.<kind>`; a value that is only the last part is an error). The last three values are in `findings[]` of the Report. Line numbers are not used.
+- A template is made from the Report. The template makes `reason` empty, so loading the template as is stops with exit code 66, and a reason must be written for each entry. One entry matches the `Inconclusive` whose six values are the same (a place where the same line appears twice in the same path), so `unique` reduces the entries to one.
 
-- **Always review changes**: Even though autofix is automated, always review the changes made to your workflow files before committing them
-- **Commit SHA fixes require internet**: The `commit-sha` rule needs to fetch commit information from GitHub, so it requires an active internet connection
-- **Rate limiting**: The commit SHA autofix makes GitHub API calls, which are subject to rate limiting. Unauthenticated requests are capped at **60 requests per hour**. Set a token to lift the limit to 5,000 req/h:
-   - `SISAKULINT_GITHUB_TOKEN` (preferred — scoped to this tool)
-   - `GITHUB_TOKEN` (read from the process environment; inside a GitHub Actions step you must map it explicitly, e.g. `env: GITHUB_TOKEN: ${{ github.token }}` — the runner does not export `secrets.GITHUB_TOKEN` to `run:` steps automatically)
-   - `GH_TOKEN` (set by `gh auth login`)
-   - `-github-token "$(gh auth token)"` (CLI flag, highest priority)
+  ```bash
+  go run ./cmd/sisakulint --root <repository> --format json |
+    jq '{schema: "sisakulint/acceptances/v0", inconclusive: ([.findings[] | select(.certainty == "inconclusive" and (.acceptance | not)) | {rule, kind_id: .args.kind_id, input: .location.file.input, key_path, span_text, span_lines, reason: ""}] | unique)}' > accept.json
+  ```
 
-   A fine-grained PAT with `public_repo` (or just `Metadata: Read-only` on the targets you pin) is sufficient. When sisakulint detects no token at startup, it now prints a warning. If the rate limit is exhausted mid-run, sisakulint aborts with a non-zero exit and skips writing partial output for the affected file rather than leaving a mix of pinned and unpinned actions on disk.
-- **Backup your files**: Consider committing your changes or backing up your workflow files before running autofix
-- **Not all rules support autofix**: Some rules like `expression`, `permissions`, `issue-injection`, `cache-poisoning`, and `deprecated-commands` require manual fixes as they depend on your specific use case
-- **Auto-fix capabilities**: Currently, `timeout-minutes`, `commit-sha`, `credentials`, `untrusted-checkout`, and `artifact-poisoning` rules support auto-fix. More rules will support auto-fix in future releases
+- When the string of the span or of the line of an accepted place changes in a way other than the indentation common to the lines, the trailing whitespace, and the kind of newline, or when the `key_path` changes (for example, a step is added before a step that has no id), the entry no longer matches, and the place is counted in bit 8 again. An entry that did not match is printed to stderr, one line for each entry (only in a run in which the rule ran and the input was read). An `Inconclusive` that is decided by a fact (`advisories-unknown` of known-vulnerable-actions and so on) does not appear in a run that has `--online` or a facts file, so in that run the entry is printed as not matching.
+- A change outside the span and the line does not invalidate the acceptance. When the reason of the acceptance depends on the step that creates the value (the content of `steps.label`), on the `with:`, the `if:`, or the `env:` of the same step, or on the order of steps, the entry keeps matching even when those change. When a step that has no id is removed or reordered, a different step that has the same line can take over the same `key_path`.
+- An error in the acceptance file (unreadable, an invalid format, an unknown rule, a `kind_id` that is not a `<rule>.<kind>` of the rule of the entry (including a `kind_id` that the rule does not declare), a `reason` of only whitespace, or a duplicate of entries whose six values are the same) gives exit code 66.
+- A PR that adds an acceptance file can remove bit 8 by the acceptance. When lint runs in a `pull_request` workflow of the repository, the author of the PR can also change the workflow itself, so the author gains nothing more. When lint runs in a workflow that the author of the PR cannot change (for example, a workflow run by a ruleset of an organization), read the acceptance file from the base branch, or protect the file with CODEOWNERS.
 
-## Architecture
+### Uploading to code scanning
 
+Uploading a file of `--format sarif` or `--sarif` with `github/codeql-action/upload-sarif` makes alerts of code scanning. Set `--root` to the root of the repository (the paths in SARIF are relative to `--root`, and code scanning reads the paths as relative to the root of the repository). Every location of a file is a relative URI whose `uriBaseId` is `%SRCROOT%`, and `originalUriBaseIds` of the run has only the description of `%SRCROOT%` and does not write the absolute path of the root (the path of the machine that ran the lint does not remain in SARIF).
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/4c6fa378-5878-48af-b95f-8b987b3cf7ef" alt="sisakulint architecture diagram" width="600"/>
-</div>
-
-```
-.github/workflows/*.yml
-        │
-        ▼
-[ AST parser ]  ──► [ Expression parser (${{ }}) ]
-        │                       │
-        ▼                       ▼
-[ Shell parser (mvdan.cc/sh) ]  [ Taint propagator ]
-        │                       │
-        └───────────► [ Rule engine ] ◄───── 50+ rules
-                              │
-                ┌─────────────┴─────────────┐
-                ▼                           ▼
-        [ Error formatter ]          [ Auto-fixer ]
-                │                           │
-                ▼                           ▼
-        SARIF / pretty text         in-place YAML rewrite
+```yaml
+permissions:
+  contents: read
+  security-events: write
+  actions: read   # needed only in a workflow of a private repository (as in the upload-sarif example of the GitHub documentation)
+steps:
+  # after actions/checkout, and after a step that prepares the binary of sisakulint
+  - run: sisakulint --root . --sarif sisakulint.sarif
+  - if: ${{ !cancelled() }}   # when a bit of the exit code is set, the previous step ends with a failure
+    uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+    with:
+      sarif_file: sisakulint.sarif
 ```
 
-- **AST parser** — `pkg/ast`, `pkg/core/parse_*.go`
-- **Expression parser** — `pkg/expressions` (full GitHub Actions `${{ }}` grammar)
-- **Shell parser & taint** — `pkg/shell` (scope-aware bash semantics, function-arg propagation)
-- **Rule engine** — `pkg/core/*rule.go` implementing the visitor pattern
-- **Auto-fixer** — `pkg/core/autofixer.go`
-
----
-
-## BlackHat Arsenal 2025
-
-<div align="center">
-  <a href="https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions">
-    <img src="https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/preview_slide_0.jpg?34808843" alt="sisakulint at BlackHat Arsenal 2025" width="600"/>
-  </a>
-
-  **[▶️ Slides](https://speakerdeck.com/4su_para/sisakulint-ci-friendly-static-linter-with-sast-semantic-analysis-for-github-actions)** · **[📥 PDF](https://files.speakerdeck.com/presentations/8047bdafc1db4bdb9a5dbc0a5825e5e2/BlackHatArsenal2025.pdf)** · **[📄 SecHack365 poster](https://sechack365.nict.go.jp/achievement/2023/pdf/14C.pdf)** · **[📺 Talk recording](https://www.youtube.com/watch?v=DhgqKOmzLSk)**
-
-  <a href="https://www.youtube.com/watch?v=DhgqKOmzLSk">
-    <img src="https://img.youtube.com/vi/DhgqKOmzLSk/hqdefault.jpg" alt="Watch the sisakulint talk on YouTube" width="480"/>
-  </a>
-</div>
-
-sisakulint was showcased at **BlackHat Asia 2025 Arsenal**. The talk covers the SAST design, the semantic-analysis approach to GitHub Actions security, the auto-fix pipeline, and real-world OWASP CI/CD Top-10 case studies. Originally built as a [SecHack365](https://sechack365.nict.go.jp/) 2023 project under NICT.
-
----
-
-## Contributing
-
-Bug reports, rule proposals, and PRs are very welcome.
-
-- File issues at <https://github.com/sisaku-security/sisakulint/issues>
-- Adding a new rule: see [`docs/RULES_GUIDE.md`](docs/RULES_GUIDE.md) and the example workflows under [`script/actions/`](script/actions/)
-- Run the test suite: `go test ./...`
-- Run against the bundled examples: `sisakulint script/actions/`
-
-If sisakulint helps you keep a workflow safe, please ⭐️ the repo — it makes it much easier for other security teams to find.
-
----
+- One rule of code scanning (the `reportingDescriptor` of SARIF) exists for each `FindingKind`, and the ID is `<rule>.<kind>` (`code-injection.controlled`). A `Severity` of critical or high becomes an error alert, medium becomes a warning, and low or info becomes a note alert. The security severity is critical, high, medium, or low. A finding of a quality rule becomes a note alert that is not a security alert.
+- An `Inconclusive` becomes an alert whose ID is `<rule>.<kind>` (the same form as the kind of a `Finding`). The level and the security severity are decided in the same way as for a `Finding`, by the `Severity` of the rule (the heaviest of the `FindingKind`). The tags of the rule are `security` and `inconclusive`. The `kind` of the result is not written (SARIF 2.1.0 limits the `kind` of a result whose `level` is not `none` to `fail`, and code scanning does not read `kind`). An `Inconclusive` accepted with `--accept` is not put in SARIF (code scanning does not close an alert with `suppressions` of SARIF). The locations of `Related` are written to `relatedLocations`, and a link to the location (`[path:line](id)`) is appended after the message (code scanning shows `relatedLocations` only through the links in the message). A conditional `Finding` becomes the same alert as a confirmed one, and the fact that has no answer, or the input that was not read, is appended after the message.
+- The `Fingerprint` (which has no line number) is written to the identity of an alert (`partialFingerprints.primaryLocationLineHash`). Even when a line moves, the same `Finding` stays the same alert. The `Fingerprint` of an `Inconclusive` is made from the rule, the input, the path of the keys of the element, the `InconclusiveKind`, the string of the place, and the order inside the same place (the form with two same `${{ }}` in the same line). `upload-sarif` writes a warning to the log for each result, because the value differs from the value that `upload-sarif` computes (the upload does not stop).
+- Code scanning can close an alert that is not in the uploaded SARIF as fixed (this was not verified on a real machine). The SARIF of a run that sets bit 16 (an unreadable input or an invalid input), and the SARIF of a run that sets bit 2 because no input exists, have no result for the files that could not be read. The SARIF of `--read-all` has no result for the files outside PATH, so do not upload the SARIF in the same category as the default branch.
+- A `Fix` is written to `fixes` of SARIF, but code scanning does not read `fixes`. An unreadable input and an internal error are written to `invocations[0].toolExecutionNotifications`.
 
 ## License
 
-[Apache License 2.0](LICENSE) © sisaku-security contributors.
+The `LICENSE` file at the repository root (Apache License 2.0) applies to the repository.
 
-## Citation
-
-If you reference sisakulint in academic or industry work:
-
-```bibtex
-@software{sisakulint,
-  title  = {sisakulint: CI-friendly static linter with SAST semantic analysis for GitHub Actions},
-  author = {sisaku-security contributors},
-  year   = {2025},
-  url    = {https://github.com/sisaku-security/sisakulint}
-}
-```
-
----
-
-<!-- OWASP Links -->
-[owasp-01]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-01-Insufficient-Flow-Control-Mechanisms
-[owasp-02]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-02-Inadequate-Identity-and-Access-Management
-[owasp-03]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-03-Dependency-Chain-Abuse
-[owasp-04]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-04-Poisoned-Pipeline-Execution
-[owasp-05]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-05-Insufficient-PBAC
-[owasp-06]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-06-Insufficient-Credential-Hygiene
-[owasp-07]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-07-Insecure-System-Configuration
-[owasp-08]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-08-Ungoverned-Usage-of-Third-Party-Services
-[owasp-09]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-09-Improper-Artifact-Integrity-Validation
-[owasp-10]: https://owasp.org/www-project-top-10-ci-cd-security-risks/CICD-SEC-10-Insufficient-Logging-and-Visibility
-
-<!-- sisakulint Docs Links -->
-[r-id]: https://sisaku-security.github.io/lint/docs/rules/idrule/
-[r-env]: https://sisaku-security.github.io/lint/docs/rules/environmentvariablerule/
-[r-perm]: https://sisaku-security.github.io/lint/docs/rules/permissions/
-[r-wc]: https://sisaku-security.github.io/lint/docs/rules/workflowcall/
-[r-jn]: https://sisaku-security.github.io/lint/docs/rules/jobneeds/
-[r-expr]: https://sisaku-security.github.io/lint/docs/rules/expressionrule/
-[r-cond]: https://sisaku-security.github.io/lint/docs/rules/conditionalrule/
-[r-dc]: https://sisaku-security.github.io/lint/docs/rules/deprecatedcommandsrule/
-[r-tm]: https://sisaku-security.github.io/lint/docs/rules/timeoutminutesrule/
-[r-cb]: https://sisaku-security.github.io/lint/docs/rules/cachebloatrule/
-[r-cred]: https://sisaku-security.github.io/lint/docs/rules/credentialrules/
-[r-se]: https://sisaku-security.github.io/lint/docs/rules/secretexposure/
-[r-use]: https://sisaku-security.github.io/lint/docs/rules/unmaskedsecretexposure/
-[r-ap]: https://sisaku-security.github.io/lint/docs/rules/artipacked/
-[r-sia]: https://sisaku-security.github.io/lint/docs/rules/secretsinartifacts/
-[r-si]: https://sisaku-security.github.io/lint/docs/rules/secretsinherit/
-[r-sef]: https://sisaku-security.github.io/lint/docs/rules/secretexfiltration/
-[r-sil]: https://sisaku-security.github.io/lint/docs/rules/secretinlogrule/
-[r-ci]: https://sisaku-security.github.io/lint/docs/rules/codeinjectioncritical/
-[r-cim]: https://sisaku-security.github.io/lint/docs/rules/codeinjectionmedium/
-[r-evi]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectioncritical/
-[r-evim]: https://sisaku-security.github.io/lint/docs/rules/envvarinjectionmedium/
-[r-epi]: https://sisaku-security.github.io/lint/docs/rules/envpathinjectioncritical/
-[r-epim]: https://sisaku-security.github.io/lint/docs/rules/envpathinjectionmedium/
-[r-oc]: https://sisaku-security.github.io/lint/docs/rules/outputclobbering/
-[r-ai]: https://sisaku-security.github.io/lint/docs/rules/argumentinjection/
-[r-uco]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckout/
-[r-toctou-c]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctoucritical/
-[r-toctou-h]: https://sisaku-security.github.io/lint/docs/rules/untrustedcheckouttoctouhigh/
-[r-sha]: https://sisaku-security.github.io/lint/docs/rules/commitsharule/
-[r-al]: https://sisaku-security.github.io/lint/docs/rules/actionlist/
-[r-ic]: https://sisaku-security.github.io/lint/docs/rules/impostorcommit/
-[r-rc]: https://sisaku-security.github.io/lint/docs/rules/refconfusion/
-[r-kva]: https://sisaku-security.github.io/lint/docs/rules/knownvulnerableactions/
-[r-au]: https://sisaku-security.github.io/lint/docs/rules/archiveduses/
-[r-ui]: https://sisaku-security.github.io/lint/docs/rules/unpinnedimages/
-[r-dga]: https://sisaku-security.github.io/lint/docs/rules/dependabotgithubactions/
-[r-rwt]: https://sisaku-security.github.io/lint/docs/rules/reusableworkflowtaint/
-[r-apc]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningcritical/
-[r-apm]: https://sisaku-security.github.io/lint/docs/rules/artifactpoisoningmedium/
-[r-cp]: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningrule/
-[r-cpp]: https://sisaku-security.github.io/lint/docs/rules/cachepoisoningpoisonablesteprule/
-[r-iac]: https://sisaku-security.github.io/lint/docs/rules/improperaccesscontrol/
-[r-bot]: https://sisaku-security.github.io/lint/docs/rules/botconditions/
-[r-uc]: https://sisaku-security.github.io/lint/docs/rules/unsoundcontains/
-[r-dt-c]: https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulecritical/
-[r-dt-m]: https://sisaku-security.github.io/lint/docs/rules/dangeroustriggersrulemedium/
-[r-ob]: https://sisaku-security.github.io/lint/docs/rules/obfuscation/
-[r-shr]: https://sisaku-security.github.io/lint/docs/rules/selfhostedrunners/
-[r-rf]: https://sisaku-security.github.io/lint/docs/rules/requestforgery/
-[r-aaut]: https://sisaku-security.github.io/lint/docs/rules/aiactionunrestrictedtrigger/
-[r-aaet]: https://sisaku-security.github.io/lint/docs/rules/aiactionexcessivetools/
-[r-aapi]: https://sisaku-security.github.io/lint/docs/rules/aiactionpromptinjection/
-[r-aaus]: https://sisaku-security.github.io/lint/docs/rules/aiactionunsafesandbox/
-[r-aaeo]: https://sisaku-security.github.io/lint/docs/rules/aiactionexecutionorder/
+Some directories hold files copied from third parties. The `README.md` and the license copy in each of those directories state where the files come from and under which license the files are provided.

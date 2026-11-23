@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step extracts an archive with tar,
+#   an option that the output of a command gives, and then the name of the
+#   pull request's head branch, through env and inside quotes.
+# reason: the command prints --directory when the tar of the runner is GNU
+#   tar and -C otherwise; both options take the next word as the directory
+#   to extract into, so tar reads the branch's name as that directory, not
+#   as an option.
+# cause: the rule does not know the output of $(tar --version | ...), which
+#   the tar of the runner decides at run time, and reads the word after the
+#   output as one that tar may read as an option.
+# attack-value: github.head_ref = "--to-command=echo${IFS}PWNED"
+# attack-run-behavior: on GNU tar 1.35, the command prints --directory, so
+#   tar takes the name as the directory, fails to enter the directory
+#   ("Cannot open: No such file or directory"), and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: tar -xf archive.tar $(tar --version | grep -q "GNU tar" && echo --directory || echo -C) "$HEAD_REF"

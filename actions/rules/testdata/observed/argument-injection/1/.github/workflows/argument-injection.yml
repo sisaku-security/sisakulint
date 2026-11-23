@@ -1,0 +1,25 @@
+name: argument-injection-probe
+on:
+  push:
+  pull_request:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: values
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          printf 'event=%s\n' "$GITHUB_EVENT_NAME"
+          printf 'ref_name=[%s]\n' "$REF_NAME"
+          printf 'head_ref=[%s]\n' "$HEAD_REF"
+          printf 'GITHUB_HEAD_REF=[%s]\n' "$GITHUB_HEAD_REF"
+      - name: git reads the quoted value as an option
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          git init -q /tmp/r
+          git ls-remote "$HEAD_REF" /tmp/r 2>&1 || true
+          echo "exit=$?"

@@ -1,0 +1,4 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"request.destination-trusted","secret":"GITHUB_TOKEN","destination":"coveralls.io"},"state":"unknown","reason":"the example does not answer it"}
+]}

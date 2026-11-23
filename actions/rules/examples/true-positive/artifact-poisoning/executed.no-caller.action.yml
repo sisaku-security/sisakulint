@@ -1,0 +1,29 @@
+# situation: a composite action with no caller among the files that the
+#   linter reads; a step downloads, with actions/download-artifact and the id
+#   of the run that started workflow_run, the artifact of that run into the
+#   workspace, and then runs npm ci.
+# reason: with no caller among the files that the linter reads, the rule
+#   reads the action on every event an attacker triggers, workflow_run among
+#   the events. npm ci reads the package.json and package-lock.json of the
+#   workspace and runs the install scripts of the two files, so the files the
+#   artifact puts in the workspace decide the code that runs, in the run of
+#   workflow_run with the token of the base repository, not in the run that
+#   made the artifact.
+# attack-value: the file package.json in the artifact of the ci run of the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the pull request from the fork changes ci so the run
+#   of ci uploads package.json; when the run of ci completes, the download
+#   takes the artifact by workflow_run.id with the token into the workspace,
+#   and npm ci runs the preinstall, which prints PWNED, with the secrets that
+#   the job of a workflow that calls the action gives the step and the token
+#   of the job.
+name: install
+description: install the built packages
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ github.token }}
+    - run: npm ci
+      shell: bash

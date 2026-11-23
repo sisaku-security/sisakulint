@@ -1,0 +1,34 @@
+# situation: on pull_request_target with labeled alone and on
+#   workflow_dispatch, the checkout takes its ref from the input ref of
+#   workflow_dispatch, and npm ci runs.
+# reason: the one who dispatches the workflow chooses the value of the
+#   input, and no label approves a run of workflow_dispatch, as a label
+#   approves only a run of pull_request_target with the activity type labeled;
+#   untrusted-checkout reports the input as input-dispatch.
+# cause: the rule reads the references that the author of a pull request
+#   can move after a label or a reviewer of an environment approves the
+#   run; an input of workflow_dispatch is not such a reference.
+# attack-value: inputs.ref = "refs/pull/1/head"
+# attack-run-behavior: in a run of pull_request_target on labeled, the
+#   workflow, which has both triggers, has no input of workflow_dispatch, so
+#   inputs.ref is empty and the checkout fetches the commit of the event in
+#   the base repository. When the one who dispatches the workflow gives
+#   refs/pull/1/head as the input ref, and the pull request 1 is from a fork
+#   whose package.json has the preinstall script echo PWNED, no label stands
+#   before the job: the checkout fetches the head of the fork's pull request,
+#   and npm ci runs the preinstall script, which prints PWNED, with the
+#   secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      ref: {type: string}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.ref }}
+      - run: npm ci

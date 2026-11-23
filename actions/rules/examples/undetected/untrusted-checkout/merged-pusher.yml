@@ -1,0 +1,28 @@
+# situation: on a pull request that is closed, actions/checkout checks out
+#   the ref that the name of the account that merged the pull request names,
+#   and make runs.
+# reason: whether GitHub sets merged_by of a merged pull request to the
+#   account of the author of the pull request was not checked: no payload with
+#   merged_by was seen on GitHub. Were merged_by the author, the author would
+#   write the name of merged_by, which is the profile name of the account of
+#   the author.
+# cause: the table of what an attacker controls reads merged_by as the
+#   account that merged the pull request, and the account that merged the pull
+#   request holds a credential that can merge.
+# attack: the author of a pull request sets the profile name of the account
+#   of the author to refs/pull/<number>/head, the ref of the head of the pull
+#   request, and the pull request is merged.
+# attack-run-behavior: were merged_by the author of the pull request, the
+#   checkout would fetch the head of the pull request, and make would run the
+#   Makefile of the pull request with the token of the run.
+on:
+  pull_request_target:
+    types: [closed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.merged_by.name }}
+      - run: make

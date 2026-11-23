@@ -1,0 +1,16 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"azure/setup-kubectl","ref":"6025c840858f1afa584a5190a4426c338f59e503"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"azure/setup-kubectl","ref":"901a10e89ea615cf61f57ac05cecdf23e7de06d8"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"azure/setup-kubectl","ref":"6025c840858f1afa584a5190a4426c338f59e503"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"advisory-low.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"azure/setup-kubectl","sha":"6025c840858f1afa584a5190a4426c338f59e503"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"azure/setup-kubectl","sha":"6025c840858f1afa584a5190a4426c338f59e503"},"state":"found","value":["refs/tags/v2.1"]},
+{"query":{"kind":"git.commit-tags","repo":"azure/setup-kubectl","sha":"901a10e89ea615cf61f57ac05cecdf23e7de06d8"},"state":"found","value":["refs/tags/v3","refs/tags/v3.2"]},
+{"query":{"kind":"git.ref-commit","repo":"azure/setup-kubectl","ref":"v3"},"state":"found","value":{"ref":"refs/tags/v3","sha":"901a10e89ea615cf61f57ac05cecdf23e7de06d8"}},
+{"query":{"kind":"package.advisories","package":"azure/setup-kubectl","version":"v2.1"},"state":"found","value":[{"first_patched_version":"3","ghsa_id":"GHSA-p756-rfxh-x63h","severity":"low","vulnerable_version_range":"< 3"}]},
+{"query":{"kind":"package.advisories","package":"azure/setup-kubectl","version":"v3.2"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"azure/setup-kubectl"},"state":"found","value":[{"first_patched_version":"3","ghsa_id":"GHSA-p756-rfxh-x63h","severity":"low","vulnerable_version_range":"< 3"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"azure/setup-kubectl"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

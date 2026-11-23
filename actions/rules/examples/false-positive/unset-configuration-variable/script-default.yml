@@ -1,0 +1,16 @@
+# situation: the step gives the configuration variable NODE_VERSION to the
+#   script in env, and the script uses 20 when the value is empty; no level
+#   defines NODE_VERSION, on purpose.
+# reason: the empty value is what the workflow expects when NODE_VERSION is
+#   missing, and the script installs Node.js 20.
+# cause: the rule does not read the script.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - env:
+          NODE: ${{ vars.NODE_VERSION }}
+        run: ./install-node.sh "${NODE:-20}"

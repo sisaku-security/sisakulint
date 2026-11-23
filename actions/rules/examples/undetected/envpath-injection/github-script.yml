@@ -1,0 +1,17 @@
+# situation: on issues, actions/github-script calls core.addPath with the
+#   issue's title.
+# reason: a todo (the same file): @actions/core's addPath writes what it is
+#   given to $GITHUB_PATH, with no check (actions/toolkit a7911ca,
+#   packages/core/src/core.ts 132 to 140).
+# cause: the rule does not read JavaScript.
+# attack-value: the issue's title, which the script reads as context.payload.issue.title = "/tmp/PWNED"
+# attack-run-behavior: core.addPath appends /tmp/PWNED and a line break to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: core.addPath(context.payload.issue.title)

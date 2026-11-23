@@ -1,0 +1,18 @@
+# situation: on push, a step puts toJSON(secrets) in its env and prints the
+#   names of the secrets with jq.
+# reason: a todo (the same file): the names are not masked, and a value jq
+#   takes out may be a secret, a part of one, or the JSON around them.
+# cause: the rule does not tell apart what jq takes out of the whole secrets
+#   context.
+# attack: one who may read the run's log opens the log and reads what jq
+#   printed.
+# attack-run-behavior: the step prints the names of the secrets of the job.
+on: push
+permissions: {}
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ALL: ${{ toJSON(secrets) }}
+        run: echo "$ALL" | jq -r 'keys[]'

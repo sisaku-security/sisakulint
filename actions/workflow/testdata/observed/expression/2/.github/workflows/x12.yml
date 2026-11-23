@@ -1,0 +1,8 @@
+name: x12
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - if: ${{ failure('a') }}
+        run: echo ok

@@ -1,0 +1,19 @@
+# situation: on issues, a step with no id writes the body of the issue
+#   to $GITHUB_OUTPUT.
+# reason: the runner keeps the outputs of a step only when the step has
+#   an id, so no step reads an output the body sets.
+# cause: the rule does not read what reads the outputs of the step.
+# attack-value: github.event.issue.body = "x\ntag=$(id)"
+# attack-run-behavior: the echo writes the lines b=x and tag=$(id) to
+#   $GITHUB_OUTPUT, the runner reads the two lines, and no step reads the
+#   outputs of the step.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: echo "b=$BODY" >> "$GITHUB_OUTPUT"
+      - run: echo done

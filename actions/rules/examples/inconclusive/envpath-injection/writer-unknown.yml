@@ -1,0 +1,17 @@
+# situation: a step puts the body of the issue in the env B, and jq writes
+#   what it reads from "$B" to $GITHUB_PATH.
+# reason: the rule reads what echo, printf and cat write to the file; what
+#   another command such as jq writes from a value an attacker may control
+#   is not analyzed.
+# attack-value: github.event.issue.body = "\"/tmp/PWNED\""
+# attack-run-behavior: when the body is a JSON text whose raw output has the
+#   line /tmp/PWNED, such as this string, jq -r . prints /tmp/PWNED to
+#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          B: ${{ github.event.issue.body }}
+        run: jq -r . <<< "$B" >> "$GITHUB_PATH"

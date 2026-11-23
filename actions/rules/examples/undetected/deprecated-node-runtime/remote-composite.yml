@@ -1,0 +1,15 @@
+# situation: a workflow runs example-org/release-action@v1, a composite
+#   action of another repository, and a step of that composite action uses
+#   an action that declares runs.using: node20.
+# reason: the runner runs the inner action on Node.js 24, not on Node.js
+#   20, and adds a warning to the job.
+# cause: the rule reads the runs.using of the action that the workflow names
+#   (composite), and does not fetch the action.yml of a composite action of
+#   another repository to read the steps of the composite action.
+on: push
+permissions: {contents: write}
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: example-org/release-action@v1

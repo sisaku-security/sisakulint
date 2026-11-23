@@ -1,0 +1,15 @@
+# situation: the job writes no permissions and only calls a reusable
+#   workflow of the same repository, which writes permissions: {}.
+# reason: the called workflow downgrades the token before any code of others
+#   runs.
+# cause: the rule does not read the called workflow.
+# attack: the maintainer of an action or a package that build.yml runs, or
+#   whoever takes over their account, makes it read the token and send it
+#   out.
+# attack-run-behavior: the job call runs build.yml, whose permissions: {}
+#   lowers the token its jobs get to no scope, so the code there reads a
+#   token with which GitHub refuses every write.
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/build.yml

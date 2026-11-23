@@ -1,0 +1,17 @@
+# situation: on push, a step gets the JSON secret DB whole in its env, and
+#   echoes its password taken out by jq.
+# reason: another rule's: secret-in-log reports what the shell makes of a
+#   secret and prints to the log.
+# cause: the rule reads the ${{ }} of the workflow, not the script.
+# attack: one who may read the run's log opens it to read the password.
+# attack-run-behavior: the runner masks DB whole, and the password jq writes
+#   is not DB, so the log has it as it is.
+on: push
+permissions: {}
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DB: ${{ secrets.DB }}
+        run: echo "password is $(jq -r .password <<<"$DB")"

@@ -1,0 +1,23 @@
+# cache-poisoning: a job of issue_comment whose cache-mode lets it save to
+# the cache of the default branch's scope; it checks out the head of the
+# pull request the comment is on and saves dist, a directory of the tree,
+# and saves under a key and a path the comment writes.
+on: issue_comment
+permissions: {}
+jobs:
+  cache:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          persist-credentials: false
+      - uses: actions/cache@v4
+        with:
+          path: dist
+          key: dist-${{ hashFiles('package-lock.json') }}
+      - uses: actions/cache/save@v4
+        with:
+          path: ${{ github.event.comment.body }}
+          key: comment-${{ github.event.comment.body }}

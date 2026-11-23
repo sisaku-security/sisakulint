@@ -1,0 +1,13 @@
+on: issues
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+      - id: x
+        run: echo hi
+      - run: |
+          echo "${{ github.event.issue.title }}"
+          echo "${{ steps.x.outputs.y }}"
+permissions: {}

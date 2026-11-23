@@ -1,0 +1,8 @@
+name: y33
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "v=${{ contains(github.event, 'a') }}"
+      - run: echo after

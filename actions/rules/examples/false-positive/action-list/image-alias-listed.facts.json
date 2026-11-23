@@ -1,0 +1,4 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"repo.action-list"},"state":"found","value":["docker://alpine:*"]},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

@@ -1,0 +1,18 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and prints the output of eval of the
+#   variable in ` `, whose quotes are escaped with backslashes.
+# reason: bash takes the backslashes off inside ` ` and runs eval
+#   "$ISSUE_TITLE", which reads the title as code.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: eval runs echo PWNED, and echo prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "`eval \"$ISSUE_TITLE\"`"

@@ -1,0 +1,19 @@
+# situation: on issues, a step sends a request with curl and the secret
+#   DEPLOY_TOKEN to prod.example.com or dev.example.com, chosen by comparing
+#   the issue's title.
+# reason: no added gain: the expression gives one of the two hosts the
+#   workflow writes.
+# cause: the rule reads a compared value as not the attacker's text.
+# attack: the attacker opens an issue titled attacker.example, the host of a
+#   server the attacker runs.
+# attack-run-behavior: the expression gives dev.example.com, so curl sends
+#   the request to dev.example.com, a host the workflow writes.
+on: issues
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title == 'prod' && 'prod.example.com' || 'dev.example.com' }}/status"

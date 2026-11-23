@@ -1,0 +1,28 @@
+# situation: on workflow_dispatch, a job with no cache-mode checks out the
+#   ref that ${{ inputs.ref }} names and runs npm tes.
+# reason: a limitation (run time): npm reads tes as the npm command test,
+#   because tes is the beginning of no other command name or alias name of
+#   the npm release that the job uses, and npm test runs the script test of
+#   the package.json of the ref; which names the npm release has is known when
+#   the job runs.
+# cause: the rule reads npm tes as a step that runs no code of the tree,
+#   so the job neither saves the tree to the cache nor runs it, and the rule
+#   reports nothing, not the inconclusive kind input-dispatch.
+# attack-value: the file package.json in the ref that inputs.ref names = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: when the one who dispatches the workflow gives the
+#   ref of an attacker, npm tes runs the script test of the attacker, which
+#   prints PWNED and can save an entry to the cache of the branch of the run.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ inputs.ref }}
+      - run: npm tes

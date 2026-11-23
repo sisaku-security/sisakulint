@@ -1,0 +1,20 @@
+# situation: on issues opened, a step sets out to $GITHUB_OUTPUT, sets it
+#   again to /dev/null, and writes v= and the issue's body to "$out".
+# reason: the second assignment points out at /dev/null, so the body goes
+#   nowhere and no output is set.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: out is /dev/null when echo runs, so the lines v=x and
+#   PWNED=1 go to /dev/null, and the runner sets no output from them.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          out=$GITHUB_OUTPUT
+          out=/dev/null
+          echo "v=$V" >> "$out"

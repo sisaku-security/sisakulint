@@ -1,0 +1,17 @@
+# situation: on issue_comment, the job runs ./deploy.sh with the secret
+#   DEPLOY_TOKEN only if the commenter's login is alice, compared by ==.
+# reason: == compares the login with alice as a whole, unlike
+#   contains(the login, 'alice'), which is true for any login with alice as
+#   a part, such as alice-x; so only alice passes.
+# attack-value: github.event.comment.user.login = "alice-x"
+# attack-run-behavior: a comment by the account alice-x on any issue runs
+#   the if; 'alice-x' == 'alice' is false, so the job deploy is skipped.
+on: issue_comment
+jobs:
+  deploy:
+    if: github.event.comment.user.login == 'alice'
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

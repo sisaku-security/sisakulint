@@ -1,0 +1,16 @@
+# The matrix of fixes (interplay_test.go of actions/rules): commit-sha pins
+# actions/checkout@v4 and actions/upload-artifact@v4 to the commits their
+# tags pointed to on 2026-09-30, which the tables of actions/artifact list,
+# so artipacked's finding keeps its certainty and condition after the pins.
+on: push
+permissions: write-all
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .
+          include-hidden-files: true
+      - run: echo after

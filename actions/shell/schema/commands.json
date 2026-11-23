@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The commands actions/shell knows (commands.json): how each reads its arguments, and what it does when it runs. commandgen writes commands_gen.go from it; enumgen writes the CommandTrait, AttackSpelling, ArgumentReading, RequestReading and CodeReading of the $defs.",
+  "type": "object",
+  "properties": {
+    "commands": {"type": "array", "items": {"$ref": "#/$defs/command-entry"}}
+  },
+  "required": ["commands"],
+  "additionalProperties": false,
+  "$defs": {
+    "command-entry": {
+      "description": "One command, or one subcommand of it: its names, options and command traits, and the sources that say so.",
+      "type": "object",
+      "properties": {
+        "names": {"description": "The names it runs by. A subcommand's entry has the names of its parent.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "name_pattern": {"description": "A Go regexp a name with a version in it matches as a whole (python[0-9.]*).", "type": "string", "minLength": 1},
+        "subcommand": {"description": "The words after the command that name the subcommand; the entry of the shorter list is its parent.", "type": "array", "items": {"type": "string", "minLength": 1}},
+        "options": {"description": "Before the subcommand for the command itself; after it for a subcommand.", "type": "array", "items": {"$ref": "#/$defs/command-option"}},
+        "operands": {"description": "For a runs-operand entry: the arguments before the command it runs (the DURATION of timeout).", "type": "integer"},
+        "assignments": {"description": "For a runs-operand entry: NAME=value words come before the command it runs (env).", "type": "boolean"},
+        "operands_only": {"description": "It reads its arguments by their number and place, not as options: an argument that begins with - is an operator or a string (test and [).", "type": "boolean"},
+        "options_after_operands": {"description": "It reads a word that begins with - as an option after its first operand too, up to -- (getopt's permutation). Without it, its options end at its first operand.", "type": "boolean"},
+        "value_options_complete": {"description": "The options declare every option of it that takes a value: an option they do not have takes none.", "type": "boolean"},
+        "long_option_prefixes": {"description": "Prefixes a long option may take and stay the same option, such as curl's --expand- (--expand-header is --header, its value expanded).", "type": "array", "items": {"type": "string", "pattern": "^--[a-z]+-$"}},
+        "operand_request": {"description": "For a command that sends a request: what its operands are to the request.", "$ref": "#/$defs/request-reading"},
+        "value_reading": {"description": "How the command reads the value of a variable that bash expands in one of its operands as code, as a test ran the command with the value of a variable and saw the value run.", "$ref": "#/$defs/code-reading"},
+        "input_value_code": {"description": "It runs as code the value of a variable that its standard input carries: a test gave it the value through a pipe, a heredoc whose delimiter is not quoted and a here-string, and saw the value run.", "type": "boolean"},
+        "traits": {"type": "array", "items": {"$ref": "#/$defs/command-trait"}},
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/quote"}},
+        "unsourced": {"description": "What of the entry no source supports, kept from the tables before commands.json, and why.", "type": "string", "minLength": 1}
+      },
+      "required": ["names", "traits", "sources"],
+      "additionalProperties": false
+    },
+    "command-option": {
+      "description": "An option of an entry.",
+      "type": "object",
+      "properties": {
+        "spellings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "value": {"description": "It takes the next word as its value, or one joined to it.", "type": "boolean"},
+        "reading": {"$ref": "#/$defs/argument-reading"},
+        "cluster": {"description": "Other short options may come before it in the same word (-ec for -c).", "type": "boolean"},
+        "joined": {"description": "Its value may be joined to it: -eCODE, or --eval=CODE for a long spelling.", "type": "boolean"},
+        "attack": {"description": "The spellings of the option with its value (the long spelling with = for one word) by which an attacker's word was seen to run a program.", "type": "array", "items": {"$ref": "#/$defs/attack-spelling"}},
+        "harmless": {"description": "The spellings by which an attacker's word was seen not to run a program.", "type": "array", "items": {"$ref": "#/$defs/attack-spelling"}},
+        "remote": {"description": "The program of its value runs on the remote side: by a local path or SSH, not HTTPS.", "type": "boolean"},
+        "ends_options": {"description": "After its value the command reads no option: the value is the code it runs, and the words after it are the code's arguments (-c of a shell or python).", "type": "boolean"},
+        "request": {"description": "For a command that sends a request: what the option's value is to the request.", "$ref": "#/$defs/request-reading"},
+        "value_reading": {"description": "How the command reads the value of a variable that bash expands in the option's value as code, as a test ran the command with the value of a variable and saw the value run.", "$ref": "#/$defs/code-reading"}
+      },
+      "required": ["spellings"],
+      "additionalProperties": false
+    },
+    "command-trait": {
+      "description": "What a command does when it runs.",
+      "oneOf": [
+        {"const": "runs-operand", "description": "It runs the words after its options as a command, or passes them to a shell."},
+        {"const": "code-arguments", "description": "It reads its arguments as bash code or arithmetic."},
+        {"const": "variable-arguments", "description": "It reads its arguments as names of variables, whose subscripts are arithmetic."},
+        {"const": "code-stdin", "description": "It reads its standard input as code, or as commands to run."},
+        {"const": "runs-git-directory-code", "description": "The program it runs is decided by files of the git directory (.git) of the repository: hooks and configuration (core.hooksPath, core.fsmonitor)."},
+        {"const": "writes-with-token", "description": "It writes to GitHub with the GitHub token."},
+        {"const": "sends-network", "description": "It sends data to a host its arguments name."},
+        {"const": "starts-detached", "description": "It runs the command after it as a process that may outlive the step."},
+        {"const": "transforms-input", "description": "It writes a value made from its standard input, a here-string or heredoc, or its operands: the value is changed or cut, not copied whole."},
+        {"const": "digests-input", "description": "It writes a digest or a count of its input, which does not give the input back."}
+      ]
+    },
+    "attack-spelling": {
+      "description": "How an attacker writes an option with its value.",
+      "oneOf": [
+        {"const": "with-blanks", "description": "One word with blanks in it: a value inside quotes."},
+        {"const": "without-blanks", "description": "One word with no blanks in it: the name of a branch, or a value outside quotes, which the shell splits at blanks."},
+        {"const": "two-words", "description": "The option and its value as two words, the value with no blanks: a value outside quotes that the shell splits at a blank."},
+        {"const": "name-characters", "description": "One word of only ASCII letters, digits, ., - and _, a short option with its value joined to it: the name of a repository, which holds no = and no blanks."}
+      ]
+    },
+    "argument-reading": {
+      "description": "How a command reads the value of an option; a value without one is data.",
+      "oneOf": [
+        {"const": "code", "description": "The value, and the words after it, are code."},
+        {"const": "program", "description": "The value names a program the command runs."}
+      ]
+    },
+    "request-reading": {
+      "description": "What a word of a command that sends a request is to the request.",
+      "oneOf": [
+        {"const": "destination", "description": "The URL the request goes to."},
+        {"const": "endpoint", "description": "The path of an API of the command's host, or, when it holds ://, the URL the request goes to (gh api)."},
+        {"const": "hostname", "description": "The host the request goes to (--hostname of gh api)."},
+        {"const": "credential", "description": "What the request carries to the host it goes to: a header, a user and password, a cookie, a body."}
+      ]
+    },
+    "code-reading": {
+      "description": "How bash, or a program bash gives a value to, reads the value of a variable as code.",
+      "oneOf": [
+        {"const": "code-argument", "description": "An argument that the command reads as code: an operand of eval, the code of -c of a shell or of an interpreter, a program that git runs."},
+        {"const": "command-word", "description": "The command word outside quotes: bash splits the value into words, and the first word names the program that runs with the other words as its arguments."},
+        {"const": "code-input", "description": "What a command that reads its standard input as code reads: the body of a heredoc whose delimiter is not quoted, a here-string, or what a command before a pipe writes."},
+        {"const": "arithmetic", "description": "An arithmetic expression, or the name of a variable whose subscript is an arithmetic expression: bash evaluates a subscript of the value, and a command substitution in the subscript runs."},
+        {"const": "prompt-expansion", "description": "The transformation ${NAME@P}: bash expands the value of the variable as a prompt string, and runs a command substitution in the value."}
+      ]
+    },
+    "quote": {
+      "description": "Words of a source pinned to a version, as the source has them.",
+      "type": "object",
+      "properties": {
+        "citation": {"type": "string", "pattern": "^https://"},
+        "text": {"type": "string", "minLength": 1},
+        "language": {"type": "string", "pattern": "^[a-z]+$"},
+        "retrieved": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      },
+      "required": ["citation", "text", "language", "retrieved"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# situation: on pull_request_target, a step runs make all and passes the
+#   name of the pull request's head branch to make after the target, through
+#   env and inside quotes.
+# reason: make reads a word that begins with - as an option even after its
+#   targets, and its option --eval reads its value as a makefile, where
+#   $(shell ...) runs a program. A branch's name has no blanks, and --eval
+#   was seen to run a program only from a word with blanks: the value
+#   without blanks that a test tried ran nothing, and whether another value
+#   without blanks runs a program is not known.
+# attack-value: github.head_ref = "--eval=$(shell${IFS}echo${IFS}PWNED>&2)"
+# attack-run-behavior: make reads the word as --eval and reads its value as
+#   a makefile. The value comes from env inside double quotes, so the shell
+#   passes ${IFS} to make as text, and make expands ${IFS} as a variable of
+#   make, which is empty; no blank follows the name of the function shell,
+#   and nothing runs.
+#   Whether another value without blanks reaches $(shell ...) is not known;
+#   if a value did, make would run the command of $(shell ...) in the step.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: make all "$HEAD_REF"

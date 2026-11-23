@@ -1,0 +1,8 @@
+name: x26
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    if: hashFiles('x') == ''
+    steps:
+      - run: echo ok

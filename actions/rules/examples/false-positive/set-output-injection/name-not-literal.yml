@@ -1,0 +1,26 @@
+# situation: on issues, the step p passes the title of the issue in the
+#   environment variable TITLE, sets n to the name TITLE, assigns a fixed
+#   word to the variable that n names with declare, and prints TITLE; the
+#   release step writes the output tag of the step p into its script.
+# reason: bash assigns the fixed word to TITLE, so TITLE holds the fixed
+#   word when echo runs, and the step does not print the title.
+# cause: the variable name of the assignment is not a literal word, so the
+#   rule reads TITLE as holding the value of the env.
+# attack: the attacker opens an issue titled x ##[set-output
+#   name=tag;]$(id).
+# attack-run-behavior: the step prints "issue: safe", the output tag stays
+#   empty, and the release step runs with an empty tag.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          n=TITLE
+          declare "$n=safe"
+          echo "issue: $TITLE"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

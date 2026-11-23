@@ -1,0 +1,14 @@
+# situation: the job sets timeout-minutes to fromJSON() of a configuration
+#   variable, vars.TIMEOUT.
+# reason: fromJSON() turns the string 5 into the number 5, which
+#   timeout-minutes of a job takes. The rule does not know the type that
+#   fromJSON() gives before the run, and reports nothing; the job starts
+#   when the variable holds a number.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(vars.TIMEOUT) }}
+    steps:
+      - run: make test

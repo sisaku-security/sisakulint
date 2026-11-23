@@ -1,0 +1,7 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"remote-callee.yml"},"state":"found","value":true},
+{"query":{"kind":"package.advisories","package":"example-org/secret-in-log-unanswered"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"example-org/secret-in-log-unanswered/.github/workflows/w.yml"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"example-org/secret-in-log-unanswered"},"state":"found","value":false}
+]}

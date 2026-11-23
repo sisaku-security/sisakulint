@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request and runs pnpm --config.ignore-pnpmfile=true store prune.
+# reason: a todo (the same file): pnpm loads no .pnpmfile.cjs of the tree
+#   when the pnpm setting ignore-pnpmfile is true, and the pnpm command
+#   store prune runs no script of the package.json, so pnpm runs no code of
+#   the pull request; the job still checks out the code of the pull request
+#   with the base repository's token, which the finding
+#   untrusted-checkout.checkout says.
+# cause: the rule reads every run of pnpm as a run that runs code of the
+#   tree, so the rule reports untrusted-checkout.executed.
+# attack-value: the file .pnpmfile.cjs in the pull request's head = "console.log('PWNED')"
+# attack-run-behavior: pnpm --config.ignore-pnpmfile=true store prune does
+#   not load the .pnpmfile.cjs of the pull request and removes packages from
+#   the store of pnpm, so PWNED is not printed.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: pnpm --config.ignore-pnpmfile=true store prune

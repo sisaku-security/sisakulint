@@ -1,0 +1,16 @@
+# situation: the job runs on issues field_added and writes
+#   github.event.label.name in a run.
+# reason: the payload of issues field_added has no label, so
+#   github.event.label.name is empty and no value of the attacker's reaches
+#   the shell.
+# attack-value: github.event.label.name = "\"; echo PWNED; echo \""
+# attack-run-behavior: the payload of issues field_added has no label, so
+#   the expression is empty and the script is echo "".
+on:
+  issues:
+    types: [field_added]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.label.name }}"

@@ -1,0 +1,25 @@
+# situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+#   in its env; a background step prints the title of the issue, and the
+#   step after the background step starts before the background step is
+#   done.
+# reason: a todo (the same file): the runner reads set-env as the runner
+#   reads the line; whether the env of a step that starts after the line
+#   gets the value was not checked.
+# cause: the rule looks at a step only when a step starts after the step is
+#   done, and the step after a background step starts at once.
+# attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+# attack-run-behavior: not checked: the runner may set BASH_ENV for the
+#   step after, whose bash would run id.
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - background: true
+        env:
+          TITLE: ${{ github.event.issue.title }}
+        run: echo "$TITLE"
+      - run: sleep 5; make

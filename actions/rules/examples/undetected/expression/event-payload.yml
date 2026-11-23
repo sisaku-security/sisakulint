@@ -1,0 +1,14 @@
+# situation: the job sets runs-on to the whole payload of the event,
+#   github.event.
+# reason: the payload has properties other than group and labels, which
+#   runs-on does not take: GitHub does not start the job.
+# cause: the rule does not know the properties of the payload, which
+#   depend on the event.
+on: push
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ${{ github.event }}
+    timeout-minutes: 10
+    steps:
+      - run: make test

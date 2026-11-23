@@ -1,0 +1,19 @@
+on: [issues, gollum]
+permissions: {}
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - env:
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          echo "$TITLE"
+      # unsecure-commands.wiki (gollum alone): GitHub turns each blank of the
+      # title of a wiki page into a - in the name of the page, so the title
+      # ::add path::DIR makes the name ::add-path::DIR
+      - env:
+          NAME: ${{ github.event.pages[0].page_name }}
+        run: echo "$NAME"
+      - run: ./notify.sh

@@ -1,0 +1,21 @@
+# situation: on issues opened, steps write the issue's title by ${{ }} inside
+#   double quotes in a $( ) whose output is assigned to a variable, and
+#   inside double quotes in the words of for.
+# reason: ${{ }} puts the title into the script before the shell parses it,
+#   and bash runs the command substitution that the title writes, inside
+#   the $( ) and in the words of for alike.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: the inner $(echo PWNED) runs inside the outer $( ) and
+#   in the words of for, and each step prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          X="$(echo "${{ github.event.issue.title }}")"
+          echo "$X"
+      - run: |
+          for t in "${{ github.event.issue.title }}"; do echo "$t"; done

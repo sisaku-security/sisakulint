@@ -1,0 +1,12 @@
+name: z10
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo ok
+        env:
+          T: 5
+        timeout-minutes: ${{ env.T }}
+      - run: echo after

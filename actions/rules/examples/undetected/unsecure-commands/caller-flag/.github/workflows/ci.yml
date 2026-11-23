@@ -1,0 +1,12 @@
+on: issues
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./called
+        with:
+          text: ${{ github.event.issue.title }}

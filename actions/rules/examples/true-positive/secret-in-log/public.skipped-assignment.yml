@@ -1,0 +1,25 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step sets fd to 2, defines a function f that sets fd to 4 only when Q is
+#   set, calls f, and prints the private key out of the secret GCP_SA_KEY to
+#   the descriptor whose number fd holds.
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, fd holds 2, the private key goes to the
+#   standard error, which is the log, and the runner does not mask the
+#   private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key on the
+#   standard error.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          fd=2
+          if [ -n "$Q" ]; then f() { fd=4; }; fi
+          f
+          echo "key: $(echo "$GCP_SA_KEY" | jq -r '.private_key')" >&$fd || true

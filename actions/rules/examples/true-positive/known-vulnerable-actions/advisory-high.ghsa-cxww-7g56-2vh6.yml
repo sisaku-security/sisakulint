@@ -1,0 +1,28 @@
+# situation: on workflow_run, a job downloads the artifact of the run that
+#   triggered it with actions/download-artifact pinned to the commit of
+#   v4.1.2. The advisory names no workflow; the step follows what the advisory
+#   describes: GHSA-cxww-7g56-2vh6 says that versions before 4.1.3 "are
+#   vulnerable to arbitrary file write when downloading and extracting a
+#   specifically crafted artifact that contains path traversal filenames".
+# reason: GHSA-cxww-7g56-2vh6, which GitHub rates high, is in the code of the
+#   action, which the workflow does not show: the action writes a file of the
+#   artifact outside the directory of the download when the name of the file
+#   holds ../.
+# attack: the author of a pull request from a fork makes the run of the pull
+#   request upload an artifact with a file named ../../.bashrc.
+# attack-run-behavior: actions/download-artifact v4.1.2 extracts the file
+#   outside the directory of the download, over a file that a later step of
+#   the job reads, with the token of the job of the base repository.
+# advisory: https://github.com/advisories/GHSA-cxww-7g56-2vh6
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # v4.1.2
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

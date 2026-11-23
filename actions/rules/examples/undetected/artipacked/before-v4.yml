@@ -1,0 +1,27 @@
+# situation: on push with write-all, actions/checkout leaves the
+#   GITHUB_TOKEN in .git/config, and actions/upload-artifact@v3.1.3 uploads
+#   the workspace.
+# reason: no added gain: the artifact of v3 is there only after the run,
+#   when the GITHUB_TOKEN has expired.
+# cause: the rule leaves out the GITHUB_TOKEN in an upload whose artifact
+#   cannot be downloaded during the run (actions/upload-artifact before
+#   v4); a lasting token in such an upload is still reported.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API while the job still
+#   runs, and takes the token from the line
+#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64
+#   of x-access-token:<token>) of .git/config.
+# attack-run-behavior: actions/upload-artifact@v3.1.3 puts .git/config with
+#   the token in the artifact, which can be downloaded only after the run
+#   ends; by then the GITHUB_TOKEN has expired, and the reader cannot use
+#   it.
+on: push
+permissions: write-all
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v3.1.3
+        with: {path: .}
+      - run: echo next

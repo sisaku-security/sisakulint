@@ -1,0 +1,9 @@
+name: z07
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      if: "${{ needs.x.result == 'success' }}"
+      run: echo ran
+    - shell: bash
+      run: echo after

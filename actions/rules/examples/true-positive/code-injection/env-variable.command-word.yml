@@ -1,0 +1,21 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and runs the variable, outside quotes,
+#   as the command word.
+# reason: bash splits the value of the variable into words, and the first
+#   word names the program that runs with the other words as its arguments,
+#   so the title chooses the program that runs and its arguments, such as a
+#   shell and its code.
+# attack-value: github.event.issue.title = "sh -c echo${IFS}PWNED"
+# attack-run-behavior: bash splits the value into sh, -c and
+#   echo${IFS}PWNED; sh runs the code echo${IFS}PWNED, expands ${IFS} and
+#   prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: $ISSUE_TITLE

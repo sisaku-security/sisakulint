@@ -1,0 +1,33 @@
+# situation: on workflow_dispatch with the input pr, the env RUN of the job
+#   is the input pr, actions/download-artifact takes the artifact named out,
+#   from the run env.RUN with the token, and ./out/publish.sh runs.
+# reason: the one who dispatches the workflow chooses the input, and the env
+#   or the output of a step makes the value from the input, so the one who
+#   dispatches the workflow chooses the value too.
+# cause: the rule reports an input of workflow_dispatch that a value refers
+#   to directly (the inconclusive kind input-dispatch), and does not follow
+#   a value that an env or the output of a step makes from the input in a
+#   job that runs only on workflow_dispatch.
+# attack-value: inputs.pr = "1234"
+# attack-run-behavior: when the one who dispatches the workflow gives the
+#   value, the download takes the artifact of the run 1234, a pull_request
+#   run of a pull request from a fork whose workflow uploads out/publish.sh
+#   that prints PWNED, and ./out/publish.sh runs the file, which prints
+#   PWNED, with the secrets of the repository.
+on:
+  workflow_dispatch:
+    inputs:
+      pr: {type: string}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    env:
+      RUN: ${{ inputs.pr }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ env.RUN }}
+          github-token: ${{ github.token }}
+          name: out
+          path: out
+      - run: ./out/publish.sh

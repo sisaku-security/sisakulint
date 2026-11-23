@@ -1,0 +1,14 @@
+on: push
+env:
+  "W=X": w
+jobs:
+  host-run:
+    runs-on: ubuntu-latest
+    env:
+      "J=X": j
+    steps:
+      - env:
+          "S=X": s
+        run: |
+          printf 'W=[%s] J=[%s] S=[%s]\n' "${W-unset}" "${J-unset}" "${S-unset}"
+          env | grep -a -E '^(W|J|S)=' || echo none

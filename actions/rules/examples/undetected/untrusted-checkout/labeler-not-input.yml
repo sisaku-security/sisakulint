@@ -1,0 +1,30 @@
+# situation: the linter is given labeled.yml alone; the repository also has a
+#   workflow that runs actions/labeler on pull_request_target with a personal
+#   access token and adds the label safe-to-test to a pull request that
+#   changes a file under site/; labeled.yml runs on pull_request_target on
+#   labeled when the label is safe-to-test, and the job checks out the head of
+#   the pull request and runs npm ci.
+# reason: the workflow that runs actions/labeler adds the label to the pull
+#   request of the attacker, so no person approves the run before the label
+#   starts the run.
+# cause: the run of the linter reads only the files that it names, so the rule
+#   does not read the workflow that runs actions/labeler.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/ and the files of the attack; actions/labeler
+#   adds the label safe-to-test, which starts labeled.yml, and the checkout
+#   fetches the head of the pull request, and npm ci runs the preinstall
+#   script of the pull request, which prints PWNED, with the secrets of the
+#   repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

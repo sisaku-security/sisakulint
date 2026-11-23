@@ -1,0 +1,24 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request and runs npm tes.
+# reason: a limitation (run time): npm reads tes as the npm command test,
+#   because tes is the beginning of no other command name or alias name of
+#   the npm release that the job uses, and npm test runs the script test of
+#   the package.json of the pull request; which names the npm release has is known when
+#   the job runs.
+# cause: the rule does not read abbreviations of npm command names, so the
+#   rule reads npm tes as a step that runs no code of the tree and reports
+#   untrusted-checkout.checkout, not untrusted-checkout.executed.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"test\":\"echo PWNED\"}}"
+# attack-run-behavior: npm tes runs the script test of the pull request,
+#   which prints PWNED, in the job that has the base repository's token and
+#   secrets.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
+      - run: npm tes

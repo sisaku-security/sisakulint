@@ -1,0 +1,11 @@
+# situation: .github/dependabot.yml has an entry of package-ecosystem
+#   github-actions for directory / whose ignore names actions/setup-node.
+# reason: Dependabot does not update the uses of actions/setup-node.
+# cause: the rule asks whether an entry reads the file, not whether the
+#   entry ignores an action of the file.
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4

@@ -1,0 +1,22 @@
+# situation: on pull_request_target, a step extracts an archive and passes
+#   the label of the pull request's head (owner:branch) to tar after the
+#   file names, through env and inside quotes.
+# reason: the label begins with the login of the owner of the head; when
+#   the authors of the linter tried on 2026-11-01, GitHub refused a login
+#   that begins with -, so tar reads the word as the name of a member of
+#   the archive to extract, not as an option. An
+#   account made before GitHub refused such a login can have a login that
+#   begins with -, and a pull request from such an account is the undetected
+#   form dash-login.
+# attack-value: github.event.pull_request.head.label = "attacker:--to-command=echo${IFS}PWNED"
+# attack-run-behavior: tar looks for a file named
+#   attacker:--to-command=echo${IFS}PWNED in the archive, does not find the
+#   file, and runs nothing.
+on: pull_request_target
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          LABEL: ${{ github.event.pull_request.head.label }}
+        run: tar -xf archive.tar notes.txt "$LABEL"

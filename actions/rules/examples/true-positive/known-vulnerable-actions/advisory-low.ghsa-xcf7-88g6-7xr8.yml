@@ -1,0 +1,81 @@
+# situation: on pull_request_target, a job checks out the head of the pull
+#   request with actions/checkout v4.2.2, writes a secret into the .env file
+#   beside the Compose file, and runs tmatens/compose-lint pinned to the
+#   commits of v0.24.0 with sarif-file at the root of the workspace, of
+#   v0.31.0 with sarif-file in a subdirectory, and of v0.32.0. The
+#   advisories name no workflow; the steps follow the configurations that
+#   the advisories describe: a workflow that writes secrets into the .env
+#   file beside the Compose file and runs on pull requests from authors who
+#   should not see the secrets (GHSA-jf3h-8jvx-vcrg and GHSA-rm8w-w798-g545),
+#   a pull request that commits a symlink that compose-lint reads
+#   (GHSA-whr6-fgpq-fpv9, GHSA-88f4-frh5-gmcr and GHSA-6wcv-rj3c-mhv3), and an
+#   input sarif-file that names a file in a subdirectory
+#   (GHSA-xcf7-88g6-7xr8). On pull_request, the author of a pull request from
+#   a fork can change the workflow, and the job gets no secret, so the
+#   example runs on pull_request_target. The rule also reports
+#   GHSA-6f4g-xm8v-pgv6, which GitHub rates medium, on the step of v0.24.0;
+#   the example of GHSA-6f4g-xm8v-pgv6 is
+#   advisory-medium.ghsa-6f4g-xm8v-pgv6. The fix of the rule upgrades each
+#   of the three steps to the commit of v0.33.0. For the step of v0.32.0,
+#   0.33.0 is the first patched version of GHSA-rm8w-w798-g545. For the
+#   steps of v0.24.0 and of v0.31.0, the greatest first patched version of
+#   the advisories of the steps is 0.32.0, which is in the range of
+#   GHSA-rm8w-w798-g545, so the fix moves on to 0.33.0, which is in the
+#   range of no advisory of the package.
+# reason: the six advisories, which GitHub rates low, are in the code of the
+#   action, which the workflow does not show. GHSA-jf3h-8jvx-vcrg says
+#   compose-lint from 0.22.0 to 0.31.0 quotes the value that a variable of
+#   the .env file gives to image: in the text of a finding, and
+#   GHSA-rm8w-w798-g545 says compose-lint 0.32.0 does so in a run that stops
+#   at 20,000 findings. GHSA-6wcv-rj3c-mhv3 says compose-lint from 0.22.0 to
+#   0.30.0 reads a .env file that is a symlink to a file outside the project,
+#   such as /proc/self/environ. GHSA-whr6-fgpq-fpv9 (up to 0.24.0) and
+#   GHSA-88f4-frh5-gmcr (up to 0.31.0) say a parse error of compose-lint
+#   quotes a line of a file outside the project that a symlink of the Compose
+#   file or of .compose-lint.yml names. GHSA-xcf7-88g6-7xr8 says the Action
+#   v0.30.0 and v0.31.0 prints the resolved path of the directory of
+#   sarif-file, which a symlink of the pull request names, with the
+#   processing of workflow commands on.
+# attack: two pull requests from a fork. The first pull request changes the
+#   image of a service of the Compose file to "${DB_PASSWORD}" and commits
+#   .compose-lint.yml as a symlink to a file of credentials on the runner,
+#   against the step of v0.24.0. The second pull request commits the
+#   directory out, which the input sarif-file of the step of v0.31.0 names,
+#   as a symlink to a directory whose name holds a line break and a workflow
+#   command; the directory that the symlink names holds a regular file named
+#   reports, so the directory out/reports cannot be created. The second pull
+#   request is against the step of v0.31.0.
+# attack-run-behavior: in the run of the first pull request, compose-lint
+#   v0.24.0 quotes the value of DB_PASSWORD and a part of a line of the file
+#   of credentials in the SARIF that the action uploads to Code Scanning. In
+#   the run of the second pull request, the action v0.31.0 fails to create
+#   the directory of sarif-file, prints the name of the directory before the
+#   step ends, and the runner reads the second line of the name as a
+#   workflow command.
+# advisory: https://github.com/advisories/GHSA-xcf7-88g6-7xr8
+# advisory: https://github.com/advisories/GHSA-rm8w-w798-g545
+# advisory: https://github.com/advisories/GHSA-whr6-fgpq-fpv9
+# advisory: https://github.com/advisories/GHSA-88f4-frh5-gmcr
+# advisory: https://github.com/advisories/GHSA-jf3h-8jvx-vcrg
+# advisory: https://github.com/advisories/GHSA-6wcv-rj3c-mhv3
+on: pull_request_target
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD" > .env
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      - uses: tmatens/compose-lint@d6e1817352200adbd0a72893fd7ea7880874759b # v0.24.0
+        with:
+          sarif-file: results.sarif
+      - uses: tmatens/compose-lint@a6a7a76736de1c72abfa96c41ff8af556ffdc55f # v0.31.0
+        with:
+          sarif-file: out/reports/results.sarif
+      - uses: tmatens/compose-lint@2d42617e4c6416f797bbfc6a057950131fa02df3 # v0.32.0

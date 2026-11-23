@@ -1,0 +1,8 @@
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    env:
+      "A&B": x
+    steps:
+      - run: env | grep -a '^A' || echo none

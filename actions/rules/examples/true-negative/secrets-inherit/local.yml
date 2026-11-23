@@ -1,0 +1,18 @@
+# situation: on issues, the job calls ./.github/workflows/deploy.yml and
+#   passes the reusable workflow only the secret DEPLOY_KEY, as deploy-key.
+# reason: in place of secrets: inherit, which lets deploy.yml reference
+#   every secret that this job has, the job names one secret, so a flaw in
+#   deploy.yml gives an attacker only DEPLOY_KEY.
+# attack: a flaw in a job of deploy.yml, such as an injection of the issue's
+#   title, runs the attacker's code in the job of the flaw.
+# attack-run-behavior: opening an issue starts this workflow, which runs
+#   deploy.yml with deploy-key, set to DEPLOY_KEY's value, as the one secret
+#   of deploy.yml besides GITHUB_TOKEN, so the attacker's code in the job of
+#   the flaw finds no other secret of the repository.
+on: issues
+permissions: {}
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    secrets:
+      deploy-key: ${{ secrets.DEPLOY_KEY }}

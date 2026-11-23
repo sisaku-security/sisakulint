@@ -1,0 +1,14 @@
+# situation: a step of pwsh prints ::set-output.
+# reason: a todo (the same file): the runner reads the line of the log as
+#   set-output and adds a warning.
+# cause: the rule reads the runs of bash and sh.
+on: push
+permissions: {contents: read}
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - id: version
+        shell: pwsh
+        run: Write-Output "::set-output name=version::1.0.0"

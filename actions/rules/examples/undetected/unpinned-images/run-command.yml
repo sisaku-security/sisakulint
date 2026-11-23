@@ -1,0 +1,14 @@
+# situation: on push, a run pulls and runs an image.
+# reason: a todo (the same file): reading the script would find the image.
+# cause: the script is not read for an image.
+# attack: whoever can push to alpine on Docker Hub pushes an image of theirs
+#   under the tag 3.
+# attack-run-behavior: docker run pulls alpine:3, which is now that image,
+#   and runs echo hi in it on the runner's docker daemon, so the image's own
+#   files and entrypoint decide what runs.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: docker run --rm alpine:3 echo hi

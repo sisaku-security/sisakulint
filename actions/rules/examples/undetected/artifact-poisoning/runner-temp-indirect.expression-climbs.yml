@@ -1,0 +1,30 @@
+# situation: on workflow_run, the artifact is downloaded under runner.temp/a,
+#   and a step runs bash $RUNNER_TEMP/pr/${{ matrix.f }}, where the matrix
+#   gives f the value ../a/x.sh.
+# reason: a todo (the same file): reading the value of the ${{ }} would
+#   find that the path goes up out of runner.temp/pr into runner.temp/a.
+# cause: the rule reads the ${{ }} of a path as a part that stays under the
+#   directory written before the ${{ }}, runner.temp/pr, and the files are
+#   in runner.temp/a.
+# attack-value: the file x.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the download puts x.sh in runner.temp/a, and
+#   bash $RUNNER_TEMP/pr/../a/x.sh runs it, which prints PWNED, with the
+#   base repository's secrets.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+permissions: {actions: read}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        f: [../a/x.sh]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/a
+      - run: bash $RUNNER_TEMP/pr/${{ matrix.f }}

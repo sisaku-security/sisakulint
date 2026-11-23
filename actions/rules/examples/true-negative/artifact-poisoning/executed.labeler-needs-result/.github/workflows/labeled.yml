@@ -1,0 +1,42 @@
+# situation: labeler.yml runs actions/labeler on pull_request_target with a
+#   personal access token in the job label, which needs the job build and
+#   has the if contains(needs.*.result, 'failure'); the configuration
+#   .github/labeler.yml adds the label safe-to-test to a pull request that
+#   changes a file under site/; labeled.yml runs on pull_request_target on
+#   opened and labeled; the job build checks out the head of the pull
+#   request and uploads dist, and the job deploy, which needs build and runs
+#   on labeled when the if github.event.label.name == 'safe-to-test' is
+#   true, downloads dist and runs ./dist/deploy.sh.
+# reason: GitHub evaluates the if of the job label, which calls no status
+#   function, only when the job build succeeded, where needs.build.result is
+#   success, so contains(needs.*.result, 'failure') is false; when the job
+#   build fails or is skipped, GitHub skips the job label; so
+#   actions/labeler adds no label
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/expressions.md,
+#   status check functions).
+# attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/; GitHub runs the job build, and the if of the
+#   job label is false, so actions/labeler adds no label, and labeled.yml
+#   does not start.
+on:
+  pull_request_target:
+    types: [opened, labeled]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist}
+  deploy:
+    needs: build
+    if: github.event.action == 'labeled' && (github.event.label.name == 'safe-to-test')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist}
+      - run: ./dist/deploy.sh

@@ -1,0 +1,30 @@
+# situation: on a pull request that is closed, the step p prints the name of
+#   the account that merged the pull request, and the release step writes the
+#   output tag of the step p into its script.
+# reason: whether GitHub sets merged_by of a merged pull request to the
+#   account of the author of the pull request was not checked: no payload with
+#   merged_by was seen on GitHub. Were merged_by the author, the author would
+#   write the name of merged_by, which is the profile name of the account of
+#   the author.
+# cause: the table of what an attacker controls reads merged_by as the
+#   account that merged the pull request, and the account that merged the pull
+#   request holds a credential that can merge.
+# attack: the author of a pull request writes x ##[set-output
+#   name=tag;]$(id) in the profile name of the account of the author, and the
+#   pull request is merged.
+# attack-run-behavior: were merged_by the author of the pull request, the
+#   runner would set the output tag of the step p, and the release step would
+#   run id.
+on:
+  pull_request_target:
+    types: [closed]
+permissions: {}
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - id: p
+        env:
+          MERGER: ${{ github.event.pull_request.merged_by.name }}
+        run: echo "merged by $MERGER"
+      - run: ./release.sh "${{ steps.p.outputs.tag }}"

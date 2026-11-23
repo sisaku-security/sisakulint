@@ -1,0 +1,19 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and gives the variable, outside quotes,
+#   to xargs as the command to run.
+# reason: xargs runs its arguments as a command, but the rule's table of
+#   commands does not say so.
+# cause: the rule reads the arguments of a command as code only where the
+#   table of commands says that a test saw the value run.
+# attack-value: github.event.issue.title = "sh -c echo${IFS}PWNED"
+# attack-run-behavior: xargs runs sh -c echo${IFS}PWNED, which prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: xargs $ISSUE_TITLE </dev/null

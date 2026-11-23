@@ -1,0 +1,47 @@
+# situation: the workflow runs on pull_request_target; the if of the job
+#   whose id is a is false; the job whose id is b needs the job a and has no
+#   if; the job whose id is test needs the job b and has the if failure();
+#   the job whose id is report has no needs and has the if failure(); the
+#   job test and the job report check out the head of the pull request and
+#   run npm ci.
+# reason: GitHub skips the job a, whose if is false, and skips the job b,
+#   which needs the job a. In the if of a job, failure() is true only when a
+#   job that the job needs, directly or through other jobs, fails. No job
+#   fails in this workflow, so failure() is false in the if of the job test
+#   and in the if of the job report, and GitHub skips the job test and the
+#   job report
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/expressions.md).
+# attack-value: the file package.json in the head of the pull request = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork; GitHub
+#   skips every job of the workflow, so no job checks out the head of the
+#   pull request.
+on: pull_request_target
+permissions: {}
+jobs:
+  a:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo a
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo b
+  test:
+    needs: b
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci
+  report:
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

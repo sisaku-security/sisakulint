@@ -1,0 +1,21 @@
+# situation: on issues opened, a step passes the issue's title in the
+#   environment variable T, defines a function f that sets T to a fixed word
+#   only when Q is set, calls f, and runs T with eval.
+# reason: Q is not set in the step, so f is not
+#   defined, the call fails, T holds the title when eval runs, and eval runs
+#   the title as code.
+# attack-value: github.event.issue.title = "echo PWNED"
+# attack-run-behavior: eval runs the title, which prints "PWNED".
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          T: ${{ github.event.issue.title }}
+        run: |
+          if [ -n "$Q" ]; then f() { T=safe; }; fi
+          f
+          eval "$T"

@@ -1,0 +1,19 @@
+# situation: on a push, a step sets an env variable to
+#   ${{ github.event.commits.*.message }}, all of the value, and writes the
+#   variable to $GITHUB_ENV.
+# reason: a reference through .* is an array; the runner refuses an array
+#   as all of a value of env ("A sequence was not expected") and fails the
+#   step before its script runs, so no commit message is written to
+#   $GITHUB_ENV.
+# attack-value: github.event.commits.*.message = "x\nPWNED=1"
+# attack-run-behavior: the runner fails the step before the script runs;
+#   where a script did run, the variable would hold the text Array, one
+#   line.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          MESSAGES: ${{ github.event.commits.*.message }}
+        run: echo "MESSAGES=$MESSAGES" >> "$GITHUB_ENV"

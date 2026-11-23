@@ -1,0 +1,23 @@
+# situation: on push, a job downloads the artifact out of the latest run of
+#   the workflow under runner.temp and runs pytest /opt/tests.
+# reason: a todo (the same file): pytest collects the tests of /opt/tests only, and loads no
+#   conftest.py and no test of the directory it runs in, so pytest runs no
+#   code of the artifact, which the download puts under runner.temp.
+# cause: the rule reads the directory that pytest runs in as a directory
+#   whose tests pytest collects, so the rule reports artifact-poisoning.executed.
+# attack-value: the file conftest.py in the artifact = "import os; os.system('echo PWNED')"
+# attack-run-behavior: pytest /opt/tests does not import the conftest.py of the
+#   attacker, so PWNED is not printed.
+on: push
+permissions:
+  actions: read
+  contents: read
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dawidd6/action-download-artifact@v3
+        with:
+          name: out
+          path: ${{ runner.temp }}/out
+      - run: pytest /opt/tests

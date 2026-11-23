@@ -1,0 +1,21 @@
+# situation: on push, in a public repository (repo.public, assumed true), a
+#   step runs exec >&4, where descriptor 4 is not open, goes on when the
+#   exec fails (|| true), and prints the private key out of the secret
+#   GCP_SA_KEY to the standard output.
+# reason: the exec fails, bash does not copy the
+#   descriptor 4 to the standard output, and the standard output still goes
+#   to the log; the runner does not mask the private key.
+# attack: anyone signed in to GitHub opens the run's log and reads the
+#   private key.
+# attack-run-behavior: the step prints "key:" and the private key.
+on: push
+permissions: {}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          exec >&4 || true
+          echo "key: $(echo "$GCP_SA_KEY" | jq -r '.private_key')"

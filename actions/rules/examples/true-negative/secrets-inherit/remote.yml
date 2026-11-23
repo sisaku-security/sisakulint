@@ -1,0 +1,19 @@
+# situation: the job calls deploy.yml of octo-org/shared-workflows at v1 and
+#   passes it only the secret DEPLOY_KEY, as deploy-key.
+# reason: in place of secrets: inherit, which lets the called workflow
+#   reference every secret of the organization and the repository, the job
+#   names one secret, so a step that whoever changes deploy.yml in
+#   octo-org/shared-workflows adds can read only DEPLOY_KEY.
+# attack: a maintainer of octo-org/shared-workflows, or whoever takes over
+#   one of their accounts, moves the tag v1 to a commit whose deploy.yml has
+#   a step that sends toJSON(secrets) out.
+# attack-run-behavior: on the next push, the job deploy runs deploy.yml at
+#   the moved v1 with deploy-key, set to DEPLOY_KEY's value, as its one
+#   secret besides GITHUB_TOKEN; toJSON(secrets) in the step expands to
+#   those two, and the step sends only them.
+on: push
+jobs:
+  deploy:
+    uses: octo-org/shared-workflows/.github/workflows/deploy.yml@v1
+    secrets:
+      deploy-key: ${{ secrets.DEPLOY_KEY }}

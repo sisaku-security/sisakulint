@@ -1,0 +1,22 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"11d5960a326750d5838078e36cf38b85af677262"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"v4"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tiryoh/actions-mkdocs","ref":"08208dbe49e1d15f9a58a6eb691e7dfb2df2253c"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"tiryoh/actions-mkdocs","ref":"14d3fd544b7a2bcffcdd86b05d558f20c244c9fc"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"v4"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"tiryoh/actions-mkdocs","ref":"14d3fd544b7a2bcffcdd86b05d558f20c244c9fc"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":"repository-workflow.yml"},"state":"found","value":true},
+{"query":{"kind":"git.commit-ref","repo":"tiryoh/actions-mkdocs","sha":"14d3fd544b7a2bcffcdd86b05d558f20c244c9fc"},"state":"absent"},
+{"query":{"kind":"git.commit-tags","repo":"tiryoh/actions-mkdocs","sha":"08208dbe49e1d15f9a58a6eb691e7dfb2df2253c"},"state":"found","value":["refs/tags/v0","refs/tags/v0.25","refs/tags/v0.25.0"]},
+{"query":{"kind":"git.commit-tags","repo":"tiryoh/actions-mkdocs","sha":"14d3fd544b7a2bcffcdd86b05d558f20c244c9fc"},"state":"found","value":["refs/tags/v0.24","refs/tags/v0.24.0"]},
+{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v4"},"state":"found","value":{"ref":"refs/tags/v4","sha":"11d5960a326750d5838078e36cf38b85af677262"}},
+{"query":{"kind":"git.ref-commit","repo":"tiryoh/actions-mkdocs","ref":"v0.25.0"},"state":"found","value":{"ref":"refs/tags/v0.25.0","sha":"08208dbe49e1d15f9a58a6eb691e7dfb2df2253c"}},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"tiryoh/actions-mkdocs","version":"v0.24.0"},"state":"found","value":[{"first_patched_version":"0.25.0","ghsa_id":"GHSA-6p2j-742g-835f","severity":"medium","vulnerable_version_range":"<= 0.24.0"}]},
+{"query":{"kind":"package.advisories","package":"tiryoh/actions-mkdocs","version":"v0.25.0"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"tiryoh/actions-mkdocs"},"state":"found","value":[{"first_patched_version":"0.25.0","ghsa_id":"GHSA-6p2j-742g-835f","severity":"medium","vulnerable_version_range":"<= 0.24.0"}]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"tiryoh/actions-mkdocs"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true}
+]}

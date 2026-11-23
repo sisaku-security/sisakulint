@@ -1,0 +1,23 @@
+# situation: the checkout is given secrets.PAT, and the job uploads the
+#   path .git/config/.
+# reason: @actions/glob matches a line that ends in / with a directory only,
+#   and .git/config is a file, so the upload takes nothing from .git.
+# attack: a reader of the repository's artifacts (anyone, in a public
+#   repository) downloads the artifact through the API, and takes the PAT
+#   from the line http.https://github.com/.extraheader of .git/config.
+# attack-run-behavior: the pattern .git/config/ matches only a directory,
+#   and .git/config is a file, so the upload finds no file and makes no
+#   artifact holding it; the reader takes no PAT.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT }}
+      - uses: actions/upload-artifact@v4
+        with:
+          path: .git/config/
+          include-hidden-files: true

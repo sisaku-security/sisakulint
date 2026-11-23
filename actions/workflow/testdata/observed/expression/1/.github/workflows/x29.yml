@@ -1,0 +1,8 @@
+name: x29
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    snapshot: probe-image
+    steps:
+      - run: echo ok
