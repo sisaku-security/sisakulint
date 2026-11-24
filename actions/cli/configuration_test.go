@@ -17,7 +17,7 @@ func TestConfigurationKeysOrder(t *testing.T) {
 	for _, k := range configurationKeys {
 		names = append(names, k.name)
 	}
-	want := []string{"exclude", "fail-on", "rule", "skip-rule", "accept", "facts", "repo", "fact", "add-attacker", "no-assumptions"}
+	want := []string{"exclude", "fail-on", "rule", "skip-rule", "accept", "facts", "repo", "fact", "add-attacker"}
 	if !slices.Equal(names, want) {
 		t.Errorf("the keys are %v, want %v", names, want)
 	}
@@ -52,12 +52,6 @@ func TestKeyFlags(t *testing.T) {
 			t.Errorf("%s empty: exit %d, stderr %q", flag, got.code, got.stderr)
 		}
 	}
-	if got := run(t, args("--root", dir, "--no-assumptions=false")); got.code == ExitUsage {
-		t.Errorf("--no-assumptions=false: exit %d, stderr %q", got.code, got.stderr)
-	}
-	if got := run(t, args("--root", dir, "--no-assumptions=maybe")); got.code != ExitUsage {
-		t.Errorf("--no-assumptions=maybe: exit %d, want %d", got.code, ExitUsage)
-	}
 }
 
 // configurationFile writes src as a configuration file in dir.
@@ -73,8 +67,6 @@ func configurationFile(t *testing.T, dir, src string) string {
 // keySource is the values as a key of a configuration file.
 func keySource(k configurationKey, values []string) string {
 	switch k.form {
-	case formBool:
-		return k.name + ": " + values[0] + "\n"
 	case formList:
 		var quoted []string
 		for _, v := range values {
@@ -89,10 +81,6 @@ func keySource(k configurationKey, values []string) string {
 func keyArgs(k configurationKey, values []string) []string {
 	var a []string
 	for _, v := range values {
-		if k.form == formBool {
-			a = append(a, "--"+k.name+"="+v)
-			continue
-		}
 		a = append(a, "--"+k.name, v)
 	}
 	return a
@@ -121,7 +109,6 @@ func TestConfigurationFileAsFlags(t *testing.T) {
 		{"facts": {"facts.json"}},
 		{"repo": {"o/r"}, "fact": {"repo.public=false", "repo.fork-pr-secrets=false"}},
 		{"add-attacker": {"read-member,triage-account"}},
-		{"no-assumptions": {"true"}},
 	}
 	seen := map[string]bool{}
 	for _, c := range cases {
@@ -210,8 +197,6 @@ func TestConfigurationErrors(t *testing.T) {
 		{"a number", "fail-on: 1\n"},
 		{"a number in a list", "exclude: [2024]\n"},
 		{"a string for a list", "exclude: \"x\"\n"},
-		{"a string for a boolean", "no-assumptions: \"true\"\n"},
-		{"yes for a boolean", "no-assumptions: yes\n"},
 		{"an alias", "exclude: &x [\"a\"]\nrule: *x\n"},
 		{"the workflows", "exclude: [\".github/workflows\"]\n"},
 		{"no severity", "fail-on: \"bogus\"\n"},
@@ -278,14 +263,26 @@ func TestConfigurationUsage(t *testing.T) {
 	}
 }
 
-// TestConfigurationRefusals: a tagged boolean that is not one and an alias
-// in the configuration file, a fact given twice, and --no-assumptions with
-// a value that is no boolean are refused, each with what it is.
+// TestNoAssumptionsRefused: --no-assumptions and its key, which a run of
+// an earlier version took, are refused as any unknown flag and any unknown
+// key are: a run answers no fact by an assumed value.
+func TestNoAssumptionsRefused(t *testing.T) {
+	dir := repo(t)
+	if got := run(t, args("--root", dir, "--no-assumptions")); got.code != ExitUsage || !strings.Contains(got.stderr, "flag provided but not defined: -no-assumptions") {
+		t.Errorf("--no-assumptions: exit %d, stderr %q; want %d", got.code, got.stderr, ExitUsage)
+	}
+	cfg := configurationFile(t, t.TempDir(), "no-assumptions: true\n")
+	if got := run(t, args("--root", dir, "--config", cfg)); got.code != ExitNoInput || !strings.Contains(got.stderr, "no-assumptions: not a key") {
+		t.Errorf("the key no-assumptions: exit %d, stderr %q; want %d", got.code, got.stderr, ExitNoInput)
+	}
+}
+
+// TestConfigurationRefusals: an alias in the configuration file and a
+// fact given twice are refused, each with what it is.
 func TestConfigurationRefusals(t *testing.T) {
 	dir := repo(t)
 	cfg := t.TempDir()
 	for _, c := range []struct{ name, src, says string }{
-		{"a tagged boolean that is not one", "no-assumptions: !!bool yes\n", "no-assumptions"},
 		{"an alias", "exclude: [&a \"sub\", *a]\n", "alias"},
 	} {
 		got := run(t, args("--root", dir, "--config", configurationFile(t, cfg, c.src)))
@@ -295,9 +292,6 @@ func TestConfigurationRefusals(t *testing.T) {
 	}
 	if got := run(t, args("--root", dir, "--repo", "o/r", "--fact", "repo.public=false", "--fact", "repo.public=true")); got.code != ExitUsage || !strings.Contains(got.stderr, "repo.public") {
 		t.Errorf("a fact twice: exit %d, stderr %q; want the fact named", got.code, got.stderr)
-	}
-	if got := run(t, args("--root", dir, "--no-assumptions=bogus")); got.code != ExitUsage || strings.Contains(got.stderr, "strconv") || !strings.Contains(got.stderr, "bogus") {
-		t.Errorf("--no-assumptions=bogus: exit %d, stderr %q", got.code, got.stderr)
 	}
 }
 

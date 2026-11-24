@@ -45,7 +45,7 @@ func TestTemplateEmpty(t *testing.T) {
 // TestTemplateValues: the template of --init with flags, read with
 // --config, is a run with the flags.
 func TestTemplateValues(t *testing.T) {
-	flags := []string{"--exclude", ".github/actions/build", "--fail-on", "high", "--skip-rule", "permissions", "--repo", "o/r", "--fact", "repo.public=false", "--no-assumptions"}
+	flags := []string{"--exclude", ".github/actions/build", "--fail-on", "high", "--skip-rule", "permissions", "--repo", "o/r", "--fact", "repo.public=false"}
 	p := initFile(t, flags...)
 	dir := repo(t)
 	want, got := run(t, args(append([]string{"--root", dir}, flags...)...)), run(t, args("--root", dir, "--config", p))

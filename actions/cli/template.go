@@ -49,12 +49,6 @@ func configurationTemplate(values []keyValue, imported []importedFact, left []le
 		switch {
 		case len(given) == 0:
 			b.WriteString("# " + k.name + ":\n")
-		case k.form == formBool:
-			v, err := strconv.ParseBool(given[len(given)-1])
-			if err != nil {
-				return nil, usageError{fmt.Errorf("--%s: %w", k.name, err)}
-			}
-			b.WriteString(k.name + ": " + strconv.FormatBool(v) + "\n")
 		case k.form == formList:
 			b.WriteString(k.name + ":\n")
 			for _, v := range given {
@@ -150,8 +144,6 @@ func templateComment(k configurationKey) string {
 	switch k.form {
 	case formList:
 		s += " The value is a list of strings; every string in the list is used."
-	case formBool:
-		s += " The value is true or false; true is the same as giving the flag."
 	default:
 		s += " The value is a string."
 	}
