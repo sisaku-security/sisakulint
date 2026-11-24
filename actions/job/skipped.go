@@ -16,11 +16,28 @@ import (
 // skipped (if: failure() after a job whose if is false, for one). A
 // workflow without on, or with an on of no event, starts no run.
 func AlwaysSkipped(w *workflow.Workflow, j *workflow.Job) bool {
+	return skippedOnEvery(w, attacker.JobIfs(w, j))
+}
+
+// StepAlwaysSkipped is whether GitHub skips the step s of the job j of w
+// in every run, as AlwaysSkipped reads it, with the if of s
+// (attacker.StepIf) read after the ifs of the job. The pre step of an
+// action runs whatever the if of its step is, so a uses step is not read
+// so.
+func StepAlwaysSkipped(w *workflow.Workflow, j *workflow.Job, s *workflow.Step) bool {
+	if s.Uses.Status != workflow.Absent || s.If.Status != workflow.Present {
+		return false
+	}
+	return skippedOnEvery(w, append(attacker.JobIfs(w, j), attacker.StepIf(w, j, s.If)))
+}
+
+// skippedOnEvery is whether one of ifs is false on every event and
+// activity type of runEvents of w.
+func skippedOnEvery(w *workflow.Workflow, ifs []attacker.PlacedIf) bool {
 	evs, known := runEvents(w)
 	if !known {
 		return false
 	}
-	ifs := attacker.JobIfs(w, j)
 	for _, e := range evs {
 		stopped := false
 		for _, p := range ifs {
