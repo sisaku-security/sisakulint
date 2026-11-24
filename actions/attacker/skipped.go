@@ -98,8 +98,21 @@ func (e runEvent) lookup(p []expr.PathElem) (expr.Value, bool) {
 		return expr.String(e.name.String()), true
 	case e.knows == knowsEvent && len(p) == 3 && expr.HasPrefix(p, "github", "event", "action") && e.activityType != workflow.ActivityTypeUnset:
 		return expr.String(e.activityType.String()), true
+	case e.knows == knowsEvent && len(p) == 4 && expr.HasPrefix(p, "github", "event", "pull_request", "merged") && mergedFalse(e):
+		return expr.Bool(false), true
 	}
 	return expr.Value{}, false
+}
+
+// mergedFalse is whether github.event.pull_request.merged is false in
+// every payload of e: a pull request is merged only when it is closed, and
+// a merged pull request is not reopened, so it is false on opened and
+// reopened of pull_request and pull_request_target.
+func mergedFalse(e runEvent) bool {
+	if e.name != workflow.EventNamePullRequest && e.name != workflow.EventNamePullRequestTarget {
+		return false
+	}
+	return e.activityType == workflow.ActivityTypeOpened || e.activityType == workflow.ActivityTypeReopened
 }
 
 // skipCache keeps what skippedJobs reads of a workflow on each run event:

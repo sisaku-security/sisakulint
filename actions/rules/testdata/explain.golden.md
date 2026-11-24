@@ -12063,6 +12063,35 @@
                 key: cache-${{ github.sha }}
       ```
   - true negatives:
+    - unpinned-action.merged-never-runs.yml (workflow, true-negative)
+      ```yaml
+      # situation: the setting of allowed actions of GitHub allows all actions and
+      #   requires a full commit SHA; the workflow runs only on pull_request with
+      #   types: [opened]; the job deploy has if:
+      #   github.event.pull_request.merged == true and uses actions/cache by the tag
+      #   v4.
+      # reason: a pull request is not merged when the pull request is opened, so
+      #   github.event.pull_request.merged is false in every run of the workflow,
+      #   the if of the job deploy is false in every run, and GitHub never runs the
+      #   job deploy
+      #   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md);
+      #   GitHub does not run the step Set up job of a job that GitHub skips, so the
+      #   job does not fail.
+      on:
+        pull_request:
+          types: [opened]
+      permissions: {}
+      jobs:
+        deploy:
+          if: github.event.pull_request.merged == true
+          runs-on: ubuntu-latest
+          timeout-minutes: 10
+          steps:
+            - uses: actions/cache@v4
+              with:
+                path: ~/.cache
+                key: cache-${{ github.sha }}
+      ```
     - unpinned-action.never-runs.yml (workflow, true-negative)
       ```yaml
       # situation: the setting of allowed actions of GitHub allows all actions and
@@ -12433,40 +12462,6 @@
     permissions: {}
     jobs:
       build:
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-          - uses: actions/cache@v4
-            with:
-              path: ~/.cache
-              key: cache-${{ github.sha }}
-    ```
-- job-never-runs: a uses in a job that GitHub never runs because the if of the job is false in every run, and the if is false because of a value other than github.event_name and github.event.action (for example, if: github.event.pull_request.merged == true in a workflow that runs only on pull_request with types: &#91;opened]): GitHub skips the job, so the step "Set up job" of the job does not run and the job does not fail. In the if of a job, and in the if of each job that the job needs, the rule reads only github.event_name, github.event.action and needs.&lt;job_id>.result. A uses in the workflow file that the setting does not allow still stops the run, because GitHub checks every uses in the workflow file before the run starts.
-  - finding kinds: allowed-actions.failed-job, allowed-actions.unpinned-action
-  - disposition: todo (needs: same-file)
-  - example: job-never-runs.yml (workflow, false-positive)
-    ```yaml
-    # situation: the setting of allowed actions of GitHub allows all actions and
-    #   requires a full commit SHA; the workflow runs only on pull_request with
-    #   types: [opened]; the job deploy has if:
-    #   github.event.pull_request.merged == true and uses actions/cache by the tag
-    #   v4.
-    # reason: a pull request is not merged when the pull request is opened, so
-    #   github.event.pull_request.merged is false in every run of the workflow,
-    #   the if of the job deploy is false in every run, and GitHub never runs the
-    #   job deploy
-    #   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md);
-    #   GitHub does not run the step Set up job of a job that GitHub skips, so the
-    #   job does not fail.
-    # cause: the rule reads only github.event_name and github.event.action in the
-    #   if of a job, and reads the if of the job deploy as an if that may be true.
-    on:
-      pull_request:
-        types: [opened]
-    permissions: {}
-    jobs:
-      deploy:
-        if: github.event.pull_request.merged == true
         runs-on: ubuntu-latest
         timeout-minutes: 10
         steps:
@@ -47719,6 +47714,30 @@
             - run: npm ci && npm test
       ```
   - true negatives:
+    - unwritten.merged-never-runs.yml (workflow, true-negative)
+      ```yaml
+      # situation: the workflow runs only on pull_request with types: [opened]; the
+      #   job deploy has if: github.event.pull_request.merged == true, writes no
+      #   permissions, and runs the action some/action.
+      # reason: a pull request is not merged when the pull request is opened, so
+      #   github.event.pull_request.merged is false in every run of the workflow,
+      #   the if of the job deploy is false in every run, and GitHub never runs the
+      #   job deploy
+      #   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md).
+      # attack: the attacker publishes the code of the action some/action, which the
+      #   job deploy runs.
+      # attack-run-behavior: GitHub never runs the job deploy, so no code runs with
+      #   the GITHUB_TOKEN of the job deploy.
+      on:
+        pull_request:
+          types: [opened]
+      jobs:
+        deploy:
+          if: github.event.pull_request.merged == true
+          runs-on: ubuntu-latest
+          steps:
+            - uses: some/action@0123456789abcdef0123456789abcdef01234567
+      ```
     - unwritten.never-runs.yml (workflow, true-negative)
       ```yaml
       # situation: on push, the job whose id is disabled has if: false, and the job
@@ -47905,35 +47924,6 @@
 
 ### false positive forms
 
-- job-never-runs: a job that GitHub never runs because the if of the job is false in every run, and the if is false because of a value other than github.event_name and github.event.action (for example, if: github.event.pull_request.merged == true in a workflow that runs only on pull_request with types: &#91;opened]). No code runs with the GITHUB_TOKEN of a job that GitHub never runs. In the if of a job, and in the if of each job that the job needs, the rule reads only github.event_name, github.event.action and needs.&lt;job_id>.result.
-  - finding kinds: permissions.unwritten, permissions.write-all
-  - disposition: todo (needs: same-file)
-  - example: job-never-runs.yml (workflow, false-positive)
-    ```yaml
-    # situation: the workflow runs only on pull_request with types: [opened]; the
-    #   job deploy has if: github.event.pull_request.merged == true, writes no
-    #   permissions, and runs the action some/action.
-    # reason: a pull request is not merged when the pull request is opened, so
-    #   github.event.pull_request.merged is false in every run of the workflow,
-    #   the if of the job deploy is false in every run, and GitHub never runs the
-    #   job deploy
-    #   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md).
-    # cause: the rule reads only github.event_name and github.event.action in the
-    #   if of a job, and reads the if of the job deploy as an if that may be true.
-    # attack: the attacker publishes the code of the action some/action, which the
-    #   job deploy runs.
-    # attack-run-behavior: GitHub never runs the job deploy, so no code runs with
-    #   the GITHUB_TOKEN of the job deploy.
-    on:
-      pull_request:
-        types: [opened]
-    jobs:
-      deploy:
-        if: github.event.pull_request.merged == true
-        runs-on: ubuntu-latest
-        steps:
-          - uses: some/action@0123456789abcdef0123456789abcdef01234567
-    ```
 - no-third-party-code: a job that runs no code of others, only commands of the runner: no one else holds the token, which the rule does not tell apart
   - finding kinds: permissions.write-all, permissions.unwritten
   - disposition: todo (needs: same-file)

@@ -19,7 +19,7 @@ func (x *IR) allSecretsContextReads() []*SecretsContextRead {
 			for _, r := range job.SecretsContextReads(w) {
 				p := r.Value.Parts[r.Part]
 				out = append(out, &SecretsContextRead{key: keyOf(x.paths, x.input, x.tree, r.Value.Base),
-					alwaysSkipped: x.alwaysSkipped(r.Value.Base), at: x.spanOf(r.Value, p.Span),
+					alwaysSkipped: x.jobAlwaysSkipped(r.Value.Base), at: x.spanOf(r.Value, p.Span),
 					text: r.Text, calledOnly: calledOnly, callerCoverage: cov, inheritCallers: callers})
 			}
 		}
@@ -114,7 +114,7 @@ func (x *IR) allSecretParts() []*SecretPart {
 					via = append(via, SecretPartVia{Job: v.Job, Output: v.Output, At: x.spanOf(v.Value, v.Value.Parts[v.Part].Span)})
 				}
 				out = append(out, &SecretPart{key: keyOf(x.paths, x.input, x.tree, s.Value.Base),
-					alwaysSkipped: x.alwaysSkipped(s.Value.Base), at: x.spanOf(s.Value, p.Span),
+					alwaysSkipped: x.jobAlwaysSkipped(s.Value.Base), at: x.spanOf(s.Value, p.Span),
 					secrets: s.Secrets, via: via, text: s.Value.Text()[p.Span.Start:p.Span.End]})
 			}
 		}
