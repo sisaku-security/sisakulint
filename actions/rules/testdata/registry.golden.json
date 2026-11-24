@@ -7543,7 +7543,7 @@
         "preconditions": [
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -8680,7 +8680,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -8710,7 +8710,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -10624,7 +10624,7 @@
           },
           {
             "id": "no-approval",
-            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false)",
+            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false)",
             "observed": [
               {
                 "date": "2026-09-28",
@@ -10636,7 +10636,7 @@
           },
           {
             "id": "token-reads",
-            "text": "the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write, assumed true); permissions written without actions set it to none",
+            "text": "the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write true); permissions written without actions set it to none",
             "observed": [],
             "cites": [
               "https://docs.github.com/en/actions/concepts/security/github_token"
@@ -10644,7 +10644,7 @@
           },
           {
             "id": "into-workspace",
-            "text": "the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal $RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed, assumed true)",
+            "text": "the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal $RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed true)",
             "observed": [
               {
                 "date": "2026-10-04",
@@ -12474,7 +12474,7 @@
           },
           {
             "id": "token-writes",
-            "text": "the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write, assumed true)",
+            "text": "the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write true)",
             "observed": [
               {
                 "date": "2026-09-30",
@@ -13924,7 +13924,7 @@
         "preconditions": [
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -13968,7 +13968,7 @@
           },
           {
             "id": "no-approval",
-            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)",
+            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)",
             "observed": [
               {
                 "date": "2026-09-28",
@@ -16357,7 +16357,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -16387,7 +16387,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -19683,7 +19683,7 @@
         "preconditions": [
           {
             "id": "readable-file",
-            "text": "the workflow file is read by anyone in a public repository (repo.public, assumed true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written",
+            "text": "the workflow file is read by anyone in a public repository (repo.public true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written",
             "observed": [],
             "cites": [
               "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainercredentials",
@@ -20229,7 +20229,7 @@
         "preconditions": [
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -20275,7 +20275,7 @@
           },
           {
             "id": "no-approval",
-            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)",
+            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)",
             "observed": [
               {
                 "date": "2026-09-28",
@@ -20287,7 +20287,7 @@
           },
           {
             "id": "token-writes",
-            "text": "the job's token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write, assumed true)",
+            "text": "the job's token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write true)",
             "observed": [],
             "cites": [
               "https://docs.github.com/en/actions/concepts/security/github_token"
@@ -21918,7 +21918,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -21937,7 +21937,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -23841,7 +23841,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -23887,7 +23887,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -27621,7 +27621,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -27652,7 +27652,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -29417,7 +29417,7 @@
           },
           {
             "id": "token-writes",
-            "text": "neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write; without an answer, the run assumes true, the worst case. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)",
+            "text": "neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write true; without an answer, the finding is conditional. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)",
             "observed": [],
             "cites": [
               "https://docs.github.com/en/actions/concepts/security/github_token"
@@ -30135,7 +30135,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -30165,7 +30165,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -32112,7 +32112,7 @@
               {
                 "metric": "AT",
                 "value": "P",
-                "reason": "the finding holds when the destination is not to be trusted with the secret, which a file of facts says otherwise (request.destination-trusted, assumed false): the holder of the server is the attacker",
+                "reason": "the finding holds when the destination is not to be trusted with the secret (request.destination-trusted false; a file of facts or --fact can answer true): the holder of the server is the attacker",
                 "cites": []
               },
               {
@@ -33373,7 +33373,7 @@
           },
           {
             "id": "readable-log",
-            "text": "anyone signed in to GitHub reads the logs of a public repository (repo.public, assumed true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default",
+            "text": "anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default",
             "observed": [],
             "cites": [
               "https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md",
@@ -35884,7 +35884,7 @@
           },
           {
             "id": "public-repo",
-            "text": "the repository is public, so anyone forks it and opens a pull request (repo.public, assumed true); by default, the run of a first-time contributor's pull request waits for approval, a contributor's does not; a credential whose only write access is to the permission Actions can approve the run (the endpoint POST /repos/{owner}/{repo}/actions/runs/{run_id}/approve), and the credential premise keeps the holder of such a credential as a possible attacker",
+            "text": "the repository is public, so anyone forks it and opens a pull request (repo.public true); by default, the run of a first-time contributor's pull request waits for approval, a contributor's does not; a credential whose only write access is to the permission Actions can approve the run (the endpoint POST /repos/{owner}/{repo}/actions/runs/{run_id}/approve), and the credential premise keeps the holder of such a credential as a possible attacker",
             "observed": [],
             "cites": [
               "https://docs.github.com/en/actions/reference/security/secure-use#hardening-for-self-hosted-runners",
@@ -36673,7 +36673,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -37911,7 +37911,7 @@
           },
           {
             "id": "readable-log",
-            "text": "anyone signed in to GitHub reads the logs of a public repository (repo.public, assumed true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default",
+            "text": "anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default",
             "observed": [],
             "cites": [
               "https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md",
@@ -39743,7 +39743,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -39762,7 +39762,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -42627,7 +42627,7 @@
           },
           {
             "id": "app-status-check",
-            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise",
+            "text": "an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts",
             "observed": [
               {
                 "date": "2026-11-05",
@@ -42676,7 +42676,7 @@
           },
           {
             "id": "no-approval",
-            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)",
+            "text": "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)",
             "observed": [
               {
                 "date": "2026-09-28",
@@ -42688,7 +42688,7 @@
           },
           {
             "id": "runs-tree",
-            "text": "a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed, assumed true)",
+            "text": "a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed true)",
             "observed": [],
             "cites": [
               "https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/"

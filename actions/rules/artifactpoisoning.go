@@ -20,8 +20,8 @@ import (
 // follows, a fork's run a release of dawidd6/action-download-artifact
 // searches, on any event of the job, or the current run, whose earlier job
 // checked out the code of a pull request and uploaded the artifact), into
-// its workspace or where a step after it runs it. When no step is seen to run it, the finding holds
-// if one does (download.executed, assumed true).
+// its workspace or where a step after it runs it. When no step is seen to
+// run it, the finding holds if one does (download.executed true).
 var ArtifactPoisoning lint.Rule = withExamples(lint.WithView[ir.ArtifactPoisoningReader](artifactPoisoning{}, ir.ArtifactPoisoningView))
 
 // ArtifactPoisoningID is the ID of artifact-poisoning, and RunnerTempPathID
@@ -120,8 +120,8 @@ func (artifactPoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.Arti
 		} else {
 			// the fact names a step of the input: a step of a remote called
 			// workflow, or of an input whose name no fact can hold, has none
-			// to ask, and the finding holds as its assumed value
-			// (download.executed is true)
+			// to ask, and the finding holds as if download.executed were true
+			// (https://github.com/gh-intel/sisakulint/issues/738)
 			var executed *lint.Condition
 			if file, ok := c.Name().FactArgument(); ok && !c.RemoteCalled() {
 				executed = factCond(facts.DownloadExecuted{InputPath: file, Step: s.StepPath()}, true)
@@ -278,19 +278,19 @@ var artifactPoisoningMeta = lint.Meta{
 			},
 			{
 				ID:   noApproval,
-				Text: "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is " + labelerAddedLabel + "; and the job has no environment that has required reviewers (repo.environment-protected, assumed false)",
+				Text: "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is " + labelerAddedLabel + "; and the job has no environment that has required reviewers (repo.environment-protected false)",
 				Observed: []lint.Observation{
 					{Date: observedCheckout, Runner: runner, What: "a push after the label ran no labeled run, and ran pull_request_target on synchronize"},
 				},
 			},
 			{
 				ID:    tokenReads,
-				Text:  "the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write, assumed true); permissions written without actions set it to none",
+				Text:  "the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write true); permissions written without actions set it to none",
 				Cites: []lint.Citation{tokenDocs},
 			},
 			{
 				ID:   intoWorkspace,
-				Text: "the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal $RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed, assumed true)",
+				Text: "the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal $RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed true)",
 				Observed: []lint.Observation{
 					{Date: observedDownload, Runner: runner, What: "actions/download-artifact@v4 with no path put the artifact's x.sh over the x.sh a step before had written in the workspace"},
 				},

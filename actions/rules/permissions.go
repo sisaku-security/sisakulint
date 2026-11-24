@@ -99,7 +99,7 @@ var permissionsMeta = lint.Meta{
 		Preconditions: []lint.Precondition{
 			{ID: othersCode, Text: "the job runs code of others: an action or a reusable workflow of another repository, or a package a script installs; an action reads the token from the github context with nothing written in with", Cites: []lint.Citation{secureUse}},
 			{ID: maliciousCode, Text: "that code turns malicious: its maintainer's doing, or that of an attacker who took over their account or moved its tag", Cites: []lint.Citation{tjActions, reviewdog}},
-			{ID: tokenWrites, Text: "neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write; without an answer, the run assumes true, the worst case. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)", Cites: []lint.Citation{tokenDocs}},
+			{ID: tokenWrites, Text: "neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write true; without an answer, the finding is conditional. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)", Cites: []lint.Citation{tokenDocs}},
 		},
 		Incidents: []lint.Incident{
 			agentkitIncident,

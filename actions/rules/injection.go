@@ -150,7 +150,7 @@ var (
 	}
 	wikiOpenPre = lint.Precondition{
 		ID:   wikiOpen,
-		Text: "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise",
+		Text: "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
 		Observed: []lint.Observation{
 			{Date: observedInjection, Runner: runner, What: "a wiki page titled with $( ) and backticks, written into run as github.event.pages[0].title, ran the commands; GitHub kept $, (, ), backticks and ;"},
 			{Date: lint.MustDate("2026-10-30"), Runner: lint.MustVersion("2.338.0"), What: "in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write"},
