@@ -47,18 +47,20 @@ func TestCacheSavesOn(t *testing.T) {
 	for _, c := range []struct {
 		wf, job string // the cache-modes written; empty for none
 		e       workflow.EventName
+		called  bool
 		want    bool
 	}{
-		{"", "", workflow.EventNamePush, true},
-		{"", "", workflow.EventNameSchedule, true},
-		{"", "", workflow.EventNamePullRequest, true}, // the merge ref's scope
-		{"", "", workflow.EventNameIssueComment, false},
-		{"", "", workflow.EventNamePullRequestTarget, false},
-		{"", "", workflow.EventNameWorkflowCall, true}, // the caller decides
-		{"", "read", workflow.EventNamePush, false},
-		{"none", "", workflow.EventNamePush, false},
-		{"", "write", workflow.EventNameIssueComment, true},
-		{"write-only", "", workflow.EventNamePullRequestTarget, true},
+		{"", "", workflow.EventNamePush, false, true},
+		{"", "", workflow.EventNameSchedule, false, true},
+		{"", "", workflow.EventNamePullRequest, false, true}, // the merge ref's scope
+		{"", "", workflow.EventNameIssueComment, false, false},
+		{"", "", workflow.EventNamePullRequestTarget, false, false},
+		{"", "", workflow.EventNameIssueComment, true, true}, // the caller decides
+		{"", "read", workflow.EventNameIssueComment, true, false},
+		{"", "read", workflow.EventNamePush, false, false},
+		{"none", "", workflow.EventNamePush, false, false},
+		{"", "write", workflow.EventNameIssueComment, false, true},
+		{"write-only", "", workflow.EventNamePullRequestTarget, false, true},
 	} {
 		src := "on: push\n"
 		if c.wf != "" {
@@ -71,7 +73,7 @@ func TestCacheSavesOn(t *testing.T) {
 		src += "    steps:\n      - run: echo\n"
 		w := parse(t, src)
 		j := w.Jobs.Value.Entries[0].Value.Value
-		if got := CacheSavesOn(j.CacheMode, w.CacheMode, c.e); got != c.want {
+		if got := CacheSavesOn(j.CacheMode, w.CacheMode, c.e, c.called); got != c.want {
 			t.Errorf("wf %q job %q on %v: %v, want %v", c.wf, c.job, c.e, got, c.want)
 		}
 	}

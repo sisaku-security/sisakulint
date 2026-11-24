@@ -368,3 +368,15 @@ func TestSameRunUploads(t *testing.T) {
 		})
 	}
 }
+
+// A called workflow whose callers are not read may run on any caller event:
+// a search of forks' runs holds on them.
+func TestDownloadCalledUnreadCallers(t *testing.T) {
+	s := oneDownload(t, "workflow_call", "", "dawidd6/action-download-artifact@v3", "", "      - run: echo\n")
+	if got := runRefTexts(s.PRRunRefs); !slices.Equal(got, []string{"uses dawidd6/action-download-artifact@v3"}) {
+		t.Errorf("refs %q", got)
+	}
+	if got := eventNames(s.PRCodeOn); !slices.Contains(got, "push/") || slices.Contains(got, "workflow_call/") {
+		t.Errorf("events %q, want the callers' events", got)
+	}
+}

@@ -150,6 +150,10 @@ func (x *IR) allCacheRestoreSaves() []*CacheRestoreSave {
 			return
 		}
 		events := taint.EventNamesOf(w)
+		called := slices.ContainsFunc(w.On.Value.Events, func(ev workflow.Event) bool {
+			n, err := workflow.ParseEventName(ev.Name.AsString())
+			return err == nil && n == workflow.EventNameWorkflowCall
+		})
 		var out []*CacheRestoreSave
 		for _, je := range w.Jobs.Value.Entries {
 			if je.Value.Status != workflow.Present {
@@ -162,7 +166,7 @@ func (x *IR) allCacheRestoreSaves() []*CacheRestoreSave {
 			on := func(ifs ...attacker.PlacedIf) []workflow.EventName {
 				var evs []workflow.EventName
 				for _, e := range events {
-					if slices.ContainsFunc(jobIfs, func(p attacker.PlacedIf) bool { return !ifAllows(p, e) }) || !job.CacheSavesOn(j.CacheMode, w.CacheMode, e) {
+					if slices.ContainsFunc(jobIfs, func(p attacker.PlacedIf) bool { return !ifAllows(p, e) }) || !job.CacheSavesOn(j.CacheMode, w.CacheMode, e, called) {
 						continue
 					}
 					if slices.ContainsFunc(ifs, func(p attacker.PlacedIf) bool { return !ifAllows(p, e) }) {

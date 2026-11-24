@@ -77,6 +77,7 @@ type DownloadSite struct {
 
 	action       downloader
 	anyEvents    []analysis.EventActivity // every event it can run on: a search of forks' runs holds on any
+	callerEvents []analysis.EventActivity // the events of its unread callers' runs, apart from anyEvents: a called run, which the event name workflow_call of except stands for
 	called       bool                     // whether callers in the repository decide the events and give the inputs: a workflow on workflow_call, or an action
 	dispatchRead bool                     // whether read read an input that refers to an input of workflow_dispatch
 	searches     bool                     // whether an inconclusive input decides a search of forks' runs
@@ -130,15 +131,20 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 	if w != nil {
 		evs := c.EventsOr(name, prCodeEvents, true, func() []analysis.EventActivity { return taint.EventsOf(w, prCodeEvents) })
 		all := taint.EventsOn(w, workflow.EventNames())
+		var callerAll []analysis.EventActivity
 		ups := sameRunUploads(c, w, AnalyzeIn(c, name, w, nil, m))
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
+		} else if onCall(w) {
+			// callers not read: a called run may be on any of their events
+			callerAll = slices.DeleteFunc(taint.EventsOf(w, workflow.EventNames()), func(e analysis.EventActivity) bool { return slices.Contains(all, e) })
 		}
 		for _, je := range w.Jobs.Value.Entries {
 			j := je.Value.Value
 			jobIfs := attacker.JobIfs(w, &j)
 			jobEvs := taint.FilterCode(c.Table(), evs, jobIfs...)
 			jobAll := taint.FilterCode(c.Table(), all, jobIfs...)
+			jobCallerAll := taint.FilterCode(c.Table(), callerAll, jobIfs...)
 			steps := j.Steps.Value.Items
 			order := workflow.OrderOf(steps)
 			for _, s := range steps {
@@ -149,7 +155,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 				if err != nil {
 					continue // a job id the model reports as invalid
 				}
-				site := DownloadSite{Step: s, Job: &j, Path: p, Uses: s.Uses.Value, PRCodeOn: taint.FilterCode(c.Table(), jobEvs, attacker.StepIf(w, &j, s.If)), anyEvents: taint.FilterCode(c.Table(), jobAll, attacker.StepIf(w, &j, s.If)), called: onCall(w) && c.Coverage(name) == analysis.CallerCoverageAll}
+				site := DownloadSite{Step: s, Job: &j, Path: p, Uses: s.Uses.Value, PRCodeOn: taint.FilterCode(c.Table(), jobEvs, attacker.StepIf(w, &j, s.If)), anyEvents: taint.FilterCode(c.Table(), jobAll, attacker.StepIf(w, &j, s.If)), callerEvents: taint.FilterCode(c.Table(), jobCallerAll, attacker.StepIf(w, &j, s.If)), called: onCall(w) && c.Coverage(name) == analysis.CallerCoverageAll}
 				site.action, site.ref = downloaderOf(s.Uses.Value)
 				site.DispatchOn, site.DispatchInput = dispatchOn(c.Table(), name, w, append(slices.Clone(jobIfs), attacker.StepIf(w, &j, s.If))...), anyDispatchInput(w, s.With)
 				if _, remote := name.Remote(); remote {
@@ -593,7 +599,7 @@ func (s *DownloadSite) inconclusive(f workflow.Field[workflow.String]) {
 func (s *DownloadSite) narrow() {
 	if len(s.PRRunRefs) == 0 {
 		if s.searches && len(s.InconclusiveValues) > 0 {
-			s.PRCodeOn = s.anyEvents // a search of forks' runs may take the attacker's on any
+			s.PRCodeOn = append(slices.Clone(s.anyEvents), s.callerEvents...) // a search of forks' runs may take the attacker's on any
 		}
 		return
 	}
@@ -606,6 +612,9 @@ func (s *DownloadSite) narrow() {
 	var refs []PRRunRef
 	for _, r := range s.PRRunRefs {
 		on := s.anyEvents
+		if !slices.Contains(r.except, workflow.EventNameWorkflowCall) {
+			on = append(slices.Clone(on), s.callerEvents...)
+		}
 		if len(r.except) > 0 {
 			on = slices.DeleteFunc(slices.Clone(on), func(e analysis.EventActivity) bool { return slices.Contains(r.except, e.Name()) })
 		}
@@ -634,7 +643,7 @@ func (s *DownloadSite) narrow() {
 	s.PRCodeOn, s.PRRunRefs = evs, refs
 }
 
-// onNames are the names of the events of w's on.
+// slicesContainsName is whether ns has n.
 func slicesContainsName(ns []workflow.EventName, n workflow.EventName) bool {
 	for _, x := range ns {
 		if x == n {

@@ -19,14 +19,14 @@ var savesByDefault = []workflow.EventName{
 
 // CacheSavesOn is whether a job whose cache-mode is jobMode, else the
 // workflow's wfMode, may save to the cache on a run of e: by CacheWriteOf,
-// then by the event's default. On workflow_call the caller decides, and it
-// may let the job save: it is read as saving.
-func CacheSavesOn(jobMode, wfMode workflow.Field[workflow.String], e workflow.EventName) bool {
+// then by the event's default. In a called workflow (called) the caller's
+// cache-mode decides, and it may let the job save: it is read as saving.
+func CacheSavesOn(jobMode, wfMode workflow.Field[workflow.String], e workflow.EventName, called bool) bool {
 	switch CacheWriteOf(jobMode, wfMode) {
 	case analysis.CacheWriteYes:
 		return true
 	case analysis.CacheWriteNo:
 		return false
 	}
-	return e == workflow.EventNameWorkflowCall || slices.Contains(savesByDefault, e)
+	return called || slices.Contains(savesByDefault, e)
 }
