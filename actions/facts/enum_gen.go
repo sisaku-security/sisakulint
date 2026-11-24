@@ -502,17 +502,15 @@ const (
 	SourceFile
 	// SourceGitHub: A GitHub API (--online).
 	SourceGitHub
-	// SourceAssumption: The x-assume of its kind, which no one found out.
-	SourceAssumption
 	// SourceArgument: Given on the command line (--fact).
 	SourceArgument
 	// SourceRepoFile: Read from a file of the repository under --root that is not an input.
 	SourceRepoFile
 )
 
-var sourceNames = [...]string{"", "file", "github", "assumption", "argument", "repo-file"}
+var sourceNames = [...]string{"", "file", "github", "argument", "repo-file"}
 
-var sourceDescriptions = [...]string{"", "A file of facts (--facts).", "A GitHub API (--online).", "The x-assume of its kind, which no one found out.", "Given on the command line (--fact).", "Read from a file of the repository under --root that is not an input."}
+var sourceDescriptions = [...]string{"", "A file of facts (--facts).", "A GitHub API (--online).", "Given on the command line (--fact).", "Read from a file of the repository under --root that is not an input."}
 
 // description is what v is, as the source of the enumeration says; empty
 // for what is not a value.
@@ -576,7 +574,7 @@ func ParseSource(s string) (Source, error) {
 			return v, nil
 		}
 	}
-	return SourceUnset, fmt.Errorf("%q is not a source (file, github, assumption, argument, repo-file)", s)
+	return SourceUnset, fmt.Errorf("%q is not a source (file, github, argument, repo-file)", s)
 }
 
 // The values of $defs/state, in the order of the schema. The zero value is the first.

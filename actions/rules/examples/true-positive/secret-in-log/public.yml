@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step gets the JSON key of a service account from the secret GCP_SA_KEY,
-#   takes the private key out with jq and prints the private key.
+# situation: on push, in a public repository (repo.public true), a step gets
+#   the JSON key of a service account from the secret GCP_SA_KEY, takes the
+#   private key out with jq and prints the private key.
 # reason: the runner masks GCP_SA_KEY where the whole JSON is in the log,
 #   not the private key jq takes out of the JSON, so the private key is in
 #   the log as it is.

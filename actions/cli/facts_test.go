@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -267,57 +268,97 @@ func TestTemporaryNames(t *testing.T) {
 	}
 }
 
-// assumedRepo is a repository whose one workflow writes a wiki page's
-// title into run on gollum.
-func assumedRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	wf := filepath.Join(dir, ".github", "workflows")
-	if err := os.MkdirAll(wf, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	src := "on: gollum\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pages[0].title }}\"\npermissions: {}\n"
-	if err := os.WriteFile(filepath.Join(wf, "wiki.yml"), []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return dir
+// selfHostedReport is what TestUnknownFactsConditional reads of a report:
+// the certainty of each finding of self-hosted-runner by its kind, and
+// the state of the answer to repo.public, and whether an answer has the
+// source assumption.
+type selfHostedReport struct {
+	certainty     map[string]string
+	public        string
+	assumedSource bool
 }
 
-func TestAssumptions(t *testing.T) {
-	dir := assumedRepo(t)
-	const assumed = `{"query":{"kind":"repo.wiki-open"},"state":"found","value":true,"source":"assumption"}`
-	// by default the worst case is assumed, and the report says so
-	def := run(t, args("--root", dir))
-	if def.code != int(lint.ConfirmedBit) || !strings.Contains(def.stdout, assumed) || !strings.Contains(def.stdout, `"certainty":"confirmed"`) {
-		t.Fatalf("default: exit %d, stderr %s\n%s", def.code, def.stderr, def.stdout)
+func readSelfHosted(t *testing.T, stdout string) selfHostedReport {
+	t.Helper()
+	var rep struct {
+		Findings []struct {
+			Rule      string `json:"rule"`
+			Certainty string `json:"certainty"`
+			Args      struct {
+				KindID string `json:"kind_id"`
+			} `json:"args"`
+		} `json:"findings"`
+		Facts []struct {
+			Query struct {
+				Kind string `json:"kind"`
+			} `json:"query"`
+			State  string `json:"state"`
+			Source string `json:"source"`
+		} `json:"facts"`
 	}
-	// --no-assumptions: not known, so conditional
-	no := run(t, args("--root", dir, "--no-assumptions"))
-	if no.code != int(lint.UndecidedBit) || strings.Contains(no.stdout, `"assumed"`) || !strings.Contains(no.stdout, `"certainty":"conditional"`) {
-		t.Errorf("--no-assumptions: exit %d\n%s", no.code, no.stdout)
+	if err := json.Unmarshal([]byte(stdout), &rep); err != nil {
+		t.Fatalf("the report: %v\n%s", err, stdout)
 	}
-	// a file of facts wins over the assumption
-	closed := filepath.Join(t.TempDir(), "facts.json")
-	if err := os.WriteFile(closed, []byte(`{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"repo.wiki-open"},"state":"found","value":false}]}`), 0o644); err != nil {
+	out := selfHostedReport{certainty: map[string]string{}}
+	for _, f := range rep.Findings {
+		if f.Rule == "self-hosted-runner" {
+			out.certainty[f.Args.KindID] = f.Certainty
+		}
+	}
+	for _, e := range rep.Facts {
+		if e.Source == "assumption" {
+			out.assumedSource = true
+		}
+		if e.Query.Kind == "repo.public" {
+			out.public = e.State
+		}
+	}
+	return out
+}
+
+// TestUnknownFactsConditional: a fact that no source answers is not known,
+// so a finding whose condition depends on the fact is conditional, and
+// both kinds whose conditions take the two answers of repo.public are
+// reported; an answer of --fact or a file of facts decides the condition.
+func TestUnknownFactsConditional(t *testing.T) {
+	dir := selfHostedRepo(t)
+	with := func(a ...string) Env {
+		return args(append([]string{"--root", dir, "--rule", "self-hosted-runner"}, a...)...)
+	}
+	def := run(t, with())
+	got := readSelfHosted(t, def.stdout)
+	if def.code != int(lint.UndecidedBit) || got.assumedSource || got.public != "unknown" {
+		t.Fatalf("default: exit %d, repo.public %s, stderr %s\n%s", def.code, got.public, def.stderr, def.stdout)
+	}
+	for _, k := range []string{"self-hosted-runner.public", "self-hosted-runner.private"} {
+		if got.certainty[k] != "conditional" {
+			t.Errorf("default: %s is %q, want conditional\n%s", k, got.certainty[k], def.stdout)
+		}
+	}
+	// an answer of --fact decides the condition
+	priv := run(t, with("--fact", "repo.public=false", "--fact", "repo.allow-forking=false"))
+	if got := readSelfHosted(t, priv.stdout); len(got.certainty) != 0 || priv.code != 0 {
+		t.Errorf("--fact repo.public=false: exit %d, findings %v\n%s", priv.code, got.certainty, priv.stdout)
+	}
+	// so does a file of facts
+	public := filepath.Join(t.TempDir(), "facts.json")
+	if err := os.WriteFile(public, []byte(`{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"repo.public"},"state":"found","value":true}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fc := run(t, args("--root", dir, "--facts", closed))
-	if fc.code != 0 || strings.Contains(fc.stdout, `"assumed"`) || strings.Contains(fc.stdout, `"rule":"code-injection"`) {
-		t.Errorf("--facts with false: exit %d\n%s", fc.code, fc.stdout)
+	fc := run(t, with("--facts", public))
+	if got := readSelfHosted(t, fc.stdout); fc.code != int(lint.ConfirmedBit) || got.certainty["self-hosted-runner.public"] != "confirmed" || got.certainty["self-hosted-runner.private"] != "" {
+		t.Errorf("--facts with true: exit %d, findings %v\n%s", fc.code, got.certainty, fc.stdout)
 	}
-	// the cache of a CI; the assumption is not written, and
-	// a run on the file assumes again
+	// the cache of a CI: the unknown answer is written, and a run on the
+	// file gives the same report, but where its answers come from
 	cache := filepath.Join(t.TempDir(), "facts.json")
-	first := run(t, args("--root", dir, "--write-facts", cache))
+	first := run(t, with("--write-facts", cache))
 	b, err := os.ReadFile(cache)
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || !strings.Contains(string(b), `{"query":{"kind":"repo.public"},"state":"unknown"`) {
+		t.Errorf("--write-facts does not write repo.public unknown: %s %v", b, err)
 	}
-	if strings.Contains(string(b), "repo.wiki-open") {
-		t.Errorf("the assumption is in the file of facts:\n%s", b)
-	}
-	second := run(t, args("--root", dir, "--facts", cache, "--write-facts", cache))
-	if second.stdout != first.stdout || second.code != first.code {
+	second := run(t, with("--facts", cache, "--write-facts", cache))
+	if withoutSource(second.stdout) != withoutSource(first.stdout) || second.code != first.code {
 		t.Errorf("the run on the cache differs: exit %d, not %d\n%s\n%s", second.code, first.code, second.stdout, first.stdout)
 	}
 }

@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines a function that takes the private key out of the secret
-#   GCP_SA_KEY with jq into a variable, turns the trace on with set -x, and
-#   calls the function.
+# situation: on push, in a public repository (repo.public true), a step
+#   defines a function that takes the private key out of the secret GCP_SA_KEY
+#   with jq into a variable, turns the trace on with set -x, and calls the
+#   function.
 # reason: bash traces the commands of the function where the call runs
 #   with the trace on, so the trace prints the assignment with the private
 #   key, which the runner does not mask.

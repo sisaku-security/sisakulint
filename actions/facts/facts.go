@@ -42,15 +42,10 @@ type RawAnswer struct {
 	Value  json.RawMessage // when Found
 	Reason string          // when Unknown, for people
 	// Source is where the answer comes from: a file of facts, an argument
-	// on the command line (Arguments), an API, or the assumptions
-	// (Assumptions). A report says so; a file of facts does
-	// not keep it.
+	// on the command line (Arguments), an API, or a file of the repository.
+	// A report says so; a file of facts does not keep it.
 	Source Source
 }
-
-// Assumed is whether r is a found value no one found out, the x-assume
-// of its kind.
-func (r RawAnswer) Assumed() bool { return r.State == StateFound && r.Source == SourceAssumption }
 
 // Resolver answers questions about facts. It returns no error: whatever
 // kept it from knowing is an Unknown with a Reason, so that no one reads
@@ -73,8 +68,10 @@ type KindInfo struct {
 	Provider    Provider
 	Permission  Permission // of a token, to find it out
 	Description string
-	// AssumedValue is the value Assumptions answers (x-assume), nil when the
-	// kind is not assumed; AssumedReason says why that value.
+	// AssumedValue is the x-assume value of the kind, nil when the kind has
+	// none: the answer with which the findings of the false positive forms
+	// of the kind hold. No run answers a fact with it. AssumedReason says
+	// when to write the other answer.
 	AssumedValue  json.RawMessage
 	AssumedReason string
 }
@@ -181,7 +178,7 @@ func notAFact(q Query) error {
 // x-value of the kind, with a Repo or a SHA in it in lower case, in the
 // canonical form of RFC 8785; an Absent without a value; an Unknown with a
 // reason. Anything else is an Unknown that says what was wrong. Where it
-// comes from (Source) is kept; Assumed holds only of a found value.
+// comes from (Source) is kept.
 func Checked(q Query, r RawAnswer) RawAnswer {
 	c := checked(q, r)
 	c.Source = r.Source

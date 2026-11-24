@@ -64,7 +64,7 @@ diff --git a/.github/workflows/all-rules.yml b/.github/workflows/all-rules.yml
 @@ -52,9 +57,8 @@
      steps:
        # untrusted-checkout.checkout: no step is seen to run the tree, so the
-       # finding holds if one does (checkout.executed, assumed true)
+       # finding holds if one does (checkout.executed true)
 -      - uses: actions/checkout@v4
 +      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
          with:

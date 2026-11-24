@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step turns lastpipe on with shopt -s and the option name in a variable,
-#   takes the private key out of the secret GCP_SA_KEY with jq into a
-#   variable in the last command of a pipeline, and prints the variable.
+# situation: on push, in a public repository (repo.public true), a step turns
+#   lastpipe on with shopt -s and the option name in a variable, takes the
+#   private key out of the secret GCP_SA_KEY with jq into a variable in the
+#   last command of a pipeline, and prints the variable.
 # reason: a todo (the same file): with lastpipe, bash runs the last command
 #   of the pipeline in the shell that runs the pipeline, so the variable
 #   holds the private key when echo runs, and the runner does not mask it.

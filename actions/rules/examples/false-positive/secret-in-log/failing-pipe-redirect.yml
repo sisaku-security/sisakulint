@@ -1,8 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step pipes "key:" and the secret GCP_SA_KEY without the first character
-#   of the secret to cat, whose redirects copy file descriptor 3, which is
-#   not open, and append to $GITHUB_STEP_SUMMARY, and goes on when cat fails
-#   (|| true).
+# situation: on push, in a public repository (repo.public true), a step pipes
+#   "key:" and the secret GCP_SA_KEY without the first character of the secret
+#   to cat, whose redirects copy file descriptor 3, which is not open, and
+#   append to $GITHUB_STEP_SUMMARY, and goes on when cat fails (|| true).
 # reason: the copy of file descriptor 3 fails, so bash does not run cat, and
 #   the job summary gets no part of the secret.
 # cause: the rule reads the last command of the pipeline as writing to the

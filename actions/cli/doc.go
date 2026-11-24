@@ -57,7 +57,7 @@
 //	version.go  --version: the version, the commit, the Go release and the schemas
 //	input.go    which inputs are read, under an os.Root, and which are reported (--read-all)
 //	selection.go --rule and --skip-rule: the rules that run
-//	facts.go    where the answers come from: --fact, --facts, --online or offline, the assumptions (--no-assumptions); --write-facts
+//	facts.go    where the answers come from: --fact, --facts, --online or offline; --write-facts
 //	fact.go     --fact: KIND[ARG=VALUE,...]=VALUE
 //	runsusing.go the runs.using of an action's metadata, which --online answers action.runs-using with
 //	fix.go      --fix: the fixes applied, checked, and written; what came of it; --dry-run

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// Each answer says where it comes from: a file of facts, the assumptions,
-// or (in actions/facts/github) the API; Checked, First and a Recorder keep
+// Each answer says where it comes from: a file of facts, or (in
+// actions/facts/github) the API; Checked, First and a Recorder keep
 // it, a report writes it, and a file of facts does not.
 func TestSource(t *testing.T) {
 	ctx := context.Background()
@@ -18,9 +18,6 @@ func TestSource(t *testing.T) {
 	}
 	if r := s.Resolve(ctx, q); r.Source != SourceFile {
 		t.Errorf("the file: %+v", r)
-	}
-	if r := Assume(resolverFunc(func(context.Context, Query) RawAnswer { return RawAnswer{State: StateUnknown, Reason: "offline"} })).Resolve(ctx, RepoWikiOpen{}); r.Source != SourceAssumption || !r.Assumed() {
-		t.Errorf("the assumption: %+v", r)
 	}
 	rec := NewRecorder(First(s))
 	if r := rec.Resolve(ctx, q); r.Source != SourceFile {

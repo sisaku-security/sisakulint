@@ -15,9 +15,9 @@ import (
 
 // SecretExfiltration is the rule secret-exfiltration: a request a run
 // sends (curl, wget, gh api) carries a secret or the job's token to a
-// destination the workflow names, which holds unless a file of facts says
-// to trust the destination with the secret (request.destination-trusted,
-// assumed false).
+// destination the workflow names, which holds unless a file of facts or
+// --fact says to trust the destination with the secret
+// (request.destination-trusted).
 // It reads no summary in a job that GitHub skips in every run
 // (AlwaysSkipped): nothing of such a job runs.
 var SecretExfiltration lint.Rule = withExamples(lint.WithView[ir.SecretExfiltrationReader](secretExfiltration{}, ir.SecretExfiltrationView))
@@ -169,7 +169,7 @@ var (
 var exfiltrationBase = lint.CVSS{
 	AV: metric(lint.AttackVectorNetwork, "the server of the destination receives the request over the network"),
 	AC: metric(lint.AttackComplexityHigh, "to hold the server of the destination, the attacker breaches the vendor or registers a lapsed domain"),
-	AT: metric(lint.AttackRequirementsPresent, "the finding holds when the destination is not to be trusted with the secret, which a file of facts says otherwise (request.destination-trusted, assumed false): the holder of the server is the attacker"),
+	AT: metric(lint.AttackRequirementsPresent, "the finding holds when the destination is not to be trusted with the secret (request.destination-trusted false; a file of facts or --fact can answer true): the holder of the server is the attacker"),
 	PR: metric(lint.PrivilegesRequiredNone, "nothing of the repository is needed"),
 	UI: metric(lint.UserInteractionNone, "the workflow sends the request whenever it runs"),
 	VC: metric(lint.ImpactHigh, "the server receives the secret or the token the request carries"),

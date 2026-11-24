@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true),
-#   an output of the job `read` takes the password out of the JSON secret
-#   DB, and the later job `print` prints the output.
+# situation: on push, in a public repository (repo.public true), an output of
+#   the job `read` takes the password out of the JSON secret DB, and the later
+#   job `print` prints the output.
 # reason: the runner masks DB whole, not the password that fromJSON takes
 #   out of DB, so the runner keeps the output, and the job `print` prints
 #   the password in the header of its step before the step runs.

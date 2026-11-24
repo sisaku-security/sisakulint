@@ -143,7 +143,7 @@ func sarifRuns(t *testing.T) map[string][]string {
 	dir := twoPlaces(t, "${{ inputs.runner }}")
 	return map[string][]string{
 		"all rules, with facts":        {"--root", allRules, "--facts", filepath.Join(allRules, "facts.json")},
-		"all rules, nothing known":     {"--root", allRules, "--no-assumptions"},
+		"all rules, nothing known":     {"--root", allRules},
 		"places, one of them accepted": {"--root", dir, "--accept", acceptFile(t, dir, "jobs.a.runs-on")},
 	}
 }

@@ -190,7 +190,7 @@ func TestAIActionUnrestrictedTriggerAnyBotPullRequestTarget(t *testing.T) {
 	src := "on: {pull_request_target: {types: [opened]}}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: anthropics/claude-code-action@v1\n        with: {allowed_bots: '*'}\n"
 	rep, _, _ := checkRules(t, []lint.Rule{AIActionUnrestrictedTrigger}, wfFile(src), exposureFacts{public: ptr(true)})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Args.KindID().String() != "ai-action-unrestricted-trigger.any-bot" {
-		t.Fatalf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+		t.Fatalf("public: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
 	rep, _, _ = checkRules(t, []lint.Rule{AIActionUnrestrictedTrigger}, wfFile(src), pullRequestTargetBlocked{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {

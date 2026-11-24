@@ -81,7 +81,7 @@ func TestLineTags(t *testing.T) {
 	got := linesOf(t, rep, in, false)
 	for _, want := range []string{
 		"and an attacker controls it on issues [--fix=review]\n",
-		"controls it on gollum [assumed repo.wiki-open = true, --fix=review]\n",
+		"controls it on gollum [--fix=review]\n",
 		"is not pinned to a full commit SHA [via alias at 10:15]\n",
 		" [conditional]\n",
 		".github/workflows/pins.yml:7:32: high commit-sha.unpinned: actions/setup-go@v5 is not pinned to a full commit SHA\n",
@@ -108,7 +108,7 @@ func TestLineColonInPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.Run(t.Context(), in, registry(t), facts.Assume(offline{}))
+	rep := lint.Run(t.Context(), in, registry(t), offline{})
 	got := linesOf(t, rep, in, false)
 	if strings.Count(got, "\n") != lineCount(rep) || !strings.HasPrefix(got, ".github/workflows/a: b.yml:6:") {
 		t.Errorf("not a line a finding starting with its place:\n%s", got)
@@ -150,7 +150,7 @@ func TestLineNewlineInMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.Run(t.Context(), in, registry(t), facts.Assume(offline{}))
+	rep := lint.Run(t.Context(), in, registry(t), offline{})
 	got := linesOf(t, rep, in, false)
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) == 0 || strings.Count(got, "\n") != lineCount(rep) || !strings.Contains(got, `@v4\nx.yml:1:1: critical fake`) {
 		t.Errorf("the newline is not escaped on one line:\n%s", got)

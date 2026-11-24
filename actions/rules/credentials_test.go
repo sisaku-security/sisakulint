@@ -82,7 +82,7 @@ func TestCredentialsRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.Run(context.Background(), in, reg, facts.Assumptions())
+	rep := lint.Run(context.Background(), in, reg, noFacts{})
 	if len(rep.Facts) != 1 {
 		t.Fatalf("%+v", rep.Facts)
 	}

@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets n to the name PRIVATE_KEY, assigns the private key out of the
-#   secret GCP_SA_KEY to the variable that n names with declare, and prints
+# situation: on push, in a public repository (repo.public true), a step sets n
+#   to the name PRIVATE_KEY, assigns the private key out of the secret
+#   GCP_SA_KEY to the variable that n names with declare, and prints
 #   PRIVATE_KEY.
 # reason: a todo (the same file): bash assigns the private key to
 #   PRIVATE_KEY, and the runner does not mask the private key.

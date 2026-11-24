@@ -199,7 +199,7 @@ func TestExplainFields(t *testing.T) {
 	got := explainOf(t, []RuleID{m.ID}, m, ruleOf("b-rule")) // b-rule has the kind the fix raises
 	for _, want := range []string{
 		"- actor: commenter\n  - via: comments (on a PR)\n  - events: issue_comment\n  - run starters: issue_comment: attacker\n",
-		"  - remedy: say it not!\n  - severity: high (found from the CVSS metrics below by the table)\n  - fix kinds: pin\n  - fact kinds: test.flag (provider: test, assumed value: none)\n  - attackers: commenter\n  - preconditions: p\n  - incidents: i\n",
+		"  - remedy: say it not!\n  - severity: high (found from the CVSS metrics below by the table)\n  - fix kinds: pin\n  - fact kinds: test.flag (provider: test)\n  - attackers: commenter\n  - preconditions: p\n  - incidents: i\n",
 		"- VI: N\n  - reason: for the test: VI\n",
 		"- precondition p: a\n  - observed: 2026-09-24, runner 2.337.0: it ran.\n  - observed: 2026-09-25: the API said so\n  - cites:\n",
 		"- AV: N\n  - reason: for the test\n  - cites:\n    - <https://example.com/av>\n",
@@ -209,7 +209,7 @@ func TestExplainFields(t *testing.T) {
 		"### fix kinds\n\n- pin: pin it\n  - safety: review\n  - fact kinds: test.text\n  - possible side effects:\n    - unquoted-one-word: An unquoted place becomes one word: a value with blanks is no longer read as several words, and outside &#91;&#91; ]] is no longer globbed.\n",
 		"### undetected forms\n\n- o: not an attack\\*\n  - finding kinds: a-rule.said\n  - disposition: no-added-gain\n  - example: o.yml (workflow, undetected)\n    ```yaml\n    on: push\n    ```\n- r: b reports it\n  - finding kinds: a-rule.said\n  - disposition: other-rule (rule: b-rule)\n  - example: r.yml (workflow, undetected)\n    ```yaml\n    on: push\n    ```\n- l: the run decides\n  - finding kinds: a-rule.said\n  - disposition: limitation (decided by: run-time)\n  - example: l.yml (workflow, undetected)\n    ```yaml\n    on: push\n    ```\n",
 		"### inconclusive\n\n- g: a place\n  - disposition: todo (needs: same-file, fact)\n  - example: g.yml (workflow, inconclusive)\n    ```yaml\n    on: push\n    ```\n",
-		"### false positive forms\n\n- f: an if keeps it out\n  - finding kinds: a-rule.said\n  - disposition: todo (needs: same-file)\n  - example: f.yml (workflow, false-positive)\n    ```yaml\n    on: push\n    ```\n- p: a private repository\n  - finding kinds: a-rule.said\n  - fact kinds:\n    - repo.public (provider: repo-setting, assumed value: true)\n  - example: p.yml (workflow, false-positive)\n    ```yaml\n    on: push\n    ```\n\n### threat",
+		"### false positive forms\n\n- f: an if keeps it out\n  - finding kinds: a-rule.said\n  - disposition: todo (needs: same-file)\n  - example: f.yml (workflow, false-positive)\n    ```yaml\n    on: push\n    ```\n- p: a private repository\n  - finding kinds: a-rule.said\n  - fact kinds:\n    - repo.public (provider: repo-setting, answer that removes the finding: false)\n  - example: p.yml (workflow, false-positive)\n    ```yaml\n    on: push\n    ```\n\n### threat",
 		"### citations\n\n- <https://example.com/x>\n- <https://example.com/p>\n- <https://example.com/ghsa>\n- <https://example.com/av>\n",
 	} {
 		if !strings.Contains(got, want) {
@@ -380,16 +380,16 @@ func TestExplainExampleClass(t *testing.T) {
 	}
 }
 
-// TestExplainFactKindAssumed: the fact kinds of a kind and of a false
-// positive form say each kind's provider and assumed value (a false
-// positive form takes only kinds with one).
-func TestExplainFactKindAssumed(t *testing.T) {
+// TestExplainFactKindRemovingAnswer: the fact kinds of a kind say each
+// kind's provider, and those of a false positive form also the answer that
+// removes the finding (a false positive form takes only kinds with one).
+func TestExplainFactKindRemovingAnswer(t *testing.T) {
 	m := asking(ruleOf("a-rule"), facts.KindRepoAllowForking)
 	m.FalsePositiveForms = []FalsePositiveForm{{ID: MustFalsePositiveFormID("p"), Text: "a private repository", FindingKinds: []FindingKindID{m.FindingKinds[0].ID}, FactKinds: []facts.Kind{facts.KindRepoPublic}, Examples: []Example{withCause(exampleOf("p.yml"))}}}
 	got := explainOf(t, nil, m)
 	for _, want := range []string{
-		"  - fact kinds: repo.allow-forking (provider: repo-setting, assumed value: none)\n",
-		"    - repo.public (provider: repo-setting, assumed value: true)\n",
+		"  - fact kinds: repo.allow-forking (provider: repo-setting)\n",
+		"    - repo.public (provider: repo-setting, answer that removes the finding: false)\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no\n%s\nin\n%s", want, got)

@@ -226,8 +226,9 @@ func WalkedInputPath(p string) InputPath {
 // FactArgument is p as the argument of a fact (input_path), and whether p
 // can be one: a name with a backslash, which CleanInputPath takes, cannot,
 // as ParseInputPath and the schema refuse it. A rule asks no fact of such an
-// input, so a finding that would hold on the answer of a fact holds as the
-// fact's assumed value, and no file of facts can drop it.
+// input, so a finding that would hold on the answer of a fact holds as if
+// the fact had that answer, and no file of facts can drop it
+// (https://github.com/gh-intel/sisakulint/issues/738).
 func (p InputPath) FactArgument() (InputPath, bool) {
 	q, err := ParseInputPath(p.s)
 	return q, err == nil

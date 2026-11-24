@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   function prints its argument to the standard error, and a step calls the
-#   function in a $( ) with four characters of the secret DEPLOY_TOKEN.
+# situation: on push, in a public repository (repo.public true), a function
+#   prints its argument to the standard error, and a step calls the function
+#   in a $( ) with four characters of the secret DEPLOY_TOKEN.
 # reason: the $( ) takes the standard output of the function alone; the
 #   standard error of the function goes to the log, and the runner does not
 #   mask the four characters.

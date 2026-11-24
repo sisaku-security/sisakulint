@@ -1,9 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step runs a compound command that points the standard error to /dev/null
-#   with exec, with a redirect >&4 of the compound command, where the
-#   descriptor 4 is not open, goes on when the redirect fails (|| true), and
-#   prints the private key out of the secret GCP_SA_KEY to the standard
-#   error.
+# situation: on push, in a public repository (repo.public true), a step runs a
+#   compound command that points the standard error to /dev/null with exec,
+#   with a redirect >&4 of the compound command, where the descriptor 4 is not
+#   open, goes on when the redirect fails (|| true), and prints the private
+#   key out of the secret GCP_SA_KEY to the standard error.
 # reason: the redirect of the compound command
 #   fails, so bash does not run the exec, the standard error is the log, and
 #   the runner does not mask the private key.

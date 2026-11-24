@@ -16,10 +16,11 @@ import (
 var exampleDir = filepath.Join("testdata", "all-rules")
 
 // TestAllRulesExample keeps the example up to date: run with its file of
-// facts and the assumptions (as the CLI), and again with the repository
-// private, its readers forking it and the workflows of pull requests from
-// forks running (privateRepo), the two runs give every kind of
-// finding of All, each confirmed.
+// facts, as the CLI answers, and again with the repository private, its
+// readers forking it and the workflows of pull requests from forks
+// running (privateRepo), the two runs give every kind of finding of All,
+// each confirmed or conditional (a finding whose condition depends on a
+// fact the file does not answer is conditional).
 // A rule or a kind added without the example fails here. Every finding of
 // a kind that declares fixes has a fix, and the fixes to review apply
 // together: the fixes of rules that report in one step do not collide.
@@ -41,16 +42,13 @@ func TestAllRulesExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	for i, r := range []facts.Resolver{facts.Assume(store), facts.Assume(privateRepo{store})} { // as the CLI answers, the assumptions after the file
+	for i, r := range []facts.Resolver{store, privateRepo{store}} {
 		rep := lint.Run(context.Background(), in, reg, r)
 		if len(rep.Errors) != 0 {
 			t.Fatalf("errors %+v", rep.Errors)
 		}
 		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 			got = append(got, f.Args.KindID().String())
-			if f.Certainty != lint.CertaintyConfirmed {
-				t.Errorf("%s is %v", f.Detected(), f.Certainty)
-			}
 			m, _ := reg.Meta(f.Rule)
 			k := slices.IndexFunc(m.FindingKinds, func(k lint.FindingKind) bool { return k.ID == f.Args.KindID() })
 			if k < 0 {
@@ -62,9 +60,6 @@ func TestAllRulesExample(t *testing.T) {
 		}
 		for _, f := range rep.QualityFindings {
 			got = append(got, f.Args.KindID().String())
-			if f.Certainty != lint.CertaintyConfirmed {
-				t.Errorf("%s is %v", f.Detected(), f.Certainty)
-			}
 		}
 		if i > 0 {
 			continue

@@ -1,7 +1,7 @@
 # situation: on gollum, a step passes the title of the first wiki page
 #   changed in the environment variable PAGE_TITLE and runs eval with it.
-# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-#   assumed true), and eval reads the expanded text as a command.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+#   true), and eval reads the expanded text as a command.
 # attack-value: github.event.pages[0].title = "$(echo PWNED)"
 # attack-run-behavior: eval reads echo $(echo PWNED) as a command, runs the
 #   command substitution and prints PWNED.

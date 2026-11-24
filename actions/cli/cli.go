@@ -61,7 +61,6 @@ type options struct {
 	// configurationPath is --config; empty when not given.
 	configurationPath string
 	online            bool                 // --online
-	noAssume          bool                 // --no-assumptions
 	added             []lint.AddedAttacker // --add-attacker
 	githubAPI         *url.URL             // --github-api; nil is api.github.com
 	remote            *remoteTarget        // --remote; nil reads --root

@@ -1,6 +1,5 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step prints the secret API_KEY whole, and a value it got from a request
-#   with the key.
+# situation: on push, in a public repository (repo.public true), a step prints
+#   the secret API_KEY whole, and a value it got from a request with the key.
 # reason: the runner masks API_KEY where the whole key is in the log, and
 #   the response of the request is not made from the key.
 # attack: anyone signed in to GitHub opens the run's log to read the key.

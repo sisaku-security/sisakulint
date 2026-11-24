@@ -1,11 +1,11 @@
 # situation: on gollum, a step makes a directory named by the wiki page's
 #   title, downloads a file into it as git, and writes the title to
 #   $GITHUB_PATH; the next step runs git status.
-# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-#   assumed true), so the page's editor names the directory, and the runner
-#   adds each line written to $GITHUB_PATH to the front of PATH for the
-#   steps after it, so git status runs the git in the directory the title
-#   names, not the system's.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+#   true), so the page's editor names the directory, and the runner adds each
+#   line written to $GITHUB_PATH to the front of PATH for the steps after it,
+#   so git status runs the git in the directory the title names, not the
+#   system's.
 # attack-value: github.event.pages[0].title = "/tmp/PWNED"
 # attack-run-behavior: mkdir makes the directory /tmp/PWNED, curl saves the
 #   file at https://example.com//tmp/PWNED as /tmp/PWNED/git, chmod makes it

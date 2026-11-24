@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step runs exec 2>/dev/null 3>&4, where the descriptor 4 is not open, goes
-#   on when the exec fails (|| true), and prints the private key out of the
-#   secret GCP_SA_KEY to the standard error.
+# situation: on push, in a public repository (repo.public true), a step runs
+#   exec 2>/dev/null 3>&4, where the descriptor 4 is not open, goes on when
+#   the exec fails (|| true), and prints the private key out of the secret
+#   GCP_SA_KEY to the standard error.
 # reason: the redirect 3>&4 fails, so bash undoes the other redirect of the
 #   exec too, the standard error is still the log, and the runner does not
 #   mask the private key.

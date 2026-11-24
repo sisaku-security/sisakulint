@@ -42,7 +42,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -78,14 +78,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -110,8 +109,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -282,7 +280,7 @@
     {
       "rule": "ai-action-unrestricted-trigger",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "ai-action-unrestricted-trigger.any-bot",
       "detected": "allowed_bots of anthropics/claude-code-action is '*', which lets any bot start the agent",
       "consequence": "a GitHub App anyone makes opens an issue or comments on a public repository, and its bot starts the agent with a prompt it writes, past the check of the actor",
@@ -337,14 +335,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -380,8 +377,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -426,7 +422,7 @@
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -451,8 +447,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -680,7 +675,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -716,8 +711,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -762,7 +756,7 @@
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -787,8 +781,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -1188,7 +1181,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -1224,14 +1217,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -1256,14 +1248,64 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "self-hosted-runner",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
+      "kind_id": "self-hosted-runner.private",
+      "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
+      "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "fingerprint": "2ca2e0b729355196c84c0576167e9fa22562d0a9b4d445acf5b2b8594632971d",
+      "args": {
+        "kind_id": "self-hosted-runner.private",
+        "label": "self-hosted"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/agent.yml",
+          "line": 36,
+          "column": 15,
+          "key_path": "jobs.claude-later.runs-on[0]",
+          "job": "claude-later",
+          "source": "    runs-on: [self-hosted, linux]"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "all",
+        "parts": [
+          {
+            "id": 1,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+            "truth": "unknown"
+          },
+          {
+            "id": 2,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.allow-forking\"},\"eq\":true}",
+            "truth": "unknown"
+          },
+          {
+            "id": 3,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.fork-pr-run-workflows\"},\"eq\":true}",
+            "truth": "unknown"
+          }
+        ],
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "self-hosted-runner",
+      "severity": "high",
+      "certainty": "conditional",
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
@@ -1289,8 +1331,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -1431,7 +1472,7 @@
     {
       "rule": "ai-action-unrestricted-trigger",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "ai-action-unrestricted-trigger.any-bot",
       "detected": "allowed_bots of anthropics/claude-code-action is '*', which lets any bot start the agent",
       "consequence": "a GitHub App anyone makes opens an issue or comments on a public repository, and its bot starts the agent with a prompt it writes, past the check of the actor",
@@ -1486,8 +1527,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -1587,7 +1627,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -1623,14 +1663,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -1655,8 +1694,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -1789,7 +1827,7 @@
     {
       "rule": "ai-action-unrestricted-trigger",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "ai-action-unrestricted-trigger.any-bot",
       "detected": "allowed_bots of anthropics/claude-code-action is '*', which lets any bot start the agent",
       "consequence": "a GitHub App anyone makes opens an issue or comments on a public repository, and its bot starts the agent with a prompt it writes, past the check of the actor",
@@ -1844,8 +1882,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -1890,7 +1927,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.token-write",
       "detected": "the job runs on issue_comment, issues, which an attacker triggers, with no approval and a GITHUB_TOKEN that may write",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them a token that pushes, releases and writes what the job may",
@@ -1926,14 +1963,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -1958,8 +1994,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -2383,7 +2418,7 @@
     {
       "rule": "code-injection",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "code-injection.wiki",
       "detected": "github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum",
       "consequence": "the value becomes code",
@@ -2418,8 +2453,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "env-var",
@@ -2841,7 +2875,7 @@
     {
       "rule": "envvar-injection",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "envvar-injection.wiki",
       "detected": "$PAGE is written to $GITHUB_ENV, and an attacker who controls it on gollum can start a name of their own",
       "consequence": "a line break in the value, or a name before its =, sets other environment variables of the steps after it",
@@ -2961,8 +2995,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "env-var-review",
@@ -3040,7 +3073,7 @@
     {
       "rule": "output-clobbering",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "output-clobbering.wiki",
       "detected": "$PAGE is written to $GITHUB_OUTPUT, and an attacker who controls it on gollum can start a name of their own",
       "consequence": "a line break in the value, or a name before its =, sets other outputs of the step",
@@ -3160,8 +3193,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "env-var-review",
@@ -3671,7 +3703,7 @@
     {
       "rule": "envpath-injection",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "envpath-injection.wiki",
       "detected": "$PAGE is written to $GITHUB_PATH, and an attacker who controls it on gollum chooses a directory of the PATH of the steps after it",
       "consequence": "an executable of the attacker's in that directory runs for a command the steps after it call by name, and as the shell of their run steps",
@@ -3775,8 +3807,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -4304,7 +4335,7 @@
     {
       "rule": "untrusted-checkout",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "untrusted-checkout.checkout",
       "detected": "actions/checkout@v4 checks out github.event.pull_request.head.sha on pull_request_target",
       "consequence": "a step that runs any of it (a build, a test, a script) runs the pull request's author's code with the job's secrets and its token",
@@ -4364,8 +4395,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"checkout.executed\",\"input_path\":\".github/workflows/all-rules.yml\",\"step\":\"jobs.pwn-data.steps[0]\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "base-checkout",
@@ -5332,7 +5362,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.secrets",
       "detected": "the job runs on issues, pull_request_target, which an attacker triggers, with no approval, and reads the secrets DEPLOY_KEY",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them the secrets and what they open past the repository",
@@ -5371,14 +5401,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.environment-protected\",\"environment\":\"production\"},\"eq\":false}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "self-hosted-runner",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
@@ -5404,8 +5433,58 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "self-hosted-runner",
+      "severity": "high",
+      "certainty": "conditional",
+      "kind_id": "self-hosted-runner.private",
+      "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
+      "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "fingerprint": "911597ea22dea4be3262807a8109b0629452dcd4529890ef4cd2dfa40a0696e6",
+      "args": {
+        "kind_id": "self-hosted-runner.private",
+        "label": "self-hosted"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/all-rules.yml",
+          "line": 91,
+          "column": 15,
+          "key_path": "jobs.deploy.runs-on[0]",
+          "job": "deploy",
+          "source": "    runs-on: [self-hosted, linux]"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "all",
+        "parts": [
+          {
+            "id": 1,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+            "truth": "unknown"
+          },
+          {
+            "id": 2,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.allow-forking\"},\"eq\":true}",
+            "truth": "unknown"
+          },
+          {
+            "id": 3,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.fork-pr-run-workflows\"},\"eq\":true}",
+            "truth": "unknown"
+          }
+        ],
+        "truth": "unknown"
       }
     },
     {
@@ -5436,7 +5515,7 @@
         {
           "role": "evidence",
           "input": ".github/workflows/all-rules.yml",
-          "line": 108,
+          "line": 109,
           "column": 18,
           "key_path": "jobs.env-variable.steps[0].env.TITLE",
           "job": "env-variable",
@@ -5445,20 +5524,20 @@
           "source": "          TITLE: ${{ github.event.issue.title }}",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}",
               "at": true
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\""
             }
           ]
@@ -5466,7 +5545,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/all-rules.yml",
-          "line": 110,
+          "line": 111,
           "column": 25,
           "key_path": "jobs.env-variable.steps[0].run",
           "job": "env-variable",
@@ -5474,19 +5553,19 @@
           "source": "        run: eval \"echo $TITLE $PAGE\"",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\"",
               "at": true
             }
@@ -5498,7 +5577,7 @@
     {
       "rule": "code-injection",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "code-injection.env-variable-wiki",
       "detected": "the script of the step (run:) passes the value of the variable $PAGE to a command that reads the value as code (eval \"...\", the code that a shell or an interpreter takes after -c, such as bash -c \"...\" or python3 -c \"...\", git -c core.fsmonitor=\"...\"), and the value of the variable comes from github.event.pages[0].title, which an attacker controls on gollum",
       "consequence": "the value becomes code",
@@ -5514,7 +5593,7 @@
         {
           "role": "evidence",
           "input": ".github/workflows/all-rules.yml",
-          "line": 109,
+          "line": 110,
           "column": 17,
           "key_path": "jobs.env-variable.steps[0].env.PAGE",
           "job": "env-variable",
@@ -5523,20 +5602,20 @@
           "source": "          PAGE: ${{ github.event.pages[0].title }}",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}",
               "at": true
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\""
             }
           ]
@@ -5544,7 +5623,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/all-rules.yml",
-          "line": 110,
+          "line": 111,
           "column": 32,
           "key_path": "jobs.env-variable.steps[0].run",
           "job": "env-variable",
@@ -5552,19 +5631,19 @@
           "source": "        run: eval \"echo $TITLE $PAGE\"",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\"",
               "at": true
             }
@@ -5576,8 +5655,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -5664,7 +5742,7 @@
     {
       "rule": "argument-injection",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "argument-injection.wiki",
       "detected": "tar gets a word that starts with the value of github.event.pages[0].page_name, and an attacker controls the value on gollum alone; for the name of a wiki page (page_name), GitHub makes the name from the title that the attacker writes and turns each +, \u003c and \u003e of the title into a -, and each blank of the title into a - after trimming the blanks at the head and the end of the title, so that a + at the head of the title makes a - at the head of the name; the word is at a place in the order of the words of tar where tar reads a word that starts with - as an option, and the attacker can write at that place an option in the list --to-command=, which makes tar run a program or code that is written after the name of the option",
       "consequence": "the attacker makes the attacker's value start with the name of one of the options that the finding names, followed by a program; the command reads the word as the option whose name starts the word, and runs the program in the step, with whatever the step can reach, such as the secrets and the token in its env, the credentials actions/checkout leaves in .git/config, the network, and sudo on a GitHub-hosted runner",
@@ -5736,14 +5814,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "bot-conditions",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "bot-conditions.dependabot",
       "detected": "github.actor is compared with dependabot[bot] in an if on pull_request_target, and a run of Dependabot's push to the attacker's pull request passes it",
       "consequence": "an attacker has the job run on their pull request: they comment @dependabot recreate on Dependabot's pull request in their fork, whose branch their pull request is from, and Dependabot's push makes the actor dependabot[bot]",
@@ -5779,8 +5856,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/bot.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "author-context",
@@ -5808,7 +5884,7 @@
     {
       "rule": "unsound-contains",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "unsound-contains.substring",
       "detected": "contains of 'alice bob' and github.event.pull_request.user.login in an if on pull_request_target lets a part of the string through",
       "consequence": "an attacker passes the if with a value that is only a part of one in the string, such as a login that is part of a name",
@@ -5857,8 +5933,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/bot.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "contains-array",
@@ -5886,7 +5961,7 @@
     {
       "rule": "unsound-contains",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "unsound-contains.superstring",
       "detected": "contains(github.event.pull_request.user.login, 'alice') in an if on pull_request_target is true for values other than 'alice'",
       "consequence": "an attacker passes the if with a value that the attacker chooses and that has the string at the place that the function checks: for the string alice, the login alice-x passes contains and startsWith, and the login x-alice passes contains and endsWith",
@@ -5935,8 +6010,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/bot.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "equality",
@@ -6132,7 +6206,7 @@
     {
       "rule": "untrusted-checkout",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "untrusted-checkout.checkout",
       "detected": "actions/checkout@v4 checks out refs/pull/${{ github.event.issue.number }}/head on issue_comment",
       "consequence": "a step that runs any of it (a build, a test, a script) runs the pull request's author's code with the job's secrets and its token",
@@ -6188,8 +6262,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"checkout.executed\",\"input_path\":\".github/workflows/cache.yml\",\"step\":\"jobs.cache.steps[0]\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "base-checkout",
@@ -6908,7 +6981,7 @@
     {
       "rule": "artifact-poisoning",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "artifact-poisoning.download",
       "detected": "dawidd6/action-download-artifact@v6 takes the artifact of github.event.workflow_run.id into the workspace on workflow_run",
       "consequence": "its files replace those of the workspace; a step that runs any of them (a build, a test, a script) runs the pull request's author's code with the job's secrets and its token",
@@ -6960,8 +7033,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"download.executed\",\"input_path\":\".github/workflows/download.yml\",\"step\":\"jobs.data.steps[0]\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "runner-temp-path",
@@ -7017,8 +7089,40 @@
     },
     {
       "rule": "credentials",
+      "severity": "high",
+      "certainty": "conditional",
+      "kind_id": "credentials.private",
+      "detected": "the password of container is written in the workflow",
+      "consequence": "whoever reads the repository reads it, and its history keeps it if the repository is made public",
+      "remedy": "revoke the password, and pass a new one from a secret of the repository",
+      "fingerprint": "076897619e50a1ba3c4ef990a861c4365267ee3292c6185f60e551287e95d566",
+      "args": {
+        "kind_id": "credentials.private",
+        "container": "container"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/images.yml",
+          "line": 11,
+          "column": 19,
+          "key_path": "jobs.images.container.credentials.password",
+          "job": "images",
+          "source": "        password: hunter2"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "leaf",
+        "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "credentials",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "credentials.public",
       "detected": "the password of container is written in the workflow",
       "consequence": "anyone reads it in a public repository, and its history keeps it",
@@ -7044,8 +7148,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -7352,7 +7455,7 @@
     {
       "rule": "untrusted-checkout-toctou",
       "severity": "medium",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "untrusted-checkout-toctou.mutable-ref",
       "detected": "actions/checkout@v4 checks out refs/pull/${{ github.event.pull_request.number }}/head on pull_request_target after a label is added, and refs/pull/${{ github.event.pull_request.number }}/head can move",
       "consequence": "the author pushes after the approval, and the job runs code no one approved with its secrets and its token",
@@ -7409,8 +7512,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/labeled.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       },
       "fix": {
         "kind_id": "pin-head-sha",
@@ -7433,7 +7535,7 @@
     {
       "rule": "ai-action-unrestricted-trigger",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "ai-action-unrestricted-trigger.labeler-token-owner",
       "detected": "the job of anthropics/claude-code-action runs on pull_request_target on labeled, and actions/labeler in .github/workflows/labeler.yml is configured to add the label that the job waits for to the pull request of an attacker, with the token of an account; the actor of the labeled run is the account of the token, and the account has write access to the repository, so anthropics/claude-code-action starts the agent for the run: anthropics/claude-code-action checks no actor, or anthropics/claude-code-action checks the actor and lets in an account that has write access",
       "consequence": "an attacker who opens a pull request from a fork starts the agent with no person approving the run; the agent reads the pull request that the attacker wrote, and the agent has the GITHUB_TOKEN of the labeled run and the API key of the agent",
@@ -7507,8 +7609,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/labeled.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -7560,7 +7661,7 @@
     {
       "rule": "dangerous-triggers",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "dangerous-triggers.secrets",
       "detected": "the job runs on pull_request_target, which an attacker triggers, with no approval, and reads the secrets LABELER_PAT",
       "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them the secrets and what they open past the repository",
@@ -7597,14 +7698,13 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.pull-request-target-allowed\",\"input_path\":\".github/workflows/labeler.yml\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
       "rule": "permissions",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "permissions.unwritten",
       "detected": "neither the job nor the workflow writes permissions: the job's GITHUB_TOKEN has the repository's default, which may write",
       "consequence": "code of others that the job runs, an action, a reusable workflow or a package a script installs, writes to the repository with the token if its maintainer turns it or loses it to an attacker: pushes, releases, packages",
@@ -7629,8 +7729,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.default-token-write\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -8466,7 +8565,7 @@
     {
       "rule": "secret-exfiltration",
       "severity": "medium",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "secret-exfiltration.untrusted-destination",
       "detected": "curl sends DEPLOY_TOKEN to deploy.example.com, and no file of facts says to trust deploy.example.com with DEPLOY_TOKEN",
       "consequence": "whoever runs the server of the destination, or takes the server over (a breached vendor, or whoever registers a lapsed domain), receives the secret or the job's token and can use the secret or the token as the job would",
@@ -8529,8 +8628,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"request.destination-trusted\",\"secret\":\"DEPLOY_TOKEN\",\"destination\":\"deploy.example.com\"},\"eq\":false}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -8669,7 +8767,7 @@
     {
       "rule": "self-hosted-runner",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
@@ -8695,8 +8793,58 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "self-hosted-runner",
+      "severity": "high",
+      "certainty": "conditional",
+      "kind_id": "self-hosted-runner.private",
+      "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
+      "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "fingerprint": "9244e66d3183472681cbccaef0c91e28386c576d75bc8267e640468c2f9fe5af",
+      "args": {
+        "kind_id": "self-hosted-runner.private",
+        "label": "self-hosted"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/request.yml",
+          "line": 29,
+          "column": 15,
+          "key_path": "jobs.probe.runs-on[0]",
+          "job": "probe",
+          "source": "    runs-on: [self-hosted, linux]"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "all",
+        "parts": [
+          {
+            "id": 1,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+            "truth": "unknown"
+          },
+          {
+            "id": 2,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.allow-forking\"},\"eq\":true}",
+            "truth": "unknown"
+          },
+          {
+            "id": 3,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.fork-pr-run-workflows\"},\"eq\":true}",
+            "truth": "unknown"
+          }
+        ],
+        "truth": "unknown"
       }
     },
     {
@@ -8921,8 +9069,62 @@
     },
     {
       "rule": "unmasked-secret-exposure",
+      "severity": "high",
+      "certainty": "conditional",
+      "kind_id": "unmasked-secret-exposure.private",
+      "detected": "a value taken out of the secrets AZURE_CREDENTIALS is written where the runner prints it",
+      "consequence": "the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Whoever has read access to the repository reads the value in the log, which is kept for 90 days by default",
+      "remedy": "store each value in a secret of its own, secrets.NAME; delete the logs that have it and rotate it",
+      "fingerprint": "676639ce56ab9646fa4d0d10728b89f2a8e086dc4c5698cda88079fc5feb2602",
+      "args": {
+        "kind_id": "unmasked-secret-exposure.private",
+        "secrets": [
+          "AZURE_CREDENTIALS"
+        ]
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/secrets.yml",
+          "line": 10,
+          "column": 26,
+          "key_path": "jobs.deploy.steps[0].env.CLIENT_SECRET",
+          "job": "deploy",
+          "step": "#1",
+          "source": "          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}",
+          "snippet": [
+            {
+              "line": 7,
+              "text": "      - run: ./deploy.sh"
+            },
+            {
+              "line": 8,
+              "text": "        env:"
+            },
+            {
+              "line": 9,
+              "text": "          ALL: ${{ toJSON(secrets) }}"
+            },
+            {
+              "line": 10,
+              "text": "          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}",
+              "at": true
+            }
+          ]
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "leaf",
+        "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "unmasked-secret-exposure",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "unmasked-secret-exposure.public",
       "detected": "a value taken out of the secrets AZURE_CREDENTIALS is written where the runner prints it",
       "consequence": "the runner masks only whole secrets, and a value taken out of a secret is not a whole secret. When a step has such a value in its env, with or run, the runner prints the value unmasked in the header of the step, before the step runs. When a container has such a value in its env, or in the username of its credentials, the runner prints the value unmasked in the docker commands that the runner prints at the start of the job, before any step runs. Anyone signed in to GitHub reads the value in the log, which is kept for 90 days by default",
@@ -8970,14 +9172,89 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
+      }
+    },
+    {
+      "rule": "secret-in-log",
+      "severity": "high",
+      "certainty": "conditional",
+      "kind_id": "secret-in-log.private",
+      "detected": "substring makes a value from the secret DEPLOY_TOKEN, and the value is printed in the output of the step",
+      "consequence": "the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: whoever has read access to the repository reads the value in the log; the log of the run is kept for 90 days by default",
+      "remedy": "do not print the value; if the value must be printed, register each line of the value with ::add-mask:: before the value is printed; delete the logs of the runs that printed the value, and rotate the secret",
+      "fingerprint": "9b204687f4a05ea322a3927a9016bad64ad138d40f81316f5fb649e7d6658c77",
+      "args": {
+        "kind_id": "secret-in-log.private",
+        "secret": "DEPLOY_TOKEN",
+        "place": "standard-output-or-error",
+        "transform": "substring"
+      },
+      "path": [
+        {
+          "role": "evidence",
+          "input": ".github/workflows/secrets.yml",
+          "line": 11,
+          "column": 14,
+          "key_path": "jobs.deploy.steps[1].run",
+          "job": "deploy",
+          "step": "#2",
+          "note": "the command that prints DEPLOY_TOKEN made into another value",
+          "source": "      - run: echo \"token starts with ${DEPLOY_TOKEN:0:4}\"",
+          "snippet": [
+            {
+              "line": 11,
+              "text": "      - run: echo \"token starts with ${DEPLOY_TOKEN:0:4}\"",
+              "at": true
+            },
+            {
+              "line": 12,
+              "text": "        env:"
+            },
+            {
+              "line": 13,
+              "text": "          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}"
+            }
+          ]
+        },
+        {
+          "role": "finding",
+          "input": ".github/workflows/secrets.yml",
+          "line": 11,
+          "column": 38,
+          "key_path": "jobs.deploy.steps[1].run",
+          "job": "deploy",
+          "step": "#2",
+          "source": "      - run: echo \"token starts with ${DEPLOY_TOKEN:0:4}\"",
+          "snippet": [
+            {
+              "line": 11,
+              "text": "      - run: echo \"token starts with ${DEPLOY_TOKEN:0:4}\"",
+              "at": true
+            },
+            {
+              "line": 12,
+              "text": "        env:"
+            },
+            {
+              "line": 13,
+              "text": "          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}"
+            }
+          ]
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "leaf",
+        "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":false}",
+        "truth": "unknown"
       }
     },
     {
       "rule": "secret-in-log",
       "severity": "critical",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "secret-in-log.public",
       "detected": "substring makes a value from the secret DEPLOY_TOKEN, and the value is printed in the output of the step",
       "consequence": "the runner registers the secret, each line of the secret and encoded forms of the secret such as the base64 of the secret, and masks only those strings, not a value the shell makes from the secret: anyone signed in to GitHub reads the value in the log; the log of the run is kept for 90 days by default",
@@ -9047,8 +9324,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.public\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -9140,7 +9416,7 @@
     {
       "rule": "unsecure-commands",
       "severity": "high",
-      "certainty": "confirmed",
+      "certainty": "conditional",
       "kind_id": "unsecure-commands.wiki",
       "detected": "the value of $NAME is printed to the log of a step where ACTIONS_ALLOW_UNSECURE_COMMANDS is true, as set in the env of the job, and an attacker who controls the value on gollum alone can make the value hold an add-path command; for the name of a wiki page (page_name), the attacker does so through the title of the page: GitHub makes the name of the page from the title that the attacker writes, turns each blank of the title into a - after trimming the blanks at the head and the end of the title, and turns each - that the attacker writes in the title into the character U+2010, so that the attacker writes a blank where the command needs a -: the title ::add path::DIR makes the name ::add-path::DIR, and the title ##[add path]DIR makes the name ##[add-path]DIR",
       "consequence": "the runner reads a line of the output that holds ##[add-path]DIR anywhere in the line, or that starts with ::add-path::DIR, as a command that puts the directory DIR before the PATH of the steps after the step, so that an executable of the attacker in DIR runs in place of the program that a step after the step calls by name; the title ##[add path]DIR of a wiki page makes the name ##[add-path]DIR, and the title ::add path::DIR makes the name ::add-path::DIR",
@@ -9209,8 +9485,7 @@
         "id": 0,
         "op": "leaf",
         "text": "{\"query\":{\"kind\":\"repo.wiki-open\"},\"eq\":true}",
-        "truth": "true",
-        "assumed": true
+        "truth": "unknown"
       }
     },
     {
@@ -14920,7 +15195,7 @@
         "    runs-on: ubuntu-latest",
         "    steps:",
         "      # untrusted-checkout.checkout: no step is seen to run the tree, so the",
-        "      # finding holds if one does (checkout.executed, assumed true)",
+        "      # finding holds if one does (checkout.executed true)",
         "      - uses: actions/checkout@v4",
         "        with:",
         "          ref: ${{ github.event.pull_request.head.sha }}",
@@ -14956,11 +15231,12 @@
         "      - run: echo after the upload",
         "  deploy:",
         "    # self-hosted-runner.public: a self-hosted runner, if the repository is",
-        "    # public (repo.public, assumed true)",
+        "    # public (repo.public true)",
         "    runs-on: [self-hosted, linux]",
         "    # dangerous-triggers.secrets: issues runs the job with no approval but the",
-        "    # environment's, if it has required reviewers (repo.environment-protected,",
-        "    # assumed false), and it reads a secret; the token writes nothing, as the",
+        "    # environment's, if the environment has required reviewers, and the",
+        "    # finding holds when the environment has none (repo.environment-protected",
+        "    # false); the job reads a secret, and the token writes nothing, as the",
         "    # workflow writes permissions: {} (dangerous-triggers.token-write is the",
         "    # job artifact's, whose permissions write)",
         "    environment: production",

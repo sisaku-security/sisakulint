@@ -14,7 +14,7 @@ import (
 // privileged job that no one approves checks out the code of a pull
 // request, which its author writes, and a step after it runs that code
 // with the job's secrets and token. When no step is seen to run it, the
-// finding holds if one does (checkout.executed, assumed true).
+// finding holds if one does (checkout.executed true).
 var UntrustedCheckout lint.Rule = withExamples(lint.WithView[ir.UntrustedCheckoutReader](untrustedCheckout{}, ir.UntrustedCheckoutView))
 
 // UntrustedCheckoutID is the ID of untrusted-checkout, and BaseCheckoutID
@@ -88,8 +88,8 @@ func (untrustedCheckout) Check(_ context.Context, c *lint.RuleContext, v ir.Untr
 		} else {
 			// the fact names a step of the input: a step of a remote called
 			// workflow, or of an input whose name no fact can hold, has none
-			// to ask, and the finding holds as its assumed value
-			// (checkout.executed is true)
+			// to ask, and the finding holds as if checkout.executed were true
+			// (https://github.com/gh-intel/sisakulint/issues/738)
 			var executed *lint.Condition
 			if q, ok := executedQuery(c, s.StepPath()); ok && !c.RemoteCalled() {
 				executed = factCond(q, true)
@@ -164,14 +164,14 @@ var untrustedCheckoutMeta = lint.Meta{
 			noGuardPre,
 			{
 				ID:   noApproval,
-				Text: "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is " + labelerAddedLabel + "; and the job has no environment that has required reviewers (repo.environment-protected, assumed false: an environment is made with no protection rules)",
+				Text: "no one approves the run: either the job runs on at least one event other than pull_request_target with the activity type labeled, and a run on the other event starts with no label added, or no person adds the label that starts the run, as the label is " + labelerAddedLabel + "; and the job has no environment that has required reviewers (repo.environment-protected false: an environment is made with no protection rules)",
 				Observed: []lint.Observation{
 					{Date: observedCheckout, Runner: runner, What: "a push after the label ran no labeled run, and ran pull_request_target on synchronize"},
 				},
 			},
 			{
 				ID:    runsTree,
-				Text:  "a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed, assumed true)",
+				Text:  "a step after the checkout runs what it brings: a program of the tree, an action of it, or a tool that reads its files (npm, pip, make, go test, cargo, mvn, gradle and the like); when none is seen, the finding holds if one does (checkout.executed true)",
 				Cites: []lint.Citation{pwnRequests},
 			},
 		},

@@ -81,7 +81,7 @@ func want(t *testing.T, in lint.Inputs, threshold lint.Severity, root string) (s
 	if root != "" {
 		r = facts.First(repofile.New(os.DirFS(root)), offline{})
 	}
-	rep := lint.Run(context.Background(), in, reg, facts.Assume(r)) // as the command answers by default
+	rep := lint.Run(context.Background(), in, reg, r) // as the command answers by default
 	b, err := rep.MarshalJSON()
 	if err != nil {
 		t.Fatal(err)

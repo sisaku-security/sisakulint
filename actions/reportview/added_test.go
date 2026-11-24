@@ -6,7 +6,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/lint"
 	"github.com/gh-intel/sisakulint/actions/rules"
 )
@@ -23,7 +22,7 @@ func TestBuildAddedAttackers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.RunAdded(context.Background(), in, reg, facts.Assume(offline{}), []lint.AddedAttacker{lint.AddedAttackerTriageAccount})
+	rep := lint.RunAdded(context.Background(), in, reg, offline{}, []lint.AddedAttacker{lint.AddedAttackerTriageAccount})
 	p, err := Build(rep, in, reg)
 	if err != nil {
 		t.Fatal(err)

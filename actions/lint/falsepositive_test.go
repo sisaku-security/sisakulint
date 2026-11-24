@@ -36,8 +36,8 @@ func examplesTargeting(m Meta) Meta {
 }
 
 // TestFalsePositiveFormChecks: NewRegistry takes a false positive form
-// with a Disposition of a limitation or a todo, or with FactKinds of an
-// assumed boolean value, and refuses the rest.
+// with a Disposition of a limitation or a todo, or with FactKinds that have
+// an answer that removes the finding, and refuses the rest.
 func TestFalsePositiveFormChecks(t *testing.T) {
 	kind := ruleOf("a-rule").FindingKinds[0].ID
 	form := func(f func(*FalsePositiveForm)) Meta {
@@ -62,10 +62,10 @@ func TestFalsePositiveFormChecks(t *testing.T) {
 		{"neither", form(func(f *FalsePositiveForm) { f.Disposition = Disposition{} }), "one of"},
 		{"no-added-gain", form(func(f *FalsePositiveForm) { f.Disposition = NoAddedGain() }), "limitation or a todo"},
 		{"other-rule", form(func(f *FalsePositiveForm) { f.Disposition = OtherRule(MustRuleID("b-rule")) }), "limitation or a todo"},
-		{"no assumed value", form(func(f *FalsePositiveForm) {
+		{"no answer that removes the finding", form(func(f *FalsePositiveForm) {
 			f.Disposition = Disposition{}
 			f.FactKinds = []facts.Kind{facts.KindGitRefCommit}
-		}), "assumed boolean"},
+		}), "an answer that removes the finding"},
 		{"fact kind twice", form(func(f *FalsePositiveForm) {
 			f.Disposition = Disposition{}
 			f.FactKinds = []facts.Kind{facts.KindRepoPublic, facts.KindRepoPublic}

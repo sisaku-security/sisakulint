@@ -1,8 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets X to safe, then assigns the secret DEPLOY_TOKEN without the
-#   first character of the secret to X in a compound command whose redirect
-#   copies file descriptor 9, which is not open, goes on when the compound
-#   command fails (|| true), and prints X.
+# situation: on push, in a public repository (repo.public true), a step sets X
+#   to safe, then assigns the secret DEPLOY_TOKEN without the first character
+#   of the secret to X in a compound command whose redirect copies file
+#   descriptor 9, which is not open, goes on when the compound command fails
+#   (|| true), and prints X.
 # reason: the copy of file descriptor 9 fails, so bash does not run the
 #   compound command, X keeps safe, and the step prints no part of the
 #   secret.

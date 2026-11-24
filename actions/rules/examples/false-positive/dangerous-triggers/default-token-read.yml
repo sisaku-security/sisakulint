@@ -1,9 +1,10 @@
 # situation: the job runs on issues and writes no permissions.
 # reason: the repository's default token is read, so the token writes
 #   nothing.
-# cause: the rule takes the default token as one that may write unless a
-#   file of facts says it is read (repo.default-token-write is assumed true,
-#   the worst case).
+# cause: unless a file of facts or --fact says that the default token is read
+#   (repo.default-token-write false), the rule treats the default token as a
+#   token that may write and reports the finding. When no source answers
+#   repo.default-token-write, the finding is conditional.
 # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
 # attack-run-behavior: opening the issue starts the job a; the script
 #   becomes echo ""; echo PWNED; echo "", so echo PWNED runs as a command,

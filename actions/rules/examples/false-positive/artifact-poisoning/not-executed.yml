@@ -1,9 +1,10 @@
 # situation: the job runs on workflow_run, downloads the artifact of the run
 #   before it, and only counts the lines of what it downloaded.
 # reason: the job runs none of what it downloaded.
-# cause: when no step is seen to run the download, the rule takes it as run
-#   unless a file of facts writes download.executed false (it is assumed
-#   true, the worst case).
+# cause: unless a file of facts or --fact says that no step runs what the
+#   download puts in the workspace (download.executed false), the rule reports
+#   the finding, also when no step is seen to run it. When no file of facts
+#   and no --fact answers download.executed, the finding is conditional.
 # attack-value: the file build.sh in the artifact of the pull request's ci run = "#!/bin/sh\necho PWNED\n"
 # attack-run-behavior: the download puts the artifact's files in the
 #   workspace, and the job only runs wc -l report.txt, which counts lines;

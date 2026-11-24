@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step runs set -x after an assignment of an element of an array before the
-#   command word (a[0]=x set -x), and then sets PRIVATE_KEY to the private key
-#   out of the secret GCP_SA_KEY.
+# situation: on push, in a public repository (repo.public true), a step runs
+#   set -x after an assignment of an element of an array before the command
+#   word (a[0]=x set -x), and then sets PRIVATE_KEY to the private key out of
+#   the secret GCP_SA_KEY.
 # reason: bash refuses the assignment of the element and runs set -x, so the
 #   trace prints the assignment of the private key, which the runner does not
 #   mask.
