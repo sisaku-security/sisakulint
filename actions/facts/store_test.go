@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -119,43 +118,6 @@ func TestEncodeFile(t *testing.T) {
 func TestEncodeFileRejectsAState(t *testing.T) {
 	if b, err := EncodeFile([]Entry{{Query: TestFlag{Name: "a"}, RawAnswer: RawAnswer{State: State(7)}}}); err == nil {
 		t.Errorf("EncodeFile = %s, want an error", b)
-	}
-}
-
-func TestEncodeFileAssumed(t *testing.T) {
-	ctx := context.Background()
-	rec := NewRecorder(resolverFunc(func(_ context.Context, q Query) RawAnswer {
-		if q.(TestFlag).Name == "assumed" {
-			return RawAnswer{State: StateFound, Value: []byte("true"), Source: SourceAssumption}
-		}
-		return RawAnswer{State: StateFound, Value: []byte("false")}
-	}))
-	rec.Resolve(ctx, TestFlag{Name: "assumed"})
-	rec.Resolve(ctx, TestFlag{Name: "real"})
-	var lines []string
-	for _, e := range rec.Entries() {
-		b, err := e.MarshalJSON()
-		if err != nil {
-			t.Fatal(err)
-		}
-		lines = append(lines, string(b))
-	}
-	want := []string{
-		`{"query":{"kind":"test.flag","name":"assumed"},"state":"found","value":true,"source":"assumption"}`,
-		`{"query":{"kind":"test.flag","name":"real"},"state":"found","value":false}`,
-	}
-	if !slices.Equal(lines, want) {
-		t.Errorf("entries\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
-	}
-	b, err := EncodeFile(rec.Entries())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(b), "assumed") || !strings.Contains(string(b), `"real"`) {
-		t.Errorf("a file of facts holds only what was found out:\n%s", b)
-	}
-	if _, err := LoadStore(b); err != nil {
-		t.Error(err)
 	}
 }
 

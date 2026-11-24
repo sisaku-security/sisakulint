@@ -42,15 +42,10 @@ type RawAnswer struct {
 	Value  json.RawMessage // when Found
 	Reason string          // when Unknown, for people
 	// Source is where the answer comes from: a file of facts, an argument
-	// on the command line (Arguments), an API, or the assumptions
-	// (Assumptions). A report says so; a file of facts does
-	// not keep it.
+	// on the command line (Arguments), an API, or a file of the repository.
+	// A report says so; a file of facts does not keep it.
 	Source Source
 }
-
-// Assumed is whether r is a found value no one found out, the x-assume
-// of its kind.
-func (r RawAnswer) Assumed() bool { return r.State == StateFound && r.Source == SourceAssumption }
 
 // Resolver answers questions about facts. It returns no error: whatever
 // kept it from knowing is an Unknown with a Reason, so that no one reads

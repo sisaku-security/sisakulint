@@ -702,7 +702,6 @@
       "oneOf": [
         {"const": "file", "description": "A file of facts (--facts)."},
         {"const": "github", "description": "A GitHub API (--online)."},
-        {"const": "assumption", "description": "The x-assume of its kind, which no one found out."},
         {"const": "argument", "description": "Given on the command line (--fact)."},
         {"const": "repo-file", "description": "Read from a file of the repository under --root that is not an input."}
       ]
@@ -717,7 +716,7 @@
       ]
     },
     "entry": {
-      "description": "One fact and its answer. value is there when state is found, and matches the x-value of the kind; reason is there when state is unknown. source, in a report, is where the answer comes from: assumption when the value is the x-assume of its kind and no one found it out (only with state found). A file of facts need not have source, a store reads it as the file's, and it never has assumption.",
+      "description": "One fact and its answer. value is there when state is found, and matches the x-value of the kind; reason is there when state is unknown. source, in a report, is where the answer comes from. A file of facts need not have source, and a store reads it as the file's.",
       "type": "object",
       "properties": {
         "query": {"$ref": "#/$defs/query"},
@@ -733,7 +732,7 @@
       "unevaluatedProperties": false
     },
     "file": {
-      "description": "A file of facts: answers found before, given back without asking again. Its entries never have the source assumption.",
+      "description": "A file of facts: answers found before, given back without asking again.",
       "type": "object",
       "properties": {
         "schema": {"const": "sisakulint/facts/v0"},

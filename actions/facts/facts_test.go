@@ -317,37 +317,6 @@ func TestSHAIsNormalized(t *testing.T) {
 	}
 }
 
-// TestCheckedAssumed: only a resolved answer is an assumption.
-func TestCheckedAssumed(t *testing.T) {
-	q := TestFlag{Name: "a"}
-	for _, c := range []struct {
-		in   RawAnswer
-		want bool
-	}{
-		{RawAnswer{State: StateFound, Value: []byte("true"), Source: SourceAssumption}, true},
-		{RawAnswer{State: StateFound, Value: []byte("true")}, false},
-		{RawAnswer{State: StateAbsent, Source: SourceAssumption}, false},
-		{RawAnswer{State: StateUnknown, Reason: "r", Source: SourceAssumption}, false},
-		{RawAnswer{State: StateFound, Value: []byte(`"no"`), Source: SourceAssumption}, false}, // off x-value: Unknown
-	} {
-		if got := Checked(q, c.in); got.Assumed() != c.want {
-			t.Errorf("Checked(%+v).Assumed = %v, want %v", c.in, got.Assumed(), c.want)
-		}
-	}
-	ctx := context.Background()
-	assumed := resolverFunc(func(context.Context, Query) RawAnswer {
-		return RawAnswer{State: StateFound, Value: []byte("true"), Source: SourceAssumption}
-	})
-	if r := First(resolverFunc(func(context.Context, Query) RawAnswer { return RawAnswer{State: StateUnknown, Reason: "no"} }), assumed).Resolve(ctx, q); !r.Assumed() {
-		t.Errorf("First lost Assumed: %+v", r)
-	}
-	rec := NewRecorder(assumed)
-	rec.Resolve(ctx, q)
-	if r := rec.Resolve(ctx, q); !r.Assumed() {
-		t.Errorf("Recorder lost Assumed: %+v", r)
-	}
-}
-
 // The schema's patterns of the new types refuse what their Go parsers
 // refuse, so that a reader of the schema
 // alone does not take a fact that sisakulint does not.

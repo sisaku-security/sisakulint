@@ -53,9 +53,6 @@ func LoadStore(data []byte) (*Store, error) {
 		if _, dup := s.m[q]; dup {
 			return nil, fail("the fact %s is written twice", e.Query)
 		}
-		if e.Source == SourceAssumption {
-			return nil, fail("an assumption is not a fact found out: a file of facts does not hold one")
-		}
 		raw := RawAnswer{State: e.State, Value: e.Value, Reason: e.Reason}
 		if raw.State == StateUnknown && raw.Reason == "" {
 			return nil, fail("unknown without a reason")
@@ -110,8 +107,7 @@ func (s *Store) Entries() []Entry {
 	return out
 }
 
-// EncodeFile writes entries as a file of facts, one entry a line. An
-// assumed answer is not written: a run that reads the file assumes again.
+// EncodeFile writes entries as a file of facts, one entry a line.
 func EncodeFile(entries []Entry) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString(`{"schema":`)
@@ -120,9 +116,6 @@ func EncodeFile(entries []Entry) ([]byte, error) {
 	b.WriteString(`,"facts":[`)
 	n := 0
 	for _, e := range entries {
-		if e.RawAnswer.Assumed() {
-			continue
-		}
 		if n > 0 {
 			b.WriteByte(',')
 		}
