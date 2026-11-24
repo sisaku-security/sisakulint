@@ -333,6 +333,10 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, unmerged, facts.Assume(downloadFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("merge of other artifacts: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
+	negated := map[string]string{".github/workflows/w.yml": strings.Replace(merge[".github/workflows/w.yml"], "pattern: part-*", "pattern: '!other-*'", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, negated, facts.Assume(downloadFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
+		t.Errorf("merge with a negated pattern: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+	}
 	missing := map[string]string{".github/workflows/w.yml": composite[".github/workflows/w.yml"]}
 	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, missing, facts.Assume(downloadFacts{}))
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 1 {

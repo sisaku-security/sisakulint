@@ -57180,6 +57180,321 @@
             },
             {
               "input_kind": "workflow",
+              "name": "executed.same-run-merge.yml",
+              "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads part-1; the job merge, which needs build,\n#   merges the artifacts part-* into dist with actions/upload-artifact/merge;\n#   the job deploy, which needs merge, downloads dist and runs ./dist/deploy.sh.\n# reason: the merge downloads the artifact that the build of the pull\n#   request's code made and uploads its files again as dist, so the files\n#   that the download puts decide the code that deploy runs with the base\n#   repository's token and secrets.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the job build checks out the fork's head, and npm run\n#   build writes dist/deploy.sh; the upload takes dist as part-1, the merge\n#   uploads it again as dist, the job deploy downloads dist, and\n#   ./dist/deploy.sh prints PWNED, with the base repository's token and\n#   secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: dist}\n  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: part-*}\n  deploy:\n    needs: merge\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
+              "facts": [
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/download-artifact",
+                    "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "path": "merge",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "path": "merge",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/upload-artifact",
+                    "path": "merge",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "dependabot.version-updates",
+                    "package_ecosystem": "github-actions",
+                    "input_path": "executed.same-run-merge.yml"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "git.commit-tags",
+                    "repo": "actions/download-artifact",
+                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4.2.2",
+                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/download-artifact"
+                  },
+                  "state": "found",
+                  "value": [
+                    {
+                      "first_patched_version": "4.1.3",
+                      "ghsa_id": "GHSA-cxww-7g56-2vh6",
+                      "severity": "high",
+                      "vulnerable_version_range": ">= 4.0.0, < 4.1.3"
+                    }
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/upload-artifact"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/upload-artifact/merge"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/download-artifact"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/upload-artifact"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.pull-request-target-allowed",
+                    "input_path": "executed.same-run-merge.yml"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                }
+              ],
+              "notes": {
+                "situation": "on pull_request_target, the job build checks out and builds the pull request's head and uploads part-1; the job merge, which needs build, merges the artifacts part-* into dist with actions/upload-artifact/merge; the job deploy, which needs merge, downloads dist and runs ./dist/deploy.sh.",
+                "reason": "the merge downloads the artifact that the build of the pull request's code made and uploads its files again as dist, so the files that the download puts decide the code that deploy runs with the base repository's token and secrets.",
+                "attack_value": {
+                  "carrier": "the file package.json in the pull request's head",
+                  "value": "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+                },
+                "attack_run_behavior": "the job build checks out the fork's head, and npm run build writes dist/deploy.sh; the upload takes dist as part-1, the merge uploads it again as dist, the job deploy downloads dist, and ./dist/deploy.sh prints PWNED, with the base repository's token and secrets."
+              }
+            },
+            {
+              "input_kind": "workflow",
               "name": "executed.same-run.yml",
               "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads dist; the job deploy, which needs build,\n#   downloads dist from the current run and runs ./dist/deploy.sh.\n# reason: the artifact of the current run is what the build of the pull\n#   request's code made, so the files that the download puts decide the code\n#   that deploy runs with the base repository's token and secrets.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the job build checks out the fork's head, and npm run\n#   build runs its build script, which writes dist/deploy.sh; the upload\n#   takes dist, the job deploy downloads dist from the current run, and\n#   ./dist/deploy.sh runs the file, which prints PWNED, with the base\n#   repository's token and secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: dist, path: dist}\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
               "facts": [

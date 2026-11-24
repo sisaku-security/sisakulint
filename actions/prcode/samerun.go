@@ -294,8 +294,8 @@ func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string)
 		return true
 	}
 	p := strings.TrimSpace(e.Value.Value.AsString())
-	if strings.ContainsAny(p, "{}") {
-		return true
+	if strings.ContainsAny(p, "{}") || strings.HasPrefix(p, "!") {
+		return true // minimatch reads braces, and negates a pattern that starts with !
 	}
 	ok, err := path.Match(p, name)
 	return ok || err != nil
