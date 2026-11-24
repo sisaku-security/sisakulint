@@ -161,6 +161,11 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 						continue
 					}
 					evidence, related := valueEvidence(c, r, r.Text)
+					if chain := s.Chain(); len(chain) > 0 {
+						// a step of a composite action of the inputs: the step of
+						// the job that runs it is where the job saves
+						evidence = append(evidence, lint.Related{Location: c.At(s.CallerAt()), Note: "runs " + hopsText(chain) + ", whose step " + s.UsesText() + " saves to the cache in the job"})
+					}
 					c.Report(lint.FindingDraft{Location: at, Anchor: seen.next(what+" "+r.Text, ir.FixPlan{}), Args: args(r, on), Evidence: evidence, Related: append(related, labeler...), Condition: cond})
 				case analysis.Inconclusive:
 					if dispatched && r.InconclusiveKind == analysis.InconclusiveRefInputDispatch {

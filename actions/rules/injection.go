@@ -60,8 +60,15 @@ func envEvidence(c *lint.RuleContext, env []ir.Handle, text string) []lint.Relat
 func valueEvidence(c *lint.RuleContext, r ir.ExprRef, text string) (evidence, related []lint.Related) {
 	for i, w := range r.With {
 		note := "the caller gives it here"
+		// the default is in the file of the reference: a reference in a
+		// composite action of the inputs that a step of the input runs is
+		// in another input than the one of the rule
+		def := c.InFile(w)
+		if !c.InFile(r.At) {
+			def = w.InputName() != "" && w.InputName() == r.At.InputName()
+		}
 		switch {
-		case c.InFile(w):
+		case def:
 			note = "the input's default gives " + text + " here"
 		case i == 0:
 			note = "a caller gives " + text + " here"

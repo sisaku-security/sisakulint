@@ -14630,6 +14630,18 @@
             },
             {
               "input_kind": "workflow",
+              "name": ".github/workflows/composite-caller.yml",
+              "text": "# situation: on issue_comment, a job with cache-mode: write runs a composite\n#   action of the repository whose step (actions/cache/save) saves build\n#   under a key that has the comment's body.\n# reason: $/ names the action at the commit of the workflow, an input of the\n#   run; its step saves to the cache as a step of the job does, so the\n#   commenter chooses the key it saves under.\n# attack-value: github.event.comment.body = \"deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99\"\n# attack-run-behavior: the comment starts the job; the step of the composite\n#   action saves build under deps-Linux-5f4dcc3b…, the key a later run\n#   computes from a lock file not merged yet, which restores this entry.\non: issue_comment\njobs:\n  a:\n    runs-on: ubuntu-latest\n    cache-mode: write\n    steps:\n      - run: make\n      - uses: $/.github/actions/save\n",
+              "others": [
+                {
+                  "input_kind": "action-metadata",
+                  "name": ".github/actions/save/action.yml",
+                  "text": "runs:\n  using: composite\n  steps:\n    - uses: actions/cache/save@v4\n      with:\n        path: build\n        key: ${{ github.event.comment.body }}\n"
+                }
+              ]
+            },
+            {
+              "input_kind": "workflow",
               "name": "attacker-key.status-commit.yml",
               "text": "# situation: on status, which an app outside GitHub Actions starts when the\n#   app writes a status for a commit, the job writes the message of the\n#   commit of the status (github.event.commit.commit.message) into the key\n#   of a cache that the job saves (cache-mode: write, which makes the save\n#   of the run of status reach the scope of the default branch).\n# reason: an outside CI that writes a status for a commit of a pull request\n#   from a fork starts a run of status on the default branch, with the\n#   message of that commit, which the author of the pull request writes, in\n#   the payload (seen on GitHub).\n# attack-value: github.event.commit.commit.message = \"main\"\n# attack-run-behavior: an outside CI writes a status for the commit of the\n#   pull request from a fork whose message is the value; the run of status\n#   starts on the default branch, and the key build-main is the key that a\n#   job on the default branch restores, so the cache that the job saves\n#   reaches that job.\non: status\njobs:\n  j:\n    runs-on: ubuntu-latest\n    cache-mode: write\n    steps:\n      - uses: actions/cache/save@v4\n        with:\n          path: build\n          key: build-${{ github.event.commit.commit.message }}\n"
             },
@@ -14784,6 +14796,18 @@
             "repo.merge-commit-app-checks"
           ],
           "true_positives": [
+            {
+              "input_kind": "workflow",
+              "name": ".github/workflows/composite-caller.yml",
+              "text": "# situation: on issue_comment, a job with cache-mode: write runs a composite\n#   action of the repository whose step (actions/cache/save) saves the path\n#   its input names, and the job gives it the comment's body.\n# reason: $/ names the action at the commit of the workflow, an input of the\n#   run; its step saves to the cache as a step of the job does, so the\n#   commenter chooses what it saves.\n# attack-value: github.event.comment.body = \"~/.ssh\"\n# attack-run-behavior: the comment starts the job; the step of the composite\n#   action saves the directory the commenter names to the default branch's\n#   scope, where a later run restores it.\non: issue_comment\njobs:\n  a:\n    runs-on: ubuntu-latest\n    cache-mode: write\n    steps:\n      - run: make\n      - uses: $/.github/actions/save\n        with:\n          path: ${{ github.event.comment.body }}\n",
+              "others": [
+                {
+                  "input_kind": "action-metadata",
+                  "name": ".github/actions/save/action.yml",
+                  "text": "inputs:\n  path:\n    required: true\nruns:\n  using: composite\n  steps:\n    - uses: actions/cache/save@v4\n      with:\n        path: ${{ inputs.path }}\n        key: build-${{ github.sha }}\n"
+                }
+              ]
+            },
             {
               "input_kind": "workflow",
               "name": "attacker-path.yml",

@@ -22262,6 +22262,38 @@
             cache-mode: write
             uses: ./.github/workflows/called.yml
         ```
+    - .github/workflows/composite-caller.yml (workflow, true-positive)
+      ```yaml
+      # situation: on issue_comment, a job with cache-mode: write runs a composite
+      #   action of the repository whose step (actions/cache/save) saves build
+      #   under a key that has the comment's body.
+      # reason: $/ names the action at the commit of the workflow, an input of the
+      #   run; its step saves to the cache as a step of the job does, so the
+      #   commenter chooses the key it saves under.
+      # attack-value: github.event.comment.body = "deps-Linux-5f4dcc3b5aa765d61d8327deb882cf99"
+      # attack-run-behavior: the comment starts the job; the step of the composite
+      #   action saves build under deps-Linux-5f4dcc3b…, the key a later run
+      #   computes from a lock file not merged yet, which restores this entry.
+      on: issue_comment
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          cache-mode: write
+          steps:
+            - run: make
+            - uses: $/.github/actions/save
+      ```
+      - finding on: .github/actions/save/action.yml
+      - .github/actions/save/action.yml (action-metadata)
+        ```yaml
+        runs:
+          using: composite
+          steps:
+            - uses: actions/cache/save@v4
+              with:
+                path: build
+                key: ${{ github.event.comment.body }}
+        ```
     - attacker-key.status-commit.yml (workflow, true-positive)
       ```yaml
       # situation: on status, which an app outside GitHub Actions starts when the
@@ -22350,6 +22382,43 @@
   - attackers: fork-pr-author, issue-author, commenter, anyone-who-forks, merged-commit-author
   - preconditions: privileged-job, no-approval, cache-writes, attacker-cache-input, app-status-check, callers-events
   - true positives:
+    - .github/workflows/composite-caller.yml (workflow, true-positive)
+      ```yaml
+      # situation: on issue_comment, a job with cache-mode: write runs a composite
+      #   action of the repository whose step (actions/cache/save) saves the path
+      #   its input names, and the job gives it the comment's body.
+      # reason: $/ names the action at the commit of the workflow, an input of the
+      #   run; its step saves to the cache as a step of the job does, so the
+      #   commenter chooses what it saves.
+      # attack-value: github.event.comment.body = "~/.ssh"
+      # attack-run-behavior: the comment starts the job; the step of the composite
+      #   action saves the directory the commenter names to the default branch's
+      #   scope, where a later run restores it.
+      on: issue_comment
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          cache-mode: write
+          steps:
+            - run: make
+            - uses: $/.github/actions/save
+              with:
+                path: ${{ github.event.comment.body }}
+      ```
+      - finding on: .github/actions/save/action.yml
+      - .github/actions/save/action.yml (action-metadata)
+        ```yaml
+        inputs:
+          path:
+            required: true
+        runs:
+          using: composite
+          steps:
+            - uses: actions/cache/save@v4
+              with:
+                path: ${{ inputs.path }}
+                key: build-${{ github.sha }}
+        ```
     - attacker-path.yml (workflow, true-positive)
       ```yaml
       # situation: on issue_comment, a job with cache-mode: write checks out the

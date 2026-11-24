@@ -997,7 +997,9 @@
           "type": "string",
           "doc": "the uses as written",
           "display": true
-        }
+        },
+        {"name": "chain", "type": "[]composite.Hop", "doc": "for a step of a composite action of the inputs that a step of the job runs (actions/composite), the uses from that step to the action; at, the references of the key and of the path are then in the file of the action, and callerAt is the uses of the step of the job; none for a step of the job"},
+        {"name": "callerAt", "type": "Handle", "doc": "for a step of a composite action of the inputs, the uses of the step of the job that runs the action; zero for a step of the job", "compare": false}
       ],
       "fixes": []
     },

@@ -2,10 +2,13 @@ package ir
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
 	"github.com/gh-intel/sisakulint/actions/attacker"
 	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/job"
 	"github.com/gh-intel/sisakulint/actions/prcode"
 	"github.com/gh-intel/sisakulint/actions/taint"
@@ -194,6 +197,7 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				refs[at] = append(refs[at], v)
 			}
 		}
+		values := map[*workflow.ActionMetadata][]taint.StepValue{}
 		var out []*CacheSave
 		for _, je := range w.Jobs.Value.Entries {
 			if je.Value.Status != workflow.Present {
@@ -212,6 +216,7 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				}
 				a := prcode.CacheActionOf(s.Uses.Value)
 				if a == analysis.CacheActionNone {
+					out = append(out, x.compositeCacheSaves(&j, s, on, don, approval, env, values)...)
 					continue
 				}
 				o := &CacheSave{key: keyOf(x.paths, x.input, x.tree, s.Base), at: x.handleOf(s.Base), action: a,
@@ -234,6 +239,77 @@ func (x *IR) allCacheSaves() []*CacheSave {
 		x.cacheSaves = out
 	})
 	return x.cacheSaves
+}
+
+// compositeCacheSaves are the steps of actions/cache or actions/cache/save
+// of the composite actions of the inputs that the step s of the job j runs
+// (actions/composite), whose job saves on on and don with approval and env:
+// at the step in the file of the action, with the references of its key and
+// its path read with the callers of the action (taint.Callers), so that an
+// input the with of s gives is read from it. The ifs of s and of the steps
+// of the composite actions on the way keep the events. values holds the
+// values read of each action, once. An action of another repository is
+// read by saved-checkout alone: its values have no callers.
+func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []analysis.EventActivity, approval analysis.Approval, env facts.EnvironmentName, values map[*workflow.ActionMetadata][]taint.StepValue) []*CacheSave {
+	if x.composites == nil || s.Uses.Status != workflow.Present {
+		return nil
+	}
+	var out []*CacheSave
+	for _, in := range x.composites.Expand(x.ctx, &s, false).Steps {
+		if in.Origin.Query != nil || in.Origin.Input.IsZero() || in.Action == nil || in.Step.Uses.Status != workflow.Present {
+			continue
+		}
+		a := prcode.CacheActionOf(in.Step.Uses.Value)
+		if a == analysis.CacheActionNone {
+			continue
+		}
+		steps := in.Action.Runs.Value.Steps.Value.Items
+		idx := -1
+		for i := range steps {
+			if &steps[i] == in.Step {
+				idx = i
+			}
+		}
+		vals, ok := values[in.Action]
+		if !ok {
+			vals = taint.StepValues(x.callersOf(), calls.InputNode(in.Origin.Input), nil, in.Action, cacheValues)
+			values[in.Action] = vals
+		}
+		ifs := append(append([]attacker.PlacedIf{attacker.StepIf(x.workflow, j, s.If)}, stepIfs(in.Ifs)...), attacker.StepIf(nil, nil, in.Step.If))
+		origin := in.Origin
+		pl := place{x: x, origin: &origin}
+		caller := keyOf(x.paths, x.input, x.tree, s.Base)
+		o := &CacheSave{key: Key{input: x.input, path: caller.path + " > " + hopsPath(in.Chain) + " " + x.paths.Of(in.Origin.Tree, in.Step.Base.Node, in.Step.Base.Via)},
+			at: pl.handle(in.Step.Base), action: a,
+			cacheWriteOn: taint.Filter(x.table(), on, ifs...), dispatchOn: taint.Filter(x.table(), don, ifs...), cacheApproval: approval, environment: env, usesText: in.Step.Uses.Value.Text(),
+			chain: in.Chain, callerAt: x.handleOf(s.Uses.Value.Base)}
+		o.automaticApproval = x.automaticApprovalOf(o.cacheWriteOn, j, ifs...)
+		for _, v := range vals {
+			if v.StepIndex != idx {
+				continue
+			}
+			text := v.Value.Text()
+			for _, r := range v.Refs {
+				e := pl.exprRef(r, text[r.Span.Start:r.Span.End], pl.span(v.Value, r.Span))
+				if v.Index == 0 {
+					o.keyRefs = append(o.keyRefs, e)
+				} else {
+					o.pathRefs = append(o.pathRefs, e)
+				}
+			}
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// hopsPath is the uses of hops, as written, joined by " > ".
+func hopsPath(hops []composite.Hop) string {
+	var parts []string
+	for _, h := range hops {
+		parts = append(parts, h.Uses)
+	}
+	return strings.Join(parts, " > ")
 }
 
 // cacheValues are the key and the path of a step of actions/cache or

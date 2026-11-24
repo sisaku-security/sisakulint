@@ -57,3 +57,69 @@ func TestCachePoisoningComposite(t *testing.T) {
 		}
 	}
 }
+
+// TestCachePoisoningLocalComposite: a step of actions/cache/save in a
+// composite action of the inputs that a step of the job runs is read as a
+// step of the job: attacker-key and attacker-path at the reference in the
+// file of the action, with the uses of the step of the job in the evidence.
+func TestCachePoisoningLocalComposite(t *testing.T) {
+	for _, c := range []struct{ dir, kind string }{
+		{"examples/true-positive/cache-poisoning/attacker-key.local-composite", "cache-poisoning.attacker-key"},
+		{"examples/true-positive/cache-poisoning/attacker-path.local-composite", "cache-poisoning.attacker-path"},
+	} {
+		files := map[string]string{}
+		for _, n := range []string{".github/workflows/composite-caller.yml", ".github/actions/save/action.yml"} {
+			b, err := os.ReadFile(c.dir + "/" + n)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files[n] = string(b)
+		}
+		rep, _, _ := checkRules(t, []lint.Rule{CachePoisoning}, files, limitFacts{})
+		if len(rep.Errors) != 0 {
+			t.Fatalf("%s: errors %+v", c.dir, rep.Errors)
+		}
+		b, err := json.Marshal(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found []struct {
+			Args struct {
+				Kind string `json:"kind_id"`
+			} `json:"args"`
+			Location struct {
+				File struct {
+					Input string `json:"input"`
+				} `json:"file"`
+			} `json:"location"`
+			Evidence []struct {
+				Location struct {
+					File struct {
+						Input string `json:"input"`
+					} `json:"file"`
+				} `json:"location"`
+			} `json:"evidence"`
+		}
+		if err := json.Unmarshal(b, &found); err != nil {
+			t.Fatal(err)
+		}
+		ok := false
+		for _, f := range found {
+			if f.Args.Kind != c.kind || f.Location.File.Input != ".github/actions/save/action.yml" {
+				continue
+			}
+			ok = slices.ContainsFunc(f.Evidence, func(e struct {
+				Location struct {
+					File struct {
+						Input string `json:"input"`
+					} `json:"file"`
+				} `json:"location"`
+			}) bool {
+				return e.Location.File.Input == ".github/workflows/composite-caller.yml"
+			})
+		}
+		if !ok {
+			t.Errorf("%s: no %s in the action with the caller in the evidence:\n%s", c.dir, c.kind, b)
+		}
+	}
+}
