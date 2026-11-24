@@ -49,7 +49,7 @@
     "certainty": {
       "description": "Whether a finding holds.",
       "oneOf": [
-        {"const": "confirmed", "description": "The finding holds: the finding has no condition, or the condition of the finding holds by the answers about facts."},
+        {"const": "confirmed", "description": "The finding holds: the finding has no condition, or the condition of the finding holds with the answers to the facts of the condition."},
         {"const": "conditional", "description": "The finding holds if the condition of the finding holds; the condition depends on facts or inputs that the run does not know."},
         {"const": "inconclusive", "description": "The rule found and examined the place of the finding, and cannot decide whether the finding holds: the value or the content that decides whether the finding holds is outside what the rule reads, and no answer about facts decides whether the finding holds. The finding has no condition, no fix and no reason for no fix."}
       ]

@@ -3,8 +3,8 @@
 # reason: the repository's default token is read, which reads no artifact of
 #   another run.
 # cause: unless a file of facts or --fact says that the default token is read
-#   (repo.default-token-write false), the rule takes the default token as one
-#   that may write and reports the finding. When no file of facts and no
+#   (repo.default-token-write false), the rule treats the default token as a
+#   token that may write and reports the finding. When no file of facts and no
 #   --fact answers repo.default-token-write, the finding is conditional.
 # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
 # attack-run-behavior: the job's github.token is the repository's default,

@@ -2,8 +2,8 @@
 # reason: the repository's default token is read, so the token writes
 #   nothing.
 # cause: unless a file of facts or --fact says that the default token is read
-#   (repo.default-token-write false), the rule takes the default token as one
-#   that may write and reports the finding. When no file of facts and no
+#   (repo.default-token-write false), the rule treats the default token as a
+#   token that may write and reports the finding. When no file of facts and no
 #   --fact answers repo.default-token-write, the finding is conditional.
 # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
 # attack-run-behavior: opening the issue starts the job a; the script

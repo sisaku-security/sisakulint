@@ -94,7 +94,7 @@ type InconclusiveKind struct {
 // inputs of the form. Disposition is what the rule would need to stop
 // reporting it, a limitation or a todo; FactKinds are the kinds of facts
 // whose answer that removes the finding (the boolean other than the
-// x-assume value of the kind) removes it now. A form has one of the two.
+// x-assume value of the kind) removes it. A form has one of the two.
 type FalsePositiveForm struct {
 	ID           FalsePositiveFormID
 	Text         string

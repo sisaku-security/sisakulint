@@ -18192,8 +18192,8 @@
     # reason: the repository's default token is read, which reads no artifact of
     #   another run.
     # cause: unless a file of facts or --fact says that the default token is read
-    #   (repo.default-token-write false), the rule takes the default token as one
-    #   that may write and reports the finding. When no file of facts and no
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no file of facts and no
     #   --fact answers repo.default-token-write, the finding is conditional.
     # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job's github.token is the repository's default,
@@ -20151,8 +20151,8 @@
     # reason: the repository's default token is read, so the token in the
     #   artifact writes nothing.
     # cause: unless a file of facts or --fact says that the default token is read
-    #   (repo.default-token-write false), the rule takes the default token as one
-    #   that may write and reports the finding. When no file of facts and no
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no file of facts and no
     #   --fact answers repo.default-token-write, the finding is conditional.
     # attack: a reader of the repository's artifacts (anyone, in a public
     #   repository) downloads the artifact through the API while the job still
@@ -33828,8 +33828,8 @@
     # reason: the repository's default token is read, so the token writes
     #   nothing.
     # cause: unless a file of facts or --fact says that the default token is read
-    #   (repo.default-token-write false), the rule takes the default token as one
-    #   that may write and reports the finding. When no file of facts and no
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no file of facts and no
     #   --fact answers repo.default-token-write, the finding is conditional.
     # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: opening the issue starts the job a; the script
@@ -47986,8 +47986,8 @@
     # reason: the repository's default token is read, so the token writes
     #   nothing.
     # cause: unless a file of facts or --fact says that the default token is read
-    #   (repo.default-token-write false), the rule takes the default token as one
-    #   that may write and reports the finding. When no file of facts and no
+    #   (repo.default-token-write false), the rule treats the default token as a
+    #   token that may write and reports the finding. When no file of facts and no
     #   --fact answers repo.default-token-write, the finding is conditional.
     # attack: the maintainer of a package npm ci installs, or whoever takes over
     #   their account, publishes a version whose install script reads the token
