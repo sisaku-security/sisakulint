@@ -35,3 +35,23 @@ func TestCallerNarrowing(t *testing.T) {
 		}
 	}
 }
+
+// TestCallerNarrowingGithubOnly: a caller's if narrows in the called
+// workflow only github, which is the same in both; its inputs and needs
+// are values of the caller's own, not those of the called workflow.
+func TestCallerNarrowingGithubOnly(t *testing.T) {
+	const top = "on: pull_request_target\njobs:\n  call:\n    uses: ./.github/workflows/mid.yml\n    with:\n      x: safe\n"
+	const mid = "on:\n  workflow_call:\n    inputs:\n      x:\n        type: string\njobs:\n  call:\n    if: inputs.x == 'safe'\n    uses: ./.github/workflows/leaf.yml\n    with:\n      x: ${{ github.event.pull_request.title }}\n"
+	const leaf = "on:\n  workflow_call:\n    inputs:\n      x:\n        type: string\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ inputs.x }}\"\n"
+	got := refsIn(t, attacker.Outsider, [2]string{".github/workflows/leaf.yml", leaf}, [2]string{".github/workflows/mid.yml", mid}, [2]string{".github/workflows/top.yml", top})
+	if r, ok := got["inputs.x"]; !ok || !slices.Equal(r, []string{"pull_request_target"}) {
+		t.Errorf("inputs: got %v", got)
+	}
+	const caller = "on: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    outputs:\n      o: ok\n    steps:\n      - run: echo\n  call:\n    needs: a\n    if: needs.a.outputs.o == 'ok'\n    uses: ./.github/workflows/called.yml\n"
+	const called = "on: workflow_call\njobs:\n  a:\n    runs-on: ubuntu-latest\n    outputs:\n      o: ${{ github.event.pull_request.title }}\n    steps:\n      - run: echo\n  b:\n    needs: a\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ needs.a.outputs.o }}\"\n"
+	withCaller := refsIn(t, attacker.Outsider, [2]string{".github/workflows/called.yml", called}, [2]string{".github/workflows/ci.yml", caller})
+	alone := refsIn(t, attacker.Outsider, [2]string{".github/workflows/called.yml", called}, [2]string{".github/workflows/ci.yml", "on: pull_request_target\njobs:\n  call:\n    uses: ./.github/workflows/called.yml\n"})
+	if !slices.Equal(withCaller["needs.a.outputs.o"], alone["needs.a.outputs.o"]) {
+		t.Errorf("needs: got %v, want as without the if %v", withCaller, alone)
+	}
+}

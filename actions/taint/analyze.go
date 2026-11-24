@@ -527,19 +527,24 @@ func (c scope) narrowed(path []expr.PathElem, env int) bool {
 	if len(path) > 0 && expr.EqualName(path[0].Name, "env") {
 		return env == 0 && c.stepNarrowing.NarrowsAnyEvent(path)
 	}
-	return c.narrowedBy(func(n attacker.Narrowing) bool { return n.NarrowsAnyEvent(path) })
+	return c.narrowedBy(path, func(n attacker.Narrowing) bool { return n.NarrowsAnyEvent(path) })
 }
 
 // narrowedOn is narrowed of a reference below github on the event e.
 func (c scope) narrowedOn(e analysis.EventActivity, path []expr.PathElem) bool {
-	return c.narrowedBy(func(n attacker.Narrowing) bool { return n.Narrows(e, path) })
+	return c.narrowedBy(path, func(n attacker.Narrowing) bool { return n.Narrows(e, path) })
 }
 
 // narrowedBy is whether f holds of a narrowing of the job or of the step,
-// or of one of every chain of calls of the scope's input.
-func (c scope) narrowedBy(f func(attacker.Narrowing) bool) bool {
+// or, for path below github, of one of every chain of calls of the
+// scope's input: github is the same in the callers and the called, while
+// inputs, needs, env and the rest are values of their own in each.
+func (c scope) narrowedBy(path []expr.PathElem, f func(attacker.Narrowing) bool) bool {
 	if slices.ContainsFunc(c.jobNarrowings, f) || f(c.stepNarrowing) {
 		return true
+	}
+	if len(path) == 0 || !expr.EqualName(path[0].Name, "github") {
+		return false
 	}
 	return len(c.callerNarrowings) > 0 && !slices.ContainsFunc(c.callerNarrowings, func(ch []attacker.Narrowing) bool { return !slices.ContainsFunc(ch, f) })
 }
