@@ -55,7 +55,7 @@
 //	types_test.go    InputPath, PackageName, PackageVersion, GHSAID, Advisory, UsesPath
 //	facts_test.go    Repo, SHA, the JSON of facts, the closed set, Ask, the dependencies
 //	request_test.go  SecretName, ConfigurationVariableName and its answer in a file of facts,
-//	                 RequestDestination, and the assumption of request.destination-trusted
+//	                 RequestDestination, and the query of request.destination-trusted
 //	actionpattern_test.go  ActionPattern, ActionListAllows, and repo.action-list in a file of facts
 //	allowedactions_test.go  AllowedActionsPattern, AllowedActionsSetting and its JSON, Allows,
 //	                 and repo.allowed-actions in a file of facts

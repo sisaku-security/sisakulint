@@ -245,7 +245,7 @@ func readKind(name string, s *jsonschema.Schema, named map[*jsonschema.Schema]st
 	}
 	if raw, ok := s.Annotations["x-assume"]; ok {
 		if from == "github" {
-			return kind{}, fmt.Errorf("x-assume: a kind from the API is asked, not assumed")
+			return kind{}, fmt.Errorf("x-assume: a kind from the API has none: the API answers it")
 		}
 		var a struct {
 			Value  json.RawMessage `json:"value"`

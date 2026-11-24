@@ -178,7 +178,7 @@ func notAFact(q Query) error {
 // x-value of the kind, with a Repo or a SHA in it in lower case, in the
 // canonical form of RFC 8785; an Absent without a value; an Unknown with a
 // reason. Anything else is an Unknown that says what was wrong. Where it
-// comes from (Source) is kept; Assumed holds only of a found value.
+// comes from (Source) is kept.
 func Checked(q Query, r RawAnswer) RawAnswer {
 	c := checked(q, r)
 	c.Source = r.Source
