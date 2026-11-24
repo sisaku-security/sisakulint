@@ -462,6 +462,42 @@ func (n *EnvironmentName) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// RunnerLabel is a label of a runner ($defs/runner-label), as runs-on
+// writes it: 1 to 255 characters, none a control, no white space around
+// it. GitHub compares labels without case, so ParseRunnerLabel writes it in
+// lower case, and two spellings of one are ==. The zero RunnerLabel is none.
+type RunnerLabel struct{ s string }
+
+// ParseRunnerLabel reads a label of a runner.
+func ParseRunnerLabel(s string) (RunnerLabel, error) {
+	if s == "" || utf8.RuneCountInString(s) > 255 || strings.TrimSpace(s) != s || strings.IndexFunc(s, unicode.IsControl) >= 0 {
+		return RunnerLabel{}, fmt.Errorf("%q is not a label of a runner: 1 to 255 characters, none a control, no white space around it", s)
+	}
+	return RunnerLabel{strings.ToLower(s)}, nil
+}
+
+func (l RunnerLabel) String() string { return l.s }
+
+func (l RunnerLabel) MarshalJSON() ([]byte, error) {
+	if l.s == "" {
+		return nil, errors.New("the zero RunnerLabel is no label")
+	}
+	return json.Marshal(l.s)
+}
+
+func (l *RunnerLabel) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	v, err := ParseRunnerLabel(s)
+	if err != nil {
+		return err
+	}
+	*l = v
+	return nil
+}
+
 // RefCommit is what the runner runs for a ref ($defs/ref-commit): the
 // commit, and the branch or the tag it was found as; the zero Ref when the
 // ref is a full SHA found as a commit.

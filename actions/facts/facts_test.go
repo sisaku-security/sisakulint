@@ -111,12 +111,26 @@ func TestParseEnvironmentName(t *testing.T) {
 	}
 }
 
+// TestParseRunnerLabel: a label of a runner is in lower case, and a label
+// GitHub refuses is an error.
+func TestParseRunnerLabel(t *testing.T) {
+	a, err := ParseRunnerLabel("GH-Intel-Fast")
+	if err != nil || a.String() != "gh-intel-fast" {
+		t.Errorf("ParseRunnerLabel(GH-Intel-Fast) = %v, %v", a, err)
+	}
+	for _, bad := range []string{"", " x", "x ", strings.Repeat("x", 256), "a\nb"} {
+		if _, err := ParseRunnerLabel(bad); err == nil {
+			t.Errorf("ParseRunnerLabel(%q): no error", bad)
+		}
+	}
+}
+
 func TestKinds(t *testing.T) {
 	var names []string
 	for _, k := range Kinds() {
 		names = append(names, k.Kind.String())
 	}
-	if got := strings.Join(names, " "); got != "action.definition action.runs-using checkout.executed dependabot.version-updates download.executed git.commit-contains git.commit-ref git.commit-tags git.ref-commit package.advisories renovate.manager-enabled repo.action-list repo.allow-forking repo.allowed-actions repo.archived repo.configuration-variables repo.default-token-write repo.environment-configuration-variables repo.environment-protected repo.fork-pr-app-checks repo.fork-pr-run-workflows repo.fork-pr-secrets repo.fork-pr-write-tokens repo.merge-commit-app-checks repo.public repo.pull-request-target-allowed repo.wiki-open request.destination-trusted test.commit test.flag test.list test.repo-flag test.text workflow.definition" {
+	if got := strings.Join(names, " "); got != "action.definition action.runs-using checkout.executed dependabot.version-updates download.executed git.commit-contains git.commit-ref git.commit-tags git.ref-commit package.advisories renovate.manager-enabled repo.action-list repo.allow-forking repo.allowed-actions repo.archived repo.configuration-variables repo.default-token-write repo.environment-configuration-variables repo.environment-protected repo.fork-pr-app-checks repo.fork-pr-run-workflows repo.fork-pr-secrets repo.fork-pr-write-tokens repo.merge-commit-app-checks repo.public repo.pull-request-target-allowed repo.runner-label-trusted repo.wiki-open request.destination-trusted test.commit test.flag test.list test.repo-flag test.text workflow.definition" {
 		t.Errorf("Kinds = %s", got)
 	}
 }

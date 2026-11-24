@@ -1760,7 +1760,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -1811,7 +1811,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -6297,7 +6297,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -6332,7 +6332,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -9156,7 +9156,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -9191,7 +9191,7 @@
       },
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "related": [],
       "evidence": [],
       "condition": {
@@ -21222,6 +21222,22 @@
       "query": {
         "kind": "repo.pull-request-target-allowed",
         "input_path": ".github/workflows/pwn.yml"
+      },
+      "state": "unknown",
+      "reason": "github: answers only the kinds git.*, package.advisories, action.runs-using, action.definition, workflow.definition and, of a named repository, repo.* except repo.pull-request-target-allowed, repo.fork-pr-app-checks and repo.merge-commit-app-checks (the description of each of these kinds in the schema of the facts says why --online does not answer the kind)"
+    },
+    {
+      "query": {
+        "kind": "repo.runner-label-trusted",
+        "runner_label": "linux"
+      },
+      "state": "unknown",
+      "reason": "github: answers only the kinds git.*, package.advisories, action.runs-using, action.definition, workflow.definition and, of a named repository, repo.* except repo.pull-request-target-allowed, repo.fork-pr-app-checks and repo.merge-commit-app-checks (the description of each of these kinds in the schema of the facts says why --online does not answer the kind)"
+    },
+    {
+      "query": {
+        "kind": "repo.runner-label-trusted",
+        "runner_label": "self-hosted"
       },
       "state": "unknown",
       "reason": "github: answers only the kinds git.*, package.advisories, action.runs-using, action.definition, workflow.definition and, of a named repository, repo.* except repo.pull-request-target-allowed, repo.fork-pr-app-checks and repo.merge-commit-app-checks (the description of each of these kinds in the schema of the facts says why --online does not answer the kind)"
