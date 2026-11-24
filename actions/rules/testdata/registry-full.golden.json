@@ -98836,7 +98836,7 @@
         },
         {
           "id": "env-variable-nested",
-          "text": "a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion $[ ], the patterns and the commands of each clause of case, a heredoc that starts inside $( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from the code after -c in single quotes (bash -c 'eval \"$V\"'), where that shell expands the variable",
+          "text": "a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion $[ ], the patterns and the commands of each clause of case, a heredoc that starts inside $( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from code after -c that is not one word in single quotes (bash -c 'eval \"$V\"'\"x\"), where that shell expands the variable (the code after -c of bash and sh in one word in single quotes is read as a script of its own)",
           "finding_kinds": [
             "code-injection.controlled",
             "code-injection.env-variable",
@@ -98851,7 +98851,7 @@
             {
               "input_kind": "workflow",
               "name": "env-variable-nested.yml",
-              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and writes the variable inside a -c in\n#   single quotes of bash.\n# reason: the inner bash expands the variable and eval reads the value as a\n#   command, but the outer script holds no expansion of the variable.\n# cause: the rule does not read the script that another shell reads from a -c\n#   in single quotes.\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: the inner bash expands $ISSUE_TITLE, eval reads echo\n#   $(echo PWNED) and prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: |\n          bash -c 'eval \"echo $ISSUE_TITLE\"'\n",
+              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and writes the variable inside a -c of\n#   bash written as two words in single quotes.\n# reason: the inner bash expands the variable and eval reads the value as a\n#   command, but the outer script holds no expansion of the variable.\n# cause: the rule reads the script that another shell reads from a -c only\n#   when the code is one word in single quotes.\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: the inner bash expands $ISSUE_TITLE, eval reads echo\n#   $(echo PWNED) and prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: |\n          bash -c 'eval \"echo $ISSUE_TITLE\"'' '\n",
               "facts": [
                 {
                   "query": {
@@ -98878,9 +98878,9 @@
                 }
               ],
               "notes": {
-                "situation": "on an opened issue, a step passes the issue's title in the environment variable ISSUE_TITLE and writes the variable inside a -c in single quotes of bash.",
+                "situation": "on an opened issue, a step passes the issue's title in the environment variable ISSUE_TITLE and writes the variable inside a -c of bash written as two words in single quotes.",
                 "reason": "the inner bash expands the variable and eval reads the value as a command, but the outer script holds no expansion of the variable.",
-                "cause": "the rule does not read the script that another shell reads from a -c in single quotes.",
+                "cause": "the rule reads the script that another shell reads from a -c only when the code is one word in single quotes.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "$(echo PWNED)"
@@ -117351,7 +117351,7 @@
         },
         {
           "id": "nested-shell",
-          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)",
+          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)",
           "finding_kinds": [
             "envpath-injection.controlled",
             "envpath-injection.wiki"
@@ -117364,7 +117364,7 @@
             {
               "input_kind": "workflow",
               "name": "nested-shell.yml",
-              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_PATH\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval or bash -c, and python\n#   reads the value from its environment itself.\n# attack-value: github.event.issue.title = \"/tmp/PWNED\"\n# attack-run-behavior: eval and bash -c each run echo \"$T\" >>\n#   \"$GITHUB_PATH\", and python3 prints T to it: each writes the line\n#   /tmp/PWNED to $GITHUB_PATH, and the steps after it get /tmp/PWNED first\n#   in PATH.\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"$T\" >> \"$GITHUB_PATH\"'\n          bash -c 'echo \"$T\" >> \"$GITHUB_PATH\"'\n          python3 -c 'import os; print(\"\" + os.environ[\"T\"])' >> \"$GITHUB_PATH\"\n",
+              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_PATH\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval, nor that of bash -c\n#   written as two words in single quotes, and python reads the value from\n#   its environment itself.\n# attack-value: github.event.issue.title = \"/tmp/PWNED\"\n# attack-run-behavior: eval and bash -c each run echo \"$T\" >>\n#   \"$GITHUB_PATH\", and python3 prints T to it: each writes the line\n#   /tmp/PWNED to $GITHUB_PATH, and the steps after it get /tmp/PWNED first\n#   in PATH.\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"$T\" >> \"$GITHUB_PATH\"'\n          bash -c 'echo \"$T\"'' >> \"$GITHUB_PATH\"'\n          python3 -c 'import os; print(\"\" + os.environ[\"T\"])' >> \"$GITHUB_PATH\"\n",
               "facts": [
                 {
                   "query": {
@@ -117393,7 +117393,7 @@
               "notes": {
                 "situation": "on issues, a run writes the issue's title to $GITHUB_PATH through eval, bash -c and python -c.",
                 "reason": "a todo (the same file): reading what another shell or program writes to the environment file would find it.",
-                "cause": "the tree does not read the code of eval or bash -c, and python reads the value from its environment itself.",
+                "cause": "the tree does not read the code of eval, nor that of bash -c written as two words in single quotes, and python reads the value from its environment itself.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "/tmp/PWNED"
@@ -123573,7 +123573,7 @@
         },
         {
           "id": "nested-shell",
-          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)",
+          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)",
           "finding_kinds": [
             "envvar-injection.controlled",
             "envvar-injection.wiki"
@@ -123586,7 +123586,7 @@
             {
               "input_kind": "workflow",
               "name": "nested-shell.yml",
-              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_ENV\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval or bash -c, and python\n#   reads the value from its environment itself.\n# attack-value: github.event.issue.title = \"x\\nPWNED=1\"\n# attack-run-behavior: eval runs echo \"a=$T\", bash -c runs it with T from\n#   its environment, and python prints a= and T, each appending a=x and\n#   PWNED=1 to $GITHUB_ENV; the runner sets a to x and PWNED to 1 (three\n#   times).\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"a=$T\" >> \"$GITHUB_ENV\"'\n          bash -c 'echo \"a=$T\" >> \"$GITHUB_ENV\"'\n          python3 -c 'import os; print(\"a=\" + os.environ[\"T\"])' >> \"$GITHUB_ENV\"\n",
+              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_ENV\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval, nor that of bash -c\n#   written as two words in single quotes, and python reads the value from\n#   its environment itself.\n# attack-value: github.event.issue.title = \"x\\nPWNED=1\"\n# attack-run-behavior: eval runs echo \"a=$T\", bash -c runs it with T from\n#   its environment, and python prints a= and T, each appending a=x and\n#   PWNED=1 to $GITHUB_ENV; the runner sets a to x and PWNED to 1 (three\n#   times).\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"a=$T\" >> \"$GITHUB_ENV\"'\n          bash -c 'echo \"a=$T\"'' >> \"$GITHUB_ENV\"'\n          python3 -c 'import os; print(\"a=\" + os.environ[\"T\"])' >> \"$GITHUB_ENV\"\n",
               "facts": [
                 {
                   "query": {
@@ -123615,7 +123615,7 @@
               "notes": {
                 "situation": "on issues, a run writes the issue's title to $GITHUB_ENV through eval, bash -c and python -c.",
                 "reason": "a todo (the same file): reading what another shell or program writes to the environment file would find it.",
-                "cause": "the tree does not read the code of eval or bash -c, and python reads the value from its environment itself.",
+                "cause": "the tree does not read the code of eval, nor that of bash -c written as two words in single quotes, and python reads the value from its environment itself.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "x\nPWNED=1"
@@ -138677,7 +138677,7 @@
         },
         {
           "id": "nested-shell",
-          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)",
+          "text": "what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)",
           "finding_kinds": [
             "output-clobbering.controlled",
             "output-clobbering.wiki"
@@ -138690,7 +138690,7 @@
             {
               "input_kind": "workflow",
               "name": "nested-shell.yml",
-              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_OUTPUT\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval or bash -c, and python\n#   reads the value from its environment itself.\n# attack-value: github.event.issue.title = \"x\\nPWNED=1\"\n# attack-run-behavior: the echo that eval runs, the echo that bash -c runs (T\n#   is in its environment) and the print of python3 each write the lines a=x\n#   and PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs a and\n#   PWNED.\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"a=$T\" >> \"$GITHUB_OUTPUT\"'\n          bash -c 'echo \"a=$T\" >> \"$GITHUB_OUTPUT\"'\n          python3 -c 'import os; print(\"a=\" + os.environ[\"T\"])' >> \"$GITHUB_OUTPUT\"\n",
+              "text": "# situation: on issues, a run writes the issue's title to $GITHUB_OUTPUT\n#   through eval, bash -c and python -c.\n# reason: a todo (the same file): reading what another shell or program\n#   writes to the environment file would find it.\n# cause: the tree does not read the code of eval, nor that of bash -c\n#   written as two words in single quotes, and python reads the value from\n#   its environment itself.\n# attack-value: github.event.issue.title = \"x\\nPWNED=1\"\n# attack-run-behavior: the echo that eval runs, the echo that bash -c runs (T\n#   is in its environment) and the print of python3 each write the lines a=x\n#   and PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs a and\n#   PWNED.\non: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          T: ${{ github.event.issue.title }}\n        run: |\n          eval 'echo \"a=$T\" >> \"$GITHUB_OUTPUT\"'\n          bash -c 'echo \"a=$T\"'' >> \"$GITHUB_OUTPUT\"'\n          python3 -c 'import os; print(\"a=\" + os.environ[\"T\"])' >> \"$GITHUB_OUTPUT\"\n",
               "facts": [
                 {
                   "query": {
@@ -138719,7 +138719,7 @@
               "notes": {
                 "situation": "on issues, a run writes the issue's title to $GITHUB_OUTPUT through eval, bash -c and python -c.",
                 "reason": "a todo (the same file): reading what another shell or program writes to the environment file would find it.",
-                "cause": "the tree does not read the code of eval or bash -c, and python reads the value from its environment itself.",
+                "cause": "the tree does not read the code of eval, nor that of bash -c written as two words in single quotes, and python reads the value from its environment itself.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "x\nPWNED=1"

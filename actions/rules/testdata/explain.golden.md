@@ -27979,18 +27979,18 @@
               ISSUE_TITLE: ${{ github.event.issue.title }}
             run: source "$ISSUE_TITLE"
     ```
-- env-variable-nested: a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion \$&#91; ], the patterns and the commands of each clause of case, a heredoc that starts inside \$( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from the code after -c in single quotes (bash -c 'eval "\$V"'), where that shell expands the variable
+- env-variable-nested: a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion \$&#91; ], the patterns and the commands of each clause of case, a heredoc that starts inside \$( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from code after -c that is not one word in single quotes (bash -c 'eval "\$V"'"x"), where that shell expands the variable (the code after -c of bash and sh in one word in single quotes is read as a script of its own)
   - finding kinds: code-injection.controlled, code-injection.env-variable, code-injection.env-variable-wiki, code-injection.wiki
   - disposition: todo (needs: same-file)
   - example: env-variable-nested.yml (workflow, undetected)
     ```yaml
     # situation: on an opened issue, a step passes the issue's title in the
-    #   environment variable ISSUE_TITLE and writes the variable inside a -c in
-    #   single quotes of bash.
+    #   environment variable ISSUE_TITLE and writes the variable inside a -c of
+    #   bash written as two words in single quotes.
     # reason: the inner bash expands the variable and eval reads the value as a
     #   command, but the outer script holds no expansion of the variable.
-    # cause: the rule does not read the script that another shell reads from a -c
-    #   in single quotes.
+    # cause: the rule reads the script that another shell reads from a -c only
+    #   when the code is one word in single quotes.
     # attack-value: github.event.issue.title = "$(echo PWNED)"
     # attack-run-behavior: the inner bash expands $ISSUE_TITLE, eval reads echo
     #   $(echo PWNED) and prints PWNED.
@@ -28004,7 +28004,7 @@
           - env:
               ISSUE_TITLE: ${{ github.event.issue.title }}
             run: |
-              bash -c 'eval "echo $ISSUE_TITLE"'
+              bash -c 'eval "echo $ISSUE_TITLE"'' '
     ```
 - env-variable-runs-argument: a variable of env as an argument of a command that runs the argument as a command or as code, or in an assignment to an integer variable, where the rule's table of commands has no record that the value of a variable was seen to run as code with that command or option: xargs, find -exec, ssh, docker run with sh -c, and the code options of interpreters that the table does not list; and an assignment to a variable that declare -i, typeset -i or local -i gives the integer attribute, whose value bash reads as arithmetic; and the input of a shell or an interpreter that the rule does not read as code: after an option that the table does not declare (bash -o pipefail &lt;&lt;EOF), from a group of commands or a function before a pipe ({ echo "\$V"; } | bash), or of an interpreter that the table does not declare as one that runs its input (node &lt;&lt;EOF)
   - finding kinds: code-injection.controlled, code-injection.env-variable, code-injection.env-variable-wiki, code-injection.wiki
@@ -37232,7 +37232,7 @@
               run-id: ${{ github.event.workflow_run.id }}
           - run: cat tool_dir.txt >> "$GITHUB_PATH"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: envpath-injection.controlled, envpath-injection.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
@@ -37241,8 +37241,9 @@
     #   through eval, bash -c and python -c.
     # reason: a todo (the same file): reading what another shell or program
     #   writes to the environment file would find it.
-    # cause: the tree does not read the code of eval or bash -c, and python
-    #   reads the value from its environment itself.
+    # cause: the tree does not read the code of eval, nor that of bash -c
+    #   written as two words in single quotes, and python reads the value from
+    #   its environment itself.
     # attack-value: github.event.issue.title = "/tmp/PWNED"
     # attack-run-behavior: eval and bash -c each run echo "$T" >>
     #   "$GITHUB_PATH", and python3 prints T to it: each writes the line
@@ -37257,7 +37258,7 @@
               T: ${{ github.event.issue.title }}
             run: |
               eval 'echo "$T" >> "$GITHUB_PATH"'
-              bash -c 'echo "$T" >> "$GITHUB_PATH"'
+              bash -c 'echo "$T"'' >> "$GITHUB_PATH"'
               python3 -c 'import os; print("" + os.environ["T"])' >> "$GITHUB_PATH"
     ```
 - wrapped-tee: tee run through another command or by its path (sudo tee, command tee, /usr/bin/tee): the rule reads tee by its name alone
@@ -40299,7 +40300,7 @@
               X=T
               echo "a=${!X}" >> "$GITHUB_ENV"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: envvar-injection.controlled, envvar-injection.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
@@ -40308,8 +40309,9 @@
     #   through eval, bash -c and python -c.
     # reason: a todo (the same file): reading what another shell or program
     #   writes to the environment file would find it.
-    # cause: the tree does not read the code of eval or bash -c, and python
-    #   reads the value from its environment itself.
+    # cause: the tree does not read the code of eval, nor that of bash -c
+    #   written as two words in single quotes, and python reads the value from
+    #   its environment itself.
     # attack-value: github.event.issue.title = "x\nPWNED=1"
     # attack-run-behavior: eval runs echo "a=$T", bash -c runs it with T from
     #   its environment, and python prints a= and T, each appending a=x and
@@ -40324,7 +40326,7 @@
               T: ${{ github.event.issue.title }}
             run: |
               eval 'echo "a=$T" >> "$GITHUB_ENV"'
-              bash -c 'echo "a=$T" >> "$GITHUB_ENV"'
+              bash -c 'echo "a=$T"'' >> "$GITHUB_ENV"'
               python3 -c 'import os; print("a=" + os.environ["T"])' >> "$GITHUB_ENV"
     ```
 - lastpipe-not-literal: an assignment or an exec in the last command of a pipeline after a shopt -s lastpipe whose option name the script does not write as a literal word (shopt -s "\$o"): bash runs the last command of the pipeline in the shell that runs the pipeline, so the assignment or the exec stays after the pipeline, and the rule reads the last command as a command in a subshell
@@ -45815,7 +45817,7 @@
               vs=$(git tag | grep "^${PREFIX}" | sed "s#^${PREFIX}#v#" | paste -sd , -)
               echo "vs=$vs"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: output-clobbering.controlled, output-clobbering.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
@@ -45824,8 +45826,9 @@
     #   through eval, bash -c and python -c.
     # reason: a todo (the same file): reading what another shell or program
     #   writes to the environment file would find it.
-    # cause: the tree does not read the code of eval or bash -c, and python
-    #   reads the value from its environment itself.
+    # cause: the tree does not read the code of eval, nor that of bash -c
+    #   written as two words in single quotes, and python reads the value from
+    #   its environment itself.
     # attack-value: github.event.issue.title = "x\nPWNED=1"
     # attack-run-behavior: the echo that eval runs, the echo that bash -c runs (T
     #   is in its environment) and the print of python3 each write the lines a=x
@@ -45840,7 +45843,7 @@
               T: ${{ github.event.issue.title }}
             run: |
               eval 'echo "a=$T" >> "$GITHUB_OUTPUT"'
-              bash -c 'echo "a=$T" >> "$GITHUB_OUTPUT"'
+              bash -c 'echo "a=$T"'' >> "$GITHUB_OUTPUT"'
               python3 -c 'import os; print("a=" + os.environ["T"])' >> "$GITHUB_OUTPUT"
     ```
 - lastpipe-not-literal: an assignment or an exec in the last command of a pipeline after a shopt -s lastpipe whose option name the script does not write as a literal word (shopt -s "\$o"): bash runs the last command of the pipeline in the shell that runs the pipeline, so the assignment or the exec stays after the pipeline, and the rule reads the last command as a command in a subshell

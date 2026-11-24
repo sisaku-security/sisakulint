@@ -203,14 +203,14 @@ type fileScan struct {
 // fileCommands reads what the run s writes to $GITHUB_ENV, $GITHUB_OUTPUT
 // and $GITHUB_PATH into s.EnvironmentFileWrites and s.InconclusiveWrites.
 func (c scope) fileCommands(s *Sink) {
-	f := &fileScan{c: c, s: s, script: Masked(s.Value)}
+	f := &fileScan{c: c, s: s, script: s.text()}
 	for i, p := range s.Value.Parts {
 		if p.Expr {
 			f.holes = append(f.holes, shell.Span{Start: p.Span.Start, End: p.Span.End})
 			f.holePart = append(f.holePart, i)
 		}
 	}
-	sc := ReadScript(c.scripts, s.Value).Script
+	sc := c.readSink(s).Script
 	f.vis = c.scripts.Visibility(f.script, sc)
 	s.CallsNotRead.Join(f.vis.CallsNotRead())
 	writes := shell.Writes(f.script, sc, shell.WriteOptions{
