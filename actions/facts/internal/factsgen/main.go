@@ -11,9 +11,11 @@
 // and no oneOf of objects, which would change its members by their values.
 // x-value is the schema of its value: a boolean, a string, an integer, a
 // member with an x-go-type, or an array of these (minItems and uniqueItems
-// on an array change no Go type, and are taken). x-provider says where it comes from. x-assume, on a kind not from
-// the API, is the value assumed when nothing else answers, and why:
-// {"value": ..., "reason": ...}, the value fitting x-value.
+// on an array change no Go type, and are taken). x-provider says where it
+// comes from. x-assume, on a kind not from the API, is the answer with
+// which the findings of the false positive forms of the kind hold, and
+// when to write the other answer: {"value": ..., "reason": ...}, the value
+// fitting x-value.
 package main
 
 import (

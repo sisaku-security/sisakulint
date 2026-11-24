@@ -322,9 +322,12 @@ func readSelfHosted(t *testing.T, stdout string) selfHostedReport {
 // reported; an answer of --fact or a file of facts decides the condition.
 func TestUnknownFactsConditional(t *testing.T) {
 	dir := selfHostedRepo(t)
-	def := run(t, args("--root", dir))
+	with := func(a ...string) Env {
+		return args(append([]string{"--root", dir, "--rule", "self-hosted-runner"}, a...)...)
+	}
+	def := run(t, with())
 	got := readSelfHosted(t, def.stdout)
-	if def.code&int(lint.ConfirmedBit) != 0 || def.code&int(lint.UndecidedBit) == 0 || got.assumedSource || got.public != "unknown" {
+	if def.code != int(lint.UndecidedBit) || got.assumedSource || got.public != "unknown" {
 		t.Fatalf("default: exit %d, repo.public %s, stderr %s\n%s", def.code, got.public, def.stderr, def.stdout)
 	}
 	for _, k := range []string{"self-hosted-runner.public", "self-hosted-runner.private"} {
@@ -333,8 +336,8 @@ func TestUnknownFactsConditional(t *testing.T) {
 		}
 	}
 	// an answer of --fact decides the condition
-	priv := run(t, args("--root", dir, "--fact", "repo.public=false", "--fact", "repo.allow-forking=false"))
-	if got := readSelfHosted(t, priv.stdout); len(got.certainty) != 0 {
+	priv := run(t, with("--fact", "repo.public=false", "--fact", "repo.allow-forking=false"))
+	if got := readSelfHosted(t, priv.stdout); len(got.certainty) != 0 || priv.code != 0 {
 		t.Errorf("--fact repo.public=false: exit %d, findings %v\n%s", priv.code, got.certainty, priv.stdout)
 	}
 	// so does a file of facts
@@ -342,15 +345,19 @@ func TestUnknownFactsConditional(t *testing.T) {
 	if err := os.WriteFile(public, []byte(`{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"repo.public"},"state":"found","value":true}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fc := run(t, args("--root", dir, "--facts", public))
-	if got := readSelfHosted(t, fc.stdout); fc.code&int(lint.ConfirmedBit) == 0 || got.certainty["self-hosted-runner.public"] != "confirmed" || got.certainty["self-hosted-runner.private"] != "" {
+	fc := run(t, with("--facts", public))
+	if got := readSelfHosted(t, fc.stdout); fc.code != int(lint.ConfirmedBit) || got.certainty["self-hosted-runner.public"] != "confirmed" || got.certainty["self-hosted-runner.private"] != "" {
 		t.Errorf("--facts with true: exit %d, findings %v\n%s", fc.code, got.certainty, fc.stdout)
 	}
 	// the cache of a CI: the unknown answer is written, and a run on the
 	// file gives the same report, but where its answers come from
 	cache := filepath.Join(t.TempDir(), "facts.json")
-	first := run(t, args("--root", dir, "--write-facts", cache))
-	second := run(t, args("--root", dir, "--facts", cache, "--write-facts", cache))
+	first := run(t, with("--write-facts", cache))
+	b, err := os.ReadFile(cache)
+	if err != nil || !strings.Contains(string(b), `{"query":{"kind":"repo.public"},"state":"unknown"`) {
+		t.Errorf("--write-facts does not write repo.public unknown: %s %v", b, err)
+	}
+	second := run(t, with("--facts", cache, "--write-facts", cache))
 	if withoutSource(second.stdout) != withoutSource(first.stdout) || second.code != first.code {
 		t.Errorf("the run on the cache differs: exit %d, not %d\n%s\n%s", second.code, first.code, second.stdout, first.stdout)
 	}

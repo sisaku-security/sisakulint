@@ -16,7 +16,8 @@ import (
 var exampleDir = filepath.Join("testdata", "all-rules")
 
 // TestAllRulesExample keeps the example up to date: run with its file of
-// facts and the assumptions (as the CLI), and again with the repository
+// facts and, for the facts the file does not answer, the x-assume values
+// of their kinds (xAssumeAfter), and again with the repository
 // private, its readers forking it and the workflows of pull requests from
 // forks running (privateRepo), the two runs give every kind of
 // finding of All, each confirmed.
@@ -41,7 +42,7 @@ func TestAllRulesExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	for i, r := range []facts.Resolver{worstCase(store), worstCase(privateRepo{store})} { // the facts of the file, then the x-assume values, so that every kind of the example is confirmed
+	for i, r := range []facts.Resolver{xAssumeAfter{store}, xAssumeAfter{privateRepo{store}}} {
 		rep := lint.Run(context.Background(), in, reg, r)
 		if len(rep.Errors) != 0 {
 			t.Fatalf("errors %+v", rep.Errors)
@@ -94,4 +95,25 @@ func (p privateRepo) Resolve(ctx context.Context, q facts.Query) facts.RawAnswer
 		return facts.RawAnswer{State: facts.StateFound, Value: []byte("true")}
 	}
 	return p.r.Resolve(ctx, q)
+}
+
+// xAssumeAfter answers as below does and, where below does not know a
+// fact, by the x-assume value of the fact's kind: the answer with which
+// the findings of the false positive forms of the kind hold. A run of the
+// command does not answer so; the all-rules example answers so, so that
+// every kind of its findings is confirmed without a file of facts that
+// writes each fact of each step and each workflow.
+type xAssumeAfter struct{ below facts.Resolver }
+
+func (x xAssumeAfter) Resolve(ctx context.Context, q facts.Query) facts.RawAnswer {
+	r := facts.Checked(q, x.below.Resolve(ctx, q))
+	if r.State != facts.StateUnknown {
+		return r
+	}
+	for _, i := range facts.Kinds() {
+		if i.Kind == q.Kind() && i.AssumedValue != nil {
+			return facts.RawAnswer{State: facts.StateFound, Value: i.AssumedValue}
+		}
+	}
+	return r
 }

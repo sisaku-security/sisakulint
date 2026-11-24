@@ -2,11 +2,13 @@
 // which commit a ref points to, whether a repository is public, and so on.
 // A rule does not ask GitHub itself; it asks a Resolver about a Query and
 // gets one of three answers: StateFound (with a value), StateAbsent
-// (known not to exist) or StateUnknown (with a reason). Nothing that could not be found out
-// reads as not being there. What no API tells (a setting of a repository)
-// may be assumed, the worst case, by Assume. Each answer says where it
-// comes from (Source: a file of facts, the GitHub API, or an assumption),
-// and a report says so; a file of facts does not keep it.
+// (known not to exist) or StateUnknown (with a reason). Nothing that could
+// not be found out reads as not being there, and nothing that no source
+// answers is given a value: what no API tells (a setting of a repository)
+// is Unknown unless a file of facts or an argument answers it. Each answer
+// says where it comes from (Source: a file of facts, an argument, the
+// GitHub API, or a file of the repository), and a report says so; a file
+// of facts does not keep it.
 //
 // The kinds of facts are a closed set. schema/facts-v0.json (JSON Schema
 // draft 2020-12) is where they are defined, for this package and for the
@@ -33,7 +35,6 @@
 //	store.go      Store, LoadStore, Entry, EncodeFile: the file of facts
 //	resolve.go    First, Recorder
 //	arguments.go  Arguments: the facts given on the command line (--fact)
-//	assume.go     Assumptions, Assume: the x-assume of the kinds, as answers
 //	online.go     OnlineAnswer, OnlineAnswerOf: how the GitHub API source (package github)
 //	              answers each kind
 //	derive.go     what a file of facts answers from its other facts (git.commit-ref), and
@@ -63,7 +64,8 @@
 //	store_test.go    what a file of facts may hold, and how EncodeFile writes one
 //	resolve_test.go  First, Recorder, and a file of facts that replays a run
 //	arguments_test.go  Arguments
-//	assume_test.go   Assumptions, Assume, and repo.wiki-open
+//	kindinfo_test.go  the x-assume values, KindInfo and the queries of the kinds that no API
+//	                 answers or that --online does not ask
 //	derive_test.go   RefName, git.commit-ref derived by a file of facts, and the kinds a file answers
 //	source_test.go   where each answer comes from, kept through First and a Recorder
 //	enum_test.go     every value of State and Provider; a file of facts of every state

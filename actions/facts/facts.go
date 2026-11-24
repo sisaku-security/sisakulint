@@ -68,8 +68,10 @@ type KindInfo struct {
 	Provider    Provider
 	Permission  Permission // of a token, to find it out
 	Description string
-	// AssumedValue is the value Assumptions answers (x-assume), nil when the
-	// kind is not assumed; AssumedReason says why that value.
+	// AssumedValue is the x-assume value of the kind, nil when the kind has
+	// none: the answer with which the findings of the false positive forms
+	// of the kind hold. No run answers a fact with it. AssumedReason says
+	// when to write the other answer.
 	AssumedValue  json.RawMessage
 	AssumedReason string
 }

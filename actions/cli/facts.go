@@ -79,11 +79,21 @@ func (r repoFileFirst) Resolve(ctx context.Context, q facts.Query) facts.RawAnsw
 	return a
 }
 
-// offline answers every fact Unknown: the command asks nothing unless told to.
+// offline answers every fact Unknown: the command asks nothing unless told
+// to. The reason names the sources that can answer the fact: --online
+// answers no fact of some kinds, such as checkout.executed.
 type offline struct{}
 
-func (offline) Resolve(context.Context, facts.Query) facts.RawAnswer {
-	return facts.RawAnswer{State: facts.StateUnknown, Reason: "offline: pass --facts or --online"}
+const (
+	offlineReason      = "offline: pass --facts or --online"
+	offlineNoAPIReason = "offline: pass --facts or --fact; --online does not answer the fact"
+)
+
+func (offline) Resolve(_ context.Context, q facts.Query) facts.RawAnswer {
+	if facts.OnlineAnswerOf(q.Kind()) == facts.OnlineNone {
+		return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineNoAPIReason}
+	}
+	return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineReason}
 }
 
 // parseAPI reads --github-api: an https URL with a host, or an http one

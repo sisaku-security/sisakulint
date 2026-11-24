@@ -107,16 +107,11 @@ func TestArtifactPoisoning(t *testing.T) {
 	}
 }
 
-// TestArtifactPoisoningAssumed: with the assumed values of the facts, the
-// finding is confirmed; with no answer it is conditional; when the files
-// downloaded are read as data, there is none.
-func TestArtifactPoisoningAssumed(t *testing.T) {
+// TestArtifactPoisoningUnknownFacts: with no answer the finding is
+// conditional; when the files downloaded are read as data, there is none.
+func TestArtifactPoisoningUnknownFacts(t *testing.T) {
 	src := "on: " + apOn + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n" + apRead + "    steps:\n      - uses: actions/download-artifact@v4\n        with: " + apWith + "\n      - run: echo done\n"
-	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), worstCase(downloadFacts{}))
-	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConfirmed {
-		t.Errorf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
-	}
-	rep, _, _ = checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), downloadFacts{})
+	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), downloadFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConditional {
 		t.Errorf("not known: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
@@ -145,7 +140,7 @@ func TestArtifactPoisoningIncidents(t *testing.T) {
 		// contents of cmd.sh", the qhelp)
 		{"CodeQL Incorrect Usage", "name: Insecure Workflow\non:\n  workflow_run:\n    workflows: [\"Prev\"]\n    types:\n      - completed\njobs:\n  Download:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n      - uses: dawidd6/action-download-artifact@v2\n        with:\n          name: pr_number\n      - name: Run command\n        run: |\n          sh cmd.sh\n", "artifact-poisoning.executed"},
 	} {
-		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), worstCase(downloadFacts{}))
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), downloadFacts{})
 		var kinds []string
 		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 			kinds = append(kinds, f.Args.KindID().String())
@@ -160,15 +155,15 @@ func TestArtifactPoisoningIncidents(t *testing.T) {
 // under runner.temp, and the finding closes; a written path gets no fix.
 func TestArtifactPoisoningFix(t *testing.T) {
 	src := "on: " + apOn + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n" + apRead + "    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n      - run: npm ci\n"
-	out := applied(t, ArtifactPoisoning, src, worstCase(downloadFacts{}), lint.SafetyReview)
+	out := applied(t, ArtifactPoisoning, src, downloadFacts{}, lint.SafetyReview)
 	if !strings.Contains(out, "          path: ${{ runner.temp }}/artifacts\n") {
 		t.Fatalf("not fixed:\n%s", out)
 	}
-	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(out), worstCase(downloadFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(out), downloadFacts{}); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("after the fix: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
 	withPath := strings.Replace(src, "          github-token: ${{ github.token }}\n", "          github-token: ${{ github.token }}\n          path: dist\n", 1) + "      - run: bash dist/x.sh\n"
-	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(withPath), worstCase(downloadFacts{}))
+	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(withPath), downloadFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Fix != nil || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].NoFix == nil || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].NoFix.Reason != ir.NoFixReasonManual {
 		t.Errorf("a path: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
@@ -182,7 +177,7 @@ func TestArtifactPoisoningZipSlipAndApprovals(t *testing.T) {
 	// runner.temp does not keep its files out of the workspace
 	for _, uses := range []string{"actions/download-artifact@v4.1.0", "actions/download-artifact@0123456789abcdef0123456789abcdef01234567"} {
 		src := "on: " + apOn + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n" + apRead + "    steps:\n      - uses: " + uses + "\n        with: " + apWith + "\n      - run: echo done\n"
-		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), worstCase(downloadFacts{}))
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), downloadFacts{})
 		if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Fix != nil || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].NoFix == nil || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].NoFix.Reason != ir.NoFixReasonManual {
 			t.Errorf("no fix of %s: %+v", uses, rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 		}
@@ -267,7 +262,7 @@ func TestArtifactPoisoningSameRun(t *testing.T) {
 		{"v3 not seen to run", "actions/download-artifact@v3", "      - run: echo done\n", "artifact-poisoning.download"},
 	} {
 		src := "on: pull_request_target\njobs:\n" + build + "  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    permissions: {contents: write}\n    steps:\n      - uses: " + c.download + "\n        with: {name: out}\n" + c.after
-		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), worstCase(downloadFacts{}))
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src), downloadFacts{})
 		if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
 			t.Errorf("%s: %d findings %+v", c.name, len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)), rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 			continue
@@ -295,7 +290,7 @@ func TestArtifactPoisoningSameRunGuard(t *testing.T) {
 	src := func(ref string) string {
 		return "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    permissions: {}\n    steps:\n      - uses: actions/checkout@" + ref + "\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n      - uses: actions/upload-artifact@v4\n        with: {name: out, path: out}\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    permissions: {contents: write}\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n"
 	}
-	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src("v4")), worstCase(downloadFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src("v4")), downloadFacts{}); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("v4: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
 	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(src("0123456789abcdef0123456789abcdef01234567")), downloadFacts{})
@@ -313,7 +308,7 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 		".github/workflows/w.yml":       "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n      - uses: ./.github/actions/up\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    permissions: {contents: write}\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n",
 		".github/actions/up/action.yml": "name: up\ndescription: up\nruns:\n  using: composite\n  steps:\n    - uses: actions/upload-artifact@v4\n      with: {name: out, path: out}\n",
 	}
-	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files, worstCase(downloadFacts{}))
+	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files, downloadFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("composite: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}

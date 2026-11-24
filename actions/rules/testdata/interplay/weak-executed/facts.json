@@ -1,1 +1,1 @@
-{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v4.3.0"},"state":"found","value":{"ref":"refs/tags/v4.3.0","sha":"1111111111111111111111111111111111111111"}}]}
+{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v4.3.0"},"state":"found","value":{"ref":"refs/tags/v4.3.0","sha":"1111111111111111111111111111111111111111"}},{"query":{"kind":"repo.pull-request-target-allowed","input_path":".github/workflows/w.yml"},"state":"found","value":true}]}

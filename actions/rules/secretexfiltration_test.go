@@ -56,38 +56,29 @@ func exfilRun(runsOn, env, run string) map[string]string {
 
 var exfilRules = []lint.Rule{SecretExfiltration}
 
-// TestSecretExfiltrationAssumed: a fixed host and no answer: confirmed on
-// the assumption that the destination is not trusted.
-func TestSecretExfiltrationAssumed(t *testing.T) {
-	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -H "Authorization: Bearer $T" https://api.example.com/x`), worstCase(exfilStore(t)))
-	if want := []string{"untrusted-destination T api.example.com confirmed"}; !slices.Equal(got, want) {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
 // TestSecretExfiltrationTrusted: a pair the file of facts trusts gives
 // nothing; another secret to the same host still gives a finding.
 func TestSecretExfiltrationTrusted(t *testing.T) {
 	files := exfilRun("ubuntu-latest", "", `curl -H "A: $T" -H "B: $U" https://API.example.com/x`)
-	got := exfilResults(t, exfilRules, files, worstCase(exfilStore(t, trusted("t", "api.example.com", true))))
-	if want := []string{"untrusted-destination U api.example.com confirmed"}; !slices.Equal(got, want) {
+	got := exfilResults(t, exfilRules, files, exfilStore(t, trusted("t", "api.example.com", true)))
+	if want := []string{"untrusted-destination U api.example.com conditional"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 	// a named destination
 	named := exfilRun("ubuntu-latest", "", `curl -d "$T" "${{ secrets.UPLOAD_API }}"`)
-	got = exfilResults(t, exfilRules, named, worstCase(exfilStore(t, trusted("T", "${{ secrets.UPLOAD_API }}", true))))
+	got = exfilResults(t, exfilRules, named, exfilStore(t, trusted("T", "${{ secrets.UPLOAD_API }}", true)))
 	if len(got) != 0 {
 		t.Errorf("named, trusted: %q", got)
 	}
-	got = exfilResults(t, exfilRules, named, worstCase(exfilStore(t)))
-	if want := []string{"untrusted-destination T ${{ secrets.upload_api }} confirmed"}; !slices.Equal(got, want) {
+	got = exfilResults(t, exfilRules, named, exfilStore(t))
+	if want := []string{"untrusted-destination T ${{ secrets.upload_api }} conditional"}; !slices.Equal(got, want) {
 		t.Errorf("named: got %q, want %q", got, want)
 	}
 }
 
-// TestSecretExfiltrationNoAssumptions: without the assumption the finding
-// is conditional.
-func TestSecretExfiltrationNoAssumptions(t *testing.T) {
+// TestSecretExfiltrationUnknownFacts: a fixed host and no answer to
+// request.destination-trusted: the finding is conditional.
+func TestSecretExfiltrationUnknownFacts(t *testing.T) {
 	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -H "A: $T" https://api.example.com/x`), exfilStore(t))
 	if want := []string{"untrusted-destination T api.example.com conditional"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
@@ -108,16 +99,16 @@ func TestSecretExfiltrationExclusions(t *testing.T) {
 		`curl -u "admin:$T" http://127.0.0.1:9200/`,
 		`curl -u "admin:$T" "http://[::1]:9200/"`,
 	} {
-		if got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", run), worstCase(exfilStore(t))); len(got) != 0 {
+		if got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", run), exfilStore(t)); len(got) != 0 {
 			t.Errorf("%s: %q", run, got)
 		}
 	}
 	service := wfFile("on: push\njobs:\n  j:\n    runs-on: [self-hosted, linux]\n    services:\n      db:\n        image: postgres\n    steps:\n      - shell: bash\n        env:\n          T: ${{ secrets.T }}\n        run: |\n          curl -u \"admin:$T\" http://db:9200/\n")
-	if got := exfilResults(t, exfilRules, service, worstCase(exfilStore(t))); len(got) != 0 {
+	if got := exfilResults(t, exfilRules, service, exfilStore(t)); len(got) != 0 {
 		t.Errorf("service: %q", got)
 	}
 	self := wfFile("on: push\njobs:\n  j:\n    runs-on: [self-hosted, linux]\n    steps:\n      - shell: bash\n        env:\n          T: ${{ secrets.T }}\n        run: |\n          curl -u \"admin:$T\" http://localhost:9200/\n")
-	if got, want := exfilResults(t, exfilRules, self, worstCase(exfilStore(t))), []string{"untrusted-destination T localhost confirmed"}; !slices.Equal(got, want) {
+	if got, want := exfilResults(t, exfilRules, self, exfilStore(t)), []string{"untrusted-destination T localhost conditional"}; !slices.Equal(got, want) {
 		t.Errorf("self-hosted localhost: got %q, want %q", got, want)
 	}
 }
@@ -125,7 +116,7 @@ func TestSecretExfiltrationExclusions(t *testing.T) {
 // TestSecretExfiltrationUnnamed: a destination with no name of its origin
 // is inconclusive.
 func TestSecretExfiltrationUnnamed(t *testing.T) {
-	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", "URL=$(curl -s https://api.github.com/x | jq -r .url)\ncurl -H \"A: $T\" \"$URL\""), worstCase(exfilStore(t)))
+	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", "URL=$(curl -s https://api.github.com/x | jq -r .url)\ncurl -H \"A: $T\" \"$URL\""), exfilStore(t))
 	if want := []string{"destination-unknown"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -135,7 +126,7 @@ func TestSecretExfiltrationUnnamed(t *testing.T) {
 // request-forgery's alone.
 func TestSecretExfiltrationNoOverlap(t *testing.T) {
 	files := wfFile("on: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    env:\n      T: ${{ secrets.T }}\n    steps:\n      - run: |\n          curl -H \"A: $T\" \"https://${{ github.event.issue.title }}/x\"\n")
-	got := exfilResults(t, []lint.Rule{SecretExfiltration, RequestForgery}, files, worstCase(exfilStore(t)))
+	got := exfilResults(t, []lint.Rule{SecretExfiltration, RequestForgery}, files, exfilStore(t))
 	if want := []string{"request-forgery.credential-host"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -144,8 +135,8 @@ func TestSecretExfiltrationNoOverlap(t *testing.T) {
 // TestSecretExfiltrationToken: the job's token is the secret GITHUB_TOKEN of
 // the fact.
 func TestSecretExfiltrationToken(t *testing.T) {
-	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -H "Authorization: token ${{ github.token }}" https://coveralls.io/api`), worstCase(exfilStore(t)))
-	if want := []string{"untrusted-destination GITHUB_TOKEN coveralls.io confirmed"}; !slices.Equal(got, want) {
+	got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -H "Authorization: token ${{ github.token }}" https://coveralls.io/api`), exfilStore(t))
+	if want := []string{"untrusted-destination GITHUB_TOKEN coveralls.io conditional"}; !slices.Equal(got, want) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -156,16 +147,16 @@ func TestSecretExfiltrationToken(t *testing.T) {
 func TestSecretExfiltrationHostForms(t *testing.T) {
 	// a named host and an attacker's value in the path, through env
 	files := wfFile("on: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    env:\n      T: ${{ secrets.T }}\n      URL: ${{ vars.BASE }}/${{ github.event.issue.title }}\n    steps:\n      - run: |\n          curl -H \"A: $T\" \"$URL\"\n")
-	if got, want := exfilResults(t, []lint.Rule{SecretExfiltration, RequestForgery}, files, worstCase(exfilStore(t))), []string{"untrusted-destination T ${{ vars.base }} confirmed"}; !slices.Equal(got, want) {
+	if got, want := exfilResults(t, []lint.Rule{SecretExfiltration, RequestForgery}, files, exfilStore(t)), []string{"untrusted-destination T ${{ vars.base }} conditional"}; !slices.Equal(got, want) {
 		t.Errorf("a named host with an attacker's path: got %q, want %q", got, want)
 	}
 	// 0.0.0.0 is the runner itself
-	if got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -u "admin:$T" http://0.0.0.0:9200/`), worstCase(exfilStore(t))); len(got) != 0 {
+	if got := exfilResults(t, exfilRules, exfilRun("ubuntu-latest", "", `curl -u "admin:$T" http://0.0.0.0:9200/`), exfilStore(t)); len(got) != 0 {
 		t.Errorf("0.0.0.0: %q", got)
 	}
 	// a named destination is answered whatever the case of its path
 	named := exfilRun("ubuntu-latest", "", `curl -d "$T" "${{ secrets.UPLOAD_API }}"`)
-	if got := exfilResults(t, exfilRules, named, worstCase(exfilStore(t, trusted("T", "${{ secrets.upload_api }}", true)))); len(got) != 0 {
+	if got := exfilResults(t, exfilRules, named, exfilStore(t, trusted("T", "${{ secrets.upload_api }}", true))); len(got) != 0 {
 		t.Errorf("case of the path: %q", got)
 	}
 }
@@ -177,8 +168,8 @@ func TestExfiltrationFingerprintPerStep(t *testing.T) {
 	two := wfFile("on: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n" + step + step)
 	one := wfFile("on: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n" + step)
 	rules := []lint.Rule{SecretExfiltration, RequestForgery}
-	a, _, _ := checkRules(t, rules, two, worstCase(exfilStore(t)))
-	b, _, _ := checkRules(t, rules, one, worstCase(exfilStore(t)))
+	a, _, _ := checkRules(t, rules, two, exfilStore(t))
+	b, _, _ := checkRules(t, rules, one, exfilStore(t))
 	if len(a.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 4 || len(b.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 2 {
 		t.Fatalf("findings: %d, %d", len(a.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)), len(b.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)))
 	}

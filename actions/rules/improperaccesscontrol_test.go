@@ -37,7 +37,7 @@ func TestImproperAccessControl(t *testing.T) {
 		// pull_request_target since 2026-07-20.
 		{"floating v4", wf("    types: [opened, synchronize]\n", "", "        if: "+label+"\n", "actions/checkout@v4", fork), nil},
 	} {
-		rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout, UntrustedCheckoutToctou}, wfFile(c.src), worstCase(nil))
+		rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout, UntrustedCheckoutToctou}, wfFile(c.src), noFacts{})
 		var got []string
 		for _, k := range kindsOf(rep) {
 			got = append(got, k.String())

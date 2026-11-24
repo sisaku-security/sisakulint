@@ -30,7 +30,7 @@ func storeResolver(t *testing.T, path string) func() facts.Resolver {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return func() facts.Resolver { return worstCase(store) }
+	return func() facts.Resolver { return store }
 }
 
 // interplayInputs are the example of every rule, the cases of
@@ -70,7 +70,7 @@ func interplayInputs(t *testing.T) []interplayInput {
 		}
 		for _, e := range ents {
 			if e.IsDir() {
-				ins = append(ins, interplayInput{group + "/" + e.Name(), filepath.Join(dir, e.Name()), func() facts.Resolver { return worstCase(anyRef{commits: true}) }})
+				ins = append(ins, interplayInput{group + "/" + e.Name(), filepath.Join(dir, e.Name()), func() facts.Resolver { return anyRef{commits: true} }})
 			}
 		}
 	}

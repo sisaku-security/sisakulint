@@ -300,7 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ github.event.pages[0].title }}"
-`), worstCase(nil))
+`), noFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("a job that is not run on gollum: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
@@ -331,7 +331,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ github.event.pages[0].title }}" "${{ github.event.issue.title }}"
-`), worstCase(nil))
+`), noFacts{})
 	got := map[string]lint.FindingKindID{}
 	for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 		switch a := f.Args.(type) {

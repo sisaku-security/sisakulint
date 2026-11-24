@@ -33,7 +33,8 @@ type kindCount struct {
 }
 
 // fold is confirmed findings the text shows under one head: the same rule,
-// severity, kind, kind of fix, and reason and note for no fix. Its rows are its findings by what they detect, the most first.
+// severity, kind, kind of fix, and reason and note for no fix. Its rows
+// are its findings by what they detect, the most first.
 type fold struct {
 	rule     lint.RuleID
 	severity lint.Severity

@@ -163,7 +163,7 @@ func TestRepoAndFact(t *testing.T) {
 		t.Error("no facts asked")
 	}
 	for _, f := range rep.Facts {
-		if f.Reason != "" && f.Reason != "offline: pass --facts or --online" {
+		if f.Reason != "" && f.Reason != offlineReason && f.Reason != offlineNoAPIReason {
 			t.Errorf("%s: reason %q", f.Query, f.Reason)
 		}
 	}
