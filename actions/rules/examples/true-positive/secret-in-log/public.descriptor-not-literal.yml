@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets PRIVATE_KEY to the private key out of the secret GCP_SA_KEY,
-#   sets fd to the output of echo 2, and prints PRIVATE_KEY with >&$fd.
+# situation: on push, in a public repository (repo.public true), a step sets
+#   PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, sets fd to
+#   the output of echo 2, and prints PRIVATE_KEY with >&$fd.
 # reason: bash duplicates the descriptor 2, the standard error, so the
 #   private key goes to the log, and the runner does not mask the private
 #   key.

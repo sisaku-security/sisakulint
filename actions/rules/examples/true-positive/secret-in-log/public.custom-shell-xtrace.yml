@@ -1,5 +1,5 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step whose shell: is bash -x {0} assigns a substring of the secret TOKEN.
+# situation: on push, in a public repository (repo.public true), a step whose
+#   shell: is bash -x {0} assigns a substring of the secret TOKEN.
 # reason: bash -x starts the script with the trace on, as set -x does, so
 #   the trace prints the assignment with the substring, which the runner
 #   does not mask.

@@ -192,8 +192,7 @@ func (p *printer) fold(f fold) {
 }
 
 // tail is what a fold, or a finding of it, ends with: the remedy, the
-// facts found out and the assumptions it rests on, the fix, and why
-// there is none.
+// facts found out that it rests on, the fix, and why there is none.
 func (p *printer) tail(f fold, fix *fixLine, found []factLine, verbose bool) {
 	p.line("  remedy: %s", clean(f.remedy))
 	for i, x := range found {
@@ -201,9 +200,6 @@ func (p *printer) tail(f fold, fix *fixLine, found []factLine, verbose bool) {
 			break
 		}
 		p.line("  fact: %s", x.text())
-	}
-	for _, a := range f.assumed {
-		p.line("  assumed: %s (--no-assumptions to drop)", a.text())
 	}
 	if x := fix; x != nil {
 		p.line("  fix (%s): %s  [%s]", x.safety, clean(x.title), applyFlag(x.safety))

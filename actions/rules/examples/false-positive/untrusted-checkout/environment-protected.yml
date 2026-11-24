@@ -2,9 +2,10 @@
 #   head and runs npm ci, in the environment production.
 # reason: the environment production has required reviewers, who approve the
 #   job before it runs (then it is untrusted-checkout-toctou's).
-# cause: the rule takes the environment as one that approves nothing unless
-#   a file of facts says it has required reviewers
-#   (repo.environment-protected is assumed false, the worst case).
+# cause: unless a file of facts or --fact says that the environment has
+#   required reviewers (repo.environment-protected true), the rule reports the
+#   finding. When no source answers repo.environment-protected, the finding is
+#   conditional.
 # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
 # attack-run-behavior: the job waits until a required reviewer of production
 #   approves it; a reviewer who reads the pull request's package.json does

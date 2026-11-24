@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/facts"
@@ -23,7 +22,6 @@ type valueForm uint8
 const (
 	formOne  valueForm = iota // one string; the value given last is the one
 	formList                  // strings: the flag may be given again, the key is a sequence
-	formBool                  // a boolean: the flag takes no value, the key is true or false
 )
 
 // mergeRule is how the values of a key on the command line and in the
@@ -173,20 +171,6 @@ var configurationKeys = []configurationKey{
 			return nil
 		},
 	},
-	{
-		name:  "no-assumptions",
-		form:  formBool,
-		help:  "answer what no file of facts and no API tells (such as whether anyone may edit the wiki) as not known, not by the worst case assumed",
-		merge: mergeReplace,
-		read: func(o *options, _ *configurationKey, s string, _ valueOrigin) error {
-			b, err := strconv.ParseBool(s)
-			if err != nil {
-				return fmt.Errorf("%q is not true or false", s)
-			}
-			o.noAssume = b
-			return nil
-		},
-	},
 }
 
 // givenBy names where the value of k was given, for an error: the flag, or
@@ -283,8 +267,6 @@ func (f keyFlag) Set(s string) error {
 	*f.to = append(*f.to, keyValue{f.key, s, originCommandLine})
 	return nil
 }
-
-func (f keyFlag) IsBoolFlag() bool { return f.key != nil && f.key.form == formBool }
 
 // registerKeys defines on fs a flag for each key, whose values are added
 // to to.
@@ -437,16 +419,6 @@ func keyStrings(k configurationKey, n cst.Node, d scalar.Directives) ([]string, 
 	switch tag := scalar.Resolve(n, d); {
 	case tag == scalar.TagNull:
 		return nil, nil
-	case k.form == formBool:
-		s, err := text(n, scalar.TagBool, "the YAML boolean true or false")
-		if err != nil {
-			return nil, err
-		}
-		b, ok := scalar.Bool(s)
-		if !ok {
-			return nil, errors.New("not the YAML boolean true or false")
-		}
-		return []string{strconv.FormatBool(b)}, nil
 	case k.form == formOne:
 		s, err := text(n, scalar.TagStr, "a string")
 		if err != nil {

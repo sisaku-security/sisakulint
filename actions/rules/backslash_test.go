@@ -7,8 +7,9 @@ import (
 
 // TestBackslashInputName: a workflow whose file name holds a backslash,
 // which no fact can name, is read by every rule without an error, and the
-// findings that would ask a fact of its name hold as the fact's assumed
-// value (two rules once panicked on it).
+// findings that would ask a fact of its name hold as if the fact were true
+// (two rules once panicked on it; see
+// https://github.com/gh-intel/sisakulint/issues/738).
 func TestBackslashInputName(t *testing.T) {
 	rep := runEveryRule(t, map[string]string{
 		`.github/workflows/a\b.yml`: `on: pull_request_target

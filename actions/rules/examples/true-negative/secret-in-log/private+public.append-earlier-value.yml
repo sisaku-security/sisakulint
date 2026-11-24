@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets fd to 1, appends 1 to fd, and prints the private key out of
-#   the secret GCP_SA_KEY to the descriptor whose number fd holds.
+# situation: on push, in a public repository (repo.public true), a step sets
+#   fd to 1, appends 1 to fd, and prints the private key out of the secret
+#   GCP_SA_KEY to the descriptor whose number fd holds.
 # reason: fd holds 11 at the print, and bash writes the print to descriptor
 #   11, which the step does not open, so the log has no part of the secret.
 # attack: anyone signed in to GitHub opens the run's log and reads the

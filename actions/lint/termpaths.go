@@ -113,7 +113,7 @@ var itemNamesWithoutPath = []struct {
 	{nExample, "the example of a declaration, which the JSON of a rule an example catalog shows leaves out"},
 	{nTruePositives, "examples, which the JSON of a rule an example catalog shows leaves out"},
 	{nTrueNegatives, "examples, which the JSON of a rule an example catalog shows leaves out"},
-	{nAssumed, "the assumed value of a kind of fact, which the terms and --explain write and the JSON of a rule does not have"},
+	{nRemovingAnswer, "the answer that removes the finding, of a kind of fact, which the terms and --explain write and the JSON of a rule does not have"},
 	{nFindingOn, "the files of the findings on an example, which the JSON of a rule leaves out with the examples"},
 	{nArguments, "the arguments of a kind, which the JSON of a rule leaves out; an example catalog shows the arguments from data of its own"},
 }

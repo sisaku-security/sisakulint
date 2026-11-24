@@ -34,7 +34,7 @@
 [90m    8 | [0m      - run: echo "${{ github.event.pages[0].title }}"
 [90m      | [0m                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
   remedy: pass it through env and read the variable
-  assumed: repo.wiki-open = true (--no-assumptions to drop)
+  fact: repo.wiki-open = true
   fix (review): move the expressions into the env of the step, and read the variables where they were, quoted as the shell needs (bash and sh)  [--fix=review]
     side effect: The value of the ${{ }} expression is no longer parsed by the program that reads the script (the shell, or the JavaScript runtime of actions/github-script) as part of the script text: characters of the value that the program interpreted before the fix (such as $, `, \, double quotes and line breaks) are taken as plain characters, and a workflow that relied on the program interpreting those characters runs differently.
 

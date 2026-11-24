@@ -212,7 +212,6 @@ if (typeof document !== "undefined") {
     const li = el("li");
     if (c.op === "leaf") {
       li.appendChild(el("code", "leaf", c.text));
-      if (c.assumed) li.appendChild(el("span", "assumed", "assumed"));
       for (const v of ["true", "false", "unknown"]) {
         const b = el("button", "truth", v);
         b.type = "button";

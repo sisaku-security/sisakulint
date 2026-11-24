@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/lint"
 )
 
@@ -20,10 +19,8 @@ import (
 // contract; --format json is.
 func writeLines(w io.Writer, rep lint.Report, in lint.Inputs, reg *lint.Registry, color bool) error {
 	p := &printer{in: in, reg: reg, color: color}
-	known := knownFacts(rep)
-	lookup := func(n facts.InputPath) lint.LookupState { _, s := in.Lookup(n); return s }
 	for _, r := range rep.Findings {
-		p.line("%s %s %s: %s%s", p.place(r.Location), p.paint(severityColor[r.Severity], r.Severity.String()), p.paint(bold, r.KindText()), clean(r.Detected()), p.tags(r, known, lookup))
+		p.line("%s %s %s: %s%s", p.place(r.Location), p.paint(severityColor[r.Severity], r.Severity.String()), p.paint(bold, r.KindText()), clean(r.Detected()), p.tags(r))
 	}
 	for _, f := range rep.QualityFindings {
 		tag := ""
@@ -72,9 +69,9 @@ func (p *printer) place(l lint.Location) string {
 }
 
 // tags are what a line of r adds after what it detects: whether it is
-// conditional, the assumptions it rests on, the flag of its fix,
+// conditional, whether --accept accepts it, the flag of its fix,
 // the aliases it was reached through, and whether its place is not exact.
-func (p *printer) tags(r lint.Finding, known map[string]facts.RawAnswer, lookup func(facts.InputPath) lint.LookupState) string {
+func (p *printer) tags(r lint.Finding) string {
 	var tags []string
 	switch r.Certainty {
 	case lint.CertaintyConditional:
@@ -84,9 +81,6 @@ func (p *printer) tags(r lint.Finding, known map[string]facts.RawAnswer, lookup 
 	}
 	if a := r.Acceptance; a != nil {
 		tags = append(tags, "accepted by --accept: "+clean(a.Reason))
-	}
-	for _, a := range assumedOf(r, known, lookup) {
-		tags = append(tags, "assumed "+a.text())
 	}
 	if r.Fix != nil {
 		k, _ := fixKind(p.reg, r.Rule, r.Fix.KindID) // a kind not in the registry has no safety: review

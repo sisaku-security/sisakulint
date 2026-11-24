@@ -1,86 +1,80 @@
-critical  ai-action-excessive-tools.setting-value             ×1  .github/workflows/agent.yml:34:46
-critical  code-injection.controlled                           ×2 (2 messages)  .github/workflows/all-rules.yml:15:24
-critical  code-injection.wiki                                 ×1  .github/workflows/all-rules.yml:15:56
-critical  envvar-injection.controlled                         ×2 (2 messages)  .github/workflows/all-rules.yml:21:22
-critical  output-clobbering.controlled                        ×1  .github/workflows/all-rules.yml:22:22
-critical  envvar-injection.wiki                               ×1  .github/workflows/all-rules.yml:24:22
-critical  output-clobbering.wiki                              ×1  .github/workflows/all-rules.yml:25:22
-critical  code-injection.controlled                           ×2 (2 messages)  .github/workflows/all-rules.yml:28:27
-critical  untrusted-checkout.executed                         ×1  .github/workflows/all-rules.yml:47:20
-critical  untrusted-checkout.checkout                         ×1  .github/workflows/all-rules.yml:57:20
-critical  artipacked.github-token                             ×1  .github/workflows/all-rules.yml:68:9
-critical  artipacked.token-input                              ×1  .github/workflows/all-rules.yml:70:9
-critical  secrets-in-artifacts.lasting                        ×1  .github/workflows/all-rules.yml:85:17
-critical  secrets-in-artifacts.job-scoped                     ×1  .github/workflows/all-rules.yml:85:17
-critical  code-injection.env-variable                         ×1  .github/workflows/all-rules.yml:110:25
-critical  code-injection.env-variable-wiki                    ×1  .github/workflows/all-rules.yml:110:32
-critical  argument-injection.option                           ×1  .github/workflows/argument.yml:17:45
-critical  argument-injection.wiki                             ×1  .github/workflows/argument.yml:26:45
-critical  bot-conditions.dependabot                           ×1  .github/workflows/bot.yml:9:9
-critical  unsound-contains.superstring                        ×1  .github/workflows/bot.yml:14:13
-critical  untrusted-checkout.checkout                         ×1  .github/workflows/cache.yml:14:16
-critical  artifact-poisoning.executed                         ×1  .github/workflows/download.yml:16:23
-critical  artifact-poisoning.download                         ×1  .github/workflows/download.yml:24:23
-critical  credentials.public                                  ×1  .github/workflows/images.yml:11:19
-critical  set-output-injection.controlled                     ×1  .github/workflows/output.yml:10:20
-critical  request-forgery.credential-host                     ×1  .github/workflows/request.yml:16:71
-critical  request-forgery.action-input                        ×1  .github/workflows/request.yml:27:22
-critical  unmasked-secret-exposure.public                     ×1  .github/workflows/secrets.yml:10:26
-critical  secret-in-log.public                                ×1  .github/workflows/secrets.yml:11:38
-critical  unsecure-commands.controlled                        ×1  .github/workflows/unsecure.yml:12:17
-critical  known-vulnerable-actions.advisory-high              ×1  .github/workflows/vulnerable.yml:12:41
-critical  known-vulnerable-actions.advisory-critical          ×2 (2 messages)  .github/workflows/vulnerable.yml:13:39
-critical  known-vulnerable-actions.advisory-unknown           ×1  .github/workflows/vulnerable.yml:16:42
-high      dangerous-triggers.secrets                          ×8 (6 messages)  .github/workflows/agent.yml:8:5
-high      dangerous-triggers.token-write                      ×6  .github/workflows/agent.yml:8:5
-high      permissions.unwritten                               ×7  .github/workflows/agent.yml:8:5
-high      ai-action-excessive-tools.write-token               ×1  .github/workflows/agent.yml:10:15
-high      ai-action-unrestricted-trigger.any-user             ×2  .github/workflows/agent.yml:14:36
-high      ai-action-unrestricted-trigger.any-bot              ×3  .github/workflows/agent.yml:15:25
-high      ai-action-prompt-injection.prompt                   ×1  .github/workflows/agent.yml:22:42
-high      ai-action-unsafe-sandbox.privileges                 ×1  .github/workflows/agent.yml:23:28
-high      ai-action-unsafe-sandbox.commands                   ×1  .github/workflows/agent.yml:24:20
-high      ai-action-unrestricted-trigger.unchecked            ×1  .github/workflows/agent.yml:28:15
-high      ai-action-prompt-injection.env                      ×1  .github/workflows/agent.yml:30:27
-high      ai-action-excessive-tools.send-network              ×1  .github/workflows/agent.yml:34:21
-high      ai-action-excessive-tools.run-code                  ×2 (2 messages)  .github/workflows/agent.yml:34:21
-high      self-hosted-runner.public                           ×3  .github/workflows/agent.yml:36:15
-high      ai-action-execution-order.later-secrets             ×1  .github/workflows/agent.yml:38:15
-high      ai-action-execution-order.edited-code               ×1  .github/workflows/agent.yml:50:15
-high      ai-action-excessive-tools.auto-mode                 ×1  .github/workflows/agent.yml:68:24
-high      commit-sha.unpinned                                 ×22 (14 messages)  .github/workflows/all-rules.yml:10:32
-high      envpath-injection.controlled                        ×1  .github/workflows/all-rules.yml:31:17
-high      envpath-injection.wiki                              ×1  .github/workflows/all-rules.yml:32:17
-high      dangerous-triggers.token-write                      ×1  .github/workflows/all-rules.yml:62:5
-high      dangerous-triggers.secrets                          ×1  .github/workflows/all-rules.yml:91:5
-high      unsound-contains.substring                          ×1  .github/workflows/bot.yml:12:13
-high      cache-poisoning.writable-job                        ×1  .github/workflows/cache.yml:10:17
-high      cache-poisoning.saved-checkout                      ×1  .github/workflows/cache.yml:18:17
-high      cache-poisoning.attacker-path                       ×1  .github/workflows/cache.yml:22:21
-high      cache-poisoning.attacker-key                        ×1  .github/workflows/cache.yml:23:28
-high      unpinned-images.mutable                             ×2 (2 messages)  .github/workflows/images.yml:8:14
-high      action-list.unlisted-image                          ×1  .github/workflows/images.yml:15:15
-high      secret-exposure.all-secrets                         ×2  .github/workflows/inherit-called.yml:13:16
-high      ai-action-unrestricted-trigger.labeler-token-owner  ×1  .github/workflows/labeled.yml:29:15
-high      dangerous-triggers.secrets                          ×1  .github/workflows/labeler.yml:7:5
-high      permissions.write-all                               ×1  .github/workflows/least-privilege.yml:14:5
-high      secrets-inherit.remote                              ×1  .github/workflows/least-privilege.yml:21:14
-high      secrets-inherit.local                               ×1  .github/workflows/least-privilege.yml:25:14
-high      action-list.unlisted                                ×1  .github/workflows/quality.yml:52:38
-high      commit-sha.unpinned-path-action                     ×1  .github/workflows/quality.yml:62:34
-high      request-forgery.runner-network                      ×1  .github/workflows/request.yml:36:32
-high      unsecure-commands.wiki                              ×1  .github/workflows/unsecure.yml:18:20
-high      known-vulnerable-actions.advisory-medium            ×1  .github/workflows/vulnerable.yml:14:41
-medium    untrusted-checkout-toctou.mutable-ref               ×1  .github/workflows/labeled.yml:18:16
-medium    secret-exfiltration.untrusted-destination           ×1  .github/workflows/request.yml:20:47
-medium    known-vulnerable-actions.advisory-low               ×1  .github/workflows/vulnerable.yml:15:35
-low       unpinned-images.service                             ×1  .github/workflows/images.yml:13:14
-low       action-list.unlisted-service                        ×1  .github/workflows/images.yml:13:14
+critical  ai-action-excessive-tools.setting-value     ×1  .github/workflows/agent.yml:34:46
+critical  code-injection.controlled                   ×2 (2 messages)  .github/workflows/all-rules.yml:15:24
+critical  envvar-injection.controlled                 ×2 (2 messages)  .github/workflows/all-rules.yml:21:22
+critical  output-clobbering.controlled                ×1  .github/workflows/all-rules.yml:22:22
+critical  code-injection.controlled                   ×2 (2 messages)  .github/workflows/all-rules.yml:28:27
+critical  untrusted-checkout.executed                 ×1  .github/workflows/all-rules.yml:47:20
+critical  artipacked.github-token                     ×1  .github/workflows/all-rules.yml:68:9
+critical  artipacked.token-input                      ×1  .github/workflows/all-rules.yml:70:9
+critical  secrets-in-artifacts.lasting                ×1  .github/workflows/all-rules.yml:85:17
+critical  secrets-in-artifacts.job-scoped             ×1  .github/workflows/all-rules.yml:85:17
+critical  code-injection.env-variable                 ×1  .github/workflows/all-rules.yml:111:25
+critical  argument-injection.option                   ×1  .github/workflows/argument.yml:17:45
+critical  artifact-poisoning.executed                 ×1  .github/workflows/download.yml:16:23
+critical  set-output-injection.controlled             ×1  .github/workflows/output.yml:10:20
+critical  request-forgery.credential-host             ×1  .github/workflows/request.yml:16:71
+critical  request-forgery.action-input                ×1  .github/workflows/request.yml:27:22
+critical  unsecure-commands.controlled                ×1  .github/workflows/unsecure.yml:12:17
+critical  known-vulnerable-actions.advisory-high      ×1  .github/workflows/vulnerable.yml:12:41
+critical  known-vulnerable-actions.advisory-critical  ×2 (2 messages)  .github/workflows/vulnerable.yml:13:39
+critical  known-vulnerable-actions.advisory-unknown   ×1  .github/workflows/vulnerable.yml:16:42
+high      dangerous-triggers.secrets                  ×8 (6 messages)  .github/workflows/agent.yml:8:5
+high      ai-action-excessive-tools.write-token       ×1  .github/workflows/agent.yml:10:15
+high      ai-action-unrestricted-trigger.any-user     ×2  .github/workflows/agent.yml:14:36
+high      ai-action-prompt-injection.prompt           ×1  .github/workflows/agent.yml:22:42
+high      ai-action-unsafe-sandbox.privileges         ×1  .github/workflows/agent.yml:23:28
+high      ai-action-unsafe-sandbox.commands           ×1  .github/workflows/agent.yml:24:20
+high      ai-action-unrestricted-trigger.unchecked    ×1  .github/workflows/agent.yml:28:15
+high      ai-action-prompt-injection.env              ×1  .github/workflows/agent.yml:30:27
+high      ai-action-excessive-tools.send-network      ×1  .github/workflows/agent.yml:34:21
+high      ai-action-excessive-tools.run-code          ×2 (2 messages)  .github/workflows/agent.yml:34:21
+high      ai-action-execution-order.later-secrets     ×1  .github/workflows/agent.yml:38:15
+high      ai-action-execution-order.edited-code       ×1  .github/workflows/agent.yml:50:15
+high      ai-action-excessive-tools.auto-mode         ×1  .github/workflows/agent.yml:68:24
+high      commit-sha.unpinned                         ×22 (14 messages)  .github/workflows/all-rules.yml:10:32
+high      envpath-injection.controlled                ×1  .github/workflows/all-rules.yml:31:17
+high      dangerous-triggers.token-write              ×1  .github/workflows/all-rules.yml:62:5
+high      cache-poisoning.writable-job                ×1  .github/workflows/cache.yml:10:17
+high      cache-poisoning.saved-checkout              ×1  .github/workflows/cache.yml:18:17
+high      cache-poisoning.attacker-path               ×1  .github/workflows/cache.yml:22:21
+high      cache-poisoning.attacker-key                ×1  .github/workflows/cache.yml:23:28
+high      unpinned-images.mutable                     ×2 (2 messages)  .github/workflows/images.yml:8:14
+high      action-list.unlisted-image                  ×1  .github/workflows/images.yml:15:15
+high      secret-exposure.all-secrets                 ×2  .github/workflows/inherit-called.yml:13:16
+high      permissions.write-all                       ×1  .github/workflows/least-privilege.yml:14:5
+high      secrets-inherit.remote                      ×1  .github/workflows/least-privilege.yml:21:14
+high      secrets-inherit.local                       ×1  .github/workflows/least-privilege.yml:25:14
+high      action-list.unlisted                        ×1  .github/workflows/quality.yml:52:38
+high      commit-sha.unpinned-path-action             ×1  .github/workflows/quality.yml:62:34
+high      request-forgery.runner-network              ×1  .github/workflows/request.yml:36:32
+high      known-vulnerable-actions.advisory-medium    ×1  .github/workflows/vulnerable.yml:14:41
+medium    known-vulnerable-actions.advisory-low       ×1  .github/workflows/vulnerable.yml:15:35
+low       unpinned-images.service                     ×1  .github/workflows/images.yml:13:14
+low       action-list.unlisted-service                ×1  .github/workflows/images.yml:13:14
 
+conditional   argument-injection.wiki  ×1, 1 unknown  (not in the file of facts)
+conditional   artifact-poisoning.download  ×1, 1 unknown  (not in the file of facts)
+conditional   bot-conditions.dependabot  ×1, 1 unknown  (not in the file of facts)
+conditional   code-injection.env-variable-wiki, code-injection.wiki  ×2, 1 unknown  (not in the file of facts)
+conditional   envvar-injection.wiki  ×1, 1 unknown  (not in the file of facts)
+conditional   output-clobbering.wiki  ×1, 1 unknown  (not in the file of facts)
+conditional   untrusted-checkout.checkout  ×2, 2 unknowns  (not in the file of facts)
+conditional   ai-action-unrestricted-trigger.any-bot, ai-action-unrestricted-trigger.labeler-token-owner  ×4, 2 unknowns  (not in the file of facts)
+conditional   credentials.private, credentials.public  ×2, 1 unknown  (not in the file of facts)
+conditional   dangerous-triggers.secrets, dangerous-triggers.token-write  ×8, 3 unknowns  (not in the file of facts)
+conditional   envpath-injection.wiki  ×1, 1 unknown  (not in the file of facts)
+conditional   permissions.unwritten  ×7, 1 unknown  (not in the file of facts)
+conditional   secret-in-log.private, secret-in-log.public  ×2, 1 unknown  (not in the file of facts)
+conditional   self-hosted-runner.private, self-hosted-runner.public  ×6, 2 unknowns  (not in the file of facts)
+conditional   unmasked-secret-exposure.private, unmasked-secret-exposure.public  ×2, 1 unknown  (not in the file of facts)
+conditional   unsecure-commands.wiki  ×1, 1 unknown  (not in the file of facts)
+conditional   unsound-contains.substring, unsound-contains.superstring  ×2, 1 unknown  (not in the file of facts)
+conditional   secret-exfiltration.untrusted-destination  ×1, 1 unknown  (not in the file of facts)
+conditional   untrusted-checkout-toctou.mutable-ref  ×1, 1 unknown  (not in the file of facts)
 inconclusive  23 findings (known-vulnerable-actions)
 inputs        24 read  (every workflow and action.yml under --root)
 
 rules  46 of 47 ran; skipped: impostor-commit
-152 findings: 129 confirmed (critical 37, high 87, medium 3, low 2), 0 conditional, 23 inconclusive
+158 findings: 89 confirmed (critical 24, high 62, medium 1, low 2), 46 conditional, 23 inconclusive
 84 quality findings: the bits do not count quality findings
-bits 9 = 1 (confirmed findings) + 8 (inconclusive findings)
+bits 11 = 1 (confirmed findings) + 2 (conditional findings) + 8 (inconclusive findings)

@@ -1678,7 +1678,7 @@ func ParseScoreRating(s string) (ScoreRating, error) {
 // The values of $defs/certainty, in the order of the schema.
 const (
 	CertaintyUnset Certainty = iota
-	// CertaintyConfirmed: The finding holds: the finding has no condition, or the condition of the finding holds by the answers about facts, assumed values included.
+	// CertaintyConfirmed: The finding holds: the finding has no condition, or the condition of the finding holds with the answers to the facts of the condition.
 	CertaintyConfirmed
 	// CertaintyConditional: The finding holds if the condition of the finding holds; the condition depends on facts or inputs that the run does not know.
 	CertaintyConditional
@@ -1688,7 +1688,7 @@ const (
 
 var certaintyNames = [...]string{"", "confirmed", "conditional", "inconclusive"}
 
-var certaintyDescriptions = [...]string{"", "The finding holds: the finding has no condition, or the condition of the finding holds by the answers about facts, assumed values included.", "The finding holds if the condition of the finding holds; the condition depends on facts or inputs that the run does not know.", "The rule found and examined the place of the finding, and cannot decide whether the finding holds: the value or the content that decides whether the finding holds is outside what the rule reads, and no answer about facts decides whether the finding holds. The finding has no condition, no fix and no reason for no fix."}
+var certaintyDescriptions = [...]string{"", "The finding holds: the finding has no condition, or the condition of the finding holds with the answers to the facts of the condition.", "The finding holds if the condition of the finding holds; the condition depends on facts or inputs that the run does not know.", "The rule found and examined the place of the finding, and cannot decide whether the finding holds: the value or the content that decides whether the finding holds is outside what the rule reads, and no answer about facts decides whether the finding holds. The finding has no condition, no fix and no reason for no fix."}
 
 // description is what v is, as the source of the enumeration says; empty
 // for what is not a value.

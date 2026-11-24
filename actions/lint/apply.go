@@ -31,7 +31,7 @@ type Applied struct {
 // was not there, one there before whose certainty or condition the fixes
 // change, or an internal error is an error. On an error nothing is given,
 // so that no input is written half fixed. The run again answers each
-// fact rep asked as rep has it, Unknown and assumed answers too; a fact
+// fact rep asked as rep has it, Unknown answers too; a fact
 // rep did not ask is what the facts of rep derive, else r's answer. When reg skipped rules, the IRs of each input
 // changed are compared before and after the fixes, and each rule skipped
 // a field of which changes is in Unchecked; those rules do not run.

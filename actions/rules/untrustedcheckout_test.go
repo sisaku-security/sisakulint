@@ -147,16 +147,11 @@ func TestUntrustedCheckout(t *testing.T) {
 	}
 }
 
-// TestUntrustedCheckoutAssumed:
-// by default the assumption makes the finding hold; with the fact false it
-// is not there.
-func TestUntrustedCheckoutAssumed(t *testing.T) {
+// TestUntrustedCheckoutUnknownFacts: with no answer the finding is
+// conditional; with the fact false it is not there.
+func TestUntrustedCheckoutUnknownFacts(t *testing.T) {
 	src := checkoutJob("pull_request_target", "", "actions/checkout@v4", headSHAWith, "      - run: echo done\n")
-	rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), facts.Assume(checkoutFacts{}))
-	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConfirmed {
-		t.Errorf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
-	}
-	rep, _, _ = checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), checkoutFacts{})
+	rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), checkoutFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConditional {
 		t.Errorf("not known: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}

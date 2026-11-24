@@ -79,8 +79,8 @@ func TestPullRequestTargetCondition(t *testing.T) {
 			if f.Certainty != CertaintyConditional {
 				t.Errorf("with no answer: %v, want conditional", f.Certainty)
 			}
-			if rep := run(t, wf(c.on+prTargetSteps), facts.Assume(mapResolver{}), plain); len(rep.FindingsWith(CertaintyConfirmed, CertaintyConditional)) != 1 || rep.FindingsWith(CertaintyConfirmed, CertaintyConditional)[0].Certainty != CertaintyConfirmed {
-				t.Errorf("with the assumption: %+v, want one confirmed", rep.FindingsWith(CertaintyConfirmed, CertaintyConditional))
+			if rep := run(t, wf(c.on+prTargetSteps), mapResolver{allowed: found("true")}, plain); len(rep.FindingsWith(CertaintyConfirmed, CertaintyConditional)) != 1 || rep.FindingsWith(CertaintyConfirmed, CertaintyConditional)[0].Certainty != CertaintyConfirmed {
+				t.Errorf("with true: %+v, want one confirmed", rep.FindingsWith(CertaintyConfirmed, CertaintyConditional))
 			}
 			if rep := run(t, wf(c.on+prTargetSteps), mapResolver{allowed: found("false")}, plain); len(rep.FindingsWith(CertaintyConfirmed, CertaintyConditional)) != 0 || len(rep.Errors) != 0 {
 				t.Errorf("with false: %+v, errors %+v; want none", rep.FindingsWith(CertaintyConfirmed, CertaintyConditional), rep.Errors)

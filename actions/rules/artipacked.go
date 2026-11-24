@@ -246,7 +246,7 @@ var artipackedMeta = lint.Meta{
 				Observed: []lint.Observation{{Date: observedArtifact, Runner: runner, What: "an upload of actions/upload-artifact v4.3.6 with path ., and of v4 with include-hidden-files true and path ., * or ** after actions/checkout v4, had .git/config; one of v4 with path . alone did not, and one with path .git/config did"}},
 				Cites:    []lint.Citation{uploadHidden, checkoutV6}},
 			artifactsTakenPre,
-			{ID: tokenWrites, Text: "the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write, assumed true)",
+			{ID: tokenWrites, Text: "the GITHUB_TOKEN works until the job ends, and the artifact is there before (v4 on): the steps and the post steps after the upload leave the time, even when it is the last step; the token may write: a scope other than id-token written write, or no permissions written and the repository's default writes (repo.default-token-write true)",
 				Observed: []lint.Observation{{Date: observedArtifact, Runner: runner, What: "a token read from .git/config of an artifact downloaded while its job still ran read the private repository then, and was refused after the run"}},
 				Cites:    []lint.Citation{tokenDocs}},
 		},

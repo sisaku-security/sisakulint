@@ -1,5 +1,5 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines a function f that prints the private key out of the secret
+# situation: on push, in a public repository (repo.public true), a step
+#   defines a function f that prints the private key out of the secret
 #   GCP_SA_KEY to the standard error, and calls f with |& before cat.
 # reason: |& sends the standard error of f to cat, cat prints the private
 #   key to the log, and the runner does not mask the private key.

@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # untrusted-checkout.checkout: no step is seen to run the tree, so the
-      # finding holds if one does (checkout.executed, assumed true)
+      # finding holds if one does (checkout.executed true)
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -87,11 +87,12 @@ jobs:
       - run: echo after the upload
   deploy:
     # self-hosted-runner.public: a self-hosted runner, if the repository is
-    # public (repo.public, assumed true)
+    # public (repo.public true)
     runs-on: [self-hosted, linux]
     # dangerous-triggers.secrets: issues runs the job with no approval but the
-    # environment's, if it has required reviewers (repo.environment-protected,
-    # assumed false), and it reads a secret; the token writes nothing, as the
+    # environment's, if the environment has required reviewers, and the
+    # finding holds when the environment has none (repo.environment-protected
+    # false); the job reads a secret, and the token writes nothing, as the
     # workflow writes permissions: {} (dangerous-triggers.token-write is the
     # job artifact's, whose permissions write)
     environment: production

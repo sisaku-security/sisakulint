@@ -1,9 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step opens file descriptor 3 to /dev/null, defines a function f that
-#   prints the secret DEPLOY_TOKEN without the first character of the secret
-#   to the file descriptor whose number fd holds, and calls f twice: once
-#   with fd=1 and the standard output of the call sent to /dev/null, and
-#   once with fd=3.
+# situation: on push, in a public repository (repo.public true), a step opens
+#   file descriptor 3 to /dev/null, defines a function f that prints the
+#   secret DEPLOY_TOKEN without the first character of the secret to the file
+#   descriptor whose number fd holds, and calls f twice: once with fd=1 and
+#   the standard output of the call sent to /dev/null, and once with fd=3.
 # reason: at each call the print goes to /dev/null, so the step prints no
 #   part of the secret.
 # attack: anyone who can read the run opens the log of the run and reads

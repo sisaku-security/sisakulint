@@ -1,8 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets fd to 2, runs declare fd=4 with a redirect >&4, where the
-#   descriptor 4 is not open, goes on when it fails (|| true), and prints the
-#   private key out of the secret GCP_SA_KEY to the descriptor whose number
-#   fd holds.
+# situation: on push, in a public repository (repo.public true), a step sets
+#   fd to 2, runs declare fd=4 with a redirect >&4, where the descriptor 4 is
+#   not open, goes on when it fails (|| true), and prints the private key out
+#   of the secret GCP_SA_KEY to the descriptor whose number fd holds.
 # reason: the redirect of declare fails, so bash does not run declare, fd
 #   holds 2, the print goes to the standard error, which is the log, and the
 #   runner does not mask the private key.

@@ -1,8 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step runs in the background (&), with no wait, a subshell that sleeps 5
-#   seconds and then writes P= and the secret DEPLOY_TOKEN without the first
-#   character of the secret to $GITHUB_ENV; the shell of the script ends
-#   before the write; a later step runs.
+# situation: on push, in a public repository (repo.public true), a step runs
+#   in the background (&), with no wait, a subshell that sleeps 5 seconds and
+#   then writes P= and the secret DEPLOY_TOKEN without the first character of
+#   the secret to $GITHUB_ENV; the shell of the script ends before the write;
+#   a later step runs.
 # reason: a write that the background command makes after the shell of the
 #   script ends does not reach the steps after the step (seen on the runner
 #   on 2026-11-17), so the header of the later step prints no P.

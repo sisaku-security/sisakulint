@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step takes clientId and clientSecret out of the JSON secret
-#   AZURE_CREDENTIALS into its env.
+# situation: on push, in a public repository (repo.public true), a step takes
+#   clientId and clientSecret out of the JSON secret AZURE_CREDENTIALS into
+#   its env.
 # reason: the runner masks AZURE_CREDENTIALS whole, not the values fromJSON
 #   takes out of it, and prints the step's env in its header before it
 #   runs, so the client secret is in the log as it is.

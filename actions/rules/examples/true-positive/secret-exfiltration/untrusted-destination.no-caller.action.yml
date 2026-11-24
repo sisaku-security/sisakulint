@@ -3,9 +3,9 @@
 #   no file of facts answers for the pair of GITHUB_TOKEN and coveralls.io.
 # reason: the request carries the token of the job to coveralls.io, and
 #   whoever holds the server can use the token while the job runs; the linter
-#   does not know whether the repository trusts the host with the token, and
-#   assumes not (request.destination-trusted, with the token named
-#   GITHUB_TOKEN).
+#   does not know whether the repository trusts the host with the token, so
+#   the finding is conditional (request.destination-trusted, with the token
+#   named GITHUB_TOKEN).
 # attack: the attacker takes over the server of the destination, by a breach
 #   of the vendor or by registering the domain when the domain lapses.
 # attack-run-behavior: the server, now the attacker's, receives the token

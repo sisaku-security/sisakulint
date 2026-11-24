@@ -31,17 +31,10 @@ func TestParseRequestDestination(t *testing.T) {
 	}
 }
 
-// TestRequestDestinationTrustedAssumption: no answer is the worst case,
-// that the destination is not trusted, marked as assumed.
-func TestRequestDestinationTrustedAssumption(t *testing.T) {
+// TestRequestDestinationTrustedQuery: the query of a pair of a secret and
+// a destination, as a file of facts writes it.
+func TestRequestDestinationTrustedQuery(t *testing.T) {
 	q := RequestDestinationTrusted{Secret: MustSecretName("T"), Destination: MustRequestDestination("api.example.com")}
-	ctx := context.Background()
-	if r := q.Ask(ctx, Assumptions()); r.State != StateFound || r.Value {
-		t.Errorf("assumed %+v, want found false", r)
-	}
-	if raw := Checked(q, Assumptions().Resolve(ctx, q)); !raw.Assumed() {
-		t.Errorf("not assumed: %+v", raw)
-	}
 	b, err := EncodeQuery(q)
 	if err != nil || string(b) != `{"kind":"request.destination-trusted","secret":"T","destination":"api.example.com"}` {
 		t.Errorf("EncodeQuery = %s, %v", b, err)

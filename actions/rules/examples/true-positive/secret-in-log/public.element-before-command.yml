@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, and
-#   prints PRIVATE_KEY with echo after an assignment of an element of an array
-#   before the command word (a[0]=x echo ...).
+# situation: on push, in a public repository (repo.public true), a step sets
+#   PRIVATE_KEY to the private key out of the secret GCP_SA_KEY, and prints
+#   PRIVATE_KEY with echo after an assignment of an element of an array before
+#   the command word (a[0]=x echo ...).
 # reason: bash refuses the assignment of the element before the command word
 #   and runs echo, and the runner does not mask the private key.
 # attack: anyone signed in to GitHub opens the run's log and reads the private

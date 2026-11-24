@@ -18,15 +18,27 @@ import (
 
 const textRepo = "testdata/text/repo"
 
-// runText is the inputs of dir and their report, offline, with the
-// assumptions: what Main has for the text.
+// runText is the inputs of dir and their report, offline, with
+// repo.wiki-open answered true as --fact answers it, so that the finding
+// of gollum is a confirmed fold of one finding.
 func runText(t *testing.T, dir string) (lint.Report, lint.Inputs) {
 	t.Helper()
 	in, err := lint.Enumerate(os.DirFS(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return lint.Run(context.Background(), in, registry(t), facts.Assume(offline{})), in
+	return lint.Run(context.Background(), in, registry(t), wikiOpen{}), in
+}
+
+// wikiOpen answers repo.wiki-open true, as --fact does, and every other
+// fact as offline does.
+type wikiOpen struct{}
+
+func (wikiOpen) Resolve(ctx context.Context, q facts.Query) facts.RawAnswer {
+	if q.Kind() == facts.KindRepoWikiOpen {
+		return facts.RawAnswer{State: facts.StateFound, Value: []byte("true"), Source: facts.SourceArgument}
+	}
+	return offline{}.Resolve(ctx, q)
 }
 
 func TestFoldConfirmed(t *testing.T) {
@@ -61,7 +73,7 @@ func TestFoldConfirmed(t *testing.T) {
 		t.Errorf("the fix of the fold is %+v, want the title of the registry, %q", ci.fix, kind.Title)
 	}
 	wiki := byKind[rules.CodeInjectionWiki{}.KindID()]
-	if wiki == nil || len(wiki.assumed) != 1 || wiki.assumed[0].text() != "repo.wiki-open = true" {
+	if wiki == nil || len(wiki.facts) != 1 || wiki.facts[0].text() != "repo.wiki-open = true" {
 		t.Errorf("the gollum finding does not rest on repo.wiki-open: %+v", wiki)
 	}
 }

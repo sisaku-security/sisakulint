@@ -1,8 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines f, which calls h on the first call of f and calls g on the
-#   second call of f; h sets s to the secret DEPLOY_TOKEN without the first
-#   character of the secret, makes s local with safe, and calls f. g unsets s
-#   and prints "token: " and $s.
+# situation: on push, in a public repository (repo.public true), a step
+#   defines f, which calls h on the first call of f and calls g on the second
+#   call of f; h sets s to the secret DEPLOY_TOKEN without the first character
+#   of the secret, makes s local with safe, and calls f. g unsets s and prints
+#   "token: " and $s.
 # reason: a todo (the same file): in the second call of f, the unset in g
 #   takes away the local that h made, and s holds the value that h set before
 #   h made s local: the token without the first character, which the runner

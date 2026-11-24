@@ -246,13 +246,11 @@ jobs:
 		name      string
 		r         facts.Resolver
 		certainty lint.Certainty
-		assumed   bool
 		none      bool
 	}{
-		{"assumed", facts.Assumptions(), lint.CertaintyConfirmed, true, false},
-		{"not known", nil, lint.CertaintyConditional, false, false},
-		{"open", wikiFact(true), lint.CertaintyConfirmed, false, false},
-		{"closed", wikiFact(false), 0, false, true},
+		{"not known", nil, lint.CertaintyConditional, false},
+		{"open", wikiFact(true), lint.CertaintyConfirmed, false},
+		{"closed", wikiFact(false), 0, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rep, in, _ := checkRules(t, []lint.Rule{CodeInjection}, wfFile(gollum), c.r)
@@ -270,10 +268,10 @@ jobs:
 					t.Errorf("%+v: want %v, with the condition of repo.wiki-open, and of the kind code-injection.wiki", f, c.certainty)
 				}
 			}
-			if len(rep.Facts) != 1 || rep.Facts[0].RawAnswer.Assumed() != c.assumed {
-				t.Errorf("facts %+v, want repo.wiki-open, assumed %v", rep.Facts, c.assumed)
+			if len(rep.Facts) != 1 {
+				t.Errorf("facts %+v, want repo.wiki-open", rep.Facts)
 			}
-			// the report with an assumed fact is what report-v0.json says
+			// the report is what report-v0.json says
 			b, err := rep.MarshalJSON()
 			if err != nil {
 				t.Fatal(err)
@@ -302,7 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ github.event.pages[0].title }}"
-`), facts.Assumptions())
+`), noFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 {
 		t.Errorf("a job that is not run on gollum: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
@@ -333,7 +331,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "${{ github.event.pages[0].title }}" "${{ github.event.issue.title }}"
-`), facts.Assumptions())
+`), noFacts{})
 	got := map[string]lint.FindingKindID{}
 	for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 		switch a := f.Args.(type) {

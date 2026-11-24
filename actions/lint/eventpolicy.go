@@ -84,7 +84,10 @@ func withPullRequestTarget(c *RuleContext, kinds []FindingKindID, d FindingDraft
 		return d.Condition
 	}
 	name, ok := c.input.Name.FactArgument()
-	if !ok { // no fact names the input: the finding holds as the assumed value (true)
+	if !ok {
+		// no fact names the input, so the condition does not ask the fact,
+		// and the finding holds as if the fact were true
+		// (https://github.com/gh-intel/sisakulint/issues/738)
 		return d.Condition
 	}
 	allowed, err := FactEq(facts.RepoPullRequestTargetAllowed{Repo: c.repo, InputPath: name}, true)

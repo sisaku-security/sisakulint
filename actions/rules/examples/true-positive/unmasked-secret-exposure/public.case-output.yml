@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true),
-#   an output of the job `read` is the whole secret TOKEN on the main branch
-#   and the password of the JSON secret DB on other branches; the later job
-#   `print` prints the output.
+# situation: on push, in a public repository (repo.public true), an output of
+#   the job `read` is the whole secret TOKEN on the main branch and the
+#   password of the JSON secret DB on other branches; the later job `print`
+#   prints the output.
 # reason: on a branch other than main, the output has only the password,
 #   which the runner does not mask, so the runner keeps the output and the
 #   job `print` prints the password in the header of its step.

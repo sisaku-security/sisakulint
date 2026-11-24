@@ -19,11 +19,11 @@ import (
 // resolver is where the answers come from: --fact, the files of the
 // repository in fsys that are not inputs (the kinds of the provider
 // repo-file; none without fsys, as for --stdin-name), the file of facts,
-// then GitHub with --online, then the assumptions (the x-assume of the
-// kinds) unless --no-assumptions; with no file and no --online, nothing is
-// asked of a file or of GitHub. The files of the repository come before the
-// file of facts, which may be of an earlier run; what they leave unknown,
-// the file of facts may answer. The FactSources are what a DefaultRun of
+// then GitHub with --online; with no file and no --online, nothing is
+// asked of a file or of GitHub. What none of them answers is not known,
+// and a finding whose condition depends on it is conditional. The files of
+// the repository come before the file of facts, which may be of an earlier
+// run; what they leave unknown, the file of facts may answer. The FactSources are what a DefaultRun of
 // facts reads of them.
 func resolver(o options, getenv func(string) string, fsys fs.FS) (facts.Resolver, lint.FactSources, error) {
 	src := lint.FactSources{Online: o.online, AnsweredKinds: facts.AnsweredKindsOf(o.given)}
@@ -60,10 +60,7 @@ func resolver(o options, getenv func(string) string, fsys fs.FS) (facts.Resolver
 	if o.arguments != nil {
 		r = facts.First(o.arguments, r)
 	}
-	if o.noAssume {
-		return r, src, nil
-	}
-	return facts.Assume(r), src, nil
+	return r, src, nil
 }
 
 // repoFileFirst asks the files of the repository, then rest: an Unknown of
@@ -82,11 +79,23 @@ func (r repoFileFirst) Resolve(ctx context.Context, q facts.Query) facts.RawAnsw
 	return a
 }
 
-// offline answers every fact Unknown: the command asks nothing unless told to.
+// offline answers every fact Unknown: the command asks nothing unless told
+// to. The reason names the sources that can answer a fact of the kind:
+// --online answers no fact of some kinds, such as checkout.executed, and
+// the facts of a repository only with --repo.
 type offline struct{}
 
-func (offline) Resolve(context.Context, facts.Query) facts.RawAnswer {
-	return facts.RawAnswer{State: facts.StateUnknown, Reason: "offline: pass --facts or --online"}
+// offlineReasons are the reasons of offline by how --online answers the
+// facts of the kind (facts.OnlineAnswerOf).
+var offlineReasons = map[facts.OnlineAnswer]string{
+	facts.OnlineNone:                 "offline: pass --facts or --fact (--online answers no fact of the kind)",
+	facts.OnlineAll:                  "offline: pass --facts or --online",
+	facts.OnlineNamedRepository:      "offline: pass --facts or --fact, or --online with --repo",
+	facts.OnlineNamedRepositoryFalse: "offline: pass --facts or --fact, or --online with --repo",
+}
+
+func (offline) Resolve(_ context.Context, q facts.Query) facts.RawAnswer {
+	return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineReasons[facts.OnlineAnswerOf(q.Kind())]}
 }
 
 // parseAPI reads --github-api: an https URL with a host, or an http one

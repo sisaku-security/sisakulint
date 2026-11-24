@@ -94,7 +94,7 @@ var credentialsMeta = lint.Meta{
 			Gains:    []lint.Gain{lint.GainUseRegistryAccount},
 		}},
 		Preconditions: []lint.Precondition{
-			{ID: readableFile, Text: "the workflow file is read by anyone in a public repository (repo.public, assumed true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written", Cites: []lint.Citation{credentialDocs, internalReaders}},
+			{ID: readableFile, Text: "the workflow file is read by anyone in a public repository (repo.public true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written", Cites: []lint.Citation{credentialDocs, internalReaders}},
 			{ID: historyKeeps, Text: "the history keeps the password after the file no longer has it, and one who had access keeps a clone, so only revoking it ends the exposure", Cites: []lint.Citation{collaborators}},
 		},
 	},

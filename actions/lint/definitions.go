@@ -125,10 +125,10 @@ func Definitions() TermDefinitions {
 }
 
 // factKindItems are what the terms say under the kind of fact k: where
-// its facts come from, whether --online answers them, and the value a run
-// assumes when nothing answers.
+// its facts come from, whether --online answers them, and the answer that
+// removes the findings of the false positive forms that name k.
 func factKindItems(k facts.KindInfo) []string {
-	return []string{nProvider.is(k.Provider.String() + ": " + k.Provider.Description()), onlineLines[facts.OnlineAnswerOf(k.Kind)], nAssumed.is(assumedOf(k))}
+	return []string{nProvider.is(k.Provider.String() + ": " + k.Provider.Description()), onlineLines[facts.OnlineAnswerOf(k.Kind)], nRemovingAnswer.is(removingAnswerOf(k))}
 }
 
 // onlineLines are what the terms say of each facts.OnlineAnswer.
@@ -139,13 +139,29 @@ var onlineLines = map[facts.OnlineAnswer]string{
 	facts.OnlineNamedRepositoryFalse: "--online answers a fact of the kind only when the fact names a repository (--repo), and only when the answer is false",
 }
 
-// assumedOf is the value a run assumes for a fact of the kind k, and the
-// reason; none for a kind without an assumed value.
-func assumedOf(k facts.KindInfo) string {
-	if k.AssumedValue == nil {
+// removingAnswerOf is the answer that removes the findings of the false
+// positive forms that name the kind of fact k, and when to write it; none
+// for a kind without x-assume, which no false positive form names.
+func removingAnswerOf(k facts.KindInfo) string {
+	v, ok := removingAnswer(k)
+	if !ok {
 		return "none"
 	}
-	return string(k.AssumedValue) + " (" + k.AssumedReason + ")"
+	return v + " (" + k.AssumedReason + ")"
+}
+
+// removingAnswer is the boolean other than the x-assume value of k, as
+// JSON: the answer with which the findings of the false positive forms
+// that name k do not hold; false for a kind without an x-assume of true
+// or false.
+func removingAnswer(k facts.KindInfo) (string, bool) {
+	switch string(k.AssumedValue) {
+	case "true":
+		return "false", true
+	case "false":
+		return "true", true
+	}
+	return "", false
 }
 
 // valueDefinitions are vs, each with what it is.

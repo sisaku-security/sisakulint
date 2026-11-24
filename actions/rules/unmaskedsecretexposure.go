@@ -80,7 +80,7 @@ var (
 	runLogs             = lint.MustCitation("https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md")
 	logRetention        = lint.MustCitation("https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/data/reusables/actions/about-artifact-log-retention.md")
 
-	readableLogPre = lint.Precondition{ID: readableLog, Text: "anyone signed in to GitHub reads the logs of a public repository (repo.public, assumed true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default", Cites: []lint.Citation{runLogs, logRetention, internalReaders}}
+	readableLogPre = lint.Precondition{ID: readableLog, Text: "anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default", Cites: []lint.Citation{runLogs, logRetention, internalReaders}}
 
 	noUnmaskedIncident = metric(lint.ExploitMaturityUnreported, "no report was found of a value taken out of a secret by fromJSON read in the log of a run (searched 2026-10-14)")
 )

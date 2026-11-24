@@ -53,7 +53,8 @@ func TestValueGroupIDsAreDefs(t *testing.T) {
 }
 
 // TestDefinitionsFactKindItems: each kind of fact says where its facts
-// come from, whether --online answers them, and the assumed value.
+// come from, whether --online answers them, and the answer that removes
+// the finding.
 func TestDefinitionsFactKindItems(t *testing.T) {
 	items := map[string][]string{}
 	for _, g := range Definitions().ValueGroups {
@@ -67,10 +68,10 @@ func TestDefinitionsFactKindItems(t *testing.T) {
 		kind string
 		want []string
 	}{
-		{"repo.public", []string{"provider: repo-setting: ", "--online answers a fact of the kind only when", "assumed value: true ("}},
-		{"repo.allow-forking", []string{"provider: repo-setting: ", "--online answers a fact of the kind only when", "assumed value: none"}},
-		{"git.commit-ref", []string{"provider: github: ", "--online answers the facts of the kind", "assumed value: none"}},
-		{"checkout.executed", []string{"provider: user-supplied: ", "--online does not answer the facts of the kind", "assumed value: true ("}},
+		{"repo.public", []string{"provider: repo-setting: ", "--online answers a fact of the kind only when", "answer that removes the finding: false ("}},
+		{"repo.allow-forking", []string{"provider: repo-setting: ", "--online answers a fact of the kind only when", "answer that removes the finding: none"}},
+		{"git.commit-ref", []string{"provider: github: ", "--online answers the facts of the kind", "answer that removes the finding: none"}},
+		{"checkout.executed", []string{"provider: user-supplied: ", "--online does not answer the facts of the kind", "answer that removes the finding: false ("}},
 	} {
 		got := items[c.kind]
 		if len(got) != len(c.want) {

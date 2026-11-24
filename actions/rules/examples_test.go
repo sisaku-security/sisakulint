@@ -339,8 +339,8 @@ func dependabotExampleAnswer(q facts.Query) facts.RawAnswer {
 	return facts.RawAnswer{State: facts.StateFound, Value: []byte(strconv.FormatBool(v[0]))}
 }
 
-// flipped answers the kinds of facts kinds with the other value than the
-// assumed one, and the rest as variableFacts: what a false positive form's
+// flipped answers the kinds of facts kinds with the answer that removes
+// the finding (the boolean other than the x-assume value), and the rest as variableFacts: what a false positive form's
 // FactKinds say removes it. A kind whose value is not a boolean has no
 // other value, and is answered as the rest.
 type flipped struct {

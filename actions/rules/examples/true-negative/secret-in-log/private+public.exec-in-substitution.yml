@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets x to the output of a $( ) in which exec points the standard
-#   output to /dev/null and then an echo prints the secret GCP_SA_KEY
-#   without the first character of the secret, and prints x.
+# situation: on push, in a public repository (repo.public true), a step sets x
+#   to the output of a $( ) in which exec points the standard output to
+#   /dev/null and then an echo prints the secret GCP_SA_KEY without the first
+#   character of the secret, and prints x.
 # reason: the exec sends the print in the $( ) to /dev/null, so x is empty,
 #   and the log has no part of the secret.
 # attack: anyone signed in to GitHub opens the run's log and reads the

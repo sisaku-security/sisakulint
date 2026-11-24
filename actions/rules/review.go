@@ -155,7 +155,7 @@ func exampleDocument(x ExampleLocation, m attackrun.Marker, runs []lint.ExampleR
 			for _, k := range run.Flipped {
 				ks = append(ks, k.String())
 			}
-			parts = append(parts, "With "+strings.Join(ks, ", ")+" answered the other way than the assumed value, the facts the rule asked:\n")
+			parts = append(parts, "With "+strings.Join(ks, ", ")+" flipped (answered false when the x-assume value of the kind is true, and true otherwise), the facts the rule asked:\n")
 		}
 		lines := run.FactLines()
 		switch {

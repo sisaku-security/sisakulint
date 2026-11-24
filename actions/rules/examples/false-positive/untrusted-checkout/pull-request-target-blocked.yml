@@ -10,9 +10,10 @@
 #   run that a policy does not allow fails with an error; the documents do not
 #   say whether a job of such a run starts before the run fails, and the rule
 #   assumes that no job starts.
-# cause: the rule assumes that a run on pull_request_target starts, unless a
-#   file of facts or --fact says that the Actions policies block the runs
-#   (repo.pull-request-target-allowed is assumed true, the worst case).
+# cause: unless a file of facts or --fact says that the Actions policies block
+#   runs on pull_request_target (repo.pull-request-target-allowed false), the
+#   rule reports the finding. When no file of facts and no --fact answers
+#   repo.pull-request-target-allowed, the finding is conditional.
 # attack-value: the file package.json in the head of the pull request = "{\"scripts\": {\"preinstall\": \"echo PWNED\"}}"
 # attack-run-behavior: the pull request of the attacker triggers
 #   pull_request_target, and the run fails with an error, and no job of the

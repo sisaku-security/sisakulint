@@ -1,8 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines a function w that sets PRIVATE_KEY to the private key out
-#   of the secret GCP_SA_KEY,
-#   runs a chain of functions f0 to f13 in which each function calls the
-#   function before it twice (16,383 calls), calls w, and
+# situation: on push, in a public repository (repo.public true), a step
+#   defines a function w that sets PRIVATE_KEY to the private key out of the
+#   secret GCP_SA_KEY, runs a chain of functions f0 to f13 in which each
+#   function calls the function before it twice (16,383 calls), calls w, and
 #   prints PRIVATE_KEY.
 # reason: the call of w comes after the 4,096 calls of functions that the
 #   rule follows when it reads what the commands of the step print, so the

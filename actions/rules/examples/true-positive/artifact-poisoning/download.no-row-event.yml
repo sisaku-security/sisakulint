@@ -3,10 +3,9 @@
 #   dawidd6/action-download-artifact v3 the artifact named out, from the
 #   newest run of its own workflow into the workspace, and no step after the
 #   download is seen to run the files of the artifact.
-# reason: the search takes the run of a pull request from a fork on any
-#   event of the job; what a run of member has is not documented, and the
-#   rule reports the job as on any other event (the fact download.executed,
-#   assumed true).
+# reason: the search takes the run of a pull request from a fork on any event
+#   of the job; what a run of member has is not documented, and the rule
+#   reports the job as on any other event (the fact download.executed true).
 # attack-value: the file build.sh in the artifact named out, from the fork's pull_request run of the workflow = "echo PWNED\n"
 # attack-run-behavior: the pull request from a fork changes the workflow to
 #   run on pull_request too, and the pull_request run uploads build.sh in

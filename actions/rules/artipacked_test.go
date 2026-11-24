@@ -118,15 +118,11 @@ func TestArtifactGapsOwnCredential(t *testing.T) {
 	}
 }
 
-// TestArtipackedAssumed: unwritten permissions hold on the assumption, are
-// conditional without it, and go with the fact false.
-func TestArtipackedAssumed(t *testing.T) {
+// TestArtipackedUnknownFacts: unwritten permissions are conditional with no
+// answer, and go with the fact false.
+func TestArtipackedUnknownFacts(t *testing.T) {
 	src := artifactJob("", coV4+upHidden+stepNext)
-	rep, _, _ := checkRules(t, []lint.Rule{Artipacked}, wfFile(src), facts.Assume(artifactFacts{}))
-	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConfirmed {
-		t.Errorf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
-	}
-	rep, _, _ = checkRules(t, []lint.Rule{Artipacked}, wfFile(src), artifactFacts{})
+	rep, _, _ := checkRules(t, []lint.Rule{Artipacked}, wfFile(src), artifactFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConditional {
 		t.Errorf("not known: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}

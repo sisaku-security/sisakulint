@@ -167,13 +167,11 @@ func TestApplyFixesReplaysTheFacts(t *testing.T) {
 	}
 }
 
-// TestApplyFixesAssumes: an assumption of the report is the answer in the
+// TestApplyFixesKeepsAnswers: an answer of the report is the answer in the
 // run after the fixes too, as the report has it: given the resolver the
-// report came from, or one
-// that does not assume, a finding the assumption dropped stays dropped.
-// Before, the run again asked r what was assumed, and a resolver that did
-// not assume refused the fixes.
-func TestApplyFixesAssumes(t *testing.T) {
+// report came from, or one that does not know the fact, a finding the
+// answer dropped stays dropped.
+func TestApplyFixesKeepsAnswers(t *testing.T) {
 	closed, _ := FactEq(facts.RepoWikiOpen{}, false)
 	m := meta("closed-wiki")
 	m = asking(m, facts.KindRepoWikiOpen)
@@ -190,21 +188,21 @@ func TestApplyFixesAssumes(t *testing.T) {
 	})
 	in, _ := Enumerate(fstest.MapFS{wfPath: {Data: []byte(twoSteps)}})
 	reg, _ := newRegistry([]Rule{wiki, mark}, true)
-	r := facts.Assume(mapResolver{})
+	r := mapResolver{facts.RepoWikiOpen{}: foundJSON("true")}
 	rep := Run(context.Background(), in, reg, r)
 	for _, f := range rep.FindingsWith(CertaintyConfirmed, CertaintyConditional) {
 		if f.Rule == m.ID {
-			t.Fatalf("the assumption (open) drops the finding on a closed wiki: %+v", f)
+			t.Fatalf("the answer (open) drops the finding on a closed wiki: %+v", f)
 		}
 	}
-	if len(rep.Facts) != 1 || !rep.Facts[0].RawAnswer.Assumed() {
-		t.Fatalf("facts %+v, want repo.wiki-open assumed", rep.Facts)
+	if len(rep.Facts) != 1 || rep.Facts[0].RawAnswer.State != facts.StateFound {
+		t.Fatalf("facts %+v, want repo.wiki-open found", rep.Facts)
 	}
 	if _, err := ApplyFixes(context.Background(), in, reg, r, rep, SafetySafe); err != nil {
 		t.Errorf("with the resolver of the report: %v", err)
 	}
 	if _, err := ApplyFixes(context.Background(), in, reg, mapResolver{}, rep, SafetySafe); err != nil {
-		t.Errorf("with a resolver that does not assume: %v", err)
+		t.Errorf("with a resolver that does not know the fact: %v", err)
 	}
 }
 

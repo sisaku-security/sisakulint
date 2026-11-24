@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets a variable to the private key out of the secret GCP_SA_KEY
-#   with the operator := of a parameter expansion, and prints the variable.
+# situation: on push, in a public repository (repo.public true), a step sets a
+#   variable to the private key out of the secret GCP_SA_KEY with the operator
+#   := of a parameter expansion, and prints the variable.
 # reason: bash assigns the private key to the
 #   variable, which is unset, and the runner does not mask the private key.
 # attack: anyone signed in to GitHub opens the run's log and reads the

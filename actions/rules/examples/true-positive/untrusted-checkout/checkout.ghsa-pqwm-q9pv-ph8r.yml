@@ -16,10 +16,11 @@
 # reason: pull_request_target runs the job with the base repository's token
 #   and secrets, while head.sha is the commit the author of the pull request,
 #   from a fork too, pushed, so the files that the three actions read are the
-#   author's. The finding does not say what runs after the checkout: the linter
-#   assumes that a step after the checkout runs the files of the checkout unless
-#   a file of facts answers otherwise (the fact checkout.executed); here each of
-#   the three actions runs the files of the checkout.
+#   author's. The finding does not say what runs after the checkout: the
+#   finding holds when a step after the checkout runs the files of the
+#   checkout (the fact checkout.executed true), and is conditional when no
+#   file of facts and no --fact answers the fact; here each of the three
+#   actions runs the files of the checkout.
 # attack: the author of a pull request from a fork commits .php-version, a
 #   pyproject.toml whose version of black is a direct URL to a repository of
 #   theirs, and .gemini/.env, and opens the pull request.
