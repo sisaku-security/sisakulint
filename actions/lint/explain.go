@@ -257,7 +257,7 @@ func falsePositiveItems(m Meta, files exampleFiles) []mdItem {
 		if len(f.FactKinds) != 0 {
 			it := mdItem{text: nFactKinds.name + ":"}
 			for _, k := range f.FactKinds {
-				it.sub = append(it.sub, mdItem{text: factKindText(k)})
+				it.sub = append(it.sub, mdItem{text: formFactKindText(k)})
 			}
 			sub = append(sub, it)
 		}
@@ -267,15 +267,16 @@ func falsePositiveItems(m Meta, files exampleFiles) []mdItem {
 	return out
 }
 
-// factKindText is the kind of fact k with its provider and its assumed
-// value (none for a kind without one).
+// factKindText is the kind of fact k with its provider.
 func factKindText(k facts.Kind) string {
+	return md(k.String()) + " (" + nProvider.is(md(kindInfoOf(k).Provider.String())) + ")"
+}
+
+// formFactKindText is the kind of fact k of a false positive form with its
+// provider and the answer that removes the finding of the form.
+func formFactKindText(k facts.Kind) string {
 	i := kindInfoOf(k)
-	assumed := "none"
-	if i.AssumedValue != nil {
-		assumed = string(i.AssumedValue)
-	}
-	return md(k.String()) + " (" + nProvider.is(md(i.Provider.String())) + ", " + nAssumed.is(md(assumed)) + ")"
+	return md(k.String()) + " (" + nProvider.is(md(i.Provider.String())) + ", " + nRemovingAnswer.is(md(removingAnswer(i))) + ")"
 }
 
 // likelihood is the item of the likelihood of b: why it is what it is,

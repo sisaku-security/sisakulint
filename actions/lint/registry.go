@@ -92,9 +92,9 @@ type InconclusiveKind struct {
 // FalsePositiveForm is a form on which the rule reports a finding of one of
 // its kinds, though the consequence of that kind does not occur on the
 // inputs of the form. Disposition is what the rule would need to stop
-// reporting it, a limitation or a todo; FactKinds are the
-// kinds of facts whose answer, other than the assumed value, removes it
-// now. A form has one of the two.
+// reporting it, a limitation or a todo; FactKinds are the kinds of facts
+// whose answer that removes the finding (the boolean other than the
+// x-assume value of the kind) removes it now. A form has one of the two.
 type FalsePositiveForm struct {
 	ID           FalsePositiveFormID
 	Text         string
@@ -660,8 +660,8 @@ func checkUndetectedForms(m Meta) error {
 
 // checkFalsePositiveForms checks that each false positive form has an ID,
 // once, says what it is, names kinds of the rule, each once, and has a
-// Disposition of a limitation or a todo, or FactKinds of an assumed boolean
-// value, each once, but not both.
+// Disposition of a limitation or a todo, or FactKinds with an answer that
+// removes the finding, each once, but not both.
 func checkFalsePositiveForms(m Meta) error {
 	seen := map[FalsePositiveFormID]bool{}
 	for _, f := range m.FalsePositiveForms {
@@ -692,8 +692,8 @@ func checkFalsePositiveForms(m Meta) error {
 			}
 		}
 		for i, k := range f.FactKinds {
-			if !assumedBoolean(k) {
-				return fmt.Errorf("the false positive form %s: %v is not a kind of fact with an assumed boolean value", f.ID, k)
+			if removingAnswer(kindInfoOf(k)) == "none" {
+				return fmt.Errorf("the false positive form %s: %v is not a kind of fact with an answer that removes the finding (an x-assume of true or false)", f.ID, k)
 			}
 			if slices.Contains(f.FactKinds[:i], k) {
 				return fmt.Errorf("the false positive form %s names the fact kind %v twice", f.ID, k)
@@ -701,19 +701,6 @@ func checkFalsePositiveForms(m Meta) error {
 		}
 	}
 	return nil
-}
-
-// assumedBoolean is whether the kind of fact k is answered by an assumed
-// value, true or false: a false positive form can say the other value
-// removes it.
-func assumedBoolean(k facts.Kind) bool {
-	for _, i := range facts.Kinds() {
-		if i.Kind == k {
-			v := string(i.AssumedValue)
-			return v == "true" || v == "false"
-		}
-	}
-	return false
 }
 
 // providerOf is where the kind of fact k comes from.

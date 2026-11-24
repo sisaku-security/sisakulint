@@ -25,7 +25,7 @@ var exampleWhatNames = [...]string{"true-positive", "true-negative", "false-posi
 func (w ExampleWhat) String() string { return exampleWhatNames[w] }
 
 // ExampleRun is a run of an example: with its facts, or with Flipped
-// answered the other way than their assumed values.
+// answered with the answers that remove the finding.
 type ExampleRun struct {
 	Flipped []facts.Kind
 	Added   []AddedAttacker // the attackers the run adds as a run of the linter adds them (RunExampleMarked, RunAdded); none for a run that adds none, and for RunExampleAdded
@@ -36,7 +36,7 @@ type ExampleRun struct {
 // FactLines are the facts the run asked, in the order of Report.Facts
 // (sorted by the query, so that the lines are the same each run), each as
 // <fact> = <answer>: the value found, absent, or unknown; a fact of a kind
-// of Flipped is marked as answered the other way than its assumed value.
+// of Flipped is marked as answered with the answer that removes the finding.
 func (r ExampleRun) FactLines() []string {
 	out := []string{}
 	for _, e := range r.Report.Facts {
@@ -49,7 +49,7 @@ func (r ExampleRun) FactLines() []string {
 		}
 		l := facts.QueryText(e.Query) + " = " + a
 		if slices.Contains(r.Flipped, e.Query.Kind()) {
-			l += " (the other way than its assumed value)"
+			l += " (the answer that removes the finding)"
 		}
 		out = append(out, l)
 	}
@@ -80,8 +80,8 @@ type ExampleCheck struct {
 //   - a true negative gives no finding;
 //   - a false positive form's example gives a finding of one of its kinds,
 //     and none with each of its FactKinds the other way; a form of no
-//     FactKinds whose kinds hold only on facts other than the assumed
-//     values gives it with the kinds' FactKinds the other way, as a true
+//     FactKinds whose kinds hold only on the answers that remove the
+//     finding gives it with the kinds' FactKinds the other way, as a true
 //     positive;
 //   - an undetected form's gives no finding (of its FindingKinds, when it
 //     has them), and another rule's disposition's rule gives one; one of
@@ -257,7 +257,7 @@ func TrueNegativeText(ks ...FindingText) string {
 }
 
 // RunExample runs every rule of r on e, with e's facts, those of the kinds
-// flip answered the other way than their assumed values: the example
+// flip answered with the answers that remove the finding: the example
 // catalog shows what every rule gives on an example.
 func (r *Registry) RunExample(ctx context.Context, e Example, flip []facts.Kind) (ExampleRun, error) {
 	in, err := e.Inputs()
@@ -342,7 +342,7 @@ func (r *Registry) runExample(ctx context.Context, id RuleID, e Example, flip []
 	return one.RunExample(ctx, e, flip)
 }
 
-// flipped answers the kinds with the other value than the assumed one, and
+// flipped answers the kinds with the answer that removes the finding, and
 // the rest as base does.
 type flipped struct {
 	kinds []facts.Kind
