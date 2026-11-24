@@ -16900,11 +16900,11 @@
       "args": {
         "kind_id": "cache-bloat.partial-restore",
         "saves_on": [
-          "push",
-          "pull_request"
+          "pull_request",
+          "push"
         ]
       },
-      "detected": "the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: push, pull_request",
+      "detected": "the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: pull_request, push",
       "consequence": "the content of the older caches stays in each new cache, so the new cache grows and takes longer to restore and to save; when the caches of the repository pass the cache limit, GitHub deletes the caches used least recently",
       "remedy": "save the cache only in runs in which restore-keys restores no older cache (for example, a push run that builds without a restore), or remove restore-keys from the step",
       "related": [],

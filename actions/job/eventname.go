@@ -4,21 +4,20 @@ import (
 	"slices"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/taint"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-// EventNamesOf are the events of w's on, each once, in the order written:
-// every event GitHub runs w on, workflow_call among them. A name GitHub
-// does not know is left out.
+// EventNamesOf are the names of the events of taint.WorkflowEvents of w,
+// each once: every event GitHub runs w on. A called run carries its
+// caller's event, so a workflow on workflow_call runs on every event, and
+// workflow_call is none of them. A name GitHub does not know is left out.
 func EventNamesOf(w *workflow.Workflow) []workflow.EventName {
-	if w == nil || w.On.Status != workflow.Present {
-		return nil
-	}
+	evs, _, _ := taint.WorkflowEvents(w)
 	var out []workflow.EventName
-	for _, ev := range w.On.Value.Events {
-		name, err := workflow.ParseEventName(ev.Name.AsString())
-		if err == nil && !slices.Contains(out, name) {
-			out = append(out, name)
+	for _, e := range evs {
+		if !slices.Contains(out, e.Name()) {
+			out = append(out, e.Name())
 		}
 	}
 	return out

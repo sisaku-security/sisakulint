@@ -8,13 +8,43 @@ import (
 )
 
 func TestEventNamesOf(t *testing.T) {
-	w := parse(t, "on: [push, pull_request, workflow_call, push]\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")
-	want := []workflow.EventName{workflow.EventNamePush, workflow.EventNamePullRequest, workflow.EventNameWorkflowCall}
+	w := parse(t, "on: [push, pull_request, push]\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")
+	want := []workflow.EventName{workflow.EventNamePullRequest, workflow.EventNamePush}
 	if got := EventNamesOf(w); !slices.Equal(got, want) {
 		t.Errorf("%v, want %v", got, want)
 	}
+	// A called run carries its caller's event: every event, never workflow_call.
+	called := EventNamesOf(parse(t, "on: [push, workflow_call]\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n"))
+	if slices.Contains(called, workflow.EventNameWorkflowCall) || !slices.Contains(called, workflow.EventNameIssueComment) {
+		t.Errorf("workflow_call: %v", called)
+	}
 	if got := EventNamesOf(parse(t, "jobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")); len(got) != 0 {
 		t.Errorf("no on: %v", got)
+	}
+}
+
+// TestCalledRunEventName checks that github.event_name of a called run
+// evaluates to its caller's event, never workflow_call.
+func TestCalledRunEventName(t *testing.T) {
+	for _, c := range []struct {
+		cond string
+		want bool
+	}{
+		{"github.event_name == 'workflow_call'", true},
+		{"github.event_name == 'issue_comment'", false},
+		{"github.event_name == 'push'", false},
+	} {
+		w := parse(t, "on: workflow_call\njobs:\n  a:\n    if: ${{ "+c.cond+" }}\n    runs-on: x\n    steps:\n      - run: a\n")
+		j := w.Jobs.Value.Entries[0].Value.Value
+		if got := AlwaysSkipped(w, &j); got != c.want {
+			t.Errorf("%s: skipped %v, want %v", c.cond, got, c.want)
+		}
+	}
+	// pull_request without types runs on its default activity types alone.
+	w := parse(t, "on: pull_request\njobs:\n  a:\n    if: ${{ github.event.action == 'closed' }}\n    runs-on: x\n    steps:\n      - run: a\n")
+	j := w.Jobs.Value.Entries[0].Value.Value
+	if !AlwaysSkipped(w, &j) {
+		t.Errorf("pull_request closed: not skipped")
 	}
 }
 

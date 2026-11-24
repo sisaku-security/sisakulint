@@ -73,11 +73,10 @@ func eventNameOf(n workflow.EventName) runEvent {
 	return runEvent{knows: knowsEventName, name: n}
 }
 
-// calledRun is a run of a called workflow: the event name workflow_call is
-// the mark of such a run in the lists of events of a workflow on
-// workflow_call (job.EventNamesOf, and the names given to taint.EventsAll
-// and taint.Callers.Events), and the run has the event of the run of its
-// caller, which is not known. Of the readings of an if, eventOf and
+// calledRun is a run of a called workflow whose caller's event is not
+// known: the event name workflow_call, which the shared reading of on
+// (taint.WorkflowEvents) never gives, since a called run carries its
+// caller's event, but a list given by a caller may still hold. Of the readings of an if, eventOf and
 // eventNameOf alone read the mark.
 func calledRun() runEvent { return runEvent{knows: knowsNoEvent} }
 
