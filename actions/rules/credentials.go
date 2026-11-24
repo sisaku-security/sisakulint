@@ -61,6 +61,20 @@ func credentialsCVSS(pr lint.Metric[lint.PrivilegesRequired]) lint.CVSS {
 	}
 }
 
+// The kind credentials.configuration-variable comes from a finding of
+// gitsune (gh-intel/gitsune, a penetration test of the GitHub platform on
+// github-emulator): the scenario GTS-S-ad464326fe of its loop, handed over
+// as gh-intel/gh-intel#553. In the scenario, an app installed only on a
+// public repository of an organization read the value of an organization
+// configuration variable (visibility all) through
+// GET /repos/{owner}/{repo}/actions/organization-variables, and the oracle
+// of gitsune recorded the value as disclosed. A replay in the lab on
+// github-emulator 059a18bc gave the same (oracle finding GTS-70495c2911),
+// the app read and wrote the configuration variables of the repository,
+// and the REST API gave only the names of the secrets. The emulator runs no
+// workflow, so the part of the kind about the log of a workflow run rests
+// on the documentation of GitHub (variableConceptDocs), not on gitsune.
+
 // variableCVSS is credentialsCVSS for a password kept in a configuration
 // variable: the value is not in the file, and is read where a workflow
 // run prints the value or from the REST API.
