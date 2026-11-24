@@ -463,7 +463,14 @@ func (v *varCodes) arguments(s *Simple, words []CommandWord, c int, readings []C
 			switch {
 			case o == nil:
 			case holds || !w.Known && strings.ContainsRune(text, '='):
-				readings[i] = o.ValueReading
+				if name != "git" || gitConfigRuns(v.s, s.Words[i], gitOptionLength(text)) {
+					readings[i] = o.ValueReading
+				}
+			case name == "git" && o.Value && i+1 < len(words):
+				if gitConfigRuns(v.s, s.Words[i+1], 0) {
+					readings[i+1] = o.ValueReading
+				}
+				i++
 			case o.Value && i+1 < len(words):
 				j := i + 1
 				if o.Cluster && !o.Joined {
@@ -511,6 +518,74 @@ func (v *varCodes) arguments(s *Simple, words []CommandWord, c int, readings []C
 		readings[i] = e.ValueReading
 	}
 	return e
+}
+
+// gitConfigRuns is whether git may run the value of the configuration
+// that the word w gives to git -c (or --config-env), its key read from the
+// byte skip of its literal prefix on: the key is not literal, the word has
+// an expansion outside quotes (whose words may add another -c), or the key
+// names a program or a command (core.sshCommand, alias.*, *.helper).
+// git -c user.name="$V" sets data only.
+func gitConfigRuns(script string, w Word, skip int) bool {
+	for _, p := range w.Parts {
+		if p.Kind != PartLiteral && p.Quote == QuoteNone {
+			return true
+		}
+	}
+	prefix := literalPrefix(script, w)
+	if skip > len(prefix) {
+		return true
+	}
+	key, _, ok := strings.Cut(prefix[skip:], "=")
+	return !ok || gitKeyRuns(key)
+}
+
+// gitOptionLength is the length of the option in the word text that holds
+// its value too: -ckey=value, --config-env=key=env.
+func gitOptionLength(text string) int {
+	if strings.HasPrefix(text, "--") {
+		return strings.IndexByte(text, '=') + 1
+	}
+	return 2
+}
+
+// gitProgramKeys are the configuration keys, section and last name in
+// lower case, whose value git runs or which make git read code from
+// elsewhere (include.path, core.hooksPath).
+var gitProgramKeys = map[string]bool{
+	"core.sshcommand": true, "core.pager": true, "core.editor": true, "core.fsmonitor": true,
+	"core.hookspath": true, "core.askpass": true, "core.gitproxy": true, "core.alternaterefscommand": true,
+	"core.worktree": true, "sequence.editor": true, "gpg.program": true, "diff.external": true,
+	"interactive.difffilter": true, "uploadpack.packobjectshook": true, "web.browser": true,
+	"include.path": true, "sendemail.smtpserver": true, "sendemail.tocmd": true, "sendemail.cccmd": true,
+	"credential.helper": true,
+}
+
+// gitProgramSections are the sections, in lower case, any of whose keys
+// may name a program or let git run one (alias.x, pager.log,
+// filter.x.smudge, protocol.ext.allow).
+var gitProgramSections = map[string]bool{
+	"alias": true, "pager": true, "filter": true, "includeif": true, "protocol": true,
+	"difftool": true, "mergetool": true, "browser": true, "man": true, "hook": true,
+}
+
+// gitProgramNames are the last names, in lower case, of keys in any
+// section whose value git runs (credential.<url>.helper,
+// diff.<driver>.textconv, remote.<name>.uploadpack).
+var gitProgramNames = map[string]bool{
+	"helper": true, "command": true, "textconv": true, "driver": true, "program": true,
+	"uploadpack": true, "receivepack": true, "proxycommand": true, "cmd": true, "path": true,
+}
+
+// gitKeyRuns is whether git may run the value of the configuration key.
+func gitKeyRuns(key string) bool {
+	section, rest, ok := strings.Cut(key, ".")
+	if !ok || section == "" || strings.HasPrefix(key, "-") {
+		return true
+	}
+	section = strings.ToLower(section)
+	last := strings.ToLower(rest[strings.LastIndex(rest, ".")+1:])
+	return gitProgramSections[section] || gitProgramNames[last] || gitProgramKeys[section+"."+last]
 }
 
 // literalPrefix is the text of the literal parts outside quotes at the

@@ -3,9 +3,8 @@
 #   value of the configuration key user.name.
 # reason: git uses the value of user.name as the name of the author of the
 #   commit, and does not run the value as a program.
-# cause: the rule reads the value of every configuration key that git -c
-#   sets as a program that git runs, as git does for the value of
-#   core.fsmonitor.
+#   The rule reads as code only the value of a key that names a program
+#   (core.sshCommand, core.fsmonitor, alias.*, *.helper).
 # attack-value: github.event.issue.title = "$(echo PWNED)"
 # attack-run-behavior: git commit writes the commit with the author name
 #   $(echo PWNED), and nothing prints PWNED.

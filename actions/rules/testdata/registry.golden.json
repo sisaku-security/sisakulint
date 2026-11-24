@@ -17148,6 +17148,11 @@
           "true_negatives": [
             {
               "input_kind": "workflow",
+              "name": "env-variable.git-config-data.yml",
+              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and gives the variable to git -c as the\n#   value of the configuration key user.name.\n# reason: git uses the value of user.name as the name of the author of the\n#   commit, and does not run the value as a program.\n#   The rule reads as code only the value of a key that names a program\n#   (core.sshCommand, core.fsmonitor, alias.*, *.helper).\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: git commit writes the commit with the author name\n#   $(echo PWNED), and nothing prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: git -c user.name=\"$ISSUE_TITLE\" commit --allow-empty -m x\n"
+            },
+            {
+              "input_kind": "workflow",
               "name": "env-variable.pipe-to-file.yml",
               "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE, and echo writes the variable to the\n#   file title.txt, in a pipeline whose last command is bash.\n# reason: the redirect of echo sends what echo writes to the file, not to\n#   the pipe, so the bash after the pipe reads nothing.\n# attack-value: github.event.issue.title = \"echo PWNED\"\n# attack-run-behavior: echo writes the line echo PWNED to title.txt, and bash\n#   reads an empty input and runs nothing.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: echo \"$ISSUE_TITLE\" > title.txt | bash\n"
             },
@@ -18729,24 +18734,6 @@
               "input_kind": "workflow",
               "name": "lastpipe-not-literal.yml",
               "text": "# situation: on issues opened, a step passes the issue's title in the\n#   environment variable TITLE, turns lastpipe on with shopt -s and the\n#   option name in a variable, sets TITLE to a fixed command in the last\n#   command of a pipeline, and runs TITLE with eval.\n# reason: with lastpipe, bash runs the last command of the pipeline in the\n#   shell that runs the pipeline, so TITLE holds the fixed command when eval\n#   runs, and the title of the issue does not run.\n# cause: the rule follows lastpipe only after shopt -s lastpipe written as\n#   literal words, so the rule reads TITLE as the value of the env.\n# attack-value: github.event.issue.title = \"echo PWNED\"\n# attack-run-behavior: eval runs the fixed command, which prints \"safe\".\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          TITLE: ${{ github.event.issue.title }}\n        run: |\n          o=lastpipe\n          shopt -s \"$o\"\n          true | TITLE=\"echo safe\"\n          eval \"$TITLE\"\n"
-            }
-          ]
-        },
-        {
-          "id": "git-config-value",
-          "text": "a variable inside double quotes given to git -c as the value of a configuration key that does not name a program for git to run, such as git -c user.name=\"$X\" commit: the rule reads the value of every configuration key that git -c sets as a program that git runs, as git does for the value of core.fsmonitor. Without the double quotes, the shell splits the value of the variable into words, and a word of the value can add another -c with a key that names a program, so that form is not a false positive",
-          "finding_kinds": [
-            "code-injection.env-variable"
-          ],
-          "disposition": "todo",
-          "needs": [
-            "same-file"
-          ],
-          "examples": [
-            {
-              "input_kind": "workflow",
-              "name": "git-config-value.yml",
-              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and gives the variable to git -c as the\n#   value of the configuration key user.name.\n# reason: git uses the value of user.name as the name of the author of the\n#   commit, and does not run the value as a program.\n# cause: the rule reads the value of every configuration key that git -c\n#   sets as a program that git runs, as git does for the value of\n#   core.fsmonitor.\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: git commit writes the commit with the author name\n#   $(echo PWNED), and nothing prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: git -c user.name=\"$ISSUE_TITLE\" commit --allow-empty -m x\n"
             }
           ]
         },

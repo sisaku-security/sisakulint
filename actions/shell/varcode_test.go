@@ -64,6 +64,12 @@ var varCodeCases = []varCodeCase{
 	{src: `perl -e "$V"`, reading: CodeReadingCodeArgument, program: "perl", values: perlValues},
 	{src: `ruby -e "$V"`, reading: CodeReadingCodeArgument, program: "ruby", values: perlValues},
 	{src: `git -c core.fsmonitor="$V" status`, reading: CodeReadingCodeArgument, program: "git"},
+	{src: `git -c core.sshCommand="$V" ls-remote ssh://h/r`, reading: CodeReadingCodeArgument, program: "git"},
+	{src: `git -c alias.x="!$V" x`, reading: CodeReadingCodeArgument, program: "git"},
+	{src: `git -c "$V" x`, reading: CodeReadingCodeArgument, program: "git", values: []string{"alias.x=!touch PWNED"}},
+	{src: `git -c user.name=$V x`, reading: CodeReadingCodeArgument, program: "git", values: []string{"y -c alias.x=!touch${IFS}PWNED"}}, // its words add another -c
+	{src: `git -c user.name="$V" commit -m m`, program: "git"},                                                                           // data: git runs no value of user.name
+	{src: `git -c user.email="$V" -c core.quotePath=false status`, program: "git"},
 	{src: `let "$V"`, reading: CodeReadingArithmetic},
 	{src: `printf -v "$V" x`, reading: CodeReadingArithmetic},
 	{src: `test -v "$V"`, reading: CodeReadingArithmetic},
@@ -373,5 +379,20 @@ func TestVariableCodesAssignedElement(t *testing.T) {
 	got := VariableCodes(src, Parse(src))
 	if len(got) != 1 || got[0].Name.String() != "V" || got[0].Reading != CodeReadingArithmetic || !got[0].Bare {
 		t.Errorf("VariableCodes = %v, want V alone", got)
+	}
+}
+
+// TestGitKeyRuns: the git configuration keys whose value git runs.
+func TestGitKeyRuns(t *testing.T) {
+	for key, want := range map[string]bool{
+		"core.sshCommand": true, "core.pager": true, "alias.st": true, "credential.helper": true,
+		"credential.https://x.helper": true, "diff.x.textconv": true, "filter.lfs.smudge": true,
+		"remote.origin.uploadpack": true, "": true, "core": true,
+		"user.name": false, "user.email": false, "core.quotePath": false, "http.extraHeader": false,
+		"safe.directory": false, "init.defaultBranch": false,
+	} {
+		if got := gitKeyRuns(key); got != want {
+			t.Errorf("gitKeyRuns(%q) = %v, want %v", key, got, want)
+		}
 	}
 }
