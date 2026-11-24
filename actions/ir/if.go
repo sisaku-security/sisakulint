@@ -24,12 +24,10 @@ func (x *IR) allIfSites() []*IfSite {
 			}
 		}
 		if w := x.workflow; w != nil {
-			evs := x.ownEventsOn(job.Privileged())
-			// a called workflow's ifs run on its callers' events too, when
-			// they decide them; else as before, on its own alone
-			if got, cov := x.callersOf().Events(x.name, job.Privileged(), false); cov == analysis.CallerCoverageAll {
-				evs = got
-			}
+			// a called workflow's ifs run on its callers' events too: the
+			// worst case of every event when not all of them are among the
+			// inputs, as the taint analysis reads them (taint.Callers.Events)
+			evs := x.callersOf().EventsOr(x.name, job.Privileged(), false, func() []analysis.EventActivity { return x.ownEventsOn(job.Privileged()) })
 			for _, je := range w.Jobs.Value.Entries {
 				if je.Value.Status != workflow.Present {
 					continue
@@ -44,10 +42,7 @@ func (x *IR) allIfSites() []*IfSite {
 			}
 		}
 		if a := x.action; a != nil {
-			evs := taint.EventsAll(job.Privileged())
-			if got, cov := x.callersOf().Events(x.name, job.Privileged(), false); cov == analysis.CallerCoverageAll {
-				evs = got
-			}
+			evs := x.callersOf().EventsOr(x.name, job.Privileged(), false, func() []analysis.EventActivity { return taint.EventsAll(job.Privileged()) })
 			for _, s := range a.Runs.Value.Steps.Value.Items {
 				add(s.If, taint.FilterEventOnly(evs, attacker.StepIf(nil, nil, s.If)), nil, nil)
 			}

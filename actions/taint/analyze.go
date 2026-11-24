@@ -217,6 +217,10 @@ func StepValues(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.
 // workflowScope is the scope of w before a job and a step are known.
 func workflowScope(cl *Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo) scope {
 	c := scope{wf: w, scripts: m, name: name, callers: cl, jobs: map[string]workflow.Job{}}
+	if _, remote := name.Remote(); remote || len(EventsOn(w, valueEventNames())) == 0 {
+		// runs here only when called: past its callers' ifs too
+		c.callerNarrowings = cl.callerNarrowings(name)
+	}
 	if w.On.Status == workflow.Present {
 		_, call := w.On.Value.Event(workflow.EventNameWorkflowCall)
 		_, dispatch := w.On.Value.Event(workflow.EventNameWorkflowDispatch)
@@ -251,7 +255,7 @@ func actionScope(cl *Callers, name calls.Node, evs []analysis.EventActivity, ste
 	s := steps[i]
 	p := attacker.StepIf(nil, nil, s.If)
 	return scope{events: Filter(cl.Table(), evs, p), inputs: true, action: true, before: steps[:i], all: steps, order: order, envs: []workflow.Field[workflow.Map[workflow.String]]{s.Env}, memo: map[envKey]ExprRef{}, scripts: m, name: name, callers: cl,
-		stepNarrowing: runNarrowing(cl.Table(), s, p)}
+		stepNarrowing: runNarrowing(cl.Table(), s, p), callerNarrowings: cl.callerNarrowings(name)}
 }
 
 // runNarrowing is the Narrowing of the if p of s when s runs a script: the
@@ -292,6 +296,10 @@ type scope struct {
 	// one of them narrows is no attacker's
 	jobNarrowings []attacker.Narrowing
 	stepNarrowing attacker.Narrowing
+	// callerNarrowings are those of the ifs of each chain of calls of the
+	// scope's input (Callers.callerNarrowings): the same for each of its
+	// steps.
+	callerNarrowings [][]attacker.Narrowing
 	// anyEvents are the events of on that a run of the step may be of,
 	// whoever starts it, by github.event_name and github.event.action
 	// alone (attacker.EventOnly), and jobAnyEvents those of the job: where
@@ -519,12 +527,21 @@ func (c scope) narrowed(path []expr.PathElem, env int) bool {
 	if len(path) > 0 && expr.EqualName(path[0].Name, "env") {
 		return env == 0 && c.stepNarrowing.NarrowsAnyEvent(path)
 	}
-	return slices.ContainsFunc(c.jobNarrowings, func(n attacker.Narrowing) bool { return n.NarrowsAnyEvent(path) }) || c.stepNarrowing.NarrowsAnyEvent(path)
+	return c.narrowedBy(func(n attacker.Narrowing) bool { return n.NarrowsAnyEvent(path) })
 }
 
 // narrowedOn is narrowed of a reference below github on the event e.
 func (c scope) narrowedOn(e analysis.EventActivity, path []expr.PathElem) bool {
-	return slices.ContainsFunc(c.jobNarrowings, func(n attacker.Narrowing) bool { return n.Narrows(e, path) }) || c.stepNarrowing.Narrows(e, path)
+	return c.narrowedBy(func(n attacker.Narrowing) bool { return n.Narrows(e, path) })
+}
+
+// narrowedBy is whether f holds of a narrowing of the job or of the step,
+// or of one of every chain of calls of the scope's input.
+func (c scope) narrowedBy(f func(attacker.Narrowing) bool) bool {
+	if slices.ContainsFunc(c.jobNarrowings, f) || f(c.stepNarrowing) {
+		return true
+	}
+	return len(c.callerNarrowings) > 0 && !slices.ContainsFunc(c.callerNarrowings, func(ch []attacker.Narrowing) bool { return !slices.ContainsFunc(ch, f) })
 }
 
 // input is what the callers give inputs.<id> of the scope's input on its
