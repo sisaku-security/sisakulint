@@ -25,7 +25,8 @@ var exampleWhatNames = [...]string{"true-positive", "true-negative", "false-posi
 func (w ExampleWhat) String() string { return exampleWhatNames[w] }
 
 // ExampleRun is a run of an example: with its facts, or with Flipped
-// answered with the answers that remove the finding.
+// flipped (answered false when the x-assume value of the kind is true,
+// and true otherwise).
 type ExampleRun struct {
 	Flipped []facts.Kind
 	Added   []AddedAttacker // the attackers the run adds as a run of the linter adds them (RunExampleMarked, RunAdded); none for a run that adds none, and for RunExampleAdded
@@ -36,7 +37,7 @@ type ExampleRun struct {
 // FactLines are the facts the run asked, in the order of Report.Facts
 // (sorted by the query, so that the lines are the same each run), each as
 // <fact> = <answer>: the value found, absent, or unknown; a fact of a kind
-// of Flipped is marked as answered with the answer that removes the finding.
+// of Flipped is marked as flipped.
 func (r ExampleRun) FactLines() []string {
 	out := []string{}
 	for _, e := range r.Report.Facts {
@@ -49,7 +50,7 @@ func (r ExampleRun) FactLines() []string {
 		}
 		l := facts.QueryText(e.Query) + " = " + a
 		if slices.Contains(r.Flipped, e.Query.Kind()) {
-			l += " (the answer that removes the finding)"
+			l += " (flipped)"
 		}
 		out = append(out, l)
 	}
@@ -257,7 +258,7 @@ func TrueNegativeText(ks ...FindingText) string {
 }
 
 // RunExample runs every rule of r on e, with e's facts, those of the kinds
-// flip answered with the answers that remove the finding: the example
+// flip flipped (see flipped): the example
 // catalog shows what every rule gives on an example.
 func (r *Registry) RunExample(ctx context.Context, e Example, flip []facts.Kind) (ExampleRun, error) {
 	in, err := e.Inputs()
@@ -342,7 +343,9 @@ func (r *Registry) runExample(ctx context.Context, id RuleID, e Example, flip []
 	return one.RunExample(ctx, e, flip)
 }
 
-// flipped answers the kinds with the answer that removes the finding, and
+// flipped answers the kinds false when the x-assume value of the kind is
+// true, and true otherwise (the answer that removes the finding of the
+// false positive forms of a kind with an x-assume of true or false), and
 // the rest as base does.
 type flipped struct {
 	kinds []facts.Kind

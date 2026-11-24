@@ -4,8 +4,8 @@
 #   job before it runs.
 # cause: unless a file of facts or --fact says that the environment has
 #   required reviewers (repo.environment-protected true), the rule reports the
-#   finding. When no file of facts and no --fact answers
-#   repo.environment-protected, the finding is conditional.
+#   finding. When no source answers repo.environment-protected, the finding is
+#   conditional.
 # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
 # attack-run-behavior: opening the issue queues the job a for the
 #   environment production, which waits for a required reviewer; until one

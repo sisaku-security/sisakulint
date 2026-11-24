@@ -5,8 +5,8 @@
 #   access, every member of the enterprise for an internal one, read the
 #   log.
 # cause: unless a file of facts or --fact says that the repository is not
-#   public (repo.public false), the rule reports the finding. When no file of
-#   facts and no --fact answers repo.public, the finding is conditional.
+#   public (repo.public false), the rule reports the finding. When no source
+#   answers repo.public, the finding is conditional.
 # attack: anyone without access to the repository tries to read the run's
 #   log to take the client secret.
 # attack-run-behavior: GitHub does not show the log of a private or

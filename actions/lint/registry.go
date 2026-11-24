@@ -692,7 +692,7 @@ func checkFalsePositiveForms(m Meta) error {
 			}
 		}
 		for i, k := range f.FactKinds {
-			if removingAnswer(kindInfoOf(k)) == "none" {
+			if _, ok := removingAnswer(kindInfoOf(k)); !ok {
 				return fmt.Errorf("the false positive form %s: %v is not a kind of fact with an answer that removes the finding (an x-assume of true or false)", f.ID, k)
 			}
 			if slices.Contains(f.FactKinds[:i], k) {

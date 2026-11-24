@@ -113,7 +113,7 @@ func TestExampleRunFactLines(t *testing.T) {
 	want := []string{
 		"repo.default-token-write = true",
 		`action.runs-using repo=actions/checkout ref=v4 = "node24"`,
-		"repo.wiki-open = false (the answer that removes the finding)",
+		"repo.wiki-open = false (flipped)",
 		"repo.archived repo=o/r = absent",
 		"repo.public = unknown",
 	}

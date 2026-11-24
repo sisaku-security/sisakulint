@@ -50409,7 +50409,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -67846,7 +67846,7 @@
             {
               "input_kind": "workflow",
               "name": "environment-protected.yml",
-              "text": "# situation: the job runs on workflow_run in the environment production,\n#   downloads the artifact of the run before it and runs npm ci.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs.\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no file of facts and no --fact answers\n#   repo.environment-protected, the finding is conditional.\n# attack-value: the file package.json in the artifact of the pull request's ci run = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job waits until a required reviewer of production\n#   approves it; a reviewer who sees that the run before it is of a fork's\n#   pull request does not approve, and nothing is downloaded or run.\non:\n  workflow_run:\n    workflows: [ci]\n    types: [completed]\npermissions: {actions: read}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n      - run: npm ci\n",
+              "text": "# situation: the job runs on workflow_run in the environment production,\n#   downloads the artifact of the run before it and runs npm ci.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs.\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no source answers repo.environment-protected, the finding is\n#   conditional.\n# attack-value: the file package.json in the artifact of the pull request's ci run = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job waits until a required reviewer of production\n#   approves it; a reviewer who sees that the run before it is of a fork's\n#   pull request does not approve, and nothing is downloaded or run.\non:\n  workflow_run:\n    workflows: [ci]\n    types: [completed]\npermissions: {actions: read}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n      - run: npm ci\n",
               "facts": [
                 {
                   "query": {
@@ -67966,7 +67966,7 @@
               "notes": {
                 "situation": "the job runs on workflow_run in the environment production, downloads the artifact of the run before it and runs npm ci.",
                 "reason": "the environment production has required reviewers, who approve the job before it runs.",
-                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no file of facts and no --fact answers repo.environment-protected, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no source answers repo.environment-protected, the finding is conditional.",
                 "attack_value": {
                   "carrier": "the file package.json in the artifact of the pull request's ci run",
                   "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
@@ -67993,7 +67993,7 @@
             {
               "input_kind": "workflow",
               "name": "default-token-read.yml",
-              "text": "# situation: the job runs on workflow_run, writes no permissions, downloads\n#   the artifact of the run before it with github.token and runs npm ci.\n# reason: the repository's default token is read, which reads no artifact of\n#   another run.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no file of facts and no\n#   --fact answers repo.default-token-write, the finding is conditional.\n# attack-value: the file package.json in the artifact of the pull request's ci run = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job's github.token is the repository's default,\n#   read, which cannot read the artifacts of another run, so the download\n#   fails and the job stops before npm ci; the preinstall does not run.\non:\n  workflow_run:\n    workflows: [ci]\n    types: [completed]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n      - run: npm ci\n",
+              "text": "# situation: the job runs on workflow_run, writes no permissions, downloads\n#   the artifact of the run before it with github.token and runs npm ci.\n# reason: the repository's default token is read, which reads no artifact of\n#   another run.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no source answers\n#   repo.default-token-write, the finding is conditional.\n# attack-value: the file package.json in the artifact of the pull request's ci run = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job's github.token is the repository's default,\n#   read, which cannot read the artifacts of another run, so the download\n#   fails and the job stops before npm ci; the preinstall does not run.\non:\n  workflow_run:\n    workflows: [ci]\n    types: [completed]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with:\n          run-id: ${{ github.event.workflow_run.id }}\n          github-token: ${{ github.token }}\n      - run: npm ci\n",
               "facts": [
                 {
                   "query": {
@@ -68112,7 +68112,7 @@
               "notes": {
                 "situation": "the job runs on workflow_run, writes no permissions, downloads the artifact of the run before it with github.token and runs npm ci.",
                 "reason": "the repository's default token is read, which reads no artifact of another run.",
-                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no file of facts and no --fact answers repo.default-token-write, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no source answers repo.default-token-write, the finding is conditional.",
                 "attack_value": {
                   "carrier": "the file package.json in the artifact of the pull request's ci run",
                   "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
@@ -76998,7 +76998,7 @@
             {
               "input_kind": "workflow",
               "name": "default-token-read.yml",
-              "text": "# situation: the job writes no permissions, checks out the repository and\n#   uploads the workspace with its hidden files, .git/config with the token\n#   among them.\n# reason: the repository's default token is read, so the token in the\n#   artifact writes nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no file of facts and no\n#   --fact answers repo.default-token-write, the finding is conditional.\n# attack: a reader of the repository's artifacts (anyone, in a public\n#   repository) downloads the artifact through the API while the job still\n#   runs, and takes the token from the line\n#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64\n#   of x-access-token:<token>) of .git/config.\n# attack-run-behavior: the artifact's .git/config holds the job's token, the\n#   repository's default, which is read, so with it the reader can read the\n#   repository but push nothing.\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/upload-artifact@v4\n        with:\n          path: .\n          include-hidden-files: true\n      - run: echo after the upload\n",
+              "text": "# situation: the job writes no permissions, checks out the repository and\n#   uploads the workspace with its hidden files, .git/config with the token\n#   among them.\n# reason: the repository's default token is read, so the token in the\n#   artifact writes nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no source answers\n#   repo.default-token-write, the finding is conditional.\n# attack: a reader of the repository's artifacts (anyone, in a public\n#   repository) downloads the artifact through the API while the job still\n#   runs, and takes the token from the line\n#   http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64\n#   of x-access-token:<token>) of .git/config.\n# attack-run-behavior: the artifact's .git/config holds the job's token, the\n#   repository's default, which is read, so with it the reader can read the\n#   repository but push nothing.\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/upload-artifact@v4\n        with:\n          path: .\n          include-hidden-files: true\n      - run: echo after the upload\n",
               "facts": [
                 {
                   "query": {
@@ -77166,7 +77166,7 @@
               "notes": {
                 "situation": "the job writes no permissions, checks out the repository and uploads the workspace with its hidden files, .git/config with the token among them.",
                 "reason": "the repository's default token is read, so the token in the artifact writes nothing.",
-                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no file of facts and no --fact answers repo.default-token-write, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no source answers repo.default-token-write, the finding is conditional.",
                 "attack": "a reader of the repository's artifacts (anyone, in a public repository) downloads the artifact through the API while the job still runs, and takes the token from the line http.https://github.com/.extraheader (AUTHORIZATION: basic, the base64 of x-access-token:<token>) of .git/config.",
                 "attack_run_behavior": "the artifact's .git/config holds the job's token, the repository's default, which is read, so with it the reader can read the repository but push nothing."
               }
@@ -93762,7 +93762,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -103700,7 +103700,7 @@
             {
               "input_kind": "workflow",
               "name": "wiki-closed.yml",
-              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"$(echo PWNED)\"\n# attack-run-behavior: with the wiki off or edited only by collaborators,\n#   the title is one a collaborator wrote; were it the value, the script\n#   would become echo \"$(echo PWNED)\", and bash would run the command\n#   substitution, so echo would print PWNED.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pages[0].title }}\"\n",
+              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no source\n#   answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"$(echo PWNED)\"\n# attack-run-behavior: with the wiki off or edited only by collaborators,\n#   the title is one a collaborator wrote; were it the value, the script\n#   would become echo \"$(echo PWNED)\", and bash would run the command\n#   substitution, so echo would print PWNED.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pages[0].title }}\"\n",
               "facts": [
                 {
                   "query": {
@@ -103736,7 +103736,7 @@
               "notes": {
                 "situation": "the job runs on gollum and reads the title of a wiki page.",
                 "reason": "the wiki is off, or only collaborators may edit it (GitHub's default), so no outsider writes the title of a page.",
-                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no file of facts and no --fact answers repo.wiki-open, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no source answers repo.wiki-open, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.pages[0].title",
                   "value": "$(echo PWNED)"
@@ -108419,7 +108419,7 @@
             {
               "input_kind": "workflow",
               "name": "private-repository.yml",
-              "text": "# situation: the job's container has a password written in the workflow.\n# reason: the repository is private or internal, so the password is\n#   credentials.private, not credentials.public: only those with read access,\n#   every member of the enterprise for an internal one, read it.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the workflow\n#   file to take the password hunter2 written in it.\n# attack-run-behavior: the repository is private or internal, so GitHub\n#   does not serve the file to those without access; those with read access\n#   read hunter2, and the runner logs in to ghcr.io with u and hunter2 as\n#   written.\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    container:\n      image: ghcr.io/o/build@sha256:0000000000000000000000000000000000000000000000000000000000000000\n      credentials:\n        username: u\n        password: hunter2\n    steps:\n      - run: make\n",
+              "text": "# situation: the job's container has a password written in the workflow.\n# reason: the repository is private or internal, so the password is\n#   credentials.private, not credentials.public: only those with read access,\n#   every member of the enterprise for an internal one, read it.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no source\n#   answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the workflow\n#   file to take the password hunter2 written in it.\n# attack-run-behavior: the repository is private or internal, so GitHub\n#   does not serve the file to those without access; those with read access\n#   read hunter2, and the runner logs in to ghcr.io with u and hunter2 as\n#   written.\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    container:\n      image: ghcr.io/o/build@sha256:0000000000000000000000000000000000000000000000000000000000000000\n      credentials:\n        username: u\n        password: hunter2\n    steps:\n      - run: make\n",
               "facts": [
                 {
                   "query": {
@@ -108455,7 +108455,7 @@
               "notes": {
                 "situation": "the job's container has a password written in the workflow.",
                 "reason": "the repository is private or internal, so the password is credentials.private, not credentials.public: only those with read access, every member of the enterprise for an internal one, read it.",
-                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no file of facts and no --fact answers repo.public, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no source answers repo.public, the finding is conditional.",
                 "attack": "anyone without access to the repository tries to read the workflow file to take the password hunter2 written in it.",
                 "attack_run_behavior": "the repository is private or internal, so GitHub does not serve the file to those without access; those with read access read hunter2, and the runner logs in to ghcr.io with u and hunter2 as written."
               }
@@ -112675,7 +112675,7 @@
             {
               "input_kind": "workflow",
               "name": "environment-protected.yml",
-              "text": "# situation: the job runs on issues in the environment production, with a\n#   secret.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs.\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no file of facts and no --fact answers\n#   repo.environment-protected, the finding is conditional.\n# attack-value: github.event.issue.title = \"\\\"; echo PWNED; echo \\\"\"\n# attack-run-behavior: opening the issue queues the job a for the\n#   environment production, which waits for a required reviewer; until one\n#   approves, no step runs, neither the script, which would become echo \"\";\n#   echo PWNED; echo \"\" && ./deploy, nor anything with KEY.\non: issues\npermissions: {}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo \"${{ github.event.issue.title }}\" && ./deploy\n        env:\n          KEY: ${{ secrets.DEPLOY_KEY }}\n",
+              "text": "# situation: the job runs on issues in the environment production, with a\n#   secret.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs.\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no source answers repo.environment-protected, the finding is\n#   conditional.\n# attack-value: github.event.issue.title = \"\\\"; echo PWNED; echo \\\"\"\n# attack-run-behavior: opening the issue queues the job a for the\n#   environment production, which waits for a required reviewer; until one\n#   approves, no step runs, neither the script, which would become echo \"\";\n#   echo PWNED; echo \"\" && ./deploy, nor anything with KEY.\non: issues\npermissions: {}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - run: echo \"${{ github.event.issue.title }}\" && ./deploy\n        env:\n          KEY: ${{ secrets.DEPLOY_KEY }}\n",
               "facts": [
                 {
                   "query": {
@@ -112705,7 +112705,7 @@
               "notes": {
                 "situation": "the job runs on issues in the environment production, with a secret.",
                 "reason": "the environment production has required reviewers, who approve the job before it runs.",
-                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no file of facts and no --fact answers repo.environment-protected, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no source answers repo.environment-protected, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "\"; echo PWNED; echo \""
@@ -112894,7 +112894,7 @@
             {
               "input_kind": "workflow",
               "name": "default-token-read.yml",
-              "text": "# situation: the job runs on issues and writes no permissions.\n# reason: the repository's default token is read, so the token writes\n#   nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no file of facts and no\n#   --fact answers repo.default-token-write, the finding is conditional.\n# attack-value: github.event.issue.title = \"\\\"; echo PWNED; echo \\\"\"\n# attack-run-behavior: opening the issue starts the job a; the script\n#   becomes echo \"\"; echo PWNED; echo \"\", so echo PWNED runs as a command,\n#   in a job whose token has the repository's default, which is read\n#   (repo.default-token-write is false here), and which reads no secret.\non: issues\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.issue.title }}\"\n",
+              "text": "# situation: the job runs on issues and writes no permissions.\n# reason: the repository's default token is read, so the token writes\n#   nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no source answers\n#   repo.default-token-write, the finding is conditional.\n# attack-value: github.event.issue.title = \"\\\"; echo PWNED; echo \\\"\"\n# attack-run-behavior: opening the issue starts the job a; the script\n#   becomes echo \"\"; echo PWNED; echo \"\", so echo PWNED runs as a command,\n#   in a job whose token has the repository's default, which is read\n#   (repo.default-token-write is false here), and which reads no secret.\non: issues\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.issue.title }}\"\n",
               "facts": [
                 {
                   "query": {
@@ -112923,7 +112923,7 @@
               "notes": {
                 "situation": "the job runs on issues and writes no permissions.",
                 "reason": "the repository's default token is read, so the token writes nothing.",
-                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no file of facts and no --fact answers repo.default-token-write, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no source answers repo.default-token-write, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.issue.title",
                   "value": "\"; echo PWNED; echo \""
@@ -114956,7 +114956,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -119432,7 +119432,7 @@
             {
               "input_kind": "workflow",
               "name": "wiki-closed.yml",
-              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"/tmp/PWNED\"\n# attack-run-behavior: a run with this title writes the line /tmp/PWNED to\n#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. With\n#   the wiki off, no gollum run comes; with editing kept to collaborators,\n#   the page's title is a collaborator's, not the attacker's.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"$V\" >> \"$GITHUB_PATH\"\n",
+              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no source\n#   answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"/tmp/PWNED\"\n# attack-run-behavior: a run with this title writes the line /tmp/PWNED to\n#   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. With\n#   the wiki off, no gollum run comes; with editing kept to collaborators,\n#   the page's title is a collaborator's, not the attacker's.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"$V\" >> \"$GITHUB_PATH\"\n",
               "facts": [
                 {
                   "query": {
@@ -119468,7 +119468,7 @@
               "notes": {
                 "situation": "the job runs on gollum and reads the title of a wiki page.",
                 "reason": "the wiki is off, or only collaborators may edit it (GitHub's default), so no outsider writes the title of a page.",
-                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no file of facts and no --fact answers repo.wiki-open, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no source answers repo.wiki-open, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.pages[0].title",
                   "value": "/tmp/PWNED"
@@ -120710,7 +120710,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -126195,7 +126195,7 @@
             {
               "input_kind": "workflow",
               "name": "wiki-closed.yml",
-              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"x\\nPWNED=1\"\n# attack-run-behavior: V holds x, a line break and PWNED=1, so echo appends\n#   v=x and PWNED=1 to $GITHUB_ENV, and the runner sets v to x and PWNED to\n#   1; with the wiki off or closed to outsiders, only a collaborator writes\n#   a title so.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"v=$V\" >> \"$GITHUB_ENV\"\n",
+              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no source\n#   answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"x\\nPWNED=1\"\n# attack-run-behavior: V holds x, a line break and PWNED=1, so echo appends\n#   v=x and PWNED=1 to $GITHUB_ENV, and the runner sets v to x and PWNED to\n#   1; with the wiki off or closed to outsiders, only a collaborator writes\n#   a title so.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"v=$V\" >> \"$GITHUB_ENV\"\n",
               "facts": [
                 {
                   "query": {
@@ -126231,7 +126231,7 @@
               "notes": {
                 "situation": "the job runs on gollum and reads the title of a wiki page.",
                 "reason": "the wiki is off, or only collaborators may edit it (GitHub's default), so no outsider writes the title of a page.",
-                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no file of facts and no --fact answers repo.wiki-open, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no source answers repo.wiki-open, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.pages[0].title",
                   "value": "x\nPWNED=1"
@@ -136479,7 +136479,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -141028,7 +141028,7 @@
             {
               "input_kind": "workflow",
               "name": "wiki-closed.yml",
-              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"x\\nPWNED=1\"\n# attack-run-behavior: with the title in V, echo writes the lines v=x and\n#   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v and PWNED.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"v=$V\" >> \"$GITHUB_OUTPUT\"\n",
+              "text": "# situation: the job runs on gollum and reads the title of a wiki page.\n# reason: the wiki is off, or only collaborators may edit it (GitHub's\n#   default), so no outsider writes the title of a page.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no source\n#   answers repo.wiki-open, the finding is conditional.\n# attack-value: github.event.pages[0].title = \"x\\nPWNED=1\"\n# attack-run-behavior: with the title in V, echo writes the lines v=x and\n#   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v and PWNED.\non: gollum\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          V: ${{ github.event.pages[0].title }}\n        run: echo \"v=$V\" >> \"$GITHUB_OUTPUT\"\n",
               "facts": [
                 {
                   "query": {
@@ -141064,7 +141064,7 @@
               "notes": {
                 "situation": "the job runs on gollum and reads the title of a wiki page.",
                 "reason": "the wiki is off, or only collaborators may edit it (GitHub's default), so no outsider writes the title of a page.",
-                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no file of facts and no --fact answers repo.wiki-open, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no source answers repo.wiki-open, the finding is conditional.",
                 "attack_value": {
                   "carrier": "github.event.pages[0].title",
                   "value": "x\nPWNED=1"
@@ -144048,7 +144048,7 @@
             {
               "input_kind": "workflow",
               "name": "default-token-read.yml",
-              "text": "# situation: the job writes no permissions and runs actions and npm.\n# reason: the repository's default token is read, so the token writes\n#   nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no file of facts and no\n#   --fact answers repo.default-token-write, the finding is conditional.\n# attack: the maintainer of a package npm ci installs, or whoever takes over\n#   their account, publishes a version whose install script reads the token\n#   and sends it out.\n# attack-run-behavior: actions/checkout writes the token into .git/config\n#   as an extraheader; npm ci runs the package's install script, which reads\n#   it there, but the token it sends has the repository's default, which is\n#   read (repo.default-token-write is false here), so GitHub refuses a write\n#   made with it.\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n      - run: npm ci && npm test\n",
+              "text": "# situation: the job writes no permissions and runs actions and npm.\n# reason: the repository's default token is read, so the token writes\n#   nothing.\n# cause: unless a file of facts or --fact says that the default token is read\n#   (repo.default-token-write false), the rule treats the default token as a\n#   token that may write and reports the finding. When no source answers\n#   repo.default-token-write, the finding is conditional.\n# attack: the maintainer of a package npm ci installs, or whoever takes over\n#   their account, publishes a version whose install script reads the token\n#   and sends it out.\n# attack-run-behavior: actions/checkout writes the token into .git/config\n#   as an extraheader; npm ci runs the package's install script, which reads\n#   it there, but the token it sends has the repository's default, which is\n#   read (repo.default-token-write is false here), so GitHub refuses a write\n#   made with it.\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n      - run: npm ci && npm test\n",
               "facts": [
                 {
                   "query": {
@@ -144216,7 +144216,7 @@
               "notes": {
                 "situation": "the job writes no permissions and runs actions and npm.",
                 "reason": "the repository's default token is read, so the token writes nothing.",
-                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no file of facts and no --fact answers repo.default-token-write, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the default token is read (repo.default-token-write false), the rule treats the default token as a token that may write and reports the finding. When no source answers repo.default-token-write, the finding is conditional.",
                 "attack": "the maintainer of a package npm ci installs, or whoever takes over their account, publishes a version whose install script reads the token and sends it out.",
                 "attack_run_behavior": "actions/checkout writes the token into .git/config as an extraheader; npm ci runs the package's install script, which reads it there, but the token it sends has the repository's default, which is read (repo.default-token-write is false here), so GitHub refuses a write made with it."
               }
@@ -144723,7 +144723,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -150194,7 +150194,7 @@
             {
               "input_kind": "workflow",
               "name": "wiki-closed.yml",
-              "text": "# situation: on gollum, a step sends a request with curl and the secret\n#   DEPLOY_TOKEN to the host the title of a wiki page names, in a repository\n#   whose wiki only collaborators may edit.\n# reason: no harm when only collaborators may edit the wiki: they can write\n#   to the repository.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.wiki-open, the finding is conditional.\n# attack: the attacker titles a wiki page attacker.example, where the wiki\n#   lets anyone edit.\n# attack-run-behavior: with the wiki closed to outsiders, the attacker\n#   cannot edit the page, and no request goes to attacker.example.\non: gollum\njobs:\n  j:\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ github.event.pages[0].title }}/status\"\n",
+              "text": "# situation: on gollum, a step sends a request with curl and the secret\n#   DEPLOY_TOKEN to the host the title of a wiki page names, in a repository\n#   whose wiki only collaborators may edit.\n# reason: no harm when only collaborators may edit the wiki: they can write\n#   to the repository.\n# cause: unless a file of facts or --fact says that not anyone may edit the\n#   wiki (repo.wiki-open false), the rule reports the finding. When no source\n#   answers repo.wiki-open, the finding is conditional.\n# attack: the attacker titles a wiki page attacker.example, where the wiki\n#   lets anyone edit.\n# attack-run-behavior: with the wiki closed to outsiders, the attacker\n#   cannot edit the page, and no request goes to attacker.example.\non: gollum\njobs:\n  j:\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ github.event.pages[0].title }}/status\"\n",
               "facts": [
                 {
                   "query": {
@@ -150230,7 +150230,7 @@
               "notes": {
                 "situation": "on gollum, a step sends a request with curl and the secret DEPLOY_TOKEN to the host the title of a wiki page names, in a repository whose wiki only collaborators may edit.",
                 "reason": "no harm when only collaborators may edit the wiki: they can write to the repository.",
-                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no file of facts and no --fact answers repo.wiki-open, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that not anyone may edit the wiki (repo.wiki-open false), the rule reports the finding. When no source answers repo.wiki-open, the finding is conditional.",
                 "attack": "the attacker titles a wiki page attacker.example, where the wiki lets anyone edit.",
                 "attack_run_behavior": "with the wiki closed to outsiders, the attacker cannot edit the page, and no request goes to attacker.example."
               }
@@ -160190,7 +160190,7 @@
             {
               "input_kind": "workflow",
               "name": "private-repository.yml",
-              "text": "# situation: on push, a step prints a substring of the secret DEPLOY_TOKEN,\n#   in a private repository.\n# reason: the repository is private or internal, so the value is\n#   secret-in-log.private, not .public: only those with read access, every\n#   member of the enterprise for an internal one, read the log.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the run's\n#   log to take the substring of the token.\n# attack-run-behavior: GitHub does not show the log of a private or\n#   internal repository to those without read access; those with it read\n#   eight characters of the token.\non: push\npermissions: {}\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n        run: echo \"token starts with ${DEPLOY_TOKEN:0:8}\"\n",
+              "text": "# situation: on push, a step prints a substring of the secret DEPLOY_TOKEN,\n#   in a private repository.\n# reason: the repository is private or internal, so the value is\n#   secret-in-log.private, not .public: only those with read access, every\n#   member of the enterprise for an internal one, read the log.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no source\n#   answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the run's\n#   log to take the substring of the token.\n# attack-run-behavior: GitHub does not show the log of a private or\n#   internal repository to those without read access; those with it read\n#   eight characters of the token.\non: push\npermissions: {}\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n        run: echo \"token starts with ${DEPLOY_TOKEN:0:8}\"\n",
               "facts": [
                 {
                   "query": {
@@ -160219,7 +160219,7 @@
               "notes": {
                 "situation": "on push, a step prints a substring of the secret DEPLOY_TOKEN, in a private repository.",
                 "reason": "the repository is private or internal, so the value is secret-in-log.private, not .public: only those with read access, every member of the enterprise for an internal one, read the log.",
-                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no file of facts and no --fact answers repo.public, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no source answers repo.public, the finding is conditional.",
                 "attack": "anyone without access to the repository tries to read the run's log to take the substring of the token.",
                 "attack_run_behavior": "GitHub does not show the log of a private or internal repository to those without read access; those with it read eight characters of the token."
               }
@@ -167760,7 +167760,7 @@
             {
               "input_kind": "workflow",
               "name": "private-repository.yml",
-              "text": "# situation: a pull request runs the job on a self-hosted runner.\n# reason: the repository is private or internal, so not anyone forks it and\n#   opens a pull request: one who may read it and fork it is\n#   self-hosted-runner.private.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.public, the finding is conditional.\n# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix\n#   that was merged), then opens a pull request from a fork whose copy of\n#   this workflow runs a step of their own in place of make.\n# attack-run-behavior: the repository is private or internal, so only those\n#   who may read it, every member of the enterprise for an internal one, fork\n#   it and open a pull request; an outsider cannot, and the job a runs on the\n#   self-hosted runner only the steps of those people's pull requests.\non: pull_request\njobs:\n  a:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: make\n",
+              "text": "# situation: a pull request runs the job on a self-hosted runner.\n# reason: the repository is private or internal, so not anyone forks it and\n#   opens a pull request: one who may read it and fork it is\n#   self-hosted-runner.private.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no source\n#   answers repo.public, the finding is conditional.\n# attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix\n#   that was merged), then opens a pull request from a fork whose copy of\n#   this workflow runs a step of their own in place of make.\n# attack-run-behavior: the repository is private or internal, so only those\n#   who may read it, every member of the enterprise for an internal one, fork\n#   it and open a pull request; an outsider cannot, and the job a runs on the\n#   self-hosted runner only the steps of those people's pull requests.\non: pull_request\njobs:\n  a:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: make\n",
               "facts": [
                 {
                   "query": {
@@ -167810,7 +167810,7 @@
               "notes": {
                 "situation": "a pull request runs the job on a self-hosted runner.",
                 "reason": "the repository is private or internal, so not anyone forks it and opens a pull request: one who may read it and fork it is self-hosted-runner.private.",
-                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no file of facts and no --fact answers repo.public, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no source answers repo.public, the finding is conditional.",
                 "attack": "the attacker becomes a contributor (in pytorch-2023, by a typo fix that was merged), then opens a pull request from a fork whose copy of this workflow runs a step of their own in place of make.",
                 "attack_run_behavior": "the repository is private or internal, so only those who may read it, every member of the enterprise for an internal one, fork it and open a pull request; an outsider cannot, and the job a runs on the self-hosted runner only the steps of those people's pull requests."
               }
@@ -173917,7 +173917,7 @@
             {
               "input_kind": "workflow",
               "name": "private-repository.yml",
-              "text": "# situation: on push, a step takes the client secret out of the JSON\n#   secret AZURE_CREDENTIALS into its env, in a private repository.\n# reason: the repository is private or internal, so the value is\n#   unmasked-secret-exposure.private, not .public: only those with read\n#   access, every member of the enterprise for an internal one, read the\n#   log.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no file of\n#   facts and no --fact answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the run's\n#   log to take the client secret.\n# attack-run-behavior: GitHub does not show the log of a private or\n#   internal repository to those without read access; those with it read\n#   the value in the step's header.\non: push\npermissions: {}\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - name: log in to azure\n        env:\n          CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}\n          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}\n        run: az login --service-principal -u \"$CLIENT_ID\" -p \"$CLIENT_SECRET\" --tenant contoso.onmicrosoft.com\n",
+              "text": "# situation: on push, a step takes the client secret out of the JSON\n#   secret AZURE_CREDENTIALS into its env, in a private repository.\n# reason: the repository is private or internal, so the value is\n#   unmasked-secret-exposure.private, not .public: only those with read\n#   access, every member of the enterprise for an internal one, read the\n#   log.\n# cause: unless a file of facts or --fact says that the repository is not\n#   public (repo.public false), the rule reports the finding. When no source\n#   answers repo.public, the finding is conditional.\n# attack: anyone without access to the repository tries to read the run's\n#   log to take the client secret.\n# attack-run-behavior: GitHub does not show the log of a private or\n#   internal repository to those without read access; those with it read\n#   the value in the step's header.\non: push\npermissions: {}\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - name: log in to azure\n        env:\n          CLIENT_ID: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientId }}\n          CLIENT_SECRET: ${{ fromJSON(secrets.AZURE_CREDENTIALS).clientSecret }}\n        run: az login --service-principal -u \"$CLIENT_ID\" -p \"$CLIENT_SECRET\" --tenant contoso.onmicrosoft.com\n",
               "facts": [
                 {
                   "query": {
@@ -173946,7 +173946,7 @@
               "notes": {
                 "situation": "on push, a step takes the client secret out of the JSON secret AZURE_CREDENTIALS into its env, in a private repository.",
                 "reason": "the repository is private or internal, so the value is unmasked-secret-exposure.private, not .public: only those with read access, every member of the enterprise for an internal one, read the log.",
-                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no file of facts and no --fact answers repo.public, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the repository is not public (repo.public false), the rule reports the finding. When no source answers repo.public, the finding is conditional.",
                 "attack": "anyone without access to the repository tries to read the run's log to take the client secret.",
                 "attack_run_behavior": "GitHub does not show the log of a private or internal repository to those without read access; those with it read the value in the step's header."
               }
@@ -176824,7 +176824,7 @@
           },
           {
             "id": "wiki-open",
-            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open",
+            "text": "on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open",
             "observed": [
               {
                 "date": "2026-09-25",
@@ -202474,7 +202474,7 @@
             {
               "input_kind": "workflow",
               "name": "environment-protected.yml",
-              "text": "# situation: the job on pull_request_target checks out the pull request's\n#   head and runs npm ci, in the environment production.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs (then it is untrusted-checkout-toctou's).\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no file of facts and no --fact answers\n#   repo.environment-protected, the finding is conditional.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job waits until a required reviewer of production\n#   approves it; a reviewer who reads the pull request's package.json does\n#   not approve, and the checkout and npm ci do not run. An approval\n#   followed by a push is untrusted-checkout-toctou's.\non: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          allow-unsafe-pr-checkout: true\n      - run: npm ci\n",
+              "text": "# situation: the job on pull_request_target checks out the pull request's\n#   head and runs npm ci, in the environment production.\n# reason: the environment production has required reviewers, who approve the\n#   job before it runs (then it is untrusted-checkout-toctou's).\n# cause: unless a file of facts or --fact says that the environment has\n#   required reviewers (repo.environment-protected true), the rule reports the\n#   finding. When no source answers repo.environment-protected, the finding is\n#   conditional.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the job waits until a required reviewer of production\n#   approves it; a reviewer who reads the pull request's package.json does\n#   not approve, and the checkout and npm ci do not run. An approval\n#   followed by a push is untrusted-checkout-toctou's.\non: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    environment: production\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          allow-unsafe-pr-checkout: true\n      - run: npm ci\n",
               "facts": [
                 {
                   "query": {
@@ -202593,7 +202593,7 @@
               "notes": {
                 "situation": "the job on pull_request_target checks out the pull request's head and runs npm ci, in the environment production.",
                 "reason": "the environment production has required reviewers, who approve the job before it runs (then it is untrusted-checkout-toctou's).",
-                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no file of facts and no --fact answers repo.environment-protected, the finding is conditional.",
+                "cause": "unless a file of facts or --fact says that the environment has required reviewers (repo.environment-protected true), the rule reports the finding. When no source answers repo.environment-protected, the finding is conditional.",
                 "attack_value": {
                   "carrier": "the file package.json in the pull request's head",
                   "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"

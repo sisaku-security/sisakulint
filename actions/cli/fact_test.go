@@ -2,10 +2,12 @@ package cli
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -163,7 +165,7 @@ func TestRepoAndFact(t *testing.T) {
 		t.Error("no facts asked")
 	}
 	for _, f := range rep.Facts {
-		if f.Reason != "" && f.Reason != offlineReason && f.Reason != offlineNoAPIReason {
+		if f.Reason != "" && !slices.Contains(slices.Collect(maps.Values(offlineReasons)), f.Reason) {
 			t.Errorf("%s: reason %q", f.Query, f.Reason)
 		}
 	}

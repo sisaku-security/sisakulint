@@ -16,11 +16,11 @@ import (
 var exampleDir = filepath.Join("testdata", "all-rules")
 
 // TestAllRulesExample keeps the example up to date: run with its file of
-// facts and, for the facts the file does not answer, the x-assume values
-// of their kinds (xAssumeAfter), and again with the repository
-// private, its readers forking it and the workflows of pull requests from
-// forks running (privateRepo), the two runs give every kind of
-// finding of All, each confirmed.
+// facts, as the CLI answers, and again with the repository private, its
+// readers forking it and the workflows of pull requests from forks
+// running (privateRepo), the two runs give every kind of finding of All,
+// each confirmed or conditional (a finding whose condition depends on a
+// fact the file does not answer is conditional).
 // A rule or a kind added without the example fails here. Every finding of
 // a kind that declares fixes has a fix, and the fixes to review apply
 // together: the fixes of rules that report in one step do not collide.
@@ -42,16 +42,13 @@ func TestAllRulesExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	for i, r := range []facts.Resolver{xAssumeAfter{store}, xAssumeAfter{privateRepo{store}}} {
+	for i, r := range []facts.Resolver{store, privateRepo{store}} {
 		rep := lint.Run(context.Background(), in, reg, r)
 		if len(rep.Errors) != 0 {
 			t.Fatalf("errors %+v", rep.Errors)
 		}
 		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 			got = append(got, f.Args.KindID().String())
-			if f.Certainty != lint.CertaintyConfirmed {
-				t.Errorf("%s is %v", f.Detected(), f.Certainty)
-			}
 			m, _ := reg.Meta(f.Rule)
 			k := slices.IndexFunc(m.FindingKinds, func(k lint.FindingKind) bool { return k.ID == f.Args.KindID() })
 			if k < 0 {
@@ -63,9 +60,6 @@ func TestAllRulesExample(t *testing.T) {
 		}
 		for _, f := range rep.QualityFindings {
 			got = append(got, f.Args.KindID().String())
-			if f.Certainty != lint.CertaintyConfirmed {
-				t.Errorf("%s is %v", f.Detected(), f.Certainty)
-			}
 		}
 		if i > 0 {
 			continue
@@ -95,25 +89,4 @@ func (p privateRepo) Resolve(ctx context.Context, q facts.Query) facts.RawAnswer
 		return facts.RawAnswer{State: facts.StateFound, Value: []byte("true")}
 	}
 	return p.r.Resolve(ctx, q)
-}
-
-// xAssumeAfter answers as below does and, where below does not know a
-// fact, by the x-assume value of the fact's kind: the answer with which
-// the findings of the false positive forms of the kind hold. A run of the
-// command does not answer so; the all-rules example answers so, so that
-// every kind of its findings is confirmed without a file of facts that
-// writes each fact of each step and each workflow.
-type xAssumeAfter struct{ below facts.Resolver }
-
-func (x xAssumeAfter) Resolve(ctx context.Context, q facts.Query) facts.RawAnswer {
-	r := facts.Checked(q, x.below.Resolve(ctx, q))
-	if r.State != facts.StateUnknown {
-		return r
-	}
-	for _, i := range facts.Kinds() {
-		if i.Kind == q.Kind() && i.AssumedValue != nil {
-			return facts.RawAnswer{State: facts.StateFound, Value: i.AssumedValue}
-		}
-	}
-	return r
 }

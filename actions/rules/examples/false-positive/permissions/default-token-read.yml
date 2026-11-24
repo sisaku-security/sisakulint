@@ -3,8 +3,8 @@
 #   nothing.
 # cause: unless a file of facts or --fact says that the default token is read
 #   (repo.default-token-write false), the rule treats the default token as a
-#   token that may write and reports the finding. When no file of facts and no
-#   --fact answers repo.default-token-write, the finding is conditional.
+#   token that may write and reports the finding. When no source answers
+#   repo.default-token-write, the finding is conditional.
 # attack: the maintainer of a package npm ci installs, or whoever takes over
 #   their account, publishes a version whose install script reads the token
 #   and sends it out.

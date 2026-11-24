@@ -2,8 +2,8 @@
 # reason: the wiki is off, or only collaborators may edit it (GitHub's
 #   default), so no outsider writes the title of a page.
 # cause: unless a file of facts or --fact says that not anyone may edit the
-#   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-#   facts and no --fact answers repo.wiki-open, the finding is conditional.
+#   wiki (repo.wiki-open false), the rule reports the finding. When no source
+#   answers repo.wiki-open, the finding is conditional.
 # attack-value: github.event.pages[0].title = "x\nPWNED=1"
 # attack-run-behavior: with the title in V, echo writes the lines v=x and
 #   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v and PWNED.

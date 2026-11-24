@@ -80,20 +80,22 @@ func (r repoFileFirst) Resolve(ctx context.Context, q facts.Query) facts.RawAnsw
 }
 
 // offline answers every fact Unknown: the command asks nothing unless told
-// to. The reason names the sources that can answer the fact: --online
-// answers no fact of some kinds, such as checkout.executed.
+// to. The reason names the sources that can answer a fact of the kind:
+// --online answers no fact of some kinds, such as checkout.executed, and
+// the facts of a repository only with --repo.
 type offline struct{}
 
-const (
-	offlineReason      = "offline: pass --facts or --online"
-	offlineNoAPIReason = "offline: pass --facts or --fact; --online does not answer the fact"
-)
+// offlineReasons are the reasons of offline by how --online answers the
+// facts of the kind (facts.OnlineAnswerOf).
+var offlineReasons = map[facts.OnlineAnswer]string{
+	facts.OnlineNone:                 "offline: pass --facts or --fact (--online answers no fact of the kind)",
+	facts.OnlineAll:                  "offline: pass --facts or --online",
+	facts.OnlineNamedRepository:      "offline: pass --facts or --fact, or --online with --repo",
+	facts.OnlineNamedRepositoryFalse: "offline: pass --facts or --fact, or --online with --repo",
+}
 
 func (offline) Resolve(_ context.Context, q facts.Query) facts.RawAnswer {
-	if facts.OnlineAnswerOf(q.Kind()) == facts.OnlineNone {
-		return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineNoAPIReason}
-	}
-	return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineReason}
+	return facts.RawAnswer{State: facts.StateUnknown, Reason: offlineReasons[facts.OnlineAnswerOf(q.Kind())]}
 }
 
 // parseAPI reads --github-api: an https URL with a host, or an http one

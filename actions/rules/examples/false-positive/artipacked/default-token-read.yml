@@ -5,8 +5,8 @@
 #   artifact writes nothing.
 # cause: unless a file of facts or --fact says that the default token is read
 #   (repo.default-token-write false), the rule treats the default token as a
-#   token that may write and reports the finding. When no file of facts and no
-#   --fact answers repo.default-token-write, the finding is conditional.
+#   token that may write and reports the finding. When no source answers
+#   repo.default-token-write, the finding is conditional.
 # attack: a reader of the repository's artifacts (anyone, in a public
 #   repository) downloads the artifact through the API while the job still
 #   runs, and takes the token from the line

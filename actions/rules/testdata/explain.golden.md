@@ -15290,7 +15290,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -18159,8 +18159,8 @@
     #   job before it runs.
     # cause: unless a file of facts or --fact says that the environment has
     #   required reviewers (repo.environment-protected true), the rule reports the
-    #   finding. When no file of facts and no --fact answers
-    #   repo.environment-protected, the finding is conditional.
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job waits until a required reviewer of production
     #   approves it; a reviewer who sees that the run before it is of a fork's
@@ -18193,8 +18193,8 @@
     #   another run.
     # cause: unless a file of facts or --fact says that the default token is read
     #   (repo.default-token-write false), the rule treats the default token as a
-    #   token that may write and reports the finding. When no file of facts and no
-    #   --fact answers repo.default-token-write, the finding is conditional.
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job's github.token is the repository's default,
     #   read, which cannot read the artifacts of another run, so the download
@@ -20152,8 +20152,8 @@
     #   artifact writes nothing.
     # cause: unless a file of facts or --fact says that the default token is read
     #   (repo.default-token-write false), the rule treats the default token as a
-    #   token that may write and reports the finding. When no file of facts and no
-    #   --fact answers repo.default-token-write, the finding is conditional.
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack: a reader of the repository's artifacts (anyone, in a public
     #   repository) downloads the artifact through the API while the job still
     #   runs, and takes the token from the line
@@ -30107,8 +30107,8 @@
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
     # cause: unless a file of facts or --fact says that not anyone may edit the
-    #   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.wiki-open, the finding is conditional.
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "$(echo PWNED)"
     # attack-run-behavior: with the wiki off or edited only by collaborators,
     #   the title is one a collaborator wrote; were it the value, the script
@@ -30644,7 +30644,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -32122,8 +32122,8 @@
     #   credentials.private, not credentials.public: only those with read access,
     #   every member of the enterprise for an internal one, read it.
     # cause: unless a file of facts or --fact says that the repository is not
-    #   public (repo.public false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.public, the finding is conditional.
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the workflow
     #   file to take the password hunter2 written in it.
     # attack-run-behavior: the repository is private or internal, so GitHub
@@ -33710,8 +33710,8 @@
     #   job before it runs.
     # cause: unless a file of facts or --fact says that the environment has
     #   required reviewers (repo.environment-protected true), the rule reports the
-    #   finding. When no file of facts and no --fact answers
-    #   repo.environment-protected, the finding is conditional.
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: opening the issue queues the job a for the
     #   environment production, which waits for a required reviewer; until one
@@ -33829,8 +33829,8 @@
     #   nothing.
     # cause: unless a file of facts or --fact says that the default token is read
     #   (repo.default-token-write false), the rule treats the default token as a
-    #   token that may write and reports the finding. When no file of facts and no
-    #   --fact answers repo.default-token-write, the finding is conditional.
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
     # attack-run-behavior: opening the issue starts the job a; the script
     #   becomes echo ""; echo PWNED; echo "", so echo PWNED runs as a command,
@@ -38158,8 +38158,8 @@
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
     # cause: unless a file of facts or --fact says that not anyone may edit the
-    #   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.wiki-open, the finding is conditional.
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "/tmp/PWNED"
     # attack-run-behavior: a run with this title writes the line /tmp/PWNED to
     #   $GITHUB_PATH, and the steps after it get /tmp/PWNED first in PATH. With
@@ -38711,7 +38711,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -41502,8 +41502,8 @@
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
     # cause: unless a file of facts or --fact says that not anyone may edit the
-    #   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.wiki-open, the finding is conditional.
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "x\nPWNED=1"
     # attack-run-behavior: V holds x, a line break and PWNED=1, so echo appends
     #   v=x and PWNED=1 to $GITHUB_ENV, and the runner sets v to x and PWNED to
@@ -42008,7 +42008,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -46887,8 +46887,8 @@
     # reason: the wiki is off, or only collaborators may edit it (GitHub's
     #   default), so no outsider writes the title of a page.
     # cause: unless a file of facts or --fact says that not anyone may edit the
-    #   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.wiki-open, the finding is conditional.
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack-value: github.event.pages[0].title = "x\nPWNED=1"
     # attack-run-behavior: with the title in V, echo writes the lines v=x and
     #   PWNED=1 to $GITHUB_OUTPUT, and the runner sets the outputs v and PWNED.
@@ -47428,7 +47428,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -47987,8 +47987,8 @@
     #   nothing.
     # cause: unless a file of facts or --fact says that the default token is read
     #   (repo.default-token-write false), the rule treats the default token as a
-    #   token that may write and reports the finding. When no file of facts and no
-    #   --fact answers repo.default-token-write, the finding is conditional.
+    #   token that may write and reports the finding. When no source answers
+    #   repo.default-token-write, the finding is conditional.
     # attack: the maintainer of a package npm ci installs, or whoever takes over
     #   their account, publishes a version whose install script reads the token
     #   and sends it out.
@@ -50390,8 +50390,8 @@
     # reason: no harm when only collaborators may edit the wiki: they can write
     #   to the repository.
     # cause: unless a file of facts or --fact says that not anyone may edit the
-    #   wiki (repo.wiki-open false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.wiki-open, the finding is conditional.
+    #   wiki (repo.wiki-open false), the rule reports the finding. When no source
+    #   answers repo.wiki-open, the finding is conditional.
     # attack: the attacker titles a wiki page attacker.example, where the wiki
     #   lets anyone edit.
     # attack-run-behavior: with the wiki closed to outsiders, the attacker
@@ -50779,7 +50779,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -55306,8 +55306,8 @@
     #   secret-in-log.private, not .public: only those with read access, every
     #   member of the enterprise for an internal one, read the log.
     # cause: unless a file of facts or --fact says that the repository is not
-    #   public (repo.public false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.public, the finding is conditional.
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the run's
     #   log to take the substring of the token.
     # attack-run-behavior: GitHub does not show the log of a private or
@@ -57517,8 +57517,8 @@
     #   opens a pull request: one who may read it and fork it is
     #   self-hosted-runner.private.
     # cause: unless a file of facts or --fact says that the repository is not
-    #   public (repo.public false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.public, the finding is conditional.
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: the attacker becomes a contributor (in pytorch-2023, by a typo fix
     #   that was merged), then opens a pull request from a fork whose copy of
     #   this workflow runs a step of their own in place of make.
@@ -61295,8 +61295,8 @@
     #   access, every member of the enterprise for an internal one, read the
     #   log.
     # cause: unless a file of facts or --fact says that the repository is not
-    #   public (repo.public false), the rule reports the finding. When no file of
-    #   facts and no --fact answers repo.public, the finding is conditional.
+    #   public (repo.public false), the rule reports the finding. When no source
+    #   answers repo.public, the finding is conditional.
     # attack: anyone without access to the repository tries to read the run's
     #   log to take the client secret.
     # attack-run-behavior: GitHub does not show the log of a private or
@@ -64660,7 +64660,7 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_call>
     - <https://github.com/advisories/GHSA-7x29-qqmq-v6qc>
-- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no file of facts and no --fact answers repo.wiki-open
+- precondition wiki-open: on gollum, an account with no role in the repository can edit the wiki only in a public repository whose settings let anyone with an account edit the wiki (the fact repo.wiki-open). The finding holds only when repo.wiki-open is true, and the finding is conditional when no source answers repo.wiki-open
   - observed: 2026-09-25, runner 2.337.0: a wiki page titled with \$( ) and backticks, written into run as github.event.pages&#91;0].title, ran the commands; GitHub kept \$, (, ), backticks and ;
   - observed: 2026-10-30, runner 2.338.0: in a public repository whose settings let anyone with an account edit the wiki, an account with no role in the repository created a wiki page on the web interface of GitHub and edited the page; the creation and the edit each started a run of gollum, and each run had the repository's secret, and a step of each run created a ref with the token of the run, which the workflow asked for with contents: write
   - cites:
@@ -71412,8 +71412,8 @@
     #   job before it runs (then it is untrusted-checkout-toctou's).
     # cause: unless a file of facts or --fact says that the environment has
     #   required reviewers (repo.environment-protected true), the rule reports the
-    #   finding. When no file of facts and no --fact answers
-    #   repo.environment-protected, the finding is conditional.
+    #   finding. When no source answers repo.environment-protected, the finding is
+    #   conditional.
     # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
     # attack-run-behavior: the job waits until a required reviewer of production
     #   approves it; a reviewer who reads the pull request's package.json does

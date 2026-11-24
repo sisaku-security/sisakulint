@@ -276,7 +276,7 @@ func factKindText(k facts.Kind) string {
 // provider and the answer that removes the finding of the form.
 func formFactKindText(k facts.Kind) string {
 	i := kindInfoOf(k)
-	return md(k.String()) + " (" + nProvider.is(md(i.Provider.String())) + ", " + nRemovingAnswer.is(md(removingAnswer(i))) + ")"
+	return md(k.String()) + " (" + nProvider.is(md(i.Provider.String())) + ", " + nRemovingAnswer.is(md(removingAnswerOrNone(i))) + ")"
 }
 
 // likelihood is the item of the likelihood of b: why it is what it is,
@@ -731,4 +731,12 @@ func strs[T fmt.Stringer](xs []T) []string {
 		out[i] = x.String()
 	}
 	return out
+}
+
+// removingAnswerOrNone is removingAnswer, or none for a kind without one.
+func removingAnswerOrNone(k facts.KindInfo) string {
+	if v, ok := removingAnswer(k); ok {
+		return v
+	}
+	return "none"
 }

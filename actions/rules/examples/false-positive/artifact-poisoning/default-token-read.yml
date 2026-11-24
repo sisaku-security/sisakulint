@@ -4,8 +4,8 @@
 #   another run.
 # cause: unless a file of facts or --fact says that the default token is read
 #   (repo.default-token-write false), the rule treats the default token as a
-#   token that may write and reports the finding. When no file of facts and no
-#   --fact answers repo.default-token-write, the finding is conditional.
+#   token that may write and reports the finding. When no source answers
+#   repo.default-token-write, the finding is conditional.
 # attack-value: the file package.json in the artifact of the pull request's ci run = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
 # attack-run-behavior: the job's github.token is the repository's default,
 #   read, which cannot read the artifacts of another run, so the download

@@ -143,23 +143,25 @@ var onlineLines = map[facts.OnlineAnswer]string{
 // positive forms that name the kind of fact k, and when to write it; none
 // for a kind without x-assume, which no false positive form names.
 func removingAnswerOf(k facts.KindInfo) string {
-	if k.AssumedValue == nil {
+	v, ok := removingAnswer(k)
+	if !ok {
 		return "none"
 	}
-	return removingAnswer(k) + " (" + k.AssumedReason + ")"
+	return v + " (" + k.AssumedReason + ")"
 }
 
-// removingAnswer is the boolean other than the x-assume value of k: the
-// answer with which the findings of the false positive forms that name k
-// do not hold (none for a kind without x-assume).
-func removingAnswer(k facts.KindInfo) string {
+// removingAnswer is the boolean other than the x-assume value of k, as
+// JSON: the answer with which the findings of the false positive forms
+// that name k do not hold; false for a kind without an x-assume of true
+// or false.
+func removingAnswer(k facts.KindInfo) (string, bool) {
 	switch string(k.AssumedValue) {
 	case "true":
-		return "false"
+		return "false", true
 	case "false":
-		return "true"
+		return "true", true
 	}
-	return "none"
+	return "", false
 }
 
 // valueDefinitions are vs, each with what it is.

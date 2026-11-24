@@ -319,9 +319,9 @@ func TestExampleDocumentFacts(t *testing.T) {
 	}{
 		{"none asked", []lint.ExampleRun{{}}, "\nThe rule asked no fact: the files alone decide what the rule reports.\n"},
 		{"one run", []lint.ExampleRun{{Report: asked}}, "\nFacts the rule asked, and the answers the rule ran with:\n\n```text\nrepo.wiki-open = true\n```\n"},
-		{"flipped only", []lint.ExampleRun{{Flipped: flip, Report: asked}}, "\nFacts the rule asked, and the answers the rule ran with:\n\n```text\nrepo.wiki-open = true (the answer that removes the finding)\n```\n"},
+		{"flipped only", []lint.ExampleRun{{Flipped: flip, Report: asked}}, "\nFacts the rule asked, and the answers the rule ran with:\n\n```text\nrepo.wiki-open = true (flipped)\n```\n"},
 		{"two runs", []lint.ExampleRun{{Report: asked}, {Flipped: flip, Report: asked}}, "\nWith the answers of the facts file, the facts the rule asked:\n\n```text\nrepo.wiki-open = true\n```\n\n" +
-			"With repo.wiki-open answered with the answer that removes the finding, the facts the rule asked:\n\n```text\nrepo.wiki-open = true (the answer that removes the finding)\n```\n"},
+			"With repo.wiki-open flipped (answered false when the x-assume value of the kind is true, and true otherwise), the facts the rule asked:\n\n```text\nrepo.wiki-open = true (flipped)\n```\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := exampleDocument(x, attackrun.MarkerNone, c.runs); got != files+c.want {
@@ -341,7 +341,7 @@ func TestReviewDocumentFactsReal(t *testing.T) {
 	}
 	want := map[string]string{
 		"argument-injection undetected/pull-request.md": "The rule asked no fact: the files alone decide what the rule reports.",
-		"code-injection false-positive/wiki-closed.md":  "answered with the answer that removes the finding, the facts the rule asked:",
+		"code-injection false-positive/wiki-closed.md":  "flipped (answered false when the x-assume value of the kind is true, and true otherwise), the facts the rule asked:",
 	}
 	for _, d := range docs {
 		if w, ok := want[d.Rule.String()+" "+d.Path.String()]; ok {
