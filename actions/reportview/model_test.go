@@ -21,7 +21,7 @@ func (offline) Resolve(context.Context, facts.Query) facts.RawAnswer {
 	return facts.RawAnswer{State: facts.StateUnknown, Reason: "offline"}
 }
 
-// runOn runs every rule on the files, offline with the assumptions.
+// runOn runs every rule on the files, offline, as the command does by default.
 func runOn(t *testing.T, files map[string]string) (lint.Report, lint.Inputs) {
 	t.Helper()
 	m := fstest.MapFS{}
@@ -36,7 +36,7 @@ func runOn(t *testing.T, files map[string]string) (lint.Report, lint.Inputs) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.Run(context.Background(), in, reg, facts.Assume(offline{}))
+	rep := lint.Run(context.Background(), in, reg, offline{})
 	if len(rep.Errors) != 0 {
 		t.Fatalf("errors %+v", rep.Errors)
 	}
@@ -178,7 +178,7 @@ func TestConditionOf(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := lint.All(eq, lint.InputPresent(inputPath(t, "x.yml")))
-	answer := answers([]facts.Entry{{Query: q, RawAnswer: facts.RawAnswer{State: facts.StateFound, Value: json.RawMessage("true"), Source: facts.SourceAssumption}}})
+	answer := answers([]facts.Entry{{Query: q, RawAnswer: facts.RawAnswer{State: facts.StateFound, Value: json.RawMessage("true"), Source: facts.SourceFile}}})
 	look := func(facts.InputPath) lint.LookupState { return lint.LookupUnknown }
 	id := 0
 	got, err := conditionOf(c, answer, look, &id)
@@ -189,10 +189,10 @@ func TestConditionOf(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	l0, l1 := got.Parts[0], got.Parts[1]
-	if l0.ID != 1 || l0.Truth != truth(expr.TruthTrue) || !l0.Assumed || l0.Text == "" {
+	if l0.ID != 1 || l0.Truth != truth(expr.TruthTrue) || l0.Text == "" {
 		t.Errorf("the fact leaf %+v", l0)
 	}
-	if l1.ID != 2 || l1.Truth != truth(expr.TruthUnknown) || l1.Assumed {
+	if l1.ID != 2 || l1.Truth != truth(expr.TruthUnknown) {
 		t.Errorf("the input leaf %+v", l1)
 	}
 	b, err := json.Marshal(got)

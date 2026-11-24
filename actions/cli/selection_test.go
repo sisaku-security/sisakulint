@@ -71,15 +71,16 @@ func TestRuleOnly(t *testing.T) {
 }
 
 // TestSkipRuleExit: what is skipped sets no bit. labeled.yml of the example
-// has one confirmed finding of untrusted-checkout-toctou and one of
-// commit-sha (its README); with both rules skipped it has none, and only
-// the inconclusive finding of known-vulnerable-actions (the file of facts
-// does not answer the advisories of actions/checkout) sets bit 8.
+// has one conditional finding of untrusted-checkout-toctou (the file of
+// facts does not answer repo.pull-request-target-allowed) and one confirmed
+// finding of commit-sha (its README); with both rules skipped it has none,
+// and only the inconclusive finding of known-vulnerable-actions (the file
+// of facts does not answer the advisories of actions/checkout) sets bit 8.
 func TestSkipRuleExit(t *testing.T) {
 	dir := example(t)
 	facts := dir + "/facts.json"
-	if got := run(t, args("--root", dir, "--facts", facts, "--rule", "untrusted-checkout-toctou", ".github/workflows/labeled.yml")); got.code != 1 {
-		t.Errorf("the rule alone: exit %d, want 1", got.code)
+	if got := run(t, args("--root", dir, "--facts", facts, "--rule", "untrusted-checkout-toctou", ".github/workflows/labeled.yml")); got.code != int(lint.UndecidedBit) {
+		t.Errorf("the rule alone: exit %d, want %d", got.code, lint.UndecidedBit)
 	}
 	got := run(t, args("--root", dir, "--facts", facts, "--skip-rule", "untrusted-checkout-toctou,commit-sha", ".github/workflows/labeled.yml"))
 	s := selection(t, got.stdout)

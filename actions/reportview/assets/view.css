@@ -37,7 +37,6 @@ button[aria-pressed="true"] { background: var(--accent); border-color: var(--acc
 .cond li { margin: 4px 0; }
 .leaf { font-size: 13px; word-break: break-all; margin-right: 8px; }
 .truth { font-size: 12px; padding: 1px 6px; margin-right: 4px; }
-.assumed { font-size: 12px; color: var(--muted); margin-right: 8px; border: 1px dashed var(--line); padding: 0 4px; border-radius: 4px; }
 .details dt { font-weight: 600; font-size: 13px; }
 .details dd { margin: 0 0 4px; font: 13px ui-monospace, monospace; word-break: break-all; }
 .layout { display: flex; gap: 16px; align-items: flex-start; }

@@ -72,7 +72,7 @@ func TestWithAppChecksNotAsked(t *testing.T) {
 // from a fork (untrusted-checkout) reports nothing, and a kind that reads
 // the message of the commit (code-injection) still reports the finding.
 func TestAppChecksForkOnly(t *testing.T) {
-	r := facts.Assume(flipped{kinds: []facts.Kind{facts.KindRepoForkPRAppChecks}})
+	r := worstCase(flipped{kinds: []facts.Kind{facts.KindRepoForkPRAppChecks}})
 	for _, c := range []struct {
 		rule lint.RuleID
 		wf   string
@@ -101,7 +101,7 @@ jobs:
 			t.Fatal(err)
 		}
 		rule := ruleOf(t, c.rule)
-		if rep := runWith(t, rule, in, facts.Assume(limitFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
+		if rep := runWith(t, rule, in, worstCase(limitFacts{})); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
 			t.Fatalf("%s with the assumption: %+v, want one finding", c.rule, rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 		}
 		if rep := runWith(t, rule, in, r); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != c.want || len(rep.Errors) != 0 {

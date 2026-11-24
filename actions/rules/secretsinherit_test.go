@@ -66,7 +66,7 @@ func TestSecretsInheritRepo(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		rep := lint.Run(context.Background(), in, reg, facts.Assumptions())
+		rep := lint.Run(context.Background(), in, reg, worstCase(nil))
 		if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || !argsEqual(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Args, c.want) {
 			t.Errorf("%q: %+v, want %+v", c.repo, rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional), c.want)
 		}

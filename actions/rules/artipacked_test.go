@@ -122,7 +122,7 @@ func TestArtifactGapsOwnCredential(t *testing.T) {
 // conditional without it, and go with the fact false.
 func TestArtipackedAssumed(t *testing.T) {
 	src := artifactJob("", coV4+upHidden+stepNext)
-	rep, _, _ := checkRules(t, []lint.Rule{Artipacked}, wfFile(src), facts.Assume(artifactFacts{}))
+	rep, _, _ := checkRules(t, []lint.Rule{Artipacked}, wfFile(src), worstCase(artifactFacts{}))
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConfirmed {
 		t.Errorf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}

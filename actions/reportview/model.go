@@ -101,12 +101,11 @@ type Node struct {
 // Condition is the condition of a finding, with a truth for each leaf to
 // start from.
 type Condition struct {
-	ID      int         `json:"id"` // in the order of a walk from the root, from 0
-	Op      op          `json:"op"`
-	Parts   []Condition `json:"parts,omitempty"`
-	Text    string      `json:"text,omitempty"` // a leaf, as the report writes it
-	Truth   truth       `json:"truth"`          // of a leaf: by the answers of the report
-	Assumed bool        `json:"assumed,omitempty"`
+	ID    int         `json:"id"` // in the order of a walk from the root, from 0
+	Op    op          `json:"op"`
+	Parts []Condition `json:"parts,omitempty"`
+	Text  string      `json:"text,omitempty"` // a leaf, as the report writes it
+	Truth truth       `json:"truth"`          // of a leaf: by the answers of the report
 }
 
 // op is a lint.ConditionOp as the script reads it.
@@ -355,10 +354,5 @@ func conditionOf(c lint.Condition, answer func(facts.Query) facts.RawAnswer, loo
 		return Condition{}, err
 	}
 	x.Text, x.Truth = string(b), truth(lint.Eval(c, answer, look))
-	for _, q := range c.Queries() {
-		if answer(q).Assumed() {
-			x.Assumed = true
-		}
-	}
 	return x, nil
 }

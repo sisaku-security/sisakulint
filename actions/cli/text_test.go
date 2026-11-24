@@ -99,7 +99,7 @@ func TestTextSections(t *testing.T) {
 		"  actions/checkout@v4 is not pinned to a full commit SHA  ×4\n    .github/workflows/alias.yml:6:36 via alias at 10:15  (+3 more, -v)\n    6 |       - uses: &co actions/checkout@v4\n",
 		"  actions/setup-node@v4 is not pinned to a full commit SHA  ×2\n    .github/workflows/pins.yml:6:34  (+1 more, -v)\n",
 		"  actions/setup-go@v5 is not pinned to a full commit SHA\n    .github/workflows/pins.yml:7:32\n    7 |       - uses: actions/setup-go@v5\n",
-		"  assumed: repo.wiki-open = true (--no-assumptions to drop)",
+		"  fact: repo.wiki-open = true\n",
 		"  fix (review): move the expressions into the env of the step, and read the variables where they were, quoted as the shell needs (bash and sh)  [--fix=review]\n",
 		"conditional  2 findings hold only if what is not known here is so",
 		"  impostor-commit.fork-commit (high)  2 findings, 1 unknown",
@@ -226,7 +226,7 @@ func FuzzWriteText(f *testing.F) {
 		if err != nil {
 			t.Skip()
 		}
-		rep := lint.Run(t.Context(), in, registry(t), facts.Assume(offline{}))
+		rep := lint.Run(t.Context(), in, registry(t), offline{})
 		for _, d := range []detail{detailSummary, detailNormal, detailFull} {
 			out := textOf(t, rep, in, textOptions{detail: d, threshold: lint.SeverityInfo})
 			if !utf8.ValidString(out) {
@@ -325,7 +325,7 @@ func TestTextImpactOnce(t *testing.T) {
 		"high  commit-sha.unpinned  ×7\n  impact: whoever can move the ref decides what runs here\n  actions/checkout@v4 is not pinned to a full commit SHA  ×4\n",
 		"  remedy: pin the uses to a full commit SHA\n  no fix: ",
 		"critical  code-injection.wiki  .github/workflows/wiki.yml:8:24\n  github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum\n  impact: the value becomes code\n    8 |",
-		"  remedy: pass it through env and read the variable\n  assumed: repo.wiki-open = true",
+		"  remedy: pass it through env and read the variable\n  fact: repo.wiki-open = true",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no %q in\n%s", want, got)
@@ -391,7 +391,7 @@ func TestTextExcluded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep := lint.Run(context.Background(), in, registry(t), facts.Assume(offline{}))
+	rep := lint.Run(context.Background(), in, registry(t), offline{})
 	text := textOf(t, rep, in, textOptions{threshold: lint.SeverityInfo})
 	for _, s := range []string{" 1 excluded", "  excluded ×1: --exclude .github/actions"} {
 		if !strings.Contains(text, s) {
@@ -411,7 +411,7 @@ func TestTextExcluded(t *testing.T) {
 		t.Fatal(err)
 	}
 	only, _ := lint.EnumerateExcept(os.DirFS(dir), []lint.Exclude{mustExclude(t, "a")})
-	r2 := lint.Run(context.Background(), only, registry(t), facts.Assume(offline{}))
+	r2 := lint.Run(context.Background(), only, registry(t), offline{})
 	if got := textOf(t, r2, only, textOptions{threshold: lint.SeverityInfo}); !strings.Contains(got, "2 (no input)") {
 		t.Errorf("every input excluded: no %q in\n%s", "2 (no input)", got)
 	}

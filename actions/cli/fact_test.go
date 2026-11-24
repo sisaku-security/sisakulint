@@ -126,7 +126,7 @@ func TestRepoAndFact(t *testing.T) {
 	}
 	// entries of another repository and of no name do not answer o/r
 	mixed := run(t, with("--repo", "o/r", "--facts", writeFile(t, `{"schema":"sisakulint/facts/v0","facts":[{"query":{"kind":"repo.public","repo":"x/y"},"state":"found","value":false},{"query":{"kind":"repo.public"},"state":"found","value":false}]}`)))
-	if mixed.code != int(lint.ConfirmedBit) || !strings.Contains(mixed.stdout, finding) || !strings.Contains(mixed.stdout, `"source":"assumption"`) {
+	if mixed.code != int(lint.UndecidedBit) || !strings.Contains(mixed.stdout, finding) || !strings.Contains(mixed.stdout, `{"query":{"kind":"repo.public","repo":"o/r"},"state":"unknown"`) {
 		t.Errorf("--facts of x/y and of no name, --repo o/r: exit %d\n%s", mixed.code, mixed.stdout)
 	}
 	// --fact, with and without --repo

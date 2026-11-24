@@ -53,10 +53,10 @@ jobs:
 		}
 		return got
 	}
-	unnamed := kinds(lint.Run(context.Background(), in, reg, facts.Assumptions()))
+	unnamed := kinds(lint.Run(context.Background(), in, reg, worstCase(nil)))
 	repo, _ := facts.ParseRepo("o/r")
 	in.Repo = repo
-	named := kinds(lint.Run(context.Background(), in, reg, facts.Assumptions()))
+	named := kinds(lint.Run(context.Background(), in, reg, worstCase(nil)))
 	for _, k := range []string{"repo.public", "repo.wiki-open", "repo.default-token-write", "repo.environment-protected"} {
 		if q, ok := unnamed[k]; !ok || strings.Contains(q, `"repo"`) {
 			t.Errorf("no --repo: %s is %q", k, q)

@@ -41,7 +41,7 @@ func TestAllRulesExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got []string
-	for i, r := range []facts.Resolver{facts.Assume(store), facts.Assume(privateRepo{store})} { // as the CLI answers, the assumptions after the file
+	for i, r := range []facts.Resolver{worstCase(store), worstCase(privateRepo{store})} { // the facts of the file, then the x-assume values, so that every kind of the example is confirmed
 		rep := lint.Run(context.Background(), in, reg, r)
 		if len(rep.Errors) != 0 {
 			t.Fatalf("errors %+v", rep.Errors)

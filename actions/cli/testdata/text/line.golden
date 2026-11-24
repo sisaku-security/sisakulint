@@ -22,7 +22,7 @@
 .github/workflows/wiki.yml:6:32: critical known-vulnerable-actions.advisories-unknown: the advisories of actions/checkout are not known (offline: pass --facts or --online) [inconclusive]
 .github/workflows/wiki.yml:7:29: high impostor-commit.fork-commit: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 is pinned to a commit that no branch and no tag of actions/cache has [conditional]
 .github/workflows/wiki.yml:7:29: critical known-vulnerable-actions.advisories-unknown: the advisories of actions/cache are not known (offline: pass --facts or --online) [inconclusive]
-.github/workflows/wiki.yml:8:24: critical code-injection.wiki: github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum [assumed repo.wiki-open = true, --fix=review]
+.github/workflows/wiki.yml:8:24: critical code-injection.wiki: github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum [--fix=review]
 .github/workflows/alias.yml:3:3: quality missing-timeout-minutes.job: the job a has no timeout-minutes
 .github/workflows/alias.yml:6:36: quality archived-uses.archived-repository: actions/checkout@v4 names actions/checkout, a repository that is archived [conditional]
 .github/workflows/alias.yml:6:36: quality archived-uses.archived-repository: actions/checkout@v4 names actions/checkout, a repository that is archived [conditional]

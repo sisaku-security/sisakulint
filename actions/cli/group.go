@@ -2,12 +2,10 @@ package cli
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 
-	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/ir"
 	"github.com/gh-intel/sisakulint/actions/lint"
@@ -35,15 +33,13 @@ type kindCount struct {
 }
 
 // fold is confirmed findings the text shows under one head: the same rule,
-// severity, kind, kind of fix, reason and note for no fix, and
-// assumptions. Its rows are its findings by what they detect, the most first.
+// severity, kind, kind of fix, and reason and note for no fix. Its rows are its findings by what they detect, the most first.
 type fold struct {
 	rule     lint.RuleID
 	severity lint.Severity
 	kind     lint.FindingKindID
 	fix      *fixLine // by kind, as the registry titles it
 	noFix    *lint.NoFix
-	assumed  []assumption                    // the assumed facts it rests on
 	facts    []factLine                      // the facts found out that its findings' conditions rest on, once each
 	factsOf  map[lint.Fingerprint][]factLine // those of each finding
 	impact   string                          // of its kind: the same for each of its findings
@@ -66,14 +62,6 @@ type group struct {
 	results  []lint.Finding // in the order of their places
 }
 
-// assumption is a fact answered by its x-assume, and the value.
-type assumption struct {
-	query facts.Query
-	value json.RawMessage
-}
-
-func (a assumption) text() string { return queryText(a.query) + " = " + clean(string(a.value)) }
-
 // factLine is a fact found out that a condition rests on, and its answer.
 type factLine struct {
 	query facts.Query
@@ -92,15 +80,15 @@ func (x factLine) text() string {
 	return queryText(x.query) + " = " + v + " (" + from + ")"
 }
 
-// factsOf are the facts found out that the condition of r rests on:
-// asked, known, and not assumed (those are assumedOf).
+// factsOf are the facts found out that the condition of r rests on: asked
+// and known.
 func factsOf(r lint.Finding, known map[string]facts.RawAnswer) []factLine {
 	if r.Condition == nil {
 		return nil
 	}
 	var out []factLine
 	for _, q := range r.Condition.Queries() {
-		if raw, ok := known[queryKey(q)]; ok && raw.State != facts.StateUnknown && !raw.Assumed() {
+		if raw, ok := known[queryKey(q)]; ok && raw.State != facts.StateUnknown {
 			out = append(out, factLine{q, raw})
 		}
 	}
@@ -206,7 +194,7 @@ func buildView(rep lint.Report, in lint.Inputs, reg *lint.Registry) view {
 			}
 			continue
 		}
-		f := fold{rule: r.Rule, severity: r.Severity, kind: r.Args.KindID(), fix: kindFix(reg, r), noFix: r.NoFix, assumed: assumedOf(r, known, lookup), impact: r.Consequence, remedy: r.Remedy}
+		f := fold{rule: r.Rule, severity: r.Severity, kind: r.Args.KindID(), fix: kindFix(reg, r), noFix: r.NoFix, impact: r.Consequence, remedy: r.Remedy}
 		k := f.key()
 		if folds[k] == nil {
 			f.factsOf = map[lint.Fingerprint][]factLine{}
@@ -297,9 +285,6 @@ func (f fold) key() string {
 	if x := f.fix; x != nil {
 		fmt.Fprintf(&b, " fix %q %d", x.kind, x.safety)
 	}
-	for _, a := range f.assumed {
-		fmt.Fprintf(&b, " assumed %q %q", queryKey(a.query), a.value)
-	}
 	return b.String()
 }
 
@@ -307,35 +292,6 @@ func (f fold) key() string {
 // their first places, then by what they detect.
 func compareRows(a, b group) int {
 	return cmp.Or(cmp.Compare(len(b.results), len(a.results)), compareLocations(a.results[0], b.results[0]), strings.Compare(a.detected, b.detected))
-}
-
-// assumedOf are the assumed facts the finding r holds by: those of its
-// condition, when the condition would not be known without the
-// assumptions (the Report holds no such certainty; a text reckons it).
-// A leaf the engine did not ask, as Eval stopped before it, counts as not
-// known: a finding may show an assumption that --no-assumptions would find
-// it does not need.
-func assumedOf(r lint.Finding, known map[string]facts.RawAnswer, lookup func(facts.InputPath) lint.LookupState) []assumption {
-	if r.Condition == nil {
-		return nil
-	}
-	without := func(q facts.Query) facts.RawAnswer {
-		raw, ok := known[queryKey(q)]
-		if !ok || raw.Assumed() {
-			return facts.RawAnswer{State: facts.StateUnknown}
-		}
-		return raw
-	}
-	if lint.Eval(*r.Condition, without, lookup) != expr.TruthUnknown {
-		return nil
-	}
-	var out []assumption
-	for _, q := range r.Condition.Queries() {
-		if raw := known[queryKey(q)]; raw.Assumed() {
-			out = append(out, assumption{q, raw.Value})
-		}
-	}
-	return out
 }
 
 // decide groups conditional findings by what of their conditions is not

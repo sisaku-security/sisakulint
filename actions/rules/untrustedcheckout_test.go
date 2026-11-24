@@ -152,7 +152,7 @@ func TestUntrustedCheckout(t *testing.T) {
 // is not there.
 func TestUntrustedCheckoutAssumed(t *testing.T) {
 	src := checkoutJob("pull_request_target", "", "actions/checkout@v4", headSHAWith, "      - run: echo done\n")
-	rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), facts.Assume(checkoutFacts{}))
+	rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), worstCase(checkoutFacts{}))
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 || rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)[0].Certainty != lint.CertaintyConfirmed {
 		t.Errorf("assumed: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}

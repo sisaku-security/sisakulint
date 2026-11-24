@@ -22,7 +22,7 @@
 [36m.github/workflows/wiki.yml[0m[90m:6:32:[0m [1;31mcritical[0m [1mknown-vulnerable-actions.advisories-unknown[0m: the advisories of actions/checkout are not known (offline: pass --facts or --online) [90m[inconclusive][0m
 [36m.github/workflows/wiki.yml[0m[90m:7:29:[0m [31mhigh[0m [1mimpostor-commit.fork-commit[0m: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 is pinned to a commit that no branch and no tag of actions/cache has [90m[conditional][0m
 [36m.github/workflows/wiki.yml[0m[90m:7:29:[0m [1;31mcritical[0m [1mknown-vulnerable-actions.advisories-unknown[0m: the advisories of actions/cache are not known (offline: pass --facts or --online) [90m[inconclusive][0m
-[36m.github/workflows/wiki.yml[0m[90m:8:24:[0m [1;31mcritical[0m [1mcode-injection.wiki[0m: github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum [90m[assumed repo.wiki-open = true, --fix=review][0m
+[36m.github/workflows/wiki.yml[0m[90m:8:24:[0m [1;31mcritical[0m [1mcode-injection.wiki[0m: github.event.pages[0].title is written into the run script by ${{ }}, and an attacker controls it on gollum [90m[--fix=review][0m
 [36m.github/workflows/alias.yml[0m[90m:3:3:[0m quality [1mmissing-timeout-minutes.job[0m: the job a has no timeout-minutes
 [36m.github/workflows/alias.yml[0m[90m:6:36:[0m quality [1marchived-uses.archived-repository[0m: actions/checkout@v4 names actions/checkout, a repository that is archived [90m[conditional][0m
 [36m.github/workflows/alias.yml[0m[90m:6:36:[0m quality [1marchived-uses.archived-repository[0m: actions/checkout@v4 names actions/checkout, a repository that is archived [90m[conditional][0m
