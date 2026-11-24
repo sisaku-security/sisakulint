@@ -1,0 +1,30 @@
+# situation: labeler.yml calls the reusable workflow label-reusable.yml on
+#   pull_request_target, and label-reusable.yml runs actions/labeler with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label test to a pull request that changes a file under site/; labeled.yml
+#   runs on pull_request_target on labeled when contains('safe-to-test',
+#   github.event.label.name) is true, and the job checks out the head of the
+#   pull request and runs npm ci.
+# reason: the reusable workflow runs actions/labeler on the pull request of
+#   the attacker on the events of its caller, and a label that the token
+#   adds starts the labeled run, so no person approves the run before the
+#   label starts the run.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/ and the files of the attack; actions/labeler
+#   adds the label test, which starts labeled.yml, and
+#   contains('safe-to-test', 'test') is true, the checkout fetches the head of
+#   the pull request, and npm ci runs the preinstall script of the pull
+#   request, which prints PWNED, with the secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: contains('safe-to-test', github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

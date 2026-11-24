@@ -334,8 +334,8 @@ func labelersOf(in Inputs) *labeler.Table { return labelersIn(in, attacker.Outsi
 func labelersIn(in Inputs, at attacker.Table) *labeler.Table {
 	var fs []calls.File
 	for _, x := range in.List {
-		if x.Workflow != nil {
-			fs = append(fs, calls.File{Name: x.Name, Tree: x.Tree, Workflow: x.Workflow})
+		if x.Workflow != nil || x.ActionMetadata != nil {
+			fs = append(fs, calls.File{Name: x.Name, Tree: x.Tree, Workflow: x.Workflow, Action: x.ActionMetadata})
 		}
 	}
 	return labeler.ReadIn(at, fs, in.Root, func(p facts.InputPath) bool {

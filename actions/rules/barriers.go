@@ -45,7 +45,7 @@ var (
 var addedForms = map[lint.RuleID]map[lint.UndetectedFormID][]lint.AddedAttacker{
 	ArgumentInjectionID:  {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
 	ArtifactPoisoningID:  {insiderAssociationLimit.ID: associationAttackers},
-	CachePoisoningID:     labelForms(scriptLabelLimit, outsideBotLabelLimit, labelerPullRequestLimit, labelerOtherEventLimit, labelerCallLimit, labelerNotInputLimit),
+	CachePoisoningID:     labelForms(scriptLabelLimit, outsideBotLabelLimit, labelerPullRequestLimit, labelerOtherEventLimit, labelerNotInputLimit),
 	CodeInjectionID:      {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
 	DangerousTriggersID:  withForm(labelForms(scriptLabelLimit, outsideBotLabelLimit, labelerPullRequestLimit, labelerOtherEventLimit, labelerNotInputLimit), insiderAssociationLimit.ID, associationAttackers),
 	EnvpathInjectionID:   {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
@@ -54,7 +54,7 @@ var addedForms = map[lint.RuleID]map[lint.UndetectedFormID][]lint.AddedAttacker{
 	RequestForgeryID:     {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
 	SetOutputInjectionID: {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
 	UnsecureCommandsID:   {insiderAssociationLimit.ID: associationAttackers, notAttackerLimit.ID: valueAttackers},
-	UntrustedCheckoutID: withForm(withForm(labelForms(scriptLabelLimit, outsideBotLabelLimit, labelerPullRequestLimit, labelerOtherEventLimit, labelerCallLimit, labelerNotInputLimit),
+	UntrustedCheckoutID: withForm(withForm(labelForms(scriptLabelLimit, outsideBotLabelLimit, labelerPullRequestLimit, labelerOtherEventLimit, labelerNotInputLimit),
 		approvedLimitID, labelAttackers), insiderAssociationLimit.ID, accountAttackers),
 }
 

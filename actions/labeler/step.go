@@ -79,11 +79,16 @@ var attackerEvents = []workflow.EventName{workflow.EventNamePullRequestTarget}
 // GITHUB_TOKEN; root is the repository the configurations are read from,
 // and a path excluded is not read.
 func stepsOf(at attacker.Table, name facts.InputPath, w *workflow.Workflow, root fs.FS, excluded func(facts.InputPath) bool) []Step {
-	if w == nil || w.Jobs.Status != workflow.Present {
+	if w == nil {
 		return nil
 	}
-	evs := taint.EventsOn(w, attackerEvents)
-	if len(evs) == 0 {
+	return workflowSteps(at, name, w, taint.EventsOn(w, attackerEvents), root, excluded)
+}
+
+// workflowSteps is stepsOf on the events evs: those of the on of w, and
+// for a reusable workflow those its callers run it on.
+func workflowSteps(at attacker.Table, name facts.InputPath, w *workflow.Workflow, evs []analysis.EventActivity, root fs.FS, excluded func(facts.InputPath) bool) []Step {
+	if w == nil || w.Jobs.Status != workflow.Present || len(evs) == 0 {
 		return nil
 	}
 	// the checkouts, with their ifs read in at as the steps of actions/labeler
@@ -112,6 +117,36 @@ func stepsOf(at attacker.Table, name facts.InputPath, w *workflow.Workflow, root
 				st.Input = name
 				out = append(out, st)
 			}
+		}
+	}
+	return out
+}
+
+// actionSteps are the steps of the composite action a, the input name,
+// that run actions/labeler on the pull request of an attacker with a
+// token other than the GITHUB_TOKEN, on the events evs its callers run it
+// on. The job of the caller is not read: the step is read as one of a job
+// that runs, with the steps of a before it.
+func actionSteps(at attacker.Table, name facts.InputPath, a *workflow.ActionMetadata, evs []analysis.EventActivity, root fs.FS, excluded func(facts.InputPath) bool) []Step {
+	if a == nil || len(evs) == 0 || a.Runs.Status != workflow.Present || a.Runs.Value.Steps.Status != workflow.Present {
+		return nil
+	}
+	sites := prcode.AnalyzeIn(taint.NewCallersIn(calls.New(nil, false, false, facts.Repo{}), at), calls.Node{}, nil, a, nil)
+	steps := a.Runs.Value.Steps.Value.Items
+	var out []Step
+	for i, s := range steps {
+		ref, ok := labelerRef(s)
+		if !ok {
+			continue
+		}
+		on := slices.DeleteFunc(slices.Clone(evs), func(e analysis.EventActivity) bool { return !attackerRuns(at, e, attacker.StepIf(nil, nil, s.If)) })
+		if len(on) == 0 {
+			continue
+		}
+		run := func(analysis.EventActivity) jobRun { return jobRunSure }
+		for _, st := range readSteps(s, ref, steps[:i], sites, at, on, run, root, excluded, nil, nil) {
+			st.Input = name
+			out = append(out, st)
 		}
 	}
 	return out

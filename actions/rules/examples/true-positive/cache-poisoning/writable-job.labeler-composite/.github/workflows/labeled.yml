@@ -1,0 +1,32 @@
+# situation: labeler.yml runs the composite action .github/actions/label on
+#   pull_request_target with a personal access token, and the composite
+#   action runs actions/labeler with the token; the configuration
+#   .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file under site/;
+#   labeled.yml runs on pull_request_target on labeled when the label is
+#   safe-to-test, and the job has cache-mode write, checks out the head of the
+#   pull request and runs npm ci.
+# reason: the composite action runs actions/labeler on the pull request of
+#   the attacker on the events of its caller, and a label that the token
+#   adds starts the labeled run, so no person approves the run before the
+#   label starts the run.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"mkdir -p ~/.npm && echo PWNED > ~/.npm/PWNED\"}}"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/ and the files of the attack; actions/labeler
+#   adds the label safe-to-test, which starts labeled.yml, and npm ci runs the
+#   preinstall script of the pull request in a job that may save to the cache
+#   of the scope of the default branch, so the code of the attacker can save
+#   an entry there.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci

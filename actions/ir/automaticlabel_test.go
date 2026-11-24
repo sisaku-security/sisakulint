@@ -382,3 +382,36 @@ func TestAutomaticLabelNeedsResult(t *testing.T) {
 		t.Errorf("caller: got %+v, want no site (the job that calls the workflow does not run)", sites)
 	}
 }
+
+// TestAutomaticLabelCalledLabeler: actions/labeler in a reusable workflow
+// or a composite action that a workflow on pull_request_target calls lets
+// the attacker in as the labeler of a job does.
+func TestAutomaticLabelCalledLabeler(t *testing.T) {
+	labelerStep := "      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.PAT }}\n"
+	for _, c := range []struct {
+		name   string
+		at     string
+		labels [][2]string
+	}{
+		{"job", ".github/workflows/labeler.yml", [][2]string{{".github/workflows/labeler.yml", labelerYML}}},
+		{"reusable", ".github/workflows/label.yml", [][2]string{
+			{".github/workflows/labeler.yml", "on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    secrets: inherit\n"},
+			{".github/workflows/label.yml", "on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep}}},
+		{"composite", ".github/actions/label/action.yml", [][2]string{
+			{".github/workflows/labeler.yml", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n"},
+			{".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n" + strings.ReplaceAll(labelerStep, "      ", "    ")}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			files := append(slices.Clone(c.labels), [2]string{".github/workflows/build.yml", labeledWorkflow("    if: github.event.label.name == 'safe-to-test'\n", headCheckout)})
+			x := labeledIR(t, ".github/workflows/build.yml", freeConfig, files...)
+			sites := x.allCheckoutSites()
+			if len(sites) != 1 {
+				t.Fatalf("%d sites", len(sites))
+			}
+			a := sites[0].automaticApproval
+			if !slices.Equal(a.AutomaticLabels, free) || a.At.InputName() != c.at || a.Token != labeler.TokenSourceAccount {
+				t.Errorf("got %+v", a)
+			}
+		})
+	}
+}

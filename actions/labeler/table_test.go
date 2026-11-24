@@ -1,6 +1,7 @@
 package labeler
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -16,8 +17,13 @@ func filesOf(t *testing.T, root fstest.MapFS, names ...string) []calls.File {
 	var out []calls.File
 	for _, n := range names {
 		tree := cst.ParseMode(root[n].Data, cst.ModeGitHub)
-		w, _ := workflow.Parse(tree)
-		out = append(out, calls.File{Name: facts.MustCleanInputPath(n), Tree: tree, Workflow: w})
+		f := calls.File{Name: facts.MustCleanInputPath(n), Tree: tree}
+		if strings.HasPrefix(n, ".github/workflows/") {
+			f.Workflow, _ = workflow.Parse(tree)
+		} else {
+			f.Action, _ = workflow.ParseActionMetadata(tree)
+		}
+		out = append(out, f)
 	}
 	return out
 }
@@ -122,5 +128,51 @@ func TestTableTwoLabelers(t *testing.T) {
 	got := Read(filesOf(t, root, ".github/workflows/a.yml", ".github/workflows/b.yml"), root, func(facts.InputPath) bool { return false }).Steps()
 	if len(got) != 1 || got[0].Input.String() != ".github/workflows/b.yml" {
 		t.Errorf("got %v, want the labeler of b.yml", got)
+	}
+}
+
+// TestTableCalled: actions/labeler in a reusable workflow or a composite
+// action that a workflow on pull_request_target calls is read on the
+// events of the caller, as in the job of the caller; one that nothing of
+// the repository calls is not.
+func TestTableCalled(t *testing.T) {
+	labelerStep := `      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.PAT }}
+`
+	for _, c := range []struct {
+		name, callee, calleeSrc, caller string
+		want                            int
+	}{
+		{"reusable", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    secrets: inherit\n", 1},
+		{"composite", ".github/actions/label/action.yml",
+			"runs:\n  using: composite\n  steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n", 1},
+		{"reusable called on push", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: push\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n", 0},
+		{"composite behind a false if", ".github/actions/label/action.yml",
+			"runs:\n  using: composite\n  steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n", 0},
+		{"reusable not called", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := fstest.MapFS{
+				".github/labeler.yml":      {Data: []byte(freeConfig)},
+				c.callee:                   {Data: []byte(c.calleeSrc)},
+				".github/workflows/ci.yml": {Data: []byte(c.caller)},
+			}
+			got := Read(filesOf(t, root, ".github/workflows/ci.yml", c.callee), root, func(facts.InputPath) bool { return false }).Steps()
+			if len(got) != c.want {
+				t.Fatalf("got %v, want %d steps", got, c.want)
+			}
+			if c.want == 1 && (got[0].Input.String() != c.callee || got[0].Token != TokenSourceAccount || got[0].Unknown || got[0].Labels["safe-to-test"] != freeReach) {
+				t.Errorf("got %+v", got[0])
+			}
+		})
 	}
 }
