@@ -11,5 +11,10 @@ jobs:
         password: hunter2
     services:
       redis: redis
+      db:
+        image: ghcr.io/o/db@sha256:0000000000000000000000000000000000000000000000000000000000000000
+        credentials:
+          username: u
+          password: ${{ vars.REGISTRY_PASSWORD }}
     steps:
       - uses: docker://alpine:3

@@ -39,7 +39,7 @@ high      cache-poisoning.saved-checkout              ×1  .github/workflows/cac
 high      cache-poisoning.attacker-path               ×1  .github/workflows/cache.yml:22:21
 high      cache-poisoning.attacker-key                ×1  .github/workflows/cache.yml:23:28
 high      unpinned-images.mutable                     ×2 (2 messages)  .github/workflows/images.yml:8:14
-high      action-list.unlisted-image                  ×1  .github/workflows/images.yml:15:15
+high      action-list.unlisted-image                  ×1  .github/workflows/images.yml:20:15
 high      secret-exposure.all-secrets                 ×2  .github/workflows/inherit-called.yml:13:16
 high      permissions.write-all                       ×1  .github/workflows/least-privilege.yml:14:5
 high      secrets-inherit.remote                      ×1  .github/workflows/least-privilege.yml:21:14
@@ -48,6 +48,7 @@ high      action-list.unlisted                        ×1  .github/workflows/qua
 high      commit-sha.unpinned-path-action             ×1  .github/workflows/quality.yml:62:34
 high      request-forgery.runner-network              ×1  .github/workflows/request.yml:36:32
 high      known-vulnerable-actions.advisory-medium    ×1  .github/workflows/vulnerable.yml:14:41
+medium    credentials.configuration-variable          ×1  .github/workflows/images.yml:18:21
 medium    known-vulnerable-actions.advisory-low       ×1  .github/workflows/vulnerable.yml:15:35
 low       unpinned-images.service                     ×1  .github/workflows/images.yml:13:14
 low       action-list.unlisted-service                ×1  .github/workflows/images.yml:13:14
@@ -75,6 +76,6 @@ inconclusive  23 findings (known-vulnerable-actions)
 inputs        24 read  (every workflow and action.yml under --root)
 
 rules  46 of 47 ran; skipped: impostor-commit
-158 findings: 89 confirmed (critical 24, high 62, medium 1, low 2), 46 conditional, 23 inconclusive
-84 quality findings: the bits do not count quality findings
+159 findings: 90 confirmed (critical 24, high 62, medium 2, low 2), 46 conditional, 23 inconclusive
+85 quality findings: the bits do not count quality findings
 bits 11 = 1 (confirmed findings) + 2 (conditional findings) + 8 (inconclusive findings)

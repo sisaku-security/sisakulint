@@ -11,7 +11,11 @@ import (
 // Credentials is the rule credentials: the password of a registry written
 // in the workflow, which whoever reads the workflow reads. Whether
 // the repository is public tells who that is, so a password gives a
-// finding of each kind, on repo.public true and false.
+// finding of each kind, on repo.public true and false. A password read
+// from a configuration variable (vars.NAME) is not in the file, but GitHub
+// keeps the value of a configuration variable as plain text, so such a
+// password gives a finding of the kind credentials.configuration-variable
+// whatever repo.public is.
 var Credentials lint.Rule = withExamples(lint.WithView[ir.CredentialsReader](credentials{}, ir.CredentialsView))
 
 // CredentialsID is the ID of credentials.
@@ -30,8 +34,10 @@ func (credentials) Check(_ context.Context, c *lint.RuleContext, v ir.Credential
 			at := c.At(r.PasswordAt())
 			c.Report(lint.FindingDraft{Location: at, Anchor: "public", Args: CredentialsPublic{Container: r.Container()}, Condition: isPublic(c)})
 			c.Report(lint.FindingDraft{Location: at, Anchor: "private", Args: CredentialsPrivate{Container: r.Container()}, Condition: factCond(facts.RepoPublic{Repo: c.Repo()}, false)})
+		case ir.PasswordFormVariable:
+			c.Report(lint.FindingDraft{Location: c.At(r.PasswordAt()), Anchor: "configuration-variable", Args: CredentialsConfigurationVariable{Container: r.Container(), Password: r.PasswordText()}})
 		case ir.PasswordFormOther:
-			c.Inconclusive(lint.InconclusiveDraft{KindID: passwordExpr, Location: c.At(r.PasswordAt()), Note: r.PasswordText() + " reads a context other than secrets; whether its value is written in the repository is not known"})
+			c.Inconclusive(lint.InconclusiveDraft{KindID: passwordExpr, Location: c.At(r.PasswordAt()), Note: r.PasswordText() + " reads a context other than secrets and vars; whether its value is written in the repository is not known"})
 		}
 	}
 	return nil
@@ -55,6 +61,25 @@ func credentialsCVSS(pr lint.Metric[lint.PrivilegesRequired]) lint.CVSS {
 	}
 }
 
+// variableCVSS is credentialsCVSS for a password kept in a configuration
+// variable: the value is not in the file, and is read where a workflow
+// run prints the value or from the REST API.
+func variableCVSS() lint.CVSS {
+	b := credentialsCVSS(metric(lint.PrivilegesRequiredLow, "the value is read by one who reads the log of a workflow run that prints the value (signed in to GitHub; on a private or internal repository, with read access), or by one who may read the configuration variables of the repository through the REST API"))
+	b.AV = metric(lint.AttackVectorNetwork, "the attacker reads the log of a workflow run, or calls the REST API, over the network")
+	b.AC = metric(lint.AttackComplexityLow, "the value is plain text where it is printed and in the answer of the REST API")
+	b.AT = metric(lint.AttackRequirementsPresent, "a step of a workflow run must print the value, or the attacker must hold a credential that may read the configuration variables of the repository")
+	return b
+}
+
+var (
+	plainTextVariable     = lint.MustPreconditionID("plain-text-variable")
+	variableConceptDocs   = lint.MustCitation(configurationVariableDocs + "content/actions/concepts/workflows-and-actions/variables.md")
+	variableRESTDocs      = lint.MustCitation("https://docs.github.com/en/rest/actions/variables#get-a-repository-variable")
+	variableAppPermission = lint.MustCitation("https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps#repository-permissions-for-variables")
+	noVariableIncident    = metric(lint.ExploitMaturityUnreported, "no report was found of a registry password kept in a configuration variable taken and used")
+)
+
 var (
 	readableFile         = lint.MustPreconditionID("readable-file")
 	historyKeeps         = lint.MustPreconditionID("history-keeps")
@@ -66,7 +91,7 @@ var (
 
 var credentialsMeta = lint.Meta{
 	ID:       CredentialsID,
-	Problem:  "the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it",
+	Problem:  "the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it, or is read from a configuration variable (vars.NAME), whose value GitHub keeps as plain text",
 	Expected: "the password is read from a secret of the repository, ${{ secrets.NAME }}",
 	Facets:   lint.Facets{Weakness: []lint.Weakness{lint.WeaknessCredentialLeak}, AttackMeans: []lint.AttackMeans{lint.AttackMeansNone}},
 	FindingKinds: []lint.FindingKind{
@@ -86,15 +111,30 @@ var credentialsMeta = lint.Meta{
 			CVSS:            credentialsCVSS(metric(lint.PrivilegesRequiredLow, "the files of a private or internal repository are read by those with read access to it, every member of the enterprise for an internal one, the apps given its contents, and whoever has their tokens")),
 			ExploitMaturity: noCredentialIncident,
 		},
+		// configuration-variable last: the examples of remote-callee are
+		// made of the first true positive, public.yml
+		{
+			FindingText:     textCredentialsConfigurationVariable,
+			Attackers:       []lint.Attacker{lint.AttackerLogReader},
+			Preconditions:   []lint.PreconditionID{plainTextVariable, readableLog},
+			CVSS:            variableCVSS(),
+			ExploitMaturity: noVariableIncident,
+		},
 	},
 	Threat: lint.Threat{
 		Actors: []lint.Actor{{
 			Attacker: lint.AttackerRepositoryReader,
 			Via:      "reads the workflow file, or a clone or a fork of the repository",
 			Gains:    []lint.Gain{lint.GainUseRegistryAccount},
+		}, {
+			Attacker: lint.AttackerLogReader,
+			Via:      "reads the log of a workflow run in which a step printed the value of the configuration variable that holds the password",
+			Gains:    []lint.Gain{lint.GainUseRegistryAccount},
 		}},
 		Preconditions: []lint.Precondition{
 			{ID: readableFile, Text: "the workflow file is read by anyone in a public repository (repo.public true), and by those with read access, the apps given its contents and whoever has their tokens in a private or internal one, where every member of the enterprise has read access to an internal one; the runner gives the password to docker login as written", Cites: []lint.Citation{credentialDocs, internalReaders}},
+			{ID: plainTextVariable, Text: "GitHub keeps the value of a configuration variable as plain text and does not register the value as a secret: the documentation of GitHub says that variables store non-sensitive configuration information, that variables render unmasked in build outputs, and that passwords belong in secrets; the REST API gives the value of a configuration variable to whoever may read the configuration variables of the repository, among them an app that has the Variables permission on the repository, and gives only the name of a secret", Cites: []lint.Citation{variableConceptDocs, variableRESTDocs, variableAppPermission}},
+			readableLogPre,
 			{ID: historyKeeps, Text: "the history keeps the password after the file no longer has it, and one who had access keeps a clone, so only revoking it ends the exposure", Cites: []lint.Citation{collaborators}},
 		},
 	},
@@ -105,7 +145,7 @@ var credentialsMeta = lint.Meta{
 		{ID: lint.MustUndetectedFormID("run-command"), Text: "a password written in a run: docker login -p", Disposition: lint.Todo(lint.NeedSameFile)},
 	}),
 	InconclusiveKinds: withRemoteCalleeUnknown([]lint.InconclusiveKind{
-		{ID: passwordExpr, Text: "a password read from a context other than secrets: env, vars, inputs, matrix", Disposition: lint.Todo(lint.NeedSameFile)},
+		{ID: passwordExpr, Text: "a password read from a context other than secrets and vars: env, inputs, matrix; also a container, or the services, written as a whole ${{ }}, whose credentials the rule does not see", Disposition: lint.Todo(lint.NeedSameFile)},
 	}),
 	FalsePositiveForms: []lint.FalsePositiveForm{
 		{ID: lint.MustFalsePositiveFormID("private-repository"), Text: "a private or internal repository, where the password is credentials.private: whoever may read the repository reads it", FindingKinds: []lint.FindingKindID{kindCredentialsPublic}, FactKinds: []facts.Kind{facts.KindRepoPublic}},

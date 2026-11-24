@@ -175,7 +175,7 @@ const (
 	FieldPrintedOutputTransform                                     // printed-output.transform: how the shell changed the value: the operator of an expansion, or the command
 	FieldPrintedOutputText                                          // printed-output.text: the ${{ }} as written
 	FieldPrintedOutputAlwaysSkipped                                 // printed-output.always-skipped: whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never
-	FieldRegistryCredentialsPasswordForm                            // registry-credentials.password-form: whether the password is written in the workflow, read from secrets, or read from another context
+	FieldRegistryCredentialsPasswordForm                            // registry-credentials.password-form: whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context
 	FieldRegistryCredentialsPasswordText                            // registry-credentials.password-text: the password as written, for the note of an inconclusive one
 	FieldRegistryCredentialsContainer                               // registry-credentials.container: container, or services.<name>
 	FieldRemoteCallUsesText                                         // remote-call.uses-text: the uses of the job as written
@@ -1998,7 +1998,7 @@ func (s *PrintedOutput) summaryHandles() []Handle { return []Handle{s.at} }
 type RegistryCredentials struct {
 	key          Key
 	passwordAt   Handle       // the password
-	passwordForm PasswordForm // whether the password is written in the workflow, read from secrets, or read from another context
+	passwordForm PasswordForm // whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context
 	passwordText string       // the password as written, for the note of an inconclusive one
 	container    string       // container, or services.<name>
 }
@@ -4114,7 +4114,7 @@ func (x CredentialsOfRegistryCredentials) Key() Key { return x.s.key }
 // PasswordAt is the handle on the password.
 func (x CredentialsOfRegistryCredentials) PasswordAt() Handle { return x.s.passwordAt }
 
-// PasswordForm is whether the password is written in the workflow, read from secrets, or read from another context.
+// PasswordForm is whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context.
 func (x CredentialsOfRegistryCredentials) PasswordForm() PasswordForm { return x.s.passwordForm }
 
 // PasswordText is the password as written, for the note of an inconclusive one.

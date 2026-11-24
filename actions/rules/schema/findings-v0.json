@@ -469,6 +469,7 @@
         {"$ref": "#/$defs/commit-sha.unpinned"},
         {"$ref": "#/$defs/commit-sha.unpinned-path-action"},
         {"$ref": "#/$defs/cond.mixed-text"},
+        {"$ref": "#/$defs/credentials.configuration-variable"},
         {"$ref": "#/$defs/credentials.private"},
         {"$ref": "#/$defs/credentials.public"},
         {"$ref": "#/$defs/dangerous-triggers.secrets"},
@@ -843,6 +844,20 @@
       "x-detected": "the if {condition} has text outside its ${{ }} (in an action.yml, a space or a line break counts as text too), or more than one ${{ }}, so GitHub reads the if as a string",
       "x-consequence": "GitHub joins the text and the values of the expressions into one string; the string is not empty, so the string is true whatever the expressions give. When no ${{ }} of the if calls a status function (always(), cancelled(), failure() or success()), GitHub adds success() && before the string, and the job or the step runs only when the jobs or the steps before the job or the step succeeded. When a ${{ }} calls a status function, even success(), GitHub adds nothing, the if is the string alone, and the job or the step runs after a failure too. When the if is written to keep an attacker from running the job or the step, the if does not stop the attacker: the rules of this linter that evaluate the if in the runs of an attacker read the if as true, as GitHub does, and read the job or the step as when the job or the step has no if: for example, dangerous-triggers reports a job that runs on an event of the attacker with secrets or a token that writes. What the attacker gets comes from what the job or the step does, not from the if alone",
       "x-remedy": "write the whole condition in one ${{ }}, such as ${{ a && b }}, or write the condition without ${{ }}, such as a && b; both forms work in a workflow and in an action.yml. In an action.yml, write nothing around the ${{ }}: no space, and no block scalar (if: |), which keeps a line break after the ${{ }}"
+    },
+    "credentials.configuration-variable": {
+      "description": "The password of a registry read from a configuration variable.",
+      "type": "object",
+      "properties": {
+        "kind_id": {"const": "credentials.configuration-variable"},
+        "container": {"description": "container, or services.<name>.", "type": "string", "minLength": 1},
+        "password": {"description": "The password as written, such as ${{ vars.REGISTRY_PASSWORD }}.", "type": "string", "minLength": 1}
+      },
+      "required": ["kind_id", "container", "password"],
+      "additionalProperties": false,
+      "x-detected": "the password of {container} is read from a configuration variable: {password}",
+      "x-consequence": "GitHub keeps the value of a configuration variable as plain text: the runner does not mask the value in the log of a workflow run, and the REST API gives the value to whoever may read the configuration variables of the repository, such as an app that has the Variables permission on the repository",
+      "x-remedy": "revoke the password, and pass a new one from a secret of the repository, ${{ secrets.NAME }}"
     },
     "credentials.private": {
       "description": "The password of a registry written in the workflow of a private repository.",
