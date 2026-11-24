@@ -17195,6 +17195,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -17364,6 +17372,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -18124,6 +18140,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -19056,6 +19080,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -19577,6 +19609,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -20352,6 +20392,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -20930,6 +20978,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -21063,6 +21119,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -21383,6 +21447,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -26799,6 +26879,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -26953,6 +27041,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -27106,6 +27202,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -65057,6 +65161,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -106284,6 +106396,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -146001,6 +146121,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -146046,6 +146182,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -146515,6 +146667,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -152030,6 +152198,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 },
                 {
                   "query": {
@@ -166684,6 +166868,22 @@
                 },
                 {
                   "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
                     "kind": "workflow.definition",
                     "repo": "example-org/self-hosted-runner-remote",
                     "path": ".github/workflows/w.yml",
@@ -166764,6 +166964,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167042,6 +167258,22 @@
                 },
                 {
                   "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
                     "kind": "workflow.definition",
                     "repo": "example-org/self-hosted-workflow",
                     "path": ".github/workflows/build.yml",
@@ -167122,6 +167354,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167588,6 +167836,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167660,6 +167924,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167732,6 +168004,14 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167805,6 +168085,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167876,6 +168172,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -167947,6 +168259,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -168091,6 +168419,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
@@ -178537,6 +178881,22 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "linux"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.runner-label-trusted",
+                    "runner_label": "self-hosted"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 }
               ],
               "notes": {
