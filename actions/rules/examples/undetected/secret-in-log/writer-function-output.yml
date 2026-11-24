@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines a function f that prints "key:" and the secret GCP_SA_KEY
-#   without the first character of the secret, and appends the output of f
-#   to $GITHUB_STEP_SUMMARY through a pipe to cat in a group.
+# situation: on push, in a public repository (repo.public true), a step
+#   defines a function f that prints "key:" and the secret GCP_SA_KEY without
+#   the first character of the secret, and appends the output of f to
+#   $GITHUB_STEP_SUMMARY through a pipe to cat in a group.
 # reason: a todo (the same file): the group passes the output of f to the
 #   job summary, and the runner does not mask a value made from the secret.
 # cause: the rule reads a pipeline whose last command is a group by every

@@ -1,6 +1,5 @@
-# situation: on pull_request, a job runs make on a runner labelled
-#   self-hosted and linux, in a public repository (repo.public, assumed
-#   true).
+# situation: on pull_request, a job runs make on a runner labelled self-hosted
+#   and linux, in a public repository (repo.public true).
 # reason: on pull_request, GitHub runs the workflow file as the pull request
 #   has it, so the author of a pull request from a fork can rewrite the
 #   steps, and runs-on: [self-hosted, linux] sends them to the repository's

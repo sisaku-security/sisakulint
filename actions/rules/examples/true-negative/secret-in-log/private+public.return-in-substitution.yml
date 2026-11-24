@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step defines a function f that sets x to the output of a $( ) that runs
-#   return and then prints the secret GCP_SA_KEY without its first
-#   character, and prints x; the step calls f.
+# situation: on push, in a public repository (repo.public true), a step
+#   defines a function f that sets x to the output of a $( ) that runs return
+#   and then prints the secret GCP_SA_KEY without its first character, and
+#   prints x; the step calls f.
 # reason: return ends the commands of the $( ), so the print in the $( )
 #   does not run, x is empty, and the log has no part of the secret.
 # attack: anyone signed in to GitHub opens the run's log and reads the

@@ -1,10 +1,9 @@
 # situation: on gollum, a step writes page= and the wiki page's title to
 #   $GITHUB_ENV.
-# reason: anyone may edit the wiki when it is open to all (repo.wiki-open,
-#   assumed true), and the runner reads $GITHUB_ENV one line at a time as
-#   NAME=value, so a line of the title such as LD_PRELOAD=... becomes a
-#   variable of its own, which changes what the programs of the later steps
-#   load.
+# reason: anyone may edit the wiki when it is open to all (repo.wiki-open
+#   true), and the runner reads $GITHUB_ENV one line at a time as NAME=value,
+#   so a line of the title such as LD_PRELOAD=... becomes a variable of its
+#   own, which changes what the programs of the later steps load.
 # attack-value: github.event.pages[0].title = "x\nPWNED=1"
 # attack-run-behavior: PAGE holds x, a line break and PWNED=1, so echo
 #   appends the two lines page=x and PWNED=1 to $GITHUB_ENV; the runner

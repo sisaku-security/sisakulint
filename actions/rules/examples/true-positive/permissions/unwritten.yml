@@ -1,10 +1,10 @@
 # situation: neither the workflow nor the job writes permissions, and the
 #   job runs actions/checkout, actions/setup-node and npm ci.
 # reason: without permissions, the token has the repository's default, which
-#   may write (repo.default-token-write, assumed true); both actions take it
-#   as the default of their token input, and actions/checkout leaves it in
-#   .git/config, where the install scripts of the packages npm ci installs
-#   can read it.
+#   may write (repo.default-token-write true); both actions take it as the
+#   default of their token input, and actions/checkout leaves it in
+#   .git/config, where the install scripts of the packages npm ci installs can
+#   read it.
 # attack: the maintainer of a package npm ci installs, or whoever takes over
 #   their account, publishes a version whose install script reads the token
 #   and sends it out.

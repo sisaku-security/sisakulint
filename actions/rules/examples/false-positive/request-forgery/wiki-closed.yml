@@ -3,8 +3,9 @@
 #   whose wiki only collaborators may edit.
 # reason: no harm when only collaborators may edit the wiki: they can write
 #   to the repository.
-# cause: the rule assumes anyone may edit the wiki (repo.wiki-open) unless a
-#   file of facts says otherwise.
+# cause: unless a file of facts or --fact says that not anyone may edit the
+#   wiki (repo.wiki-open false), the rule reports the finding. When no file of
+#   facts and no --fact answers repo.wiki-open, the finding is conditional.
 # attack: the attacker titles a wiki page attacker.example, where the wiki
 #   lets anyone edit.
 # attack-run-behavior: with the wiki closed to outsiders, the attacker

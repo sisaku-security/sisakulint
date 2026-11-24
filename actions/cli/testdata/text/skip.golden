@@ -8,7 +8,7 @@ critical  artipacked.github-token                     ×1  .github/workflows/all
 critical  artipacked.token-input                      ×1  .github/workflows/all-rules.yml:70:9
 critical  secrets-in-artifacts.lasting                ×1  .github/workflows/all-rules.yml:85:17
 critical  secrets-in-artifacts.job-scoped             ×1  .github/workflows/all-rules.yml:85:17
-critical  code-injection.env-variable                 ×1  .github/workflows/all-rules.yml:110:25
+critical  code-injection.env-variable                 ×1  .github/workflows/all-rules.yml:111:25
 critical  argument-injection.option                   ×1  .github/workflows/argument.yml:17:45
 critical  artifact-poisoning.executed                 ×1  .github/workflows/download.yml:16:23
 critical  set-output-injection.controlled             ×1  .github/workflows/output.yml:10:20

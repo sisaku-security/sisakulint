@@ -1,5 +1,5 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step opens file descriptor 3 on /dev/null with exec, and appends to
+# situation: on push, in a public repository (repo.public true), a step opens
+#   file descriptor 3 on /dev/null with exec, and appends to
 #   $GITHUB_STEP_SUMMARY, through cat, a line of "key:" and a $( ) in which
 #   exec points the standard output at file descriptor 3 and then an echo
 #   prints the secret GCP_SA_KEY without the first character of the secret.

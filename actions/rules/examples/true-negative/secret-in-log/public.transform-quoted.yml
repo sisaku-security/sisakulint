@@ -1,6 +1,6 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step prints the secret API_KEY written as a declare command that sets
-#   the variable again (${API_KEY@A}).
+# situation: on push, in a public repository (repo.public true), a step prints
+#   the secret API_KEY written as a declare command that sets the variable
+#   again (${API_KEY@A}).
 # reason: ${API_KEY@A} writes the whole key inside quotes, as ${API_KEY@Q}
 #   does, and the runner masks the key where the whole key is in the log.
 # attack: anyone signed in to GitHub opens the run's log to read the key.

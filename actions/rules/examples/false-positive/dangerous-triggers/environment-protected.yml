@@ -2,9 +2,10 @@
 #   secret.
 # reason: the environment production has required reviewers, who approve the
 #   job before it runs.
-# cause: the rule takes the environment as one that approves nothing unless
-#   a file of facts says it has required reviewers
-#   (repo.environment-protected is assumed false, the worst case).
+# cause: unless a file of facts or --fact says that the environment has
+#   required reviewers (repo.environment-protected true), the rule reports the
+#   finding. When no file of facts and no --fact answers
+#   repo.environment-protected, the finding is conditional.
 # attack-value: github.event.issue.title = "\"; echo PWNED; echo \""
 # attack-run-behavior: opening the issue queues the job a for the
 #   environment production, which waits for a required reviewer; until one

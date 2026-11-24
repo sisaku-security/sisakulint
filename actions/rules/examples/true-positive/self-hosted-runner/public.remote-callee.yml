@@ -1,8 +1,7 @@
 # situation: on push, a job calls
 #   example-org/self-hosted-workflow/.github/workflows/build.yml@v1, a
 #   reusable workflow of another repository whose job runs on a runner
-#   labelled self-hosted and linux, in a public repository (repo.public,
-#   assumed true).
+#   labelled self-hosted and linux, in a public repository (repo.public true).
 # reason: the jobs of a called workflow run on the runners of the
 #   repository that calls it, so the repository has a self-hosted runner
 #   with both labels; workflow.definition answers the file of the called

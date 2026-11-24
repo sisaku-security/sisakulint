@@ -5515,7 +5515,7 @@
         {
           "role": "evidence",
           "input": ".github/workflows/all-rules.yml",
-          "line": 108,
+          "line": 109,
           "column": 18,
           "key_path": "jobs.env-variable.steps[0].env.TITLE",
           "job": "env-variable",
@@ -5524,20 +5524,20 @@
           "source": "          TITLE: ${{ github.event.issue.title }}",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}",
               "at": true
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\""
             }
           ]
@@ -5545,7 +5545,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/all-rules.yml",
-          "line": 110,
+          "line": 111,
           "column": 25,
           "key_path": "jobs.env-variable.steps[0].run",
           "job": "env-variable",
@@ -5553,19 +5553,19 @@
           "source": "        run: eval \"echo $TITLE $PAGE\"",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\"",
               "at": true
             }
@@ -5593,7 +5593,7 @@
         {
           "role": "evidence",
           "input": ".github/workflows/all-rules.yml",
-          "line": 109,
+          "line": 110,
           "column": 17,
           "key_path": "jobs.env-variable.steps[0].env.PAGE",
           "job": "env-variable",
@@ -5602,20 +5602,20 @@
           "source": "          PAGE: ${{ github.event.pages[0].title }}",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}",
               "at": true
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\""
             }
           ]
@@ -5623,7 +5623,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/all-rules.yml",
-          "line": 110,
+          "line": 111,
           "column": 32,
           "key_path": "jobs.env-variable.steps[0].run",
           "job": "env-variable",
@@ -5631,19 +5631,19 @@
           "source": "        run: eval \"echo $TITLE $PAGE\"",
           "snippet": [
             {
-              "line": 107,
+              "line": 108,
               "text": "      - env:"
             },
             {
-              "line": 108,
+              "line": 109,
               "text": "          TITLE: ${{ github.event.issue.title }}"
             },
             {
-              "line": 109,
+              "line": 110,
               "text": "          PAGE: ${{ github.event.pages[0].title }}"
             },
             {
-              "line": 110,
+              "line": 111,
               "text": "        run: eval \"echo $TITLE $PAGE\"",
               "at": true
             }
@@ -15195,7 +15195,7 @@
         "    runs-on: ubuntu-latest",
         "    steps:",
         "      # untrusted-checkout.checkout: no step is seen to run the tree, so the",
-        "      # finding holds if one does (checkout.executed, assumed true)",
+        "      # finding holds if one does (checkout.executed true)",
         "      - uses: actions/checkout@v4",
         "        with:",
         "          ref: ${{ github.event.pull_request.head.sha }}",
@@ -15231,13 +15231,14 @@
         "      - run: echo after the upload",
         "  deploy:",
         "    # self-hosted-runner.public: a self-hosted runner, if the repository is",
-        "    # public (repo.public, assumed true)",
+        "    # public (repo.public true)",
         "    runs-on: [self-hosted, linux]",
         "    # dangerous-triggers.secrets: issues runs the job with no approval but the",
-        "    # environment's, if it has required reviewers (repo.environment-protected,",
-        "    # assumed false), and it reads a secret; the token writes nothing, as the",
-        "    # workflow writes permissions: {} (dangerous-triggers.token-write is the",
-        "    # job artifact's, whose permissions write)",
+        "    # environment's, if it has required reviewers, and the finding holds when",
+        "    # it has none (repo.environment-protected false); the job reads a secret,",
+        "    # and the token writes nothing, as the workflow writes permissions: {}",
+        "    # (dangerous-triggers.token-write is the job artifact's, whose permissions",
+        "    # write)",
         "    environment: production",
         "    steps:",
         "      - run: ./deploy",

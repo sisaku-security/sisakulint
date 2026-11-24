@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true),
-#   the container of the job `build` takes the user out of the JSON secret
-#   REGISTRY into the username of its credentials, and the API key out of
-#   the JSON secret CONFIG into its env.
+# situation: on push, in a public repository (repo.public true), the container
+#   of the job `build` takes the user out of the JSON secret REGISTRY into the
+#   username of its credentials, and the API key out of the JSON secret CONFIG
+#   into its env.
 # reason: the runner masks REGISTRY and CONFIG whole, not the values that
 #   fromJSON takes out of them, and the runner prints the docker login
 #   command with the username and the docker create command with the env at

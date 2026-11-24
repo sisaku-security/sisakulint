@@ -1,7 +1,6 @@
-# situation: a composite action with no caller among the files that the
-#   linter reads, in a public repository (repo.public, assumed true); a step
-#   takes the token of the job without the prefix ghs_ with sed and prints the
-#   rest.
+# situation: a composite action with no caller among the files that the linter
+#   reads, in a public repository (repo.public true); a step takes the token
+#   of the job without the prefix ghs_ with sed and prints the rest.
 # reason: the runner masks the whole token where the whole token is in the
 #   log, not the rest that sed leaves after sed removes ghs_, so the rest is
 #   in the log unmasked, and the prefix ghs_ is the same for every token.

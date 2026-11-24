@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets fd to 2, defines a function f that sets fd to 4 only when Q is
-#   set, calls f, and prints the private key out of the secret GCP_SA_KEY to
-#   the descriptor whose number fd holds.
+# situation: on push, in a public repository (repo.public true), a step sets
+#   fd to 2, defines a function f that sets fd to 4 only when Q is set, calls
+#   f, and prints the private key out of the secret GCP_SA_KEY to the
+#   descriptor whose number fd holds.
 # reason: Q is not set in the step, so f is not
 #   defined, the call fails, fd holds 2, the private key goes to the
 #   standard error, which is the log, and the runner does not mask the

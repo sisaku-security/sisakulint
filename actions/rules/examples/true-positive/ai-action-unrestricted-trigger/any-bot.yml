@@ -1,5 +1,5 @@
-# situation: on issue_comment, a step of claude-code-action has
-#   allowed_bots '*', in a public repository (repo.public, assumed true).
+# situation: on issue_comment, a step of claude-code-action has allowed_bots
+#   '*', in a public repository (repo.public true).
 # reason: a GitHub App anyone makes comments on the public repository, and
 #   the action lets its bot start the agent without checking that it can
 #   write.

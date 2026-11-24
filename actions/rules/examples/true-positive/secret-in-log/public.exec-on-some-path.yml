@@ -1,7 +1,7 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step points the standard output to /dev/null with exec, points it back
-#   to the standard error with exec when VERBOSE is empty, and prints the
-#   private key out of the secret GCP_SA_KEY.
+# situation: on push, in a public repository (repo.public true), a step points
+#   the standard output to /dev/null with exec, points it back to the standard
+#   error with exec when VERBOSE is empty, and prints the private key out of
+#   the secret GCP_SA_KEY.
 # reason: VERBOSE is not set in the step, so the second exec runs, the print
 #   goes to the standard error, which is the log, and the runner does not
 #   mask the private key.

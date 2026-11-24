@@ -1,8 +1,8 @@
 # situation: on push, a step uploads a build to VirusTotal with curl and the
 #   secret API_KEY in a header; no file of facts answers for the pair.
-# reason: the request carries API_KEY to www.virustotal.com, and whoever
-#   holds that server receives the key; the linter does not know whether the
-#   repository trusts that host with the key, and assumes not
+# reason: the request carries API_KEY to www.virustotal.com, and whoever holds
+#   that server receives the key; the linter does not know whether the
+#   repository trusts that host with the key, so the finding is conditional
 #   (request.destination-trusted).
 # attack: the attacker takes over the server of the destination, by a breach
 #   of the vendor or by registering the domain when the domain lapses.

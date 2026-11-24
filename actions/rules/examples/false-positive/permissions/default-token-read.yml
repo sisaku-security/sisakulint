@@ -1,9 +1,10 @@
 # situation: the job writes no permissions and runs actions and npm.
 # reason: the repository's default token is read, so the token writes
 #   nothing.
-# cause: the rule takes the default token as one that may write unless a
-#   file of facts says it is read (repo.default-token-write is assumed true,
-#   the worst case).
+# cause: unless a file of facts or --fact says that the default token is read
+#   (repo.default-token-write false), the rule takes the default token as one
+#   that may write and reports the finding. When no file of facts and no
+#   --fact answers repo.default-token-write, the finding is conditional.
 # attack: the maintainer of a package npm ci installs, or whoever takes over
 #   their account, publishes a version whose install script reads the token
 #   and sends it out.

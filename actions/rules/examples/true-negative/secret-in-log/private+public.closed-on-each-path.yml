@@ -1,8 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step opens a descriptor on the standard error with exec {fd} when QUIET
-#   is empty and on /dev/null otherwise, closes the descriptor whose number
-#   fd holds with exec {fd}>&-, and prints the private key out of the
-#   secret GCP_SA_KEY to the descriptor whose number fd holds.
+# situation: on push, in a public repository (repo.public true), a step opens
+#   a descriptor on the standard error with exec {fd} when QUIET is empty and
+#   on /dev/null otherwise, closes the descriptor whose number fd holds with
+#   exec {fd}>&-, and prints the private key out of the secret GCP_SA_KEY to
+#   the descriptor whose number fd holds.
 # reason: exec {fd}>&- closes the descriptor that exec {fd} in the branch of
 #   if opened, so the print fails on both paths, and the log has no part of
 #   the secret.

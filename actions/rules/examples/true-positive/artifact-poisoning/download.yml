@@ -4,8 +4,8 @@
 # reason: the run of ci that starts this one may be a pull request's from a
 #   fork, whose author then decides the artifact's files; the job checks out
 #   nothing, so the build.sh that source reads can only come from the artifact
-#   (download.executed, assumed true), and it runs in this workflow_run,
-#   with the base repository's token, not in the pull request's run.
+#   (download.executed true), and it runs in this workflow_run, with the base
+#   repository's token, not in the pull request's run.
 # attack-value: the file build.sh in the artifact of the pull request's ci run = "echo PWNED\n"
 # attack-run-behavior: the fork's pull request changes ci so its run uploads
 #   build.sh; when that run completes, the download takes its artifact by

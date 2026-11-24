@@ -1,8 +1,8 @@
-# situation: on push, in a public repository (repo.public, assumed true), a
-#   step sets s to x and defines reset, which unsets s; point makes s local
-#   with safe, calls reset, and sets s to the secret DEPLOY_TOKEN without the
-#   first character of the secret. The step calls point and then prints
-#   "token: " and $s.
+# situation: on push, in a public repository (repo.public true), a step sets s
+#   to x and defines reset, which unsets s; point makes s local with safe,
+#   calls reset, and sets s to the secret DEPLOY_TOKEN without the first
+#   character of the secret. The step calls point and then prints "token: "
+#   and $s.
 # reason: a todo (the same file): the unset in reset takes away the local that
 #   point made, so the assignment in point after reset sets the s of the step:
 #   the token without the first character, which the runner does not mask.
