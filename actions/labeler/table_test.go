@@ -5,6 +5,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"github.com/gh-intel/sisakulint/actions/calls"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/workflow"
@@ -183,5 +184,56 @@ func TestTableCalled(t *testing.T) {
 				t.Errorf("got %+v", got[0])
 			}
 		})
+	}
+}
+
+// TestTableCalledToken: the token that a calling job makes with
+// actions/create-github-app-token is the app's, read among the steps of
+// that job; an environment of a calling job may hold the run, so the step
+// is Unknown.
+func TestTableCalledToken(t *testing.T) {
+	action := "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n"
+	for _, c := range []struct {
+		name, caller string
+		token        TokenSource
+		unknown      bool
+	}{
+		{"app token", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - id: app\n        uses: actions/create-github-app-token@v2\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ steps.app.outputs.token }}\n", TokenSourceApp, false},
+		{"environment", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    environment: approval\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ secrets.PAT }}\n", TokenSourceAccount, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := fstest.MapFS{
+				".github/labeler.yml":              {Data: []byte(freeConfig)},
+				".github/actions/label/action.yml": {Data: []byte(action)},
+				".github/workflows/ci.yml":         {Data: []byte(c.caller)},
+			}
+			got := Read(filesOf(t, root, ".github/workflows/ci.yml", ".github/actions/label/action.yml"), root, func(facts.InputPath) bool { return false }).Steps()
+			if len(got) != 1 || got[0].Token != c.token || got[0].Unknown != c.unknown {
+				t.Errorf("got %+v", got)
+			}
+		})
+	}
+}
+
+// TestTableOtherRepo: a job that calls a workflow of another repository at
+// the path of an input runs that repository's workflow, when the
+// repository of the inputs is known.
+func TestTableOtherRepo(t *testing.T) {
+	root := fstest.MapFS{
+		".github/labeler.yml":                  {Data: []byte(freeConfig)},
+		".github/workflows/label-reusable.yml": {Data: []byte("on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.PAT }}\n")},
+		".github/workflows/ci.yml":             {Data: []byte("on: pull_request_target\njobs:\n  label:\n    uses: other-org/lib/.github/workflows/label-reusable.yml@v1\n    secrets: inherit\n")},
+	}
+	files := filesOf(t, root, ".github/workflows/ci.yml", ".github/workflows/label-reusable.yml")
+	repo, err := facts.ParseRepo("example-org/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadIn(attacker.Outsider, repo, files, root, func(facts.InputPath) bool { return false }).Steps(); len(got) != 0 {
+		t.Errorf("another repository's workflow: got %v", got)
+	}
+	repo, _ = facts.ParseRepo("other-org/lib")
+	if got := ReadIn(attacker.Outsider, repo, files, root, func(facts.InputPath) bool { return false }).Steps(); len(got) != 1 {
+		t.Errorf("the repository's own workflow: got %v", got)
 	}
 }

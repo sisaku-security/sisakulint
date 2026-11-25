@@ -338,7 +338,7 @@ func labelersIn(in Inputs, at attacker.Table) *labeler.Table {
 			fs = append(fs, calls.File{Name: x.Name, Tree: x.Tree, Workflow: x.Workflow, Action: x.ActionMetadata})
 		}
 	}
-	return labeler.ReadIn(at, fs, in.Root, func(p facts.InputPath) bool {
+	return labeler.ReadIn(at, in.Repo, fs, in.Root, func(p facts.InputPath) bool {
 		return slices.ContainsFunc(in.Excluded, func(e Exclude) bool { return e.covers(p.String()) })
 	})
 }

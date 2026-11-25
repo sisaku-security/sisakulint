@@ -20,16 +20,19 @@ type Table struct {
 // (chainsOf); a configuration under a path excluded is not read. A nil root (the
 // inputs are not the whole repository) has no steps.
 func Read(files []calls.File, root fs.FS, excluded func(facts.InputPath) bool) *Table {
-	return ReadIn(attacker.Outsider, files, root, excluded)
+	return ReadIn(attacker.Outsider, facts.Repo{}, files, root, excluded)
 }
 
-// ReadIn is Read, with the ifs read in the attacker run table at.
-func ReadIn(at attacker.Table, files []calls.File, root fs.FS, excluded func(facts.InputPath) bool) *Table {
+// ReadIn is Read, with the ifs read in the attacker run table at, for
+// the files of repo: a uses: owner/repo/path@ref of another repository
+// runs that repository's file, not the input at path (calls.New). The
+// zero Repo is a repository not known.
+func ReadIn(at attacker.Table, repo facts.Repo, files []calls.File, root fs.FS, excluded func(facts.InputPath) bool) *Table {
 	t := &Table{}
 	if root == nil {
 		return t
 	}
-	g := calls.New(files, true, false, facts.Repo{})
+	g := calls.New(files, true, false, repo)
 	for _, f := range files {
 		for _, c := range chainsOf(g, f.Node(), map[calls.Node]bool{}) {
 			var steps []Step

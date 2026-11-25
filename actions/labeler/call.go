@@ -22,10 +22,41 @@ type chain struct {
 	via []hop
 }
 
-// hop is a call and the input it calls.
+// hop is a call, the input it calls and the file of its caller.
 type hop struct {
 	call   calls.Call
 	called calls.File
+	caller calls.File
+}
+
+// environment is whether a job of a call of c has an environment, whose
+// required reviewers may approve the run before the label.
+func (c chain) environment() bool {
+	return slices.ContainsFunc(c.via, func(h hop) bool {
+		return h.call.Job != nil && h.call.Job.Environment.Status != workflow.Absent
+	})
+}
+
+// stepsBefore are the steps that run before the step of h in the job or
+// the composite action of its caller, whose outputs a value of its with
+// reads; none for a job that calls a workflow.
+func (h hop) stepsBefore() []workflow.Step {
+	if h.call.Step == nil {
+		return nil
+	}
+	var steps []workflow.Step
+	switch {
+	case h.call.Job != nil && h.call.Job.Steps.Status == workflow.Present:
+		steps = h.call.Job.Steps.Value.Items
+	case h.call.Job == nil && h.caller.Action != nil && h.caller.Action.Runs.Status == workflow.Present && h.caller.Action.Runs.Value.Steps.Status == workflow.Present:
+		steps = h.caller.Action.Runs.Value.Steps.Value.Items
+	}
+	for i, x := range steps {
+		if x.Base.Node == h.call.Step.Base.Node {
+			return steps[:i]
+		}
+	}
+	return nil
 }
 
 // own is the chain of w on the events of its own on.
@@ -59,7 +90,7 @@ func chainsOf(g *calls.Graph, name calls.Node, seen map[calls.Node]bool) []chain
 			out = append(out, chain{
 				evs: up.evs,
 				ifs: append(slices.Clone(ifs), up.ifs...),
-				via: append([]hop{{call, f}}, up.via...),
+				via: append([]hop{{call, f, cf}}, up.via...),
 			})
 		}
 	}
@@ -84,42 +115,48 @@ func callIfs(w *workflow.Workflow, call calls.Call) []attacker.PlacedIf {
 	return out
 }
 
-// resolve is the value v, written in the input that c leads to, as the
-// workflow at the top of c gives it: inputs.<id> is the value that the
-// call gives under with, else the default of the input, else empty;
-// secrets.<id> of a reusable workflow is the secret that the calling job
-// passes, the same secret under secrets: inherit, else empty. ok is false
-// for a value that the calls do not tell, such as an expression that reads
-// more than one input.
-func (c chain) resolve(v workflow.String) (workflow.String, bool) {
-	for k, h := range c.via {
+// resolve is the value v, written in the input that c leads to after the
+// steps before, as the workflow at the top of c gives it: inputs.<id> is
+// the value that the call gives under with, else the default of the
+// input, else empty; secrets.<id> of a reusable workflow is the secret
+// that the calling job passes, the same secret under secrets: inherit,
+// else empty. The steps returned are those before the step whose job or
+// composite action writes the value, which steps.<id>.outputs of the value
+// reads (tokenSource). ok is false for a value that the calls do not
+// tell, such as an expression that reads more than one input.
+func (c chain) resolve(v workflow.String, before []workflow.Step) (workflow.String, []workflow.Step, bool) {
+	defaults := 0 // a default that reads another input is read again in the same input, a few times at most
+	for k := 0; k < len(c.via); k++ {
+		h := c.via[k]
 		if v.Parts == nil {
-			return v, true
+			return v, before, true
 		}
 		n, ok := onlyTree(v)
 		if !ok {
-			return v, false
+			return v, before, false
 		}
 		if taint.JobTokenRef(n) {
-			return v, true
+			return v, before, true
 		}
 		p, ok := expr.AccessPath(n)
-		if !ok || len(p) != 2 && !(k == 0 && expr.HasPrefix(p, "steps")) {
-			return v, false
+		if !ok {
+			return v, before, false
 		}
 		switch {
 		case expr.HasPrefix(p, "steps"):
-			return v, true // a step of the input itself, before the step (tokenSource)
-		case expr.HasPrefix(p, "inputs"):
+			return v, before, true // a step before, read by tokenSource
+		case len(p) == 2 && expr.HasPrefix(p, "inputs"):
 			id := expr.FoldName(p[1].Name)
 			if w, ok := withValue(h.call.With, id); ok {
 				v = w
-			} else if d, ok := inputDefault(h.called, id); ok {
-				v = d
+			} else if d, ok := inputDefault(h.called, id); ok && defaults < len(c.via)+4 {
+				v, defaults = d, defaults+1
+				k-- // a default is read in the input, not in the caller
+				continue
 			} else {
 				v = workflow.String{}
 			}
-		case expr.HasPrefix(p, "secrets"):
+		case len(p) == 2 && expr.HasPrefix(p, "secrets"):
 			if h.call.Step != nil || h.call.Job.InheritSecrets {
 				continue // a composite action, in the job of its step; or the same secret
 			}
@@ -130,10 +167,11 @@ func (c chain) resolve(v workflow.String) (workflow.String, bool) {
 				v = workflow.String{}
 			}
 		default:
-			return v, false
+			return v, before, false
 		}
+		before = h.stepsBefore()
 	}
-	return v, true
+	return v, before, true
 }
 
 // withValue is the value that with gives the key id, compared ignoring
