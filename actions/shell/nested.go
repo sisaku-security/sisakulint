@@ -13,8 +13,10 @@ type NestedScript struct {
 	Code    Span   // the code, inside its quotes
 	// Assigns are the names the command gives the shell a value of its
 	// own: the assignments before the command word (T=x bash -c ...) and
-	// those of env (env T=x bash -c ...). Clears: env takes an option
-	// (env -i, env -u T), so the shell may not have the variables at all.
+	// those of env (env T=x bash -c ...), and the names env -u takes off.
+	// Clears: the shell does not get the variables at all: env -i, or
+	// sudo, whose env_reset (the default, and that of GitHub's runners)
+	// gives the command a new environment, with -E too.
 	Assigns []VarName
 	Clears  bool
 }
@@ -37,18 +39,36 @@ func NestedScripts(script string, sc *Script) []NestedScript {
 				assigns = append(assigns, VarName{n})
 			}
 		}
-		clears, inEnv := false, false
+		clears, inEnv, unset := false, false, false
 		for i := range x.Words {
 			if r.Roles[i] != ArgumentRoleCommand {
 				break
 			}
 			t := words[i].Text
 			switch {
+			case base(t) == "sudo":
+				clears = true
 			case base(t) == "env":
 				inEnv = true
 			case !inEnv:
-			case strings.HasPrefix(t, "-"):
+			case unset:
+				if n, ok := NameOf(t); ok {
+					assigns = append(assigns, n)
+				}
+				unset = false
+			case t == "-" || t == "-i" || t == "--ignore-environment":
 				clears = true
+			case t == "-u" || t == "--unset":
+				unset = true
+			case strings.HasPrefix(t, "--unset="):
+				if n, ok := NameOf(strings.TrimPrefix(t, "--unset=")); ok {
+					assigns = append(assigns, n)
+				}
+			case strings.HasPrefix(t, "-u"):
+				if n, ok := NameOf(t[2:]); ok {
+					assigns = append(assigns, n)
+				}
+			case strings.HasPrefix(t, "-"):
 			case strings.Contains(t, "="):
 				if n, ok := NameOf(t[:strings.IndexByte(t, '=')]); ok {
 					assigns = append(assigns, n)

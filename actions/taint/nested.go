@@ -65,38 +65,66 @@ func (c scope) nestedScripts(s *Sink) {
 
 // hiddenIn is whether the shell of n does not get the value of env of a
 // variable: the command gives it a value (T=x bash -c, env T=x bash -c),
-// env takes an option (env -i), the run assigns it before the command, or
-// takes the export off it there (export -n T, declare +x T).
+// env -u takes it off, the command clears the environment (env -i, sudo),
+// the run assigns it before the command (its new value is not followed:
+// the undetected form env-variable-nested), or the shell that runs the
+// command, or one around it, takes the export off it before
+// (export -n T, declare +x T; not one in a subshell).
 func (f *secretFlow) hiddenIn(n shell.NestedScript) func(shell.VarName) bool {
 	at := n.Command.Span().Start
-	unexported := map[string]bool{}
-	shell.WalkSimple(f.script.List, func(x *shell.Simple) {
+	type off struct {
+		env  *shell.ExecutionEnvironment
+		name string
+	}
+	var offs []off
+	var cmdEnv *shell.ExecutionEnvironment
+	shell.Walk(f.text, f.script.List, shell.Enclosing{}, shell.Visitor{Command: func(c shell.Command, e shell.Enclosing) bool {
+		x, ok := c.(*shell.Simple)
+		if !ok {
+			return true
+		}
+		if x == n.Command {
+			cmdEnv = e.Env
+		}
 		if x.Span().Start >= at {
-			return
+			return true
 		}
 		words := shell.WordsOf(f.text, x)
 		if len(words) == 0 || !words[0].Known {
-			return
+			return true
 		}
-		off := false
+		drop := false
 		switch words[0].Text {
 		case "export", "declare", "typeset", "local", "readonly":
 		default:
-			return
+			return true
 		}
 		for _, w := range words[1:] {
 			switch {
 			case !w.Known:
 			case words[0].Text == "export" && strings.HasPrefix(w.Text, "-") && strings.Contains(w.Text, "n"):
-				off = true
+				drop = true
 			case strings.HasPrefix(w.Text, "+") && strings.Contains(w.Text, "x"):
-				off = true
-			case off:
+				drop = true
+			case drop:
 				name, _, _ := strings.Cut(w.Text, "=")
-				unexported[name] = true
+				offs = append(offs, off{e.Env, name})
 			}
 		}
-	})
+		return true
+	}})
+	unexported := map[string]bool{}
+	for _, o := range offs {
+		for p := cmdEnv; ; p = p.Parent {
+			if p == o.env {
+				unexported[o.name] = true
+				break
+			}
+			if p == nil {
+				break
+			}
+		}
+	}
 	return func(v shell.VarName) bool {
 		name := v.String()
 		return n.Clears || slices.Contains(n.Assigns, v) || unexported[name] || f.assigned(name, at)
