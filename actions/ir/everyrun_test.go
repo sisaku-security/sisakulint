@@ -120,12 +120,16 @@ func TestAgentStepEveryRun(t *testing.T) {
 		{analysis.AgentValueRoutePromptInput, "prompt", "vars.P", "vars.P", true},
 		{analysis.AgentValueRouteStepEnv, "GUIDE", "vars.G", "vars.G", true},
 		{analysis.AgentValueRouteStepEnv, "B", "env.FROM_VAR", "vars.V", false},
+		{analysis.AgentValueRouteStepEnv, "FROM_VAR", "vars.V", "vars.V", true}, // the job's env
 		{analysis.AgentValueRouteSettingInput, "claude_args", "vars.A", "vars.A", true},
 	}
 	if !slices.Equal(refs, want) {
 		t.Errorf("every run refs\n %+v\nwant\n %+v", refs, want)
 	}
 	for _, p := range a.promptRefs {
+		if p.Ref.Text == "secrets.S" {
+			continue // the job's env FROM_VAR: not the attacker's in a run that adds variables-writer
+		}
 		if !slices.Equal(eventNameSet(p.EveryRunOn), both) {
 			t.Errorf("prompt ref %s: every run on %v, want %v", p.Ref.Text, eventNameSet(p.EveryRunOn), both)
 		}

@@ -18,14 +18,14 @@ func (x *IR) allAgentSteps() []*AgentStep {
 		// the values that reach the agent, read once for the input with
 		// what the sinks read (the callers, the env, the steps before)
 		prompts := map[stepAt][]taint.StepValue{}
-		for _, v := range taint.StepValues(x.callersOf(), x.name, x.workflow, x.action, func(s workflow.Step) []taint.Pick {
+		for _, v := range taint.StepValuesIn(x.callersOf(), x.name, x.workflow, x.action, func(s workflow.Step, j *workflow.Job) []taint.Pick {
 			a, ok := agent.Of(s)
 			if !ok {
 				return nil
 			}
 			var out []taint.Pick
-			for _, p := range agent.Prompts(s, a.Action) {
-				out = append(out, taint.Pick{Value: p.Value, InEnv: p.Route == analysis.PromptRouteEnv})
+			for _, p := range agent.Prompts(s, a.Action, x.outerEnv(j)...) {
+				out = append(out, taint.Pick{Value: p.Value, InEnv: p.Route == analysis.PromptRouteEnv, EnvLevel: p.Level})
 			}
 			return out
 		}) {
@@ -94,7 +94,7 @@ func (x *IR) allAgentSteps() []*AgentStep {
 		add := func(at stepAt, j *workflow.Job, steps []workflow.Step, evs []analysis.EventActivity, ifs ...attacker.PlacedIf) {
 			if a, ok := agent.Of(steps[at.step]); ok {
 				env := x.agentEnv(j, a)
-				o := x.projectAgentStep(x.inputPlace(), a, evs, ifs, prompts[at], settings[at], env, nil)
+				o := x.projectAgentStep(x.inputPlace(), a, evs, ifs, prompts[at], settings[at], env, x.outerEnv(j), nil)
 				o.automaticApproval = x.automaticApprovalOf(agent.Supported(a.Action, evs), j, ifs...)
 				x.projectLater(x.inputPlace(), o, a, j, j, steps, at.step, evs, env)
 				out = append(out, o)
@@ -280,7 +280,7 @@ func (x *IR) remoteAgentSteps(j *workflow.Job, steps []workflow.Step, at int, ev
 				composite = append(composite, e)
 			}
 		}
-		o := x.projectAgentStep(pl, a, evs, all, prompts, settings, env, composite)
+		o := x.projectAgentStep(pl, a, evs, all, prompts, settings, env, nil, composite)
 		o.writtenValueOn = joinEvents(o.writtenValueOn, agent.Supported(a.Action, taint.FilterEventOnly(slices.Clone(withOn), innerIfs...)))
 		o.key, o.at, o.chain = keyOf(x.paths, x.input, x.tree, s.Uses.Value.Base), x.handleOf(s.Uses.Value.Base), in.Chain
 		o.automaticApproval = x.automaticApprovalOf(agent.Supported(a.Action, evs), j, all...)
@@ -455,11 +455,26 @@ func (x *IR) agentEnv(j *workflow.Job, a agent.Step) []workflow.Field[workflow.M
 	return append(env, a.Step.Env)
 }
 
+// outerEnv are the env around a step of the job j, inner first, that the
+// agent's process gets: the job's, and the workflow's but in a job that
+// calls a workflow; none in an action.yml.
+func (x *IR) outerEnv(j *workflow.Job) []workflow.Field[workflow.Map[workflow.String]] {
+	if j == nil {
+		return nil
+	}
+	out := []workflow.Field[workflow.Map[workflow.String]]{j.Env}
+	if j.Kind != workflow.JobCall && x.workflow != nil {
+		out = append(out, x.workflow.Env)
+	}
+	return out
+}
+
 // projectAgentStep is the projection of a, whose step runs on evs past
-// ifs under env and whose values that reach the agent are vals: its values
+// ifs under env and whose values that reach the agent are vals (read with
+// outer, the env around the step, agent.Prompts): its values
 // without their positions, which the handles keep. The subprocess env
 // scrub of env decides what claude's modes allow (agent.ScrubOf).
-func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivity, ifs []attacker.PlacedIf, vals []taint.StepValue, sets []taint.StepValue, env []workflow.Field[workflow.Map[workflow.String]], composite []EveryRunRef) *AgentStep {
+func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivity, ifs []attacker.PlacedIf, vals []taint.StepValue, sets []taint.StepValue, env, outer []workflow.Field[workflow.Map[workflow.String]], composite []EveryRunRef) *AgentStep {
 	evs = agent.Supported(a.Action, evs)
 	scrub, scrubSrc := agent.ScrubOf(a, env)
 	a = a.UnderScrub(scrub, scrubSrc)
@@ -497,7 +512,7 @@ func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivi
 		}
 		o.inconclusiveSettings = append(o.inconclusiveSettings, s)
 	}
-	ps := agent.Prompts(a.Step, a.Action)
+	ps := agent.Prompts(a.Step, a.Action, outer...)
 	for _, v := range vals {
 		p := ps[v.Index]
 		text := v.Value.Text()

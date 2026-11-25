@@ -214,7 +214,6 @@ var aiActionPromptInjectionMeta = lint.Meta{
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		forkReviewLimit,
 		repositoryDispatchLimit, appCommitEventLimit, dispatchRelayLimit, dispatchInputCallLimit, dispatchDerivedLimit,
-		{ID: lint.MustUndetectedFormID("job-env"), Text: "a value that an attacker writes, which the workflow puts in the env of the job or in the env of the workflow: the process of the agent also gets the env of the job and the env of the workflow, and the rule does not count the env of the job or the env of the workflow, because the env of the job or the env of the workflow may be set for a step other than the step of the agent", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("action-fetches"), Text: "what the action fetches itself into the prompt: claude-code-action's tag mode (no prompt input) puts the title, the body and the comments of the issue or the pull request in it", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("agent-reads"), Text: "what the agent reads through its tools on its own, such as gh issue view: the prompt and the agent decide it", Disposition: lint.Limitation(lint.DeciderRunTime)},
 		{ID: lint.MustUndetectedFormID("other-agent-action"), Text: "an action that runs an AI agent and is not in the linter's table of the actions that run an AI agent, such as a wrapper action in another repository", Disposition: lint.Todo(lint.NeedFact)},
