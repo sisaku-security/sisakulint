@@ -2,10 +2,14 @@ package ir
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
 	"github.com/gh-intel/sisakulint/actions/attacker"
 	"github.com/gh-intel/sisakulint/actions/calls"
+	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/job"
 	"github.com/gh-intel/sisakulint/actions/prcode"
 	"github.com/gh-intel/sisakulint/actions/taint"
@@ -168,6 +172,132 @@ func (x *IR) dispatchSaveOn(j *workflow.Job) []analysis.EventActivity {
 
 func (x *IR) allCacheSaves() []*CacheSave {
 	x.once(SummaryCacheSave, func() {
+		out, steps := x.ownCacheSaves()
+		x.shareCacheRefs(out, steps)
+		x.cacheSaves = out
+	})
+	return x.cacheSaves
+}
+
+// shareCacheRefs gives each CacheSave of out of a step of a composite action
+// of the inputs (steps) its sharedRefs: the job steps of the workflows of
+// the inputs that run the same step of the action, read with their own
+// ownCacheSaves, of which the first by its key reports each reference, so
+// that a step of an action gives one finding of a reference whichever
+// number of job steps run it.
+func (x *IR) shareCacheRefs(out []*CacheSave, steps map[*CacheSave]actionStep) {
+	if len(steps) == 0 {
+		return
+	}
+	all := map[actionStep][]*CacheSave{}
+	for _, o := range out {
+		if st, ok := steps[o]; ok {
+			all[st] = append(all[st], o)
+		}
+	}
+	if g := x.callersOf().Graph(); g != nil {
+		// the workflows that run the actions, through the actions that run them
+		wfs := map[calls.Node]bool{}
+		seen := map[calls.Node]bool{}
+		var visit func(calls.Node)
+		visit = func(n calls.Node) {
+			if seen[n] {
+				return
+			}
+			seen[n] = true
+			for _, c := range g.CallsOf(n) {
+				if c.Job != nil {
+					wfs[c.Caller] = true
+				} else {
+					visit(c.Caller)
+				}
+			}
+		}
+		for _, st := range steps {
+			visit(calls.InputNode(st.action))
+		}
+		var nodes []calls.Node
+		for n := range wfs {
+			if n != x.name {
+				nodes = append(nodes, n)
+			}
+		}
+		slices.SortFunc(nodes, calls.CompareNodes)
+		for _, n := range nodes {
+			f, ok := g.File(n)
+			if !ok || f.Workflow == nil || f.Remote != nil {
+				continue
+			}
+			o := New(n.String(), f.Tree, f.Workflow, nil)
+			o.callers, o.labelers, o.barriers, o.composites, o.ctx = x.callers, x.labelers, x.barriers, x.composites, x.ctx
+			others, otherSteps := o.ownCacheSaves()
+			for _, c := range others {
+				if st, ok := otherSteps[c]; ok && len(all[st]) > 0 {
+					all[st] = append(all[st], c)
+				}
+			}
+		}
+	}
+	for _, o := range out {
+		st, ok := steps[o]
+		if !ok {
+			continue
+		}
+		peers := slices.Clone(all[st])
+		slices.SortStableFunc(peers, func(a, b *CacheSave) int { return strings.Compare(a.key.String(), b.key.String()) })
+		for k, refs := range [][]ExprRef{o.keyRefs, o.pathRefs} {
+			for i := range refs {
+				var reporters []*CacheSave
+				for _, p := range peers {
+					if sharedReports(p, k, i) {
+						reporters = append(reporters, p)
+					}
+				}
+				if !slices.Contains(reporters, o) || len(reporters) < 2 {
+					continue
+				}
+				r := SharedCacheRef{Key: k == 0, Index: i, Elsewhere: reporters[0] != o}
+				for _, p := range reporters {
+					if p != o {
+						r.Others = append(r.Others, p.callerAt)
+					}
+				}
+				o.sharedRefs = append(o.sharedRefs, r)
+			}
+		}
+	}
+}
+
+// sharedReports is whether the reference i of the key (k 0) or the path
+// (k 1) of o is one cache-poisoning reports: controlled on an event its job
+// saves on, or inconclusive in a job that saves.
+func sharedReports(o *CacheSave, k, i int) bool {
+	refs := [][]ExprRef{o.keyRefs, o.pathRefs}[k]
+	if i >= len(refs) {
+		return false
+	}
+	switch r := refs[i]; r.Verdict {
+	case analysis.Controlled:
+		return slices.ContainsFunc(r.ControlledOn, func(e analysis.EventActivity) bool { return slices.Contains(o.cacheWriteOn, e) })
+	case analysis.Inconclusive:
+		return len(o.cacheWriteOn) > 0 || len(o.dispatchOn) > 0
+	}
+	return false
+}
+
+// actionStep is a step of a composite action of the inputs: the action,
+// and the path of the step in it.
+type actionStep struct {
+	action facts.InputPath
+	path   string
+}
+
+// ownCacheSaves are the CacheSave summaries of the workflow of x, with no
+// sharedRefs, and of each of a composite action of the inputs, the step of
+// the action it is.
+func (x *IR) ownCacheSaves() (out []*CacheSave, steps map[*CacheSave]actionStep) {
+	steps = map[*CacheSave]actionStep{}
+	func() {
 		w := x.workflow
 		if w == nil {
 			return
@@ -194,7 +324,29 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				refs[at] = append(refs[at], v)
 			}
 		}
-		var out []*CacheSave
+		values := map[*workflow.ActionMetadata][]taint.StepValue{}
+		// the with of each step that uses an action, read as the values of
+		// the step: what it gives each input of the action
+		withs := map[stepAt]map[string]taint.StepValue{}
+		for _, v := range taint.StepValues(x.callersOf(), x.name, w, nil, func(s workflow.Step) []taint.Pick {
+			if s.Uses.Status != workflow.Present || prcode.CacheActionOf(s.Uses.Value) != analysis.CacheActionNone {
+				return nil
+			}
+			var out []taint.Pick
+			for _, v := range job.MapValues(s.With) {
+				out = append(out, taint.Pick{Value: v})
+			}
+			return out
+		}) {
+			if v.Job == nil {
+				continue
+			}
+			at := stepAt{v.Job.ID.AsString(), v.StepIndex}
+			if withs[at] == nil {
+				withs[at] = map[string]taint.StepValue{}
+			}
+			withs[at][expr.FoldName(withInputs(v.Step.With)[v.Index].String())] = v
+		}
 		for _, je := range w.Jobs.Value.Entries {
 			if je.Value.Status != workflow.Present {
 				continue
@@ -212,6 +364,7 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				}
 				a := prcode.CacheActionOf(s.Uses.Value)
 				if a == analysis.CacheActionNone {
+					out = append(out, x.compositeCacheSaves(&j, s, on, don, approval, env, values, withs[stepAt{j.ID.AsString(), i}], steps)...)
 					continue
 				}
 				o := &CacheSave{key: keyOf(x.paths, x.input, x.tree, s.Base), at: x.handleOf(s.Base), action: a,
@@ -231,9 +384,131 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				out = append(out, o)
 			}
 		}
-		x.cacheSaves = out
-	})
-	return x.cacheSaves
+	}()
+	return out, steps
+}
+
+// compositeCacheSaves are the steps of actions/cache or actions/cache/save
+// of the composite actions of the inputs that the step s of the job j runs
+// (actions/composite), whose job saves on on and don with approval and env:
+// at the step in the file of the action. The references of its key and its
+// path are read without callers; an inputs.<id> of the action s uses is
+// read from with, the values of the with of s (keyed by the folded name of
+// the input), and not from the with of the other callers of the action,
+// which save in their own jobs. The ifs of s and of the steps of the
+// composite actions on the way keep the events. values holds the values
+// read of each action, once. An action of another repository is read by
+// saved-checkout alone.
+func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []analysis.EventActivity, approval analysis.Approval, env facts.EnvironmentName, values map[*workflow.ActionMetadata][]taint.StepValue, with map[string]taint.StepValue, steps map[*CacheSave]actionStep) []*CacheSave {
+	if x.composites == nil || s.Uses.Status != workflow.Present {
+		return nil
+	}
+	var out []*CacheSave
+	for _, in := range x.composites.Expand(x.ctx, &s, false).Steps {
+		if in.Origin.Query != nil || in.Origin.Input.IsZero() || in.Action == nil || in.Step.Uses.Status != workflow.Present {
+			continue
+		}
+		a := prcode.CacheActionOf(in.Step.Uses.Value)
+		if a == analysis.CacheActionNone {
+			continue
+		}
+		items := in.Action.Runs.Value.Steps.Value.Items
+		idx := -1
+		for i := range items {
+			if &items[i] == in.Step {
+				idx = i
+			}
+		}
+		vals, ok := values[in.Action]
+		if !ok {
+			vals = taint.StepValues(nil, calls.Node{}, nil, in.Action, cacheValues)
+			values[in.Action] = vals
+		}
+		ifs := append(append([]attacker.PlacedIf{attacker.StepIf(x.workflow, j, s.If)}, stepIfs(in.Ifs)...), attacker.StepIf(nil, nil, in.Step.If))
+		origin := in.Origin
+		pl := place{x: x, origin: &origin}
+		caller := keyOf(x.paths, x.input, x.tree, s.Base)
+		o := &CacheSave{key: Key{input: x.input, path: caller.path + " > " + hopsPath(in.Chain) + " " + x.paths.Of(in.Origin.Tree, in.Step.Base.Node, in.Step.Base.Via)},
+			at: pl.handle(in.Step.Base), action: a,
+			cacheWriteOn: taint.Filter(x.table(), on, ifs...), dispatchOn: taint.Filter(x.table(), don, ifs...), cacheApproval: approval, environment: env, usesText: in.Step.Uses.Value.Text(),
+			chain: in.Chain, callerAt: x.handleOf(s.Uses.Value.Base)}
+		o.automaticApproval = x.automaticApprovalOf(o.cacheWriteOn, j, ifs...)
+		steps[o] = actionStep{in.Origin.Input, x.paths.Of(in.Origin.Tree, in.Step.Base.Node, in.Step.Base.Via)}
+		for _, v := range vals {
+			if v.StepIndex != idx {
+				continue
+			}
+			text := v.Value.Text()
+			for _, r := range v.Refs {
+				e := pl.exprRef(r, text[r.Span.Start:r.Span.End], pl.span(v.Value, r.Span))
+				if len(in.Chain) == 1 && len(r.Path) >= 2 && expr.FoldName(r.Path[0].Name) == "inputs" && r.Path[1].Name != "" {
+					given, ok := with[expr.FoldName(r.Path[1].Name)]
+					if ok {
+						e = x.givenRef(e, given)
+					}
+				}
+				if v.Index == 0 {
+					o.keyRefs = append(o.keyRefs, e)
+				} else {
+					o.pathRefs = append(o.pathRefs, e)
+				}
+			}
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// givenRef is the reference e of an input of a composite action read from
+// given, the value of the with of the step that runs the action: controlled
+// on the events of the references of given an attacker controls, else
+// inconclusive as the first of them that is, with given as its With; keep
+// not controlled when given has no reference that either is (a value the
+// step writes): the reference stays, so that the references of the step are
+// those of every job step that runs it (shareCacheRefs).
+func (x *IR) givenRef(e ExprRef, given taint.StepValue) ExprRef {
+	text := given.Value.Text()
+	var controlled, inconclusive *taint.ExprRef
+	var on []analysis.EventActivity
+	for i, r := range given.Refs {
+		switch r.Verdict {
+		case analysis.Controlled:
+			if controlled == nil {
+				controlled = &given.Refs[i]
+			}
+			for _, ev := range r.ControlledOn {
+				if !slices.Contains(on, ev) {
+					on = append(on, ev)
+				}
+			}
+		case analysis.Inconclusive:
+			if inconclusive == nil {
+				inconclusive = &given.Refs[i]
+			}
+		}
+	}
+	r := controlled
+	if r == nil {
+		r = inconclusive
+	}
+	if r == nil {
+		e.Verdict, e.ControlledOn, e.InconclusiveKind = analysis.NotControlled, nil, 0
+		return e
+	}
+	g := x.exprRefOf(*r, text[r.Span.Start:r.Span.End], x.spanOf(given.Value, r.Span))
+	e.Verdict, e.ControlledOn, e.InconclusiveKind = g.Verdict, on, g.InconclusiveKind
+	e.With = append(append([]Handle{g.At}, g.Env...), g.With...)
+	e.OtherCallers = g.OtherCallers
+	return e
+}
+
+// hopsPath is the uses of hops, as written, joined by " > ".
+func hopsPath(hops []composite.Hop) string {
+	var parts []string
+	for _, h := range hops {
+		parts = append(parts, h.Uses)
+	}
+	return strings.Join(parts, " > ")
 }
 
 // cacheValues are the key and the path of a step of actions/cache or

@@ -1,0 +1,20 @@
+# situation: on issue_comment, a job with cache-mode: write runs a composite
+#   action of the repository whose step (actions/cache/save) saves the path
+#   its input names, and the job gives it the comment's body.
+# reason: $/ names the action at the commit of the workflow, an input of the
+#   run; its step saves to the cache as a step of the job does, so the
+#   commenter chooses what it saves.
+# attack-value: github.event.comment.body = "~/.ssh"
+# attack-run-behavior: the comment starts the job; the step of the composite
+#   action saves the directory the commenter names to the default branch's
+#   scope, where a later run restores it.
+on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: $/.github/actions/save
+        with:
+          path: ${{ github.event.comment.body }}
