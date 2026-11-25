@@ -62,9 +62,8 @@ func TestCallersPerRule(t *testing.T) {
 		// it by owner/repo/path@ref of the repository (--repo): the caller is
 		// not resolved to the file, so a rule that reads the events of the
 		// callers reads the called workflow on every event, and a rule that
-		// reads its ifs reads them on its own events alone (the undetected
-		// form caller-by-repository-name of bot-conditions and
-		// unsound-contains)
+		// reads its ifs reads them on every event too (the undetected form
+		// caller-by-repository-name of unsound-contains)
 		named bool
 	}{
 		{CodeInjection, "issues", true, true},
@@ -75,10 +74,9 @@ func TestCallersPerRule(t *testing.T) {
 		// on every event, the checkout is untrusted-checkout's .executed
 		{UntrustedCheckoutToctou, "pull_request_target:\n    types: [labeled]", false, false},
 		{ArtifactPoisoning, "workflow_run:\n    workflows: [ci]", true, true},
-		// the ifs of a called workflow read alone are on its own events
-		// only, as before callers were read, and when a caller is not
-		// resolved (the undetected form caller-by-repository-name)
-		{BotConditions, "pull_request_target", false, false},
+		// the ifs of a called workflow whose callers are not all known are
+		// read on every event, as the taint rules read its steps
+		{BotConditions, "pull_request_target", true, true},
 		// on every event, the login is not the attacker's in every run that
 		// the if lets in (the push of a writer: an empty login)
 		{UnsoundContains, "issue_comment", false, false},
