@@ -340,6 +340,10 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, dynamic, downloadFacts{}); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 1 {
 		t.Errorf("merge with a pattern that is a ${{ }}: %+v", rep.Findings)
 	}
+	otherName := map[string]string{".github/workflows/w.yml": strings.Replace(strings.Replace(dynamic[".github/workflows/w.yml"], "{name: out, pattern:", "{name: merged, pattern:", 1), "        with: {name: merged, pattern: '${{ vars.P }}'}\n", "        with: {name: merged, pattern: '${{ vars.P }}'}\n      - uses: actions/upload-artifact@v4\n        with: {name: out, path: docs}\n", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, otherName, downloadFacts{}); len(rep.Findings) != 0 {
+		t.Errorf("merge with an unknown pattern under another name: %+v", rep.Findings)
+	}
 	skipped := map[string]string{".github/workflows/w.yml": composite[".github/workflows/w.yml"], ".github/actions/up/action.yml": strings.Replace(composite[".github/actions/up/action.yml"], "    - uses: actions/upload-artifact@v4\n", "    - if: false\n      uses: actions/upload-artifact@v4\n", 1)}
 	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, skipped, downloadFacts{}); len(rep.Findings) != 0 {
 		t.Errorf("composite upload with if: false: %+v", rep.Findings)

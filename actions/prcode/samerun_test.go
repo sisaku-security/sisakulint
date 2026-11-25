@@ -57,6 +57,9 @@ func TestMinimatch(t *testing.T) {
 		{"{a,part}-*", "part-1", true},
 		{"{a,b}-*", "part-1", false},
 		{"x{a,{b,part}}-*", "xpart-1", true},
+		{"part-[!x]*", "part-1", true},
+		{"part-[!1]*", "part-1", false},
+		{"part-@(1|2)", "part-1", true},
 	} {
 		if got := minimatch(tc.p, tc.name); got != tc.want {
 			t.Errorf("minimatch(%q, %q) = %v, want %v", tc.p, tc.name, got, tc.want)

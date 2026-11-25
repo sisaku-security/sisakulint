@@ -117,10 +117,19 @@ const maxCallDepth = 10
 // job of a checkout uses after the checkout, those of a reusable workflow
 // of the inputs that a job of w calls, read as uploads of that job, and
 // those that actions/upload-artifact/merge uploads again under its name.
-// unknown are, by the job, in lower case, the uses of ./ that the inputs
-// do not have, whose uploads are not known.
-func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int) (out []SameRunUpload, unknown map[string][]workflow.String) {
-	unknown = map[string][]workflow.String{}
+// unknown are, by the job, in lower case, the uses whose uploads are not
+// known: a ./ workflow or action that the inputs do not have, and a merge
+// whose pattern is a ${{ }}.
+// unknownUpload is a uses whose uploads are not known, and the name it
+// uploads under: a merge has one, a ./ workflow or action may upload any.
+type unknownUpload struct {
+	uses    workflow.String
+	name    string
+	anyName bool
+}
+
+func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int) (out []SameRunUpload, unknown map[string][]unknownUpload) {
+	unknown = map[string][]unknownUpload{}
 	g := c.Graph()
 	var called []calls.CalledCall
 	if g != nil {
@@ -147,7 +156,7 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 				f, _ = g.File(called[i].Called)
 			}
 			if f.Workflow == nil {
-				unknown[strings.ToLower(id)] = append(unknown[strings.ToLower(id)], j.Uses.Value.String)
+				unknown[strings.ToLower(id)] = append(unknown[strings.ToLower(id)], unknownUpload{uses: j.Uses.Value.String, anyName: true})
 				continue
 			}
 			inner, innerUnknown := sameRunUploadsIn(c, called[i].Called, f.Workflow, m, depth+1)
@@ -169,7 +178,7 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 // checkout of checkouts uses after the checkout (one level: an action that
 // such an action uses is not read). called are the calls of w (CalledBy);
 // a ./ action that the inputs do not have is added to unknown.
-func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []CheckoutSite, g *calls.Graph, called []calls.CalledCall, unknown map[string][]workflow.String) []SameRunUpload {
+func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []CheckoutSite, g *calls.Graph, called []calls.CalledCall, unknown map[string][]unknownUpload) []SameRunUpload {
 	var out []SameRunUpload
 	for _, co := range checkouts {
 		if co.Job == nil || !co.Placed || co.CheckoutCode != analysis.CodePR || len(co.PRCodeOn) == 0 || co.Approval != analysis.ApprovalNone {
@@ -198,7 +207,7 @@ func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []Checko
 				f, _ = g.File(called[i].Called)
 			}
 			if f.Action == nil {
-				unknown[strings.ToLower(id)] = append(unknown[strings.ToLower(id)], s.Uses.Value.String)
+				unknown[strings.ToLower(id)] = append(unknown[strings.ToLower(id)], unknownUpload{uses: s.Uses.Value.String, anyName: true})
 				continue
 			}
 			a := f.Action
@@ -246,7 +255,7 @@ func isMerge(u workflow.Uses) bool {
 // name.
 //
 // A merge whose pattern is not known adds its uses to unknown.
-func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]workflow.String) []SameRunUpload {
+func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]unknownUpload) []SameRunUpload {
 	if len(ups) == 0 || w.Jobs.Status != workflow.Present {
 		return nil
 	}
@@ -272,7 +281,9 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 					}
 					if takes, known := mergeTakes(s.With, u.name); !known {
 						k := strings.ToLower(id)
-						unknown[k] = append(unknown[k], s.Uses.Value.String)
+						x := unknownUpload{uses: s.Uses.Value.String}
+						x.name, x.anyName = inputName(s.With, mergedArtifactName)
+						unknown[k] = append(unknown[k], x)
 						seen[k+"/"+strconv.Itoa(s.Order)] = true
 						break
 					} else if !takes && !u.anyName {
@@ -318,13 +329,19 @@ func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string)
 
 // minimatch is whether the pattern p takes name as minimatch reads it
 // with no options: each leading ! negates, braces expand into
-// alternatives, and a * or ? does not take a leading dot.
+// alternatives, a [!...] class is negated, and a * or ? does not take a
+// leading dot. An extglob (@(...), +(...), ...) is not read, and is read as
+// taking it.
 func minimatch(p, name string) bool {
 	neg := false
 	for strings.HasPrefix(p, "!") {
 		p, neg = p[1:], !neg
 	}
 	for _, alt := range expandBraces(p) {
+		if extglob(alt) {
+			return true
+		}
+		alt = strings.ReplaceAll(alt, "[!", "[^")
 		if strings.HasPrefix(name, ".") && !strings.HasPrefix(alt, ".") {
 			continue
 		}
@@ -333,6 +350,16 @@ func minimatch(p, name string) bool {
 		}
 	}
 	return neg
+}
+
+// extglob is whether p has an extglob of minimatch: one of @!+*? before (.
+func extglob(p string) bool {
+	for i := 1; i < len(p); i++ {
+		if p[i] == '(' && strings.IndexByte("@!+*?", p[i-1]) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // expandBraces are the alternatives of the first {a,b} of p, each with its
@@ -472,9 +499,10 @@ func uploadBefore4(u workflow.Uses) bool {
 // which both the checkout and s run. A job that does not need the job that
 // uploads may run before the upload: the undetected form same-run-pr-code.
 //
-// A ./ uses in a job that s needs whose uploads are not known (unknown, by
-// the job) is added to InconclusiveValues when no upload is found.
-func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]workflow.String) {
+// A uses in a job that s needs whose uploads are not known (unknown, by
+// the job), under a name s may take, is added to SameRunUnknown when no
+// upload is found.
+func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]unknownUpload) {
 	if !s.currentRun || s.Job == nil || len(ups) == 0 && len(unknown) == 0 {
 		return
 	}
@@ -485,7 +513,11 @@ func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknow
 		}
 		for _, je := range w.Jobs.Value.Entries {
 			if k := strings.ToLower(je.Value.Value.ID.AsString()); needed[k] {
-				s.SameRunUnknown = append(s.SameRunUnknown, unknown[k]...)
+				for _, x := range unknown[k] {
+					if x.anyName || s.takesName(x.name) {
+						s.SameRunUnknown = append(s.SameRunUnknown, x.uses)
+					}
+				}
 			}
 		}
 	}()
