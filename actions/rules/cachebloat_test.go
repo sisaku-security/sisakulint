@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/cache@v4
         with: {path: ~/.npm, key: "npm-${{ hashFiles('package-lock.json') }}", restore-keys: npm-}
-`, "cache-bloat.partial-restore: the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: push"},
+`, "cache-bloat.partial-restore: the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: workflow_call"},
 		{"called, after a job skipped on some events", `on: workflow_call
 jobs:
   a:
@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/cache@v4
         with: {path: ~/.npm, key: "npm-${{ hashFiles('package-lock.json') }}", restore-keys: npm-}
-`, "cache-bloat.partial-restore: the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: push"},
+`, "cache-bloat.partial-restore: the step may save under a new key the content of an older cache that restore-keys restored; the events on which the step may save: workflow_call"},
 		{"another path saved", `on: push
 jobs:
   a:

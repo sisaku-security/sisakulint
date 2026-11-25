@@ -73,6 +73,20 @@ func WorkflowEvents(w *workflow.Workflow) (evs []analysis.EventActivity, called,
 	return sortEvents(own), called, known
 }
 
+// OwnEvents are WorkflowEvents without the callers' events: those of w's on
+// itself, and whether it is called.
+func OwnEvents(w *workflow.Workflow) (evs []analysis.EventActivity, called, known bool) {
+	evs, called, known = ownEvents(w)
+	return sortEvents(evs), called, known
+}
+
+// CalledMark is the event a list of events of a called workflow holds for a
+// run whose caller's event is left to its callers: workflow_call, which
+// attacker reads as a run whose event is not known.
+func CalledMark() analysis.EventActivity {
+	return analysis.MustEventActivity(workflow.EventNameWorkflowCall, workflow.ActivityTypeUnset)
+}
+
 // ownEvents are WorkflowEvents without the callers' events.
 func ownEvents(w *workflow.Workflow) (evs []analysis.EventActivity, called, known bool) {
 	if w == nil {

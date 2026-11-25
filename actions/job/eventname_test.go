@@ -13,10 +13,10 @@ func TestEventNamesOf(t *testing.T) {
 	if got := EventNamesOf(w); !slices.Equal(got, want) {
 		t.Errorf("%v, want %v", got, want)
 	}
-	// A called run carries its caller's event: every event, never workflow_call.
+	// A called workflow ends with workflow_call, the mark of its callers' runs.
 	called := EventNamesOf(parse(t, "on: [push, workflow_call]\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n"))
-	if slices.Contains(called, workflow.EventNameWorkflowCall) || !slices.Contains(called, workflow.EventNameIssueComment) {
-		t.Errorf("workflow_call: %v", called)
+	if want := []workflow.EventName{workflow.EventNamePush, workflow.EventNameWorkflowCall}; !slices.Equal(called, want) {
+		t.Errorf("workflow_call: %v, want %v", called, want)
 	}
 	if got := EventNamesOf(parse(t, "jobs:\n  a:\n    runs-on: x\n    steps:\n      - run: a\n")); len(got) != 0 {
 		t.Errorf("no on: %v", got)

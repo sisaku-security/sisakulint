@@ -8,17 +8,20 @@ import (
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-// EventNamesOf are the names of the events of taint.WorkflowEvents of w,
-// each once: every event GitHub runs w on. A called run carries its
-// caller's event, so a workflow on workflow_call runs on every event, and
-// workflow_call is none of them. A name GitHub does not know is left out.
+// EventNamesOf are the names of the events of w's own on
+// (taint.OwnEvents), each once, and workflow_call last when w is called: the
+// mark of a run whose event its callers decide, which CacheSavesOn reads as
+// the caller's choice. A name GitHub does not know is left out.
 func EventNamesOf(w *workflow.Workflow) []workflow.EventName {
-	evs, _, _ := taint.WorkflowEvents(w)
+	evs, called, _ := taint.OwnEvents(w)
 	var out []workflow.EventName
 	for _, e := range evs {
 		if !slices.Contains(out, e.Name()) {
 			out = append(out, e.Name())
 		}
+	}
+	if called {
+		out = append(out, workflow.EventNameWorkflowCall)
 	}
 	return out
 }
