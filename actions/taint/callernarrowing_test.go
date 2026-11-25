@@ -55,3 +55,16 @@ func TestCallerNarrowingGithubOnly(t *testing.T) {
 		t.Errorf("needs: got %v, want as without the if %v", withCaller, alone)
 	}
 }
+
+// TestCallerNarrowingMiddleOwnEvents: a workflow in the middle of the
+// chain that runs on an event of its own calls the leaf past none of the
+// ifs of its callers in those runs.
+func TestCallerNarrowingMiddleOwnEvents(t *testing.T) {
+	const top = "on: pull_request_target\njobs:\n  call:\n    if: github.head_ref == 'release'\n    uses: ./.github/workflows/mid.yml\n"
+	const mid = "on: [workflow_call, pull_request_target]\njobs:\n  call:\n    uses: ./.github/workflows/leaf.yml\n"
+	const leaf = "on: workflow_call\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.head_ref }}\"\n"
+	got := refsIn(t, attacker.Outsider, [2]string{".github/workflows/leaf.yml", leaf}, [2]string{".github/workflows/mid.yml", mid}, [2]string{".github/workflows/top.yml", top})
+	if r, ok := got["github.head_ref"]; !ok || !slices.Equal(r, []string{"pull_request_target"}) {
+		t.Errorf("got %v", got)
+	}
+}

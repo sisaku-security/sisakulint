@@ -710,12 +710,21 @@ func (c *Callers) chains(name calls.Node, e *analysis.EventActivity, seen map[ca
 			continue
 		}
 		ifs := callIfs(f.Workflow, call)
+		// a caller that runs on events of its own calls past its ifs alone
+		// in those runs, also when it is called too
+		own := f.Workflow != nil && len(EventsOn(f.Workflow, valueEventNames())) > 0
+		if e != nil {
+			own = f.Workflow != nil && slices.Contains(EventsOn(f.Workflow, []workflow.EventName{e.Name()}), *e)
+		}
 		if len(c.g.CallsOf(call.Caller)) == 0 {
-			if e != nil && (f.Workflow == nil || !slices.Contains(EventsOn(f.Workflow, []workflow.EventName{e.Name()}), *e)) {
+			if e != nil && !own {
 				continue // a caller that does not run on e
 			}
 			out = append(out, ifs)
 			continue
+		}
+		if own {
+			out = append(out, ifs)
 		}
 		for _, up := range c.chains(call.Caller, e, seen) {
 			out = append(out, append(slices.Clone(ifs), up...))
