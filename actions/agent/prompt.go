@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
-	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
@@ -83,10 +82,13 @@ func Prompts(s workflow.Step, a analysis.AgentAction, outer ...workflow.Field[wo
 		}
 		for _, e := range env.Value.Entries {
 			n, ok := workflow.EnvNameOf(e.Key.AsString())
-			if !ok || seen[expr.FoldName(n.String())] {
+			// compared as written: a Linux runner keeps BODY and body apart,
+			// so an inner body leaves an outer BODY (Windows folds them; a
+			// value read there as reaching the agent may then not)
+			if !ok || seen[n.String()] {
 				continue
 			}
-			seen[expr.FoldName(n.String())] = true
+			seen[n.String()] = true
 			if filter && !geminiPasses(n) {
 				continue
 			}

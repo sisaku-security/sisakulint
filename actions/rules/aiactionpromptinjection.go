@@ -31,6 +31,17 @@ func (aiActionPromptInjection) Meta() lint.Meta { return aiActionPromptInjection
 var valueUnknown = lint.MustInconclusiveKindID("value-unknown")
 
 func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v ir.AIActionPromptInjectionReader) error {
+	// a value of the env of a job or of the workflow reaches each agent
+	// step under it from one place: reported there once
+	done := map[string]bool{}
+	once := func(loc lint.Location, key string) bool {
+		k := fmt.Sprintf("%+v %s", loc, key)
+		if done[k] {
+			return false
+		}
+		done[k] = true
+		return true
+	}
 	for _, s := range v.AgentSteps() {
 		if s.Substituted() {
 			substitutedAgent(c, s.At(), s.Chain())
@@ -55,6 +66,9 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 				case len(within(own, gr.bot)) > 0:
 					cond = isPublic(c)
 				case len(within(own, gr.undecided)) > 0:
+					if !once(rp.At(r.At), gateExpr.String()) {
+						continue
+					}
 					rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(r.At), Related: slices.Concat(evidence, related), Note: r.Text + " reaches the agent only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
 					continue
 				default:
@@ -62,6 +76,9 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 				}
 				// one value can have several: which one, and which of the same text
 				f := lint.FindingDraft{Location: rp.At(r.At), Condition: cond, Evidence: evidence, Related: related, Anchor: seen.next(r.Text, ir.FixPlan{})}
+				if !once(f.Location, f.Anchor) {
+					continue
+				}
 				if p.Route == analysis.PromptRouteEnv {
 					f.Args = AIActionPromptInjectionEnv{Action: s.Action(), Env: p.Env.String(), ExprRef: r.Text}
 				} else {
@@ -71,12 +88,18 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 			case analysis.Inconclusive:
 				if r.InconclusiveKind == analysis.InconclusiveRefInputDispatch && s.PromptDispatch() {
 					// whether the gate lets the dispatcher in is the dispatcher's
+					if !once(rp.At(r.At), inputDispatch.String()) {
+						continue
+					}
 					rp.Inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: rp.At(r.At),
 						Note: r.Text + " reaches the agent as text and refers to an input of workflow_dispatch, whose value the one who dispatches the workflow chooses; the rule does not determine the text that the value gives the agent"})
 					continue
 				}
 				if len(s.AttackerOn()) == 0 && len(s.WrittenValueOn()) == 0 {
 					continue // no run has a value the attacker writes
+				}
+				if !once(rp.At(r.At), valueUnknown.String()) {
+					continue
 				}
 				rp.Inconclusive(lint.InconclusiveDraft{KindID: valueUnknown, Location: rp.At(r.At),
 					Note: fmt.Sprintf("%s reaches the agent as text; whether an attacker controls it is not analyzed (%s)", r.Text, r.InconclusiveKind)})
@@ -214,6 +237,7 @@ var aiActionPromptInjectionMeta = lint.Meta{
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		forkReviewLimit,
 		repositoryDispatchLimit, appCommitEventLimit, dispatchRelayLimit, dispatchInputCallLimit, dispatchDerivedLimit,
+		{ID: lint.MustUndetectedFormID("job-env-composite"), Text: "a value that an attacker writes, which the workflow puts in the env of the job or in the env of the workflow, where the job runs a composite action whose step runs the agent: the process of the agent also gets the env of the job and the env of the workflow, and the rule reads a step of a composite action with the env of the step only", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("action-fetches"), Text: "what the action fetches itself into the prompt: claude-code-action's tag mode (no prompt input) puts the title, the body and the comments of the issue or the pull request in it", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("agent-reads"), Text: "what the agent reads through its tools on its own, such as gh issue view: the prompt and the agent decide it", Disposition: lint.Limitation(lint.DeciderRunTime)},
 		{ID: lint.MustUndetectedFormID("other-agent-action"), Text: "an action that runs an AI agent and is not in the linter's table of the actions that run an AI agent, such as a wrapper action in another repository", Disposition: lint.Todo(lint.NeedFact)},
