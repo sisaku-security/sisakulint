@@ -765,6 +765,7 @@
         {"name": "EveryRunOn", "type": "[]analysis.EventActivity", "doc": "of the EveryRunOn of the reference (taint.ExprRef.EveryRunOn), those the action runs on, not only the privileged events: the events on which the attacker chooses the value in every run, whoever starts the run; none but in a run of an attacker who writes vars or secrets"}
       ]
     },
+    {"name": "SharedCacheRef", "doc": "SharedCacheRef is a reference of the key or the path of a step of actions/cache or actions/cache/save of a composite action of the inputs, which many job steps run (CacheSave.sharedRefs).", "fields": [{"name": "Key", "type": "bool", "doc": "whether it is of keyRefs, else of pathRefs"}, {"name": "Index", "type": "int", "doc": "its index in them"}, {"name": "Elsewhere", "type": "bool", "doc": "whether another job step that runs the action reports it: the first of them by their keys"}, {"name": "Others", "type": "[]Handle", "doc": "the uses of the other job steps that run the action and save it so", "compare": false}]},
     {
       "name": "StartMode",
       "doc": "StartMode is the permission mode Claude Code starts in on the runs of a step of claude-code-action or its base-action (actions/agent).",
@@ -999,7 +1000,8 @@
           "display": true
         },
         {"name": "chain", "type": "[]composite.Hop", "doc": "for a step of a composite action of the inputs that a step of the job runs (actions/composite), the uses from that step to the action; at, the references of the key and of the path are then in the file of the action, and callerAt is the uses of the step of the job; none for a step of the job"},
-        {"name": "callerAt", "type": "Handle", "doc": "for a step of a composite action of the inputs, the uses of the step of the job that runs the action; zero for a step of the job", "compare": false}
+        {"name": "callerAt", "type": "Handle", "doc": "for a step of a composite action of the inputs, the uses of the step of the job that runs the action; zero for a step of the job", "compare": false},
+        {"name": "sharedRefs", "type": "[]SharedCacheRef", "doc": "for a step of a composite action of the inputs, of each reference of keyRefs and pathRefs that an attacker controls on cacheWriteOn, or that is inconclusive, the other job steps of the inputs that run the action and save it so: one finding of the step of the action, reported by the first of them"}
       ],
       "fixes": []
     },

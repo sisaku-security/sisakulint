@@ -125,8 +125,9 @@ func TestCachePoisoningLocalComposite(t *testing.T) {
 }
 
 // TestCachePoisoningLocalCompositeCallers: a composite action of the inputs
-// run by two jobs of two workflows gives one finding for each job, with no
-// error of a finding reported twice; and an input of the action is read from
+// run by two jobs of two workflows gives one finding of the step of the
+// action, with the other three job steps related, and no error of a finding
+// reported twice; and an input of the action is read from
 // the with of the step that runs it, not from the with of another caller
 // whose job does not save.
 func TestCachePoisoningLocalCompositeCallers(t *testing.T) {
@@ -178,15 +179,16 @@ jobs:
 `
 	}
 	for _, c := range []struct {
-		name  string
-		files map[string]string
-		keys  int
+		name    string
+		files   map[string]string
+		keys    int
+		callers int // the job steps that run the action and save the key
 	}{
-		{"two workflows of two jobs", map[string]string{".github/actions/c/action.yml": direct, ".github/workflows/a.yml": twoJobs, ".github/workflows/b.yml": twoJobs}, 4},
+		{"two workflows of two jobs", map[string]string{".github/actions/c/action.yml": direct, ".github/workflows/a.yml": twoJobs, ".github/workflows/b.yml": twoJobs}, 1, 4},
 		{"the attacker's key in a job that does not save", map[string]string{".github/actions/c/action.yml": input,
-			".github/workflows/a.yml": caller("write", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("read", "${{ github.event.comment.body }}")}, 0},
+			".github/workflows/a.yml": caller("write", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("read", "${{ github.event.comment.body }}")}, 0, 0},
 		{"the attacker's key in the job that saves", map[string]string{".github/actions/c/action.yml": input,
-			".github/workflows/a.yml": caller("read", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("write", "${{ github.event.comment.body }}")}, 1},
+			".github/workflows/a.yml": caller("read", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("write", "${{ github.event.comment.body }}")}, 1, 1},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{CachePoisoning}, c.files, limitFacts{})
 		if len(rep.Errors) != 0 {
@@ -196,6 +198,9 @@ jobs:
 		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 			if f.Args.KindID().String() == "cache-poisoning.attacker-key" {
 				keys++
+				if want := c.callers - 1; len(f.Related) != want {
+					t.Errorf("%s: %d related, want %d: %+v", c.name, len(f.Related), want, f.Related)
+				}
 			}
 		}
 		if keys != c.keys {
