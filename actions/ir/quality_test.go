@@ -68,7 +68,7 @@ jobs:
       - run: make
       - uses: actions/cache/save@v4
         with: {path: p, key: "k-${{ github.sha }}"}
-`, []string{"push,pull_request"}},
+`, []string{"pull_request,push"}},
 		{"split by event", `on: [push, pull_request]
 jobs:
   a:
