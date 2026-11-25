@@ -123,3 +123,83 @@ func TestCachePoisoningLocalComposite(t *testing.T) {
 		}
 	}
 }
+
+// TestCachePoisoningLocalCompositeCallers: a composite action of the inputs
+// run by two jobs of two workflows gives one finding for each job, with no
+// error of a finding reported twice; and an input of the action is read from
+// the with of the step that runs it, not from the with of another caller
+// whose job does not save.
+func TestCachePoisoningLocalCompositeCallers(t *testing.T) {
+	direct := `runs:
+  using: composite
+  steps:
+    - uses: actions/cache/save@v4
+      with:
+        path: build
+        key: ${{ github.event.comment.body }}
+`
+	twoJobs := `on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: ./.github/actions/c
+  b:
+    runs-on: ubuntu-latest
+    cache-mode: write
+    steps:
+      - run: make
+      - uses: ./.github/actions/c
+`
+	input := `inputs:
+  key:
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/save@v4
+      with:
+        path: build
+        key: ${{ inputs.key }}
+`
+	caller := func(mode, key string) string {
+		return `on: issue_comment
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    cache-mode: ` + mode + `
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/c
+        with:
+          key: ` + key + `
+`
+	}
+	for _, c := range []struct {
+		name  string
+		files map[string]string
+		keys  int
+	}{
+		{"two workflows of two jobs", map[string]string{".github/actions/c/action.yml": direct, ".github/workflows/a.yml": twoJobs, ".github/workflows/b.yml": twoJobs}, 4},
+		{"the attacker's key in a job that does not save", map[string]string{".github/actions/c/action.yml": input,
+			".github/workflows/a.yml": caller("write", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("read", "${{ github.event.comment.body }}")}, 0},
+		{"the attacker's key in the job that saves", map[string]string{".github/actions/c/action.yml": input,
+			".github/workflows/a.yml": caller("read", "build-${{ github.sha }}"), ".github/workflows/b.yml": caller("write", "${{ github.event.comment.body }}")}, 1},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{CachePoisoning}, c.files, limitFacts{})
+		if len(rep.Errors) != 0 {
+			t.Fatalf("%s: errors %+v", c.name, rep.Errors)
+		}
+		keys := 0
+		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
+			if f.Args.KindID().String() == "cache-poisoning.attacker-key" {
+				keys++
+			}
+		}
+		if keys != c.keys {
+			t.Errorf("%s: %d attacker-key, want %d", c.name, keys, c.keys)
+		}
+	}
+}

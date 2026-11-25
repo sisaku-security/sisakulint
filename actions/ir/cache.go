@@ -8,6 +8,7 @@ import (
 	"github.com/gh-intel/sisakulint/actions/attacker"
 	"github.com/gh-intel/sisakulint/actions/calls"
 	"github.com/gh-intel/sisakulint/actions/composite"
+	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/job"
 	"github.com/gh-intel/sisakulint/actions/prcode"
@@ -198,6 +199,28 @@ func (x *IR) allCacheSaves() []*CacheSave {
 			}
 		}
 		values := map[*workflow.ActionMetadata][]taint.StepValue{}
+		// the with of each step that uses an action, read as the values of
+		// the step: what it gives each input of the action
+		withs := map[stepAt]map[string]taint.StepValue{}
+		for _, v := range taint.StepValues(x.callersOf(), x.name, w, nil, func(s workflow.Step) []taint.Pick {
+			if s.Uses.Status != workflow.Present || prcode.CacheActionOf(s.Uses.Value) != analysis.CacheActionNone {
+				return nil
+			}
+			var out []taint.Pick
+			for _, v := range job.MapValues(s.With) {
+				out = append(out, taint.Pick{Value: v})
+			}
+			return out
+		}) {
+			if v.Job == nil {
+				continue
+			}
+			at := stepAt{v.Job.ID.AsString(), v.StepIndex}
+			if withs[at] == nil {
+				withs[at] = map[string]taint.StepValue{}
+			}
+			withs[at][expr.FoldName(withInputs(v.Step.With)[v.Index].String())] = v
+		}
 		var out []*CacheSave
 		for _, je := range w.Jobs.Value.Entries {
 			if je.Value.Status != workflow.Present {
@@ -216,7 +239,7 @@ func (x *IR) allCacheSaves() []*CacheSave {
 				}
 				a := prcode.CacheActionOf(s.Uses.Value)
 				if a == analysis.CacheActionNone {
-					out = append(out, x.compositeCacheSaves(&j, s, on, don, approval, env, values)...)
+					out = append(out, x.compositeCacheSaves(&j, s, on, don, approval, env, values, withs[stepAt{j.ID.AsString(), i}])...)
 					continue
 				}
 				o := &CacheSave{key: keyOf(x.paths, x.input, x.tree, s.Base), at: x.handleOf(s.Base), action: a,
@@ -244,13 +267,15 @@ func (x *IR) allCacheSaves() []*CacheSave {
 // compositeCacheSaves are the steps of actions/cache or actions/cache/save
 // of the composite actions of the inputs that the step s of the job j runs
 // (actions/composite), whose job saves on on and don with approval and env:
-// at the step in the file of the action, with the references of its key and
-// its path read with the callers of the action (taint.Callers), so that an
-// input the with of s gives is read from it. The ifs of s and of the steps
-// of the composite actions on the way keep the events. values holds the
-// values read of each action, once. An action of another repository is
-// read by saved-checkout alone: its values have no callers.
-func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []analysis.EventActivity, approval analysis.Approval, env facts.EnvironmentName, values map[*workflow.ActionMetadata][]taint.StepValue) []*CacheSave {
+// at the step in the file of the action. The references of its key and its
+// path are read without callers; an inputs.<id> of the action s uses is
+// read from with, the values of the with of s (keyed by the folded name of
+// the input), and not from the with of the other callers of the action,
+// which save in their own jobs. The ifs of s and of the steps of the
+// composite actions on the way keep the events. values holds the values
+// read of each action, once. An action of another repository is read by
+// saved-checkout alone.
+func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []analysis.EventActivity, approval analysis.Approval, env facts.EnvironmentName, values map[*workflow.ActionMetadata][]taint.StepValue, with map[string]taint.StepValue) []*CacheSave {
 	if x.composites == nil || s.Uses.Status != workflow.Present {
 		return nil
 	}
@@ -272,7 +297,7 @@ func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []ana
 		}
 		vals, ok := values[in.Action]
 		if !ok {
-			vals = taint.StepValues(x.callersOf(), calls.InputNode(in.Origin.Input), nil, in.Action, cacheValues)
+			vals = taint.StepValues(nil, calls.Node{}, nil, in.Action, cacheValues)
 			values[in.Action] = vals
 		}
 		ifs := append(append([]attacker.PlacedIf{attacker.StepIf(x.workflow, j, s.If)}, stepIfs(in.Ifs)...), attacker.StepIf(nil, nil, in.Step.If))
@@ -291,6 +316,16 @@ func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []ana
 			text := v.Value.Text()
 			for _, r := range v.Refs {
 				e := pl.exprRef(r, text[r.Span.Start:r.Span.End], pl.span(v.Value, r.Span))
+				if len(in.Chain) == 1 && len(r.Path) >= 2 && expr.FoldName(r.Path[0].Name) == "inputs" && r.Path[1].Name != "" {
+					given, ok := with[expr.FoldName(r.Path[1].Name)]
+					if ok {
+						var keep bool
+						e, keep = x.givenRef(e, given)
+						if !keep {
+							continue
+						}
+					}
+				}
 				if v.Index == 0 {
 					o.keyRefs = append(o.keyRefs, e)
 				} else {
@@ -301,6 +336,47 @@ func (x *IR) compositeCacheSaves(j *workflow.Job, s workflow.Step, on, don []ana
 		out = append(out, o)
 	}
 	return out
+}
+
+// givenRef is the reference e of an input of a composite action read from
+// given, the value of the with of the step that runs the action: controlled
+// on the events of the references of given an attacker controls, else
+// inconclusive as the first of them that is, with given as its With; keep
+// is false when given has no reference that either is (a value the step
+// writes).
+func (x *IR) givenRef(e ExprRef, given taint.StepValue) (ExprRef, bool) {
+	text := given.Value.Text()
+	var controlled, inconclusive *taint.ExprRef
+	var on []analysis.EventActivity
+	for i, r := range given.Refs {
+		switch r.Verdict {
+		case analysis.Controlled:
+			if controlled == nil {
+				controlled = &given.Refs[i]
+			}
+			for _, ev := range r.ControlledOn {
+				if !slices.Contains(on, ev) {
+					on = append(on, ev)
+				}
+			}
+		case analysis.Inconclusive:
+			if inconclusive == nil {
+				inconclusive = &given.Refs[i]
+			}
+		}
+	}
+	r := controlled
+	if r == nil {
+		r = inconclusive
+	}
+	if r == nil {
+		return e, false
+	}
+	g := x.exprRefOf(*r, text[r.Span.Start:r.Span.End], x.spanOf(given.Value, r.Span))
+	e.Verdict, e.ControlledOn, e.InconclusiveKind = g.Verdict, on, g.InconclusiveKind
+	e.With = append(append([]Handle{g.At}, g.Env...), g.With...)
+	e.OtherCallers = g.OtherCallers
+	return e, true
 }
 
 // hopsPath is the uses of hops, as written, joined by " > ".
