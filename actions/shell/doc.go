@@ -166,6 +166,8 @@
 //	             the request
 //	read.go      Read, ReadAt, Memo: a script tokenized once for its tree and its places, and kept
 //	             so that the analyses of an input read it once
+//	nested.go    NestedScripts, NestedScript: the code after -c of bash and sh in single quotes, which
+//	             another shell reads as a script of its own
 //	varcode.go   VariableCodes, VariableCode, CodeReading: where bash or a program reads the value of a
 //	             variable as code
 //

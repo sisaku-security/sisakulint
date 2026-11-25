@@ -266,13 +266,13 @@ type argKey struct {
 var declarers = map[string]bool{"export": true, "local": true, "declare": true, "readonly": true, "typeset": true}
 
 func (c scope) secretFlowOf(s *Sink) *secretFlow {
-	f := &secretFlow{c: c, s: s, text: Masked(s.Value), carried: map[any]memoEntry{}, recursive: map[any][]*recursionAnswers{}, values: map[any][]seg{}, reading: map[any]bool{}, pass: map[shell.OutputPlace][]CarriedSecret{}}
+	f := &secretFlow{c: c, s: s, text: s.text(), carried: map[any]memoEntry{}, recursive: map[any][]*recursionAnswers{}, values: map[any][]seg{}, reading: map[any]bool{}, pass: map[shell.OutputPlace][]CarriedSecret{}}
 	for i, p := range s.Value.Parts {
 		if p.Expr {
 			f.holes = append(f.holes, hole{shell.Span{Start: p.Span.Start, End: p.Span.End}, i})
 		}
 	}
-	f.script = ReadScript(c.scripts, s.Value).Script
+	f.script = c.readSink(s).Script
 	f.collect(f.script.List, nil)
 	f.vis = c.scripts.Visibility(f.text, f.script)
 	s.CallsNotRead.Join(f.vis.CallsNotRead())

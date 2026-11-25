@@ -80,6 +80,10 @@ type Sink struct {
 	// secretFlow reads, for a run of bash or sh, the secrets its words
 	// carry and where the hosts of its requests come from (secretflow.go).
 	secretFlow *secretFlow
+	// nested is, for the script another shell runs from the code after -c
+	// of a command of the run (nested.go), the run's text with only that
+	// code in it; "" for the run itself.
+	nested string
 }
 
 // ExprRef is a reference in a sink.
@@ -336,6 +340,7 @@ func (c scope) sinks(s workflow.Step) []Sink {
 				if x.Shell == ShellBash {
 					c.variableCodes(&x, x.secretFlow)
 				}
+				c.nestedScripts(&x)
 			}
 		}
 		out = append(out, x)
@@ -745,6 +750,29 @@ func hasExpr(n cst.Node) bool {
 		}
 	}
 	return false
+}
+
+// text is the script of s as the shell sees it (Masked), or the nested
+// script s reads.
+func (s *Sink) text() string {
+	if s.nested != "" {
+		return s.nested
+	}
+	return Masked(s.Value)
+}
+
+// readSink is the script of s (text), read once for c.
+func (c scope) readSink(s *Sink) shell.Read {
+	if s.nested == "" {
+		return ReadScript(c.scripts, s.Value)
+	}
+	var at []int
+	for _, p := range s.Value.Parts {
+		if p.Expr && s.nested[p.Span.Start] != ' ' { // those in the code
+			at = append(at, p.Span.Start)
+		}
+	}
+	return c.scripts.Read(s.nested, at)
 }
 
 // ReadScript is the script of v as the shell sees it (Masked), read once

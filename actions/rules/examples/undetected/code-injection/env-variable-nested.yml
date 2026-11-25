@@ -1,10 +1,10 @@
 # situation: on an opened issue, a step passes the issue's title in the
-#   environment variable ISSUE_TITLE and writes the variable inside a -c in
-#   single quotes of bash.
+#   environment variable ISSUE_TITLE and writes the variable inside a -c of
+#   bash written as two words in single quotes.
 # reason: the inner bash expands the variable and eval reads the value as a
 #   command, but the outer script holds no expansion of the variable.
-# cause: the rule does not read the script that another shell reads from a -c
-#   in single quotes.
+# cause: the rule reads the script that another shell reads from a -c only
+#   when the code is one word in single quotes.
 # attack-value: github.event.issue.title = "$(echo PWNED)"
 # attack-run-behavior: the inner bash expands $ISSUE_TITLE, eval reads echo
 #   $(echo PWNED) and prints PWNED.
@@ -18,4 +18,4 @@ jobs:
       - env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          bash -c 'eval "echo $ISSUE_TITLE"'
+          bash -c 'eval "echo $ISSUE_TITLE"'' '
