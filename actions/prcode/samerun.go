@@ -161,7 +161,7 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 			}
 		}
 	}
-	return append(out, mergeUploads(c, w, out)...), unknown
+	return append(out, mergeUploads(c, w, out, unknown)...), unknown
 }
 
 // compositeUploads are the uploads of actions/upload-artifact among the
@@ -212,7 +212,11 @@ func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []Checko
 				if len(co.CodeRunSteps) == 0 && !uploadCovers(x, co.Placement.dir) {
 					continue
 				}
-				u := SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + ")", Checkout: co.Step.Base, Upload: s.Base, Unless: unless, before4: uploadBefore4(x.Uses.Value), events: evs}
+				xevs := taint.FilterCode(c.Table(), evs, attacker.StepIf(nil, nil, x.If))
+				if len(xevs) == 0 {
+					continue
+				}
+				u := SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + ")", Checkout: co.Step.Base, Upload: s.Base, Unless: unless, before4: uploadBefore4(x.Uses.Value), events: xevs}
 				u.name, u.anyName = inputName(x.With, defaultArtifactName)
 				out = append(out, u)
 			}
@@ -240,7 +244,9 @@ func isMerge(u workflow.Uses) bool {
 // they need, directly or through other jobs: the merge downloads the
 // artifacts its pattern names and uploads their files again under its
 // name.
-func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) []SameRunUpload {
+//
+// A merge whose pattern is not known adds its uses to unknown.
+func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]workflow.String) []SameRunUpload {
 	if len(ups) == 0 || w.Jobs.Status != workflow.Present {
 		return nil
 	}
@@ -261,7 +267,15 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) [
 					continue
 				}
 				for _, u := range all {
-					if !needed[u.job] || u.before4 || !u.anyName && !mergeTakes(s.With, u.name) {
+					if !needed[u.job] || u.before4 {
+						continue
+					}
+					if takes, known := mergeTakes(s.With, u.name); !known {
+						k := strings.ToLower(id)
+						unknown[k] = append(unknown[k], s.Uses.Value.String)
+						seen[k+"/"+strconv.Itoa(s.Order)] = true
+						break
+					} else if !takes && !u.anyName {
 						continue
 					}
 					evs := taint.FilterCode(c.Table(), u.events, append(attacker.JobIfs(w, &j), attacker.StepIf(w, &j, s.If))...)
@@ -280,25 +294,83 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) [
 	return out
 }
 
-// mergeTakes is whether a merge step with with takes the artifact name:
-// its pattern, when it has one, else every artifact of the run.
-func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string) bool {
-	if with.Status != workflow.Present {
-		return true
+// mergeTakes is whether a merge step with with takes the artifact name,
+// as the merge filters the names with minimatch: its pattern, when it has
+// one, else every artifact of the run. known is false when the pattern is
+// a ${{ }}, or the with is one: which names the merge takes is not known.
+func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string) (takes, known bool) {
+	switch with.Status {
+	case workflow.Dynamic:
+		return false, false
+	case workflow.Present:
+	default:
+		return true, true
 	}
 	e, ok := with.Value.Lookup("pattern")
 	if !ok {
-		return true
+		return true, true
 	}
 	if e.Value.Status != workflow.Present || e.Value.Value.Parts != nil {
-		return true
+		return false, false
 	}
-	p := strings.TrimSpace(e.Value.Value.AsString())
-	if strings.ContainsAny(p, "{}") || strings.HasPrefix(p, "!") {
-		return true // minimatch reads braces, and negates a pattern that starts with !
+	return minimatch(strings.TrimSpace(e.Value.Value.AsString()), name), true
+}
+
+// minimatch is whether the pattern p takes name as minimatch reads it
+// with no options: each leading ! negates, braces expand into
+// alternatives, and a * or ? does not take a leading dot.
+func minimatch(p, name string) bool {
+	neg := false
+	for strings.HasPrefix(p, "!") {
+		p, neg = p[1:], !neg
 	}
-	ok, err := path.Match(p, name)
-	return ok || err != nil
+	for _, alt := range expandBraces(p) {
+		if strings.HasPrefix(name, ".") && !strings.HasPrefix(alt, ".") {
+			continue
+		}
+		if ok, err := path.Match(alt, name); ok || err != nil {
+			return !neg // a pattern path.Match cannot read is read as taking it
+		}
+	}
+	return neg
+}
+
+// expandBraces are the alternatives of the first {a,b} of p, each with its
+// own braces expanded; p itself when it has none with a comma.
+func expandBraces(p string) []string {
+	open := strings.IndexByte(p, '{')
+	if open < 0 {
+		return []string{p}
+	}
+	depth, parts, start := 0, []string(nil), open+1
+	for i := open; i < len(p); i++ {
+		switch p[i] {
+		case '{':
+			depth++
+		case ',':
+			if depth == 1 {
+				parts, start = append(parts, p[start:i]), i+1
+			}
+		case '}':
+			if depth--; depth == 0 {
+				if parts == nil {
+					rest := expandBraces(p[i+1:])
+					out := make([]string, 0, len(rest))
+					for _, r := range rest {
+						out = append(out, p[:i+1]+r)
+					}
+					return out
+				}
+				parts = append(parts, p[start:i])
+				var out []string
+				for _, alt := range parts {
+					out = append(out, expandBraces(p[:open]+alt+p[i+1:])...)
+				}
+				return out
+			}
+		}
+	}
+	return []string{p}
 }
 
 // unguarded are the events on which the checkout c brings the code of the
@@ -413,7 +485,7 @@ func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknow
 		}
 		for _, je := range w.Jobs.Value.Entries {
 			if k := strings.ToLower(je.Value.Value.ID.AsString()); needed[k] {
-				s.InconclusiveValues = append(s.InconclusiveValues, unknown[k]...)
+				s.SameRunUnknown = append(s.SameRunUnknown, unknown[k]...)
 			}
 		}
 	}()

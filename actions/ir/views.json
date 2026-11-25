@@ -176,6 +176,7 @@
         "download-site.pr-run-refs",
         "download-site.same-run-uploads",
         "download-site.inconclusive-values",
+        "download-site.same-run-unknown",
         "download-site.dynamic",
         "download-site.pr-code-on",
         "download-site.dispatch-on",

@@ -40,3 +40,26 @@ func TestSameRunRefusedCheckout(t *testing.T) {
 		t.Errorf("placed: %+v", ups)
 	}
 }
+
+// TestMinimatch: the patterns of actions/upload-artifact/merge, as
+// minimatch reads them.
+func TestMinimatch(t *testing.T) {
+	for _, tc := range []struct {
+		p, name string
+		want    bool
+	}{
+		{"part-*", "part-1", true},
+		{"!other-*", "part-1", true},
+		{"!part-*", "part-1", false},
+		{"!!part-*", "part-1", true},
+		{"*", ".hidden", false},
+		{".*", ".hidden", true},
+		{"{a,part}-*", "part-1", true},
+		{"{a,b}-*", "part-1", false},
+		{"x{a,{b,part}}-*", "xpart-1", true},
+	} {
+		if got := minimatch(tc.p, tc.name); got != tc.want {
+			t.Errorf("minimatch(%q, %q) = %v, want %v", tc.p, tc.name, got, tc.want)
+		}
+	}
+}

@@ -72,8 +72,9 @@ type InconclusiveDownloadKind uint8
 const (
 	InconclusiveDownloadInput InconclusiveDownloadKind = iota // an input that decides the run is a ${{ }} the tables cannot tell, or the with is one
 	InconclusiveDownloadPath                                  // the path is not of the workspace nor under runner.temp, by what is written
+	InconclusiveSameRunUpload                                 // a job the download needs runs a ./ workflow or action that is not read, or a merge whose pattern is a ${{ }}
 )
 
-var inconclusiveDownloadKindNames = [...]string{"download-input-unknown", "download-path-unknown"}
+var inconclusiveDownloadKindNames = [...]string{"download-input-unknown", "download-path-unknown", "same-run-upload-unknown"}
 
 func (g InconclusiveDownloadKind) String() string { return inconclusiveDownloadKindNames[g] }

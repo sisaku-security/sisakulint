@@ -16532,7 +16532,7 @@
               token: ${{ github.token }}
           - run: git push origin HEAD:${{ steps.check.outputs.head-ref }}
     ```
-- same-run-pr-code: an artifact of the current run that another job made from a pull request's code that the other job checked out, where the job that downloads does not list the job that uploads in its needs, directly or through other jobs, or where an approval admits the job that uploads; also an upload that the rule does not read as such: an upload in a reusable workflow of another repository, and an upload inside a composite action that another composite action uses. The rule reads such an upload when the job of the download lists the job of the upload in needs, directly or through other jobs, no approval admits the job of the upload, and the job uploads with actions/upload-artifact, with a composite action of the inputs whose steps use it, or by calling a reusable workflow of the inputs that does, or the job uses actions/upload-artifact/merge on such an artifact; a ./ uses of such a job that the inputs do not have is inconclusive
+- same-run-pr-code: an artifact of the current run that another job made from a pull request's code that the other job checked out, where the job that downloads does not list the job that uploads in its needs, directly or through other jobs, or where an approval admits the job that uploads; also an upload that the rule does not read as such: an upload in a reusable workflow of another repository, an upload inside a composite action of another repository that a step uses, and an upload inside a composite action that another composite action uses. The rule reads such an upload when the job of the download lists the job of the upload in needs, directly or through other jobs, no approval admits the job of the upload, and the job uploads with actions/upload-artifact, with a composite action of the inputs whose steps use it, or by calling a reusable workflow of the inputs that does, or the job uses actions/upload-artifact/merge on such an artifact
   - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
   - disposition: todo (needs: same-file)
   - example: same-run-pr-code.yml (workflow, undetected)
@@ -17607,6 +17607,47 @@
               with:
                 repo-token: ${{ secrets.LABELER_PAT }}
       ```
+- same-run-upload-unknown: a download of the current run whose job needs, directly or through other jobs, a job that calls a ./ reusable workflow or uses a ./ action that is not among the inputs, or uses actions/upload-artifact/merge with a pattern (or a with) that is a \${{ }}: what that job uploads is not known, so whether the artifact holds the code of a pull request is not known
+  - disposition: todo (needs: repo-file)
+  - example: same-run-upload-unknown.yml (workflow, inconclusive)
+    ```yaml
+    # situation: on pull_request_target, the job build checks out and builds the
+    #   pull request's head and uploads part-1; the job merge merges the
+    #   artifacts that the variable P names into dist; the job deploy downloads
+    #   dist and runs ./dist/deploy.sh.
+    # reason: the pattern of actions/upload-artifact/merge is a variable, so
+    #   whether dist holds the artifact of the pull request's build is not known
+    #   from the workflow.
+    # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+    # attack-run-behavior: when the variable P is part-*, the merge uploads the
+    #   build of the fork's head again as dist, the job deploy downloads dist,
+    #   and ./dist/deploy.sh prints PWNED, with the base repository's token and
+    #   secrets.
+    on: pull_request_target
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4.2.2
+            with:
+              ref: ${{ github.event.pull_request.head.sha }}
+          - run: npm ci && npm run build
+          - uses: actions/upload-artifact@v4
+            with: {name: part-1, path: dist}
+      merge:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/upload-artifact/merge@v4
+            with: {name: dist, pattern: '${{ vars.P }}'}
+      deploy:
+        needs: merge
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/download-artifact@v4
+            with: {name: dist}
+          - run: ./dist/deploy.sh
+    ```
 - input-dispatch: a download whose token, run-id, repository, run_id or repo has a \${{ }} that refers to an input of workflow_dispatch (inputs, github.event.inputs), alone or with other values: whoever dispatches the workflow chooses the value of the input. A credential whose only write access is to the permission Actions can dispatch the workflow, and the credential premise keeps the holder of such a credential as a possible attacker; the linter does not know whether such a credential exists or who holds it. The rule reports the value in a job with an environment that has required reviewers too, where a required reviewer of the environment can stop the run
   - disposition: limitation (decided by: dispatcher)
   - example: input-dispatch.yml (workflow, inconclusive)

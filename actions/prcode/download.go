@@ -57,7 +57,11 @@ type DownloadSite struct {
 	PRRunRefs          []PRRunRef        // what makes it take an attacker's run
 	SameRunUploads     []SameRunUpload   // the uploads of the current run that check out the code of a pull request, when it takes the current run
 	InconclusiveValues []workflow.String // the inputs the tables cannot tell
-	Dynamic            bool              // whether with is a whole ${{ }}
+	// SameRunUnknown are the uses in the jobs it needs whose uploads of
+	// the current run are not known: a ./ workflow or action the inputs do
+	// not have, or a merge whose pattern is a ${{ }}
+	SameRunUnknown []workflow.String
+	Dynamic        bool // whether with is a whole ${{ }}
 
 	PRCodeOn    []analysis.EventActivity // the privileged events it can run on, narrowed to those of PRRunRefs
 	Approval    analysis.Approval

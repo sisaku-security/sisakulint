@@ -332,6 +332,18 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, negated, downloadFacts{}); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 1 {
 		t.Errorf("merge with a negated pattern: %+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
+	excluded := map[string]string{".github/workflows/w.yml": strings.Replace(merge[".github/workflows/w.yml"], "pattern: part-*", "pattern: '!part-*'", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, excluded, downloadFacts{}); len(rep.Findings) != 0 {
+		t.Errorf("merge with a negated pattern that excludes the artifact: %+v", rep.Findings)
+	}
+	dynamic := map[string]string{".github/workflows/w.yml": strings.Replace(merge[".github/workflows/w.yml"], "pattern: part-*", "pattern: '${{ vars.P }}'", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, dynamic, downloadFacts{}); len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 1 {
+		t.Errorf("merge with a pattern that is a ${{ }}: %+v", rep.Findings)
+	}
+	skipped := map[string]string{".github/workflows/w.yml": composite[".github/workflows/w.yml"], ".github/actions/up/action.yml": strings.Replace(composite[".github/actions/up/action.yml"], "    - uses: actions/upload-artifact@v4\n", "    - if: false\n      uses: actions/upload-artifact@v4\n", 1)}
+	if rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, skipped, downloadFacts{}); len(rep.Findings) != 0 {
+		t.Errorf("composite upload with if: false: %+v", rep.Findings)
+	}
 	missing := map[string]string{".github/workflows/w.yml": composite[".github/workflows/w.yml"]}
 	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, missing, downloadFacts{})
 	if len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)) != 0 || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 1 {

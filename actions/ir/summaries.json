@@ -1239,6 +1239,12 @@
           "display": true
         },
         {
+          "name": "sameRunUnknown",
+          "type": "[]string",
+          "doc": "the uses, as written, in the jobs it needs whose uploads of the current run are not known",
+          "display": true
+        },
+        {
           "name": "dynamic",
           "type": "bool",
           "doc": "whether with is a whole ${{ }}"
