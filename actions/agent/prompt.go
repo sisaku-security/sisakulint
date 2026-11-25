@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
@@ -14,6 +15,7 @@ type PromptValue struct {
 	Route analysis.PromptRoute
 	Input analysis.AgentInput // by PromptRouteInput
 	Env   workflow.EnvName    // by PromptRouteEnv
+	Level int                 // by PromptRouteEnv: 0 the step's env, 1 the next of outer, ...
 	Value workflow.String
 }
 
@@ -55,8 +57,10 @@ func geminiPasses(n workflow.EnvName) bool {
 // whole with that is a ${{ }}, and the env of the step, which the agent's
 // process gets and its tools read, but under codex-action's
 // safety-strategy unprivileged-user, whose sudo resets the env, and the
-// names gemini-cli drops when no settings is given.
-func Prompts(s workflow.Step, a analysis.AgentAction) []PromptValue {
+// names gemini-cli drops when no settings is given. outer are the env
+// around the step, inner first (the job's, then the workflow's), which the
+// agent's process gets too but for a name an inner env sets.
+func Prompts(s workflow.Step, a analysis.AgentAction, outer ...workflow.Field[workflow.Map[workflow.String]]) []PromptValue {
 	var out []PromptValue
 	if s.With.Status == workflow.Present {
 		for _, in := range promptInputs[a] {
@@ -70,18 +74,25 @@ func Prompts(s workflow.Step, a analysis.AgentAction) []PromptValue {
 			return out
 		}
 	}
-	if s.Env.Status != workflow.Present {
-		return out
-	}
 	// settings may allow any name (allowedEnvironmentVariables)
 	filter := a == analysis.AgentActionGeminiCLI && !inputOf(s, analysis.AgentInputSettings).present
-	for _, e := range s.Env.Value.Entries {
-		n, ok := workflow.EnvNameOf(e.Key.AsString())
-		if !ok || filter && !geminiPasses(n) {
+	seen := map[string]bool{}
+	for lvl, env := range append([]workflow.Field[workflow.Map[workflow.String]]{s.Env}, outer...) {
+		if env.Status != workflow.Present {
 			continue
 		}
-		if v, ok := fieldValue(e.Value); ok {
-			out = append(out, PromptValue{Route: analysis.PromptRouteEnv, Env: n, Value: v})
+		for _, e := range env.Value.Entries {
+			n, ok := workflow.EnvNameOf(e.Key.AsString())
+			if !ok || seen[expr.FoldName(n.String())] {
+				continue
+			}
+			seen[expr.FoldName(n.String())] = true
+			if filter && !geminiPasses(n) {
+				continue
+			}
+			if v, ok := fieldValue(e.Value); ok {
+				out = append(out, PromptValue{Route: analysis.PromptRouteEnv, Env: n, Level: lvl, Value: v})
+			}
 		}
 	}
 	return out

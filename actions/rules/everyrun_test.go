@@ -822,25 +822,26 @@ func TestAIActionUnsafeSandboxEveryRun(t *testing.T) {
 
 // TestJobEnvEveryRun: in a run that adds variables-writer, a variable in
 // an env of the job reaches the process of the agent, and the rules of the
-// steps do not count it (the undetected form job-env): no step kind of
-// ai-action-excessive-tools, ai-action-execution-order or
-// ai-action-unsafe-sandbox, where a variable in the prompt gives one
-// (TestAIActionExcessiveToolsEveryRun and the others).
+// steps count it as one in the prompt: the step kind of
+// ai-action-excessive-tools, ai-action-execution-order and
+// ai-action-unsafe-sandbox (TestAIActionExcessiveToolsEveryRun and the
+// others).
 func TestJobEnvEveryRun(t *testing.T) {
 	jobEnv := func(runsOn, with, after string) string {
 		return "on: {issues: {types: [assigned]}}\njobs:\n  a:\n    runs-on: " + runsOn + "\n    if: " + ownerIf + "\n    env:\n      GUIDE: ${{ vars.GUIDE }}\n    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n          prompt: Triage the issue by the guide in the env GUIDE\n" + with + after
 	}
 	for _, c := range []struct {
-		id  lint.RuleID
-		src string
+		id   lint.RuleID
+		src  string
+		want string
 	}{
-		{AIActionExcessiveToolsID, jobEnv("ubuntu-latest", "          claude_args: --allowedTools Bash\n", "")},
-		{AIActionExecutionOrderID, jobEnv("self-hosted", "          claude_args: --allowedTools Bash\n", "      - run: ./deploy.sh\n        env:\n          TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n")},
-		{AIActionUnsafeSandboxID, jobEnv("ubuntu-latest", "          claude_args: --dangerously-skip-permissions\n", "")},
+		{AIActionExcessiveToolsID, jobEnv("ubuntu-latest", "          claude_args: --allowedTools Bash\n", ""), ".github/workflows/w.yml ai-action-excessive-tools.run-code Bash [variables-writer]"},
+		{AIActionExecutionOrderID, jobEnv("self-hosted", "          claude_args: --allowedTools Bash\n", "      - run: ./deploy.sh\n        env:\n          TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n"), ".github/workflows/w.yml ai-action-execution-order.later-secrets anthropics/claude-code-action@v1 [variables-writer]"},
+		{AIActionUnsafeSandboxID, jobEnv("ubuntu-latest", "          claude_args: --dangerously-skip-permissions\n", ""), ".github/workflows/w.yml ai-action-unsafe-sandbox.commands --dangerously-skip-permissions [variables-writer]"},
 	} {
 		rep, in := runAdded(t, map[string]string{".github/workflows/w.yml": c.src}, lint.AddedAttackerVariablesWriter)
-		if got := marked(t, rep, in, c.id); len(got) != 0 {
-			t.Errorf("%s: %v, want none (job-env)", c.id, got)
+		if got := marked(t, rep, in, c.id); !slices.Equal(got, []string{c.want}) {
+			t.Errorf("%s: %v, want %s", c.id, got, c.want)
 		}
 	}
 }
