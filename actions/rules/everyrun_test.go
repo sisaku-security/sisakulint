@@ -883,3 +883,23 @@ func TestAgentPlaceInconclusiveRelated(t *testing.T) {
 		t.Errorf("evidence %+v, want none", g.Evidence)
 	}
 }
+
+// TestJobEnvTwoAgentSteps: a value of the env of the job that reaches two
+// agent steps is one finding, at the env, and no error of a finding
+// reported twice (runAdded fails on one); an env of a step whose name
+// differs only in case does not replace it (a Linux runner keeps both).
+func TestJobEnvTwoAgentSteps(t *testing.T) {
+	step := func(env string) string {
+		return "      - uses: anthropics/claude-code-action@v1\n" + env + "        with:\n          allowed_non_write_users: \"*\"\n          github_token: t\n          prompt: Label the issue whose body is in the env BODY\n          claude_args: --allowedTools Bash\n"
+	}
+	head := "on: {issues: {types: [opened]}}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    env:\n      BODY: ${{ github.event.issue.body }}\n    steps:\n"
+	for name, src := range map[string]string{
+		"two steps": head + step("") + step(""),
+		"case":      head + step("        env:\n          body: fixed text\n"),
+	} {
+		rep, in := runAdded(t, map[string]string{".github/workflows/w.yml": src})
+		if got := marked(t, rep, in, AIActionPromptInjectionID); len(got) != 1 {
+			t.Errorf("%s: %v, want one finding", name, got)
+		}
+	}
+}
