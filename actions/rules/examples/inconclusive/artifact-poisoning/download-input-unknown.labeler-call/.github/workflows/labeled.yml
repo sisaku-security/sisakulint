@@ -1,0 +1,37 @@
+# situation: labeler.yml calls the reusable workflow label-reusable.yml on
+#   pull_request_target, and label-reusable.yml runs actions/labeler with a
+#   personal access token; the configuration .github/labeler.yml adds the
+#   label safe-to-test to a pull request that changes a file under site/;
+#   labeled.yml runs on pull_request_target on labeled when the label is
+#   safe-to-test, and the job downloads the artifact out of the run that the
+#   output of a step names, and runs ./out/publish.sh.
+# reason: the reusable workflow runs actions/labeler on the pull request of
+#   the attacker on the events of its caller, and a label that the token
+#   adds starts the labeled run, so no person approves the run before the
+#   label starts the run.
+# attack-value: the file out/publish.sh in the artifact of a run of the pull request = "#!/bin/sh\necho PWNED\n"
+# attack-run-behavior: the attacker opens a pull request from a fork that
+#   changes a file under site/ and the files of the attack; actions/labeler
+#   adds the label safe-to-test, which starts labeled.yml, and when the step
+#   names a run of the workflow build.yml of the pull request, the download
+#   puts the out/publish.sh of the attacker in out, and the step runs the
+#   file, which prints PWNED, with the secrets of the repository.
+on:
+  pull_request_target:
+    types: [labeled]
+jobs:
+  build:
+    if: github.event.label.name == 'safe-to-test'
+    runs-on: ubuntu-latest
+    steps:
+      - id: run
+        run: echo "id=$(gh run list --workflow build.yml --json databaseId -q '.[0].databaseId')" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: out
+          path: out
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+      - run: ./out/publish.sh

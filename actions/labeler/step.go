@@ -79,11 +79,17 @@ var attackerEvents = []workflow.EventName{workflow.EventNamePullRequestTarget}
 // GITHUB_TOKEN; root is the repository the configurations are read from,
 // and a path excluded is not read.
 func stepsOf(at attacker.Table, name facts.InputPath, w *workflow.Workflow, root fs.FS, excluded func(facts.InputPath) bool) []Step {
-	if w == nil || w.Jobs.Status != workflow.Present {
+	if w == nil {
 		return nil
 	}
-	evs := taint.EventsOn(w, attackerEvents)
-	if len(evs) == 0 {
+	return workflowSteps(at, name, w, own(w), root, excluded)
+}
+
+// workflowSteps is stepsOf on the chain c: the events of the workflow at
+// its top, past the ifs of its calls, with the token that its calls give.
+func workflowSteps(at attacker.Table, name facts.InputPath, w *workflow.Workflow, c chain, root fs.FS, excluded func(facts.InputPath) bool) []Step {
+	evs := c.evs
+	if w == nil || w.Jobs.Status != workflow.Present || len(evs) == 0 {
 		return nil
 	}
 	// the checkouts, with their ifs read in at as the steps of actions/labeler
@@ -99,19 +105,56 @@ func stepsOf(at attacker.Table, name facts.InputPath, w *workflow.Workflow, root
 			if !ok {
 				continue
 			}
-			ifs := append(slices.Clone(jobIfs), attacker.StepIf(w, &j, s.If))
+			ifs := append(append(slices.Clone(jobIfs), attacker.StepIf(w, &j, s.If)), c.ifs...)
 			on := slices.DeleteFunc(slices.Clone(evs), func(e analysis.EventActivity) bool { return !attackerRuns(at, e, ifs...) })
 			if len(on) == 0 {
 				continue
 			}
 			run := func(e analysis.EventActivity) jobRun { return jobRunOn(at, e, w, &j, sites) }
-			for _, st := range readSteps(s, ref, steps[:i], sites, at, on, run, root, excluded, w, &j) {
-				if j.Environment.Status != workflow.Absent {
+			for _, st := range readSteps(s, ref, steps[:i], sites, at, on, run, c.resolve, root, excluded, w, &j) {
+				if j.Environment.Status != workflow.Absent || c.environment() {
 					st.Unknown = true // required reviewers of the environment may approve the run before the label
 				}
 				st.Input = name
 				out = append(out, st)
 			}
+		}
+	}
+	return out
+}
+
+// actionSteps are the steps of the composite action a, the input name,
+// that run actions/labeler on the pull request of an attacker with a
+// token other than the GITHUB_TOKEN, on the events evs its callers run it
+// on through the chain c. The jobs of the callers are read for their ifs
+// and environments alone: the step is read as one of a job that runs,
+// with the steps of a before it.
+func actionSteps(at attacker.Table, name facts.InputPath, a *workflow.ActionMetadata, c chain, root fs.FS, excluded func(facts.InputPath) bool) []Step {
+	evs := c.evs
+	if a == nil || len(evs) == 0 || a.Runs.Status != workflow.Present || a.Runs.Value.Steps.Status != workflow.Present {
+		return nil
+	}
+	sites := prcode.AnalyzeIn(taint.NewCallersIn(calls.New(nil, false, false, facts.Repo{}), at), calls.Node{}, nil, a, nil)
+	steps := a.Runs.Value.Steps.Value.Items
+	var out []Step
+	for i, s := range steps {
+		ref, ok := labelerRef(s)
+		if !ok {
+			continue
+		}
+		on := slices.DeleteFunc(slices.Clone(evs), func(e analysis.EventActivity) bool {
+			return !attackerRuns(at, e, append([]attacker.PlacedIf{attacker.StepIf(nil, nil, s.If)}, c.ifs...)...)
+		})
+		if len(on) == 0 {
+			continue
+		}
+		run := func(analysis.EventActivity) jobRun { return jobRunSure }
+		for _, st := range readSteps(s, ref, steps[:i], sites, at, on, run, c.resolve, root, excluded, nil, nil) {
+			if c.environment() {
+				st.Unknown = true // required reviewers of the environment of a calling job may approve the run before the label
+			}
+			st.Input = name
+			out = append(out, st)
 		}
 	}
 	return out
@@ -280,22 +323,33 @@ func labelerRef(s workflow.Step) (string, bool) {
 
 // readSteps reads the labeler step s at ref, after the steps before of its
 // job, on the events evs whose attacker runs pass its ifs, read in the
-// table at: one Step for each reading of the configuration that
+// table at, with its repo-token as resolve gives it through the calls
+// that run the step (chain.resolve): one Step for each reading of the
+// configuration that
 // attackerConfig gives, so one step of actions/labeler may give a Step
 // that surely runs and a Step that may not run (MayNotRun). None for a
 // step that adds no label that starts a run: the GITHUB_TOKEN, no
 // configuration, a checkout before it that stops the job.
-func readSteps(s workflow.Step, ref string, before []workflow.Step, sites []prcode.CheckoutSite, at attacker.Table, evs []analysis.EventActivity, jobRun func(analysis.EventActivity) jobRun, root fs.FS, excluded func(facts.InputPath) bool, wf *workflow.Workflow, job *workflow.Job) []Step {
+func readSteps(s workflow.Step, ref string, before []workflow.Step, sites []prcode.CheckoutSite, at attacker.Table, evs []analysis.EventActivity, jobRun func(analysis.EventActivity) jobRun, resolve func(workflow.String, []workflow.Step) (workflow.String, []workflow.Step, bool), root fs.FS, excluded func(facts.InputPath) bool, wf *workflow.Workflow, job *workflow.Job) []Step {
 	st := Step{Step: s}
 	if s.With.Status == workflow.Dynamic {
 		st.Token, st.Unknown = TokenSourceUnknown, true
 		return []Step{st}
 	}
 	token, present := input(s, "repo-token")
-	if !present || githubToken(token) {
+	own := before
+	resolved := true
+	if present {
+		token, before, resolved = resolve(token, before)
+	}
+	if !present || resolved && githubToken(token) {
 		return nil // the default github.token, or none (the labeler fails)
 	}
 	st.Token = tokenSource(token, before)
+	before = own
+	if !resolved {
+		st.Token, st.Unknown = TokenSourceUnknown, true
+	}
 	if mayBeJobToken(token) {
 		st.Unknown = true // the token may be the GITHUB_TOKEN, whose label starts no run
 	}
