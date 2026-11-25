@@ -32,6 +32,7 @@ type EnvironmentFileWrite struct {
 	InBody   bool
 	Env      ExprRef
 	Heredoc  *DelimWrite
+	Nested   bool // in the code after -c of another shell (nested.go), inside single quotes
 }
 
 // DelimWrite is a name<<DELIM of the form the fix makes random:

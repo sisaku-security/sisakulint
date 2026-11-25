@@ -11,6 +11,12 @@ type NestedScript struct {
 	Command *Simple
 	Shell   string // bash or sh, as commands.json names it
 	Code    Span   // the code, inside its quotes
+	// Assigns are the names the command gives the shell a value of its
+	// own: the assignments before the command word (T=x bash -c ...) and
+	// those of env (env T=x bash -c ...). Clears: env takes an option
+	// (env -i, env -u T), so the shell may not have the variables at all.
+	Assigns []VarName
+	Clears  bool
 }
 
 // NestedScripts are the nested scripts of the simple commands of script,
@@ -24,6 +30,30 @@ func NestedScripts(script string, sc *Script) []NestedScript {
 		r := ArgumentRoles(words)
 		if r.Entry == nil || r.Name != "bash" && r.Name != "sh" {
 			return
+		}
+		var assigns []VarName
+		for _, a := range x.Assigns {
+			if n, _, _, ok := AssignedName(script, a); ok {
+				assigns = append(assigns, VarName{n})
+			}
+		}
+		clears, inEnv := false, false
+		for i := range x.Words {
+			if r.Roles[i] != ArgumentRoleCommand {
+				break
+			}
+			t := words[i].Text
+			switch {
+			case base(t) == "env":
+				inEnv = true
+			case !inEnv:
+			case strings.HasPrefix(t, "-"):
+				clears = true
+			case strings.Contains(t, "="):
+				if n, ok := NameOf(t[:strings.IndexByte(t, '=')]); ok {
+					assigns = append(assigns, n)
+				}
+			}
 		}
 		code := false // a word before is -c, whose value is the code
 		for i, w := range x.Words {
@@ -40,7 +70,7 @@ func NestedScripts(script string, sc *Script) []NestedScript {
 				continue
 			}
 			if code && len(w.Parts) == 1 && w.Parts[0].Quote == QuoteSingle && w.Parts[0].Kind == PartLiteral {
-				out = append(out, NestedScript{Command: x, Shell: r.Name, Code: w.Parts[0].Span})
+				out = append(out, NestedScript{Command: x, Shell: r.Name, Code: w.Parts[0].Span, Assigns: assigns, Clears: clears})
 			}
 			return // the first operand after -c is the code
 		}

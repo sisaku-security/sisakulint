@@ -299,6 +299,8 @@ func (p *stepPlan) step(scripts *shell.Memo, sinks []taint.Sink, idx []int) {
 		case v.n == 0: // in the body of a heredoc whose delimiter the fix makes random
 		case v.n&(needKey|needBody|needLine) != 0:
 			o.NoFix = manual(noteOf(v.n))
+		case v.w.Nested:
+			o.NoFix = manual("the variable is in the code after -c of another shell, inside single quotes, where the quotes of the fix would end that code; take its line breaks out by hand")
 		case v.w.Op:
 			o.NoFix = manual("the variable has an operator (${NAME:-x} and the like); take its line breaks out by hand")
 		case sharedBase(s.Step.Base) || sharedBase(s.Value.Base):

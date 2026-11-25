@@ -27979,7 +27979,7 @@
               ISSUE_TITLE: ${{ github.event.issue.title }}
             run: source "$ISSUE_TITLE"
     ```
-- env-variable-nested: a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion \$&#91; ], the patterns and the commands of each clause of case, a heredoc that starts inside \$( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from code after -c that is not one word in single quotes (bash -c 'eval "\$V"'"x"), where that shell expands the variable (the code after -c of bash and sh in one word in single quotes is read as a script of its own)
+- env-variable-nested: a variable of env at a place of a run of bash that the rule does not follow: the old arithmetic expansion \$&#91; ], the patterns and the commands of each clause of case, a heredoc that starts inside \$( ), the line where the script leaves a quote or a heredoc open and the lines after it (bash runs the lines after a heredoc that is not closed); and the script that another shell reads from the body of a heredoc whose delimiter is quoted, or from code after -c that the rule does not read as a script of its own, where that shell expands the variable: code that is not one word in single quotes (bash -c 'eval "\$V"'"x"), the code of sh -c, the arguments after the code that the shell reads as \$1 and the like (bash -c 'eval "\$1"' \_ "\$V"), and a -c after an option of the shell the rule does not read (bash -x -o pipefail -c '...')
   - finding kinds: code-injection.controlled, code-injection.env-variable, code-injection.env-variable-wiki, code-injection.wiki
   - disposition: todo (needs: same-file)
   - example: env-variable-nested.yml (workflow, undetected)
@@ -37232,7 +37232,7 @@
               run-id: ${{ github.event.workflow_run.id }}
           - run: cat tool_dir.txt >> "$GITHUB_PATH"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval; bash -c and sh -c whose code is not one word in single quotes, or whose code reads the arguments after it as \$1 and the like, or whose -c comes after an option of the shell the rule does not read: one word in single quotes is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: envpath-injection.controlled, envpath-injection.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
@@ -40300,7 +40300,7 @@
               X=T
               echo "a=${!X}" >> "$GITHUB_ENV"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval; bash -c and sh -c whose code is not one word in single quotes, or whose code reads the arguments after it as \$1 and the like, or whose -c comes after an option of the shell the rule does not read: one word in single quotes is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: envvar-injection.controlled, envvar-injection.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
@@ -45817,7 +45817,7 @@
               vs=$(git tag | grep "^${PREFIX}" | sed "s#^${PREFIX}#v#" | paste -sd , -)
               echo "vs=$vs"
     ```
-- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval, and bash -c and sh -c whose code is not one word in single quotes, which is read as a script of its own) or from the environment it reads itself (python -c and the like)
+- nested-shell: what another shell or program the script starts writes to the environment file, from its code (eval; bash -c and sh -c whose code is not one word in single quotes, or whose code reads the arguments after it as \$1 and the like, or whose -c comes after an option of the shell the rule does not read: one word in single quotes is read as a script of its own) or from the environment it reads itself (python -c and the like)
   - finding kinds: output-clobbering.controlled, output-clobbering.wiki
   - disposition: todo (needs: same-file)
   - example: nested-shell.yml (workflow, undetected)
