@@ -1,14 +1,13 @@
 # situation: on an opened issue, a step passes the issue's title in the
 #   environment variable ISSUE_TITLE and gives the variable to git -c as the
-#   value of the configuration key user.name.
-# reason: git uses the value of user.name as the name of the author of the
-#   commit, and does not run the value as a program.
-# cause: the rule reads the value of every configuration key that git -c
-#   sets as a program that git runs, as git does for the value of
-#   core.fsmonitor.
+#   value of the configuration key merge.conflictStyle.
+# reason: git reads the value of merge.conflictStyle as the name of a style
+#   of conflict markers, and does not run the value as a program.
+# cause: the rule reads the value of every configuration key outside its
+#   list of data keys as code, as git does for the value of core.sshCommand.
 # attack-value: github.event.issue.title = "$(echo PWNED)"
-# attack-run-behavior: git commit writes the commit with the author name
-#   $(echo PWNED), and nothing prints PWNED.
+# attack-run-behavior: git status rejects the style $(echo PWNED) or
+#   ignores it, and nothing prints PWNED.
 on:
   issues:
     types: [opened]
@@ -18,4 +17,4 @@ jobs:
     steps:
       - env:
           ISSUE_TITLE: ${{ github.event.issue.title }}
-        run: git -c user.name="$ISSUE_TITLE" commit --allow-empty -m x
+        run: git -c merge.conflictStyle="$ISSUE_TITLE" status

@@ -27677,6 +27677,29 @@
               run: eval "echo $ISSUE_TITLE"
       ```
   - true negatives:
+    - env-variable.git-config-data.yml (workflow, true-negative)
+      ```yaml
+      # situation: on an opened issue, a step passes the issue's title in the
+      #   environment variable ISSUE_TITLE and gives the variable to git -c as the
+      #   value of the configuration key user.name.
+      # reason: git uses the value of user.name as the name of the author of the
+      #   commit, and does not run the value as a program.
+      #   The rule reads as data the value of the keys it lists as data
+      #   (user.name, user.email and the like), in any quoting of the key.
+      # attack-value: github.event.issue.title = "$(echo PWNED)"
+      # attack-run-behavior: git commit writes the commit with the author name
+      #   $(echo PWNED), and nothing prints PWNED.
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                ISSUE_TITLE: ${{ github.event.issue.title }}
+              run: git -c user.name="$ISSUE_TITLE" commit --allow-empty -m x
+      ```
     - env-variable.pipe-to-file.yml (workflow, true-negative)
       ```yaml
       # situation: on an opened issue, a step passes the issue's title in the
@@ -30316,33 +30339,6 @@
               true | TITLE="echo safe"
               eval "$TITLE"
     ```
-- git-config-value: a variable inside double quotes given to git -c as the value of a configuration key that does not name a program for git to run, such as git -c user.name="\$X" commit: the rule reads the value of every configuration key that git -c sets as a program that git runs, as git does for the value of core.fsmonitor. Without the double quotes, the shell splits the value of the variable into words, and a word of the value can add another -c with a key that names a program, so that form is not a false positive
-  - finding kinds: code-injection.env-variable
-  - disposition: todo (needs: same-file)
-  - example: git-config-value.yml (workflow, false-positive)
-    ```yaml
-    # situation: on an opened issue, a step passes the issue's title in the
-    #   environment variable ISSUE_TITLE and gives the variable to git -c as the
-    #   value of the configuration key user.name.
-    # reason: git uses the value of user.name as the name of the author of the
-    #   commit, and does not run the value as a program.
-    # cause: the rule reads the value of every configuration key that git -c
-    #   sets as a program that git runs, as git does for the value of
-    #   core.fsmonitor.
-    # attack-value: github.event.issue.title = "$(echo PWNED)"
-    # attack-run-behavior: git commit writes the commit with the author name
-    #   $(echo PWNED), and nothing prints PWNED.
-    on:
-      issues:
-        types: [opened]
-    jobs:
-      a:
-        runs-on: ubuntu-latest
-        steps:
-          - env:
-              ISSUE_TITLE: ${{ github.event.issue.title }}
-            run: git -c user.name="$ISSUE_TITLE" commit --allow-empty -m x
-    ```
 - name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
   - finding kinds: code-injection.env-variable
   - disposition: todo (needs: same-file)
@@ -30371,6 +30367,32 @@
               n=TITLE
               declare "$n=echo safe"
               eval "$TITLE"
+    ```
+- git-config-value: a variable inside quotes given to git -c as the value of a configuration key that git keeps as data but that the rule's list of data keys (user.name, user.email and the like) does not name, such as git -c merge.conflictStyle="\$X" merge: the rule reads the value of every key outside that list as code, as git runs the value of core.sshCommand, init.templateDir or imap.tunnel. Without the quotes, the shell splits the value of the variable into words, and a word of the value can add another -c with a key that names a program, so that form is not a false positive
+  - finding kinds: code-injection.env-variable
+  - disposition: todo (needs: same-file)
+  - example: git-config-value.yml (workflow, false-positive)
+    ```yaml
+    # situation: on an opened issue, a step passes the issue's title in the
+    #   environment variable ISSUE_TITLE and gives the variable to git -c as the
+    #   value of the configuration key merge.conflictStyle.
+    # reason: git reads the value of merge.conflictStyle as the name of a style
+    #   of conflict markers, and does not run the value as a program.
+    # cause: the rule reads the value of every configuration key outside its
+    #   list of data keys as code, as git does for the value of core.sshCommand.
+    # attack-value: github.event.issue.title = "$(echo PWNED)"
+    # attack-run-behavior: git status rejects the style $(echo PWNED) or
+    #   ignores it, and nothing prints PWNED.
+    on:
+      issues:
+        types: [opened]
+    jobs:
+      a:
+        runs-on: ubuntu-latest
+        steps:
+          - env:
+              ISSUE_TITLE: ${{ github.event.issue.title }}
+            run: git -c merge.conflictStyle="$ISSUE_TITLE" status
     ```
 - associative-key-not-literal: a key of an associative array that a declare, typeset or local command declares with an initial value written as a list in parentheses (declare -A m=(&#91;k]=v); echo "\${m&#91;\$KEY]}"), where a variable of env is in the key: the rule reads the subscript as arithmetic, which bash does only for an indexed array, as the rule does not read which names such a command declares associative
   - finding kinds: code-injection.env-variable

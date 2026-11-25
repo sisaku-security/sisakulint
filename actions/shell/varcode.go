@@ -463,7 +463,14 @@ func (v *varCodes) arguments(s *Simple, words []CommandWord, c int, readings []C
 			switch {
 			case o == nil:
 			case holds || !w.Known && strings.ContainsRune(text, '='):
-				readings[i] = o.ValueReading
+				if name != "git" || gitConfigRuns(v.s, s.Words[i], gitOptionLength(text)) {
+					readings[i] = o.ValueReading
+				}
+			case name == "git" && o.Value && i+1 < len(words):
+				if gitConfigRuns(v.s, s.Words[i+1], 0) {
+					readings[i+1] = o.ValueReading
+				}
+				i++
 			case o.Value && i+1 < len(words):
 				j := i + 1
 				if o.Cluster && !o.Joined {
@@ -511,6 +518,74 @@ func (v *varCodes) arguments(s *Simple, words []CommandWord, c int, readings []C
 		readings[i] = e.ValueReading
 	}
 	return e
+}
+
+// gitConfigRuns is whether git may run the value of the configuration
+// that the word w gives to git -c (or --config-env), its key read from the
+// byte skip of its literal prefix on: the word has an expansion outside
+// quotes (whose words may add another -c), the key is not literal, or the
+// key is not one whose value git keeps as data (gitDataKeys). git -c
+// user.name="$V", git -c "user.name=$V" and git -c 'user.name'="$V" set
+// data only.
+func gitConfigRuns(script string, w Word, skip int) bool {
+	for _, p := range w.Parts {
+		if p.Kind != PartLiteral && p.Quote == QuoteNone {
+			return true
+		}
+	}
+	prefix := quotedLiteralPrefix(script, w)
+	if skip > len(prefix) {
+		return true
+	}
+	key, _, ok := strings.Cut(prefix[skip:], "=")
+	return !ok || gitKeyRuns(key)
+}
+
+// quotedLiteralPrefix is the text of the literal parts at the start of w,
+// outside quotes or inside '...' or "...": user.name= of "user.name=$V"
+// and of 'user.name'="$V".
+func quotedLiteralPrefix(script string, w Word) string {
+	var b strings.Builder
+	for _, p := range w.Parts {
+		if p.Kind != PartLiteral || p.Quote != QuoteNone && p.Quote != QuoteSingle && p.Quote != QuoteDouble {
+			break
+		}
+		b.WriteString(script[p.Span.Start:p.Span.End])
+	}
+	return b.String()
+}
+
+// gitOptionLength is the length of the option in the word text that holds
+// its value too: -ckey=value, --config-env=key=env.
+func gitOptionLength(text string) int {
+	if strings.HasPrefix(text, "--") {
+		return strings.IndexByte(text, '=') + 1
+	}
+	return 2
+}
+
+// gitDataKeys are the configuration keys, in lower case, whose value git
+// keeps as data: it runs no part of it, and it names no program, file or
+// directory that git reads code from. Every other key may (core.sshCommand,
+// init.templateDir, imap.tunnel, submodule.<name>.update with !), so the
+// rule reads its value as code.
+var gitDataKeys = map[string]bool{
+	"user.name": true, "user.email": true, "author.name": true, "author.email": true,
+	"committer.name": true, "committer.email": true, "user.usecommonname": true,
+	"core.quotepath": true, "core.autocrlf": true, "core.filemode": true, "core.ignorecase": true,
+	"core.longpaths": true, "core.safecrlf": true, "core.eol": true, "core.abbrev": true,
+	"init.defaultbranch": true, "advice.detachedhead": true, "color.ui": true,
+	"commit.gpgsign": true, "tag.gpgsign": true, "pull.rebase": true, "pull.ff": true,
+	"merge.ff": true, "push.default": true, "push.autosetupremote": true, "fetch.prune": true,
+	"protocol.version": true, "http.version": true, "http.extraheader": true, "http.sslverify": true,
+	"http.postbuffer": true, "gc.auto": true, "i18n.commitencoding": true, "i18n.logoutputencoding": true,
+	"log.showsignature": true, "maintenance.auto": true, "checkout.workers": true,
+}
+
+// gitKeyRuns is whether git may run the value of the configuration key: it
+// is not among gitDataKeys.
+func gitKeyRuns(key string) bool {
+	return !gitDataKeys[strings.ToLower(key)]
 }
 
 // literalPrefix is the text of the literal parts outside quotes at the

@@ -1,0 +1,20 @@
+# situation: on an opened issue, a step passes the issue's title in the
+#   environment variable ISSUE_TITLE and gives the variable to git -c as the
+#   value of the configuration key user.name.
+# reason: git uses the value of user.name as the name of the author of the
+#   commit, and does not run the value as a program.
+#   The rule reads as data the value of the keys it lists as data
+#   (user.name, user.email and the like), in any quoting of the key.
+# attack-value: github.event.issue.title = "$(echo PWNED)"
+# attack-run-behavior: git commit writes the commit with the author name
+#   $(echo PWNED), and nothing prints PWNED.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: git -c user.name="$ISSUE_TITLE" commit --allow-empty -m x
