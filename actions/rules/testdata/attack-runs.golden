@@ -6,6 +6,7 @@ actions/rules/examples/false-positive/code-injection/callee.yml	false-positive	h
 actions/rules/examples/false-positive/code-injection/callee.named/.github/workflows/called.yml	false-positive	harm shows
 actions/rules/examples/false-positive/code-injection/fork-flag-review.yml	false-positive	harm shows
 actions/rules/examples/false-positive/code-injection/fork-pull-request.yml	false-positive	not run: no-attacker-event
+actions/rules/examples/false-positive/code-injection/git-config-value.yml	false-positive	no harm
 actions/rules/examples/false-positive/code-injection/if-unnarrowed.yml	false-positive	harm shows
 actions/rules/examples/false-positive/code-injection/lastpipe-not-literal.yml	false-positive	no harm
 actions/rules/examples/false-positive/code-injection/name-not-literal.yml	false-positive	no harm

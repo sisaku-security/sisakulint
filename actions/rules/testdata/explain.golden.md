@@ -27608,8 +27608,8 @@
       #   value of the configuration key user.name.
       # reason: git uses the value of user.name as the name of the author of the
       #   commit, and does not run the value as a program.
-      #   The rule reads as code only the value of a key that names a program
-      #   (core.sshCommand, core.fsmonitor, alias.*, *.helper).
+      #   The rule reads as data the value of the keys it lists as data
+      #   (user.name, user.email and the like), in any quoting of the key.
       # attack-value: github.event.issue.title = "$(echo PWNED)"
       # attack-run-behavior: git commit writes the commit with the author name
       #   $(echo PWNED), and nothing prints PWNED.
@@ -30291,6 +30291,32 @@
               n=TITLE
               declare "$n=echo safe"
               eval "$TITLE"
+    ```
+- git-config-value: a variable inside quotes given to git -c as the value of a configuration key that git keeps as data but that the rule's list of data keys (user.name, user.email and the like) does not name, such as git -c merge.conflictStyle="\$X" merge: the rule reads the value of every key outside that list as code, as git runs the value of core.sshCommand, init.templateDir or imap.tunnel. Without the quotes, the shell splits the value of the variable into words, and a word of the value can add another -c with a key that names a program, so that form is not a false positive
+  - finding kinds: code-injection.env-variable
+  - disposition: todo (needs: same-file)
+  - example: git-config-value.yml (workflow, false-positive)
+    ```yaml
+    # situation: on an opened issue, a step passes the issue's title in the
+    #   environment variable ISSUE_TITLE and gives the variable to git -c as the
+    #   value of the configuration key merge.conflictStyle.
+    # reason: git reads the value of merge.conflictStyle as the name of a style
+    #   of conflict markers, and does not run the value as a program.
+    # cause: the rule reads the value of every configuration key outside its
+    #   list of data keys as code, as git does for the value of core.sshCommand.
+    # attack-value: github.event.issue.title = "$(echo PWNED)"
+    # attack-run-behavior: git status rejects the style $(echo PWNED) or
+    #   ignores it, and nothing prints PWNED.
+    on:
+      issues:
+        types: [opened]
+    jobs:
+      a:
+        runs-on: ubuntu-latest
+        steps:
+          - env:
+              ISSUE_TITLE: ${{ github.event.issue.title }}
+            run: git -c merge.conflictStyle="$ISSUE_TITLE" status
     ```
 - associative-key-not-literal: a key of an associative array that a declare, typeset or local command declares with an initial value written as a list in parentheses (declare -A m=(&#91;k]=v); echo "\${m&#91;\$KEY]}"), where a variable of env is in the key: the rule reads the subscript as arithmetic, which bash does only for an indexed array, as the rule does not read which names such a command declares associative
   - finding kinds: code-injection.env-variable

@@ -69,6 +69,10 @@ var varCodeCases = []varCodeCase{
 	{src: `git -c "$V" x`, reading: CodeReadingCodeArgument, program: "git", values: []string{"alias.x=!touch PWNED"}},
 	{src: `git -c user.name=$V x`, reading: CodeReadingCodeArgument, program: "git", values: []string{"y -c alias.x=!touch${IFS}PWNED"}}, // its words add another -c
 	{src: `git -c user.name="$V" commit -m m`, program: "git"},                                                                           // data: git runs no value of user.name
+	{src: `git -c "user.name=$V" commit -m m`, program: "git"},
+	{src: `git -c 'user.name'="$V" commit -m m`, program: "git"},
+	{src: `git -c "alias.x=!$V" x`, reading: CodeReadingCodeArgument, program: "git"},
+	{src: `git -c 'alias.x'="!$V" x`, reading: CodeReadingCodeArgument, program: "git"},
 	{src: `git -c user.email="$V" -c core.quotePath=false status`, program: "git"},
 	{src: `let "$V"`, reading: CodeReadingArithmetic},
 	{src: `printf -v "$V" x`, reading: CodeReadingArithmetic},
@@ -389,10 +393,28 @@ func TestGitKeyRuns(t *testing.T) {
 		"credential.https://x.helper": true, "diff.x.textconv": true, "filter.lfs.smudge": true,
 		"remote.origin.uploadpack": true, "": true, "core": true,
 		"user.name": false, "user.email": false, "core.quotePath": false, "http.extraHeader": false,
-		"safe.directory": false, "init.defaultBranch": false,
+		"init.defaultBranch": false, "User.Name": false, "safe.directory": true,
+		"init.templateDir": true, "gpg.ssh.defaultKeyCommand": true, "imap.tunnel": true,
+		"submodule.s.update": true, "sendemail.sendmailCmd": true, "user.name.x": true,
 	} {
 		if got := gitKeyRuns(key); got != want {
 			t.Errorf("gitKeyRuns(%q) = %v, want %v", key, got, want)
+		}
+	}
+}
+
+// TestGitConfigUnlisted: the value of a key that gitDataKeys does not list
+// is read as code, written in any quoting.
+func TestGitConfigUnlisted(t *testing.T) {
+	for _, src := range []string{
+		`git -c init.templateDir="$V" init r`,
+		`git -c submodule.s.update="$V" submodule update`,
+		`git -c imap.tunnel="$V" imap-send`,
+		`git -c "core.sshCommand=$V" fetch`,
+		`git -c $'user.name'="$V" commit`,
+	} {
+		if got := vOf(src); len(got) != 1 || got[0].Reading != CodeReadingCodeArgument {
+			t.Errorf("%s: VariableCodes = %v, want V read as code", src, got)
 		}
 	}
 }

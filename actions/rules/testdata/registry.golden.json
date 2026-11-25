@@ -17149,7 +17149,7 @@
             {
               "input_kind": "workflow",
               "name": "env-variable.git-config-data.yml",
-              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and gives the variable to git -c as the\n#   value of the configuration key user.name.\n# reason: git uses the value of user.name as the name of the author of the\n#   commit, and does not run the value as a program.\n#   The rule reads as code only the value of a key that names a program\n#   (core.sshCommand, core.fsmonitor, alias.*, *.helper).\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: git commit writes the commit with the author name\n#   $(echo PWNED), and nothing prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: git -c user.name=\"$ISSUE_TITLE\" commit --allow-empty -m x\n"
+              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and gives the variable to git -c as the\n#   value of the configuration key user.name.\n# reason: git uses the value of user.name as the name of the author of the\n#   commit, and does not run the value as a program.\n#   The rule reads as data the value of the keys it lists as data\n#   (user.name, user.email and the like), in any quoting of the key.\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: git commit writes the commit with the author name\n#   $(echo PWNED), and nothing prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: git -c user.name=\"$ISSUE_TITLE\" commit --allow-empty -m x\n"
             },
             {
               "input_kind": "workflow",
@@ -18752,6 +18752,24 @@
               "input_kind": "workflow",
               "name": "name-not-literal.yml",
               "text": "# situation: on issues opened, a step passes the issue's title in the\n#   environment variable TITLE, sets n to the name TITLE, assigns a fixed\n#   command to the variable that n names with declare, and runs TITLE with\n#   eval.\n# reason: bash assigns the fixed command to TITLE, so TITLE holds the fixed\n#   command when eval runs, and the title of the issue does not run.\n# cause: the variable name of the assignment is not a literal word, so the\n#   rule reads TITLE as holding the value of the env.\n# attack-value: github.event.issue.title = \"echo PWNED\"\n# attack-run-behavior: eval runs the fixed command, which prints \"safe\".\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          TITLE: ${{ github.event.issue.title }}\n        run: |\n          n=TITLE\n          declare \"$n=echo safe\"\n          eval \"$TITLE\"\n"
+            }
+          ]
+        },
+        {
+          "id": "git-config-value",
+          "text": "a variable inside quotes given to git -c as the value of a configuration key that git keeps as data but that the rule's list of data keys (user.name, user.email and the like) does not name, such as git -c merge.conflictStyle=\"$X\" merge: the rule reads the value of every key outside that list as code, as git runs the value of core.sshCommand, init.templateDir or imap.tunnel. Without the quotes, the shell splits the value of the variable into words, and a word of the value can add another -c with a key that names a program, so that form is not a false positive",
+          "finding_kinds": [
+            "code-injection.env-variable"
+          ],
+          "disposition": "todo",
+          "needs": [
+            "same-file"
+          ],
+          "examples": [
+            {
+              "input_kind": "workflow",
+              "name": "git-config-value.yml",
+              "text": "# situation: on an opened issue, a step passes the issue's title in the\n#   environment variable ISSUE_TITLE and gives the variable to git -c as the\n#   value of the configuration key merge.conflictStyle.\n# reason: git reads the value of merge.conflictStyle as the name of a style\n#   of conflict markers, and does not run the value as a program.\n# cause: the rule reads the value of every configuration key outside its\n#   list of data keys as code, as git does for the value of core.sshCommand.\n# attack-value: github.event.issue.title = \"$(echo PWNED)\"\n# attack-run-behavior: git status rejects the style $(echo PWNED) or\n#   ignores it, and nothing prints PWNED.\non:\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ISSUE_TITLE: ${{ github.event.issue.title }}\n        run: git -c merge.conflictStyle=\"$ISSUE_TITLE\" status\n"
             }
           ]
         },
