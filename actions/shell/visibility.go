@@ -54,7 +54,8 @@ type Assignment struct {
 // never called is read where it is defined, giving nothing back. The
 // value of a variable is not read: if false; then s=x; fi reaches as any
 // other if. Assignments and definitions whose names are not literal are
-// not followed.
+// not followed, but declare "$n=value" (and local, export, readonly) where
+// n holds one literal name on every path: an assignment to that name.
 type NameVisibility struct {
 	reads map[int]map[string][]*Assignment // by where a parameter starts
 	cmds  map[int]map[string][]*Assignment // by where a simple command starts: what reaches it
@@ -474,6 +475,58 @@ func AssignedName(script string, w Word) (name string, value int, element, ok bo
 		}
 	}
 	return "", 0, false, false
+}
+
+// nameParam is the parameter n of the declaration word w of script when w
+// is "$n=value" (or $n=, ${n}=): bash assigns value to the variable whose
+// name is the value of n; with where value starts.
+func nameParam(script string, w Word) (n string, value int, ok bool) {
+	if len(w.Parts) < 2 || w.Parts[0].Kind != PartParam || !isName(w.Parts[0].Name.String()) {
+		return "", 0, false
+	}
+	l := w.Parts[1]
+	if l.Kind != PartLiteral || l.Span.Start != w.Parts[0].Span.End || !strings.HasPrefix(script[l.Span.Start:l.Span.End], "=") {
+		return "", 0, false
+	}
+	return w.Parts[0].Name.String(), l.Span.Start + 1, true
+}
+
+// literalName is the one name that every assignment of as gives as its
+// value, a literal word; false when one is the value from before the
+// script, appends, unsets, has no value, or the values differ.
+func literalName(script string, as []*Assignment) (string, bool) {
+	name := ""
+	for _, a := range as {
+		if a.Before || a.Append || a.Unset || a.Descriptor || a.Value == nil {
+			return "", false
+		}
+		v, ok := literalOf(script, *a.Value)
+		if !ok || !isName(v) || (name != "" && v != name) {
+			return "", false
+		}
+		name = v
+	}
+	return name, name != ""
+}
+
+// DeclaredName is the name of the variable the declaration word w of
+// script ("$n=value", an argument of declare, local, export or readonly)
+// assigns when n has one literal value there, read through v; with where
+// value starts.
+func (v *NameVisibility) DeclaredName(script string, w Word) (name string, value int, ok bool) {
+	n, value, ok := nameParam(script, w)
+	if !ok {
+		return "", 0, false
+	}
+	rs := v.Reaching(VarName{n}, Span{Start: w.Parts[0].Span.Start, End: w.Parts[0].Span.Start})
+	as := make([]*Assignment, len(rs))
+	for i := range rs {
+		as[i] = &rs[i]
+	}
+	if name, ok = literalName(script, as); !ok {
+		return "", 0, false
+	}
+	return name, value, true
 }
 
 // valueWord is the word of the value of the assignment word w, whose value

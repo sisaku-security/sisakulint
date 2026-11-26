@@ -739,6 +739,17 @@ func (w *fdReading) flowSimple(c *Simple, at Enclosing, done, redirectsDone int)
 						w.local(&w.vars, n, at.Env)
 					}
 				}
+				if n, value, ok := nameParam(w.s, wordsAt[i]); ok {
+					// declare "$n=value": an assignment to the name n holds,
+					// when n holds one literal name on every path
+					if name, ok := literalName(w.s, w.vars.vars[n]); ok {
+						if isLocal {
+							w.local(&w.vars, name, at.Env)
+						}
+						w.assign(&w.vars, &Assignment{Name: VarName{name}, At: wordsAt[i].Span, Value: valueWord(wordsAt[i], value), Func: at.Func, Local: isLocal, Env: at.Env, By: c})
+					}
+					continue
+				}
 				w.assignWord(&w.vars, &wordsAt[i], c, at, isLocal)
 				continue
 			}

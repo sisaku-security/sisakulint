@@ -455,7 +455,7 @@ var callAfterExecLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("call
 
 // nameNotLiteralLimit is an assignment whose variable name is not literal,
 // which the shell walk does not follow.
-var nameNotLiteralLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("name-not-literal"), Text: "an assignment whose variable name the script does not write as a literal word (n=key; declare \"$n=$X\"; or read -r \"$n\"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment", Disposition: lint.Todo(lint.NeedSameFile)}
+var nameNotLiteralLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("name-not-literal"), Text: "an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=$(printf key); declare \"$n=$X\"; or read -r \"$n\"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment", Disposition: lint.Todo(lint.NeedSameFile)}
 
 // recursiveUnsetLocalLimit is a variable a function unsets in a recursive
 // call deeper than the shell walk reads in place, where a calling function
@@ -475,7 +475,7 @@ var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID
 // by an assignment whose variable name is not literal: the rule reads the
 // variable as env's value.
 func nameNotLiteralFalsePositive(kinds ...lint.FindingKindID) lint.FalsePositiveForm {
-	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("name-not-literal"), Text: "a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare \"$n=echo safe\"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step", FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile)}
+	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("name-not-literal"), Text: "a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=$(printf TITLE); declare \"$n=echo safe\"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step", FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile)}
 }
 
 // reassignedEnvFalsePositive is a variable of env the script sets again,

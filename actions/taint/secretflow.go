@@ -84,11 +84,14 @@ type secretFlow struct {
 	script  *shell.Script
 	assigns []assignment // in the order of the script
 	funcs   []function   // the functions the script defines
-	vis     *shell.NameVisibility
-	byAt    map[int]*assignment // the assignments by where they start
-	regs    *[]maskRegistration
-	logs    *[]shell.Write
-	out     *shell.OutputReading // the readings of outputs, which nest at the $( ) of words
+	// declared: the arguments of declare and its like whose name is not
+	// literal; f.vis reads which name each assigns
+	declared []declared
+	vis      *shell.NameVisibility
+	byAt     map[int]*assignment // the assignments by where they start
+	regs     *[]maskRegistration
+	logs     *[]shell.Write
+	out      *shell.OutputReading // the readings of outputs, which nest at the $( ) of words
 	// carried keeps the secrets of what is read once (memoized): a variable
 	// at an assignment (an *assignment) or in env (an envLevel), a
 	// parameter of a function (argKey), a $( ) (substKey); reading are the
@@ -277,6 +280,13 @@ func (c scope) secretFlowOf(s *Sink) *secretFlow {
 	f.vis = c.scripts.Visibility(f.text, f.script)
 	s.CallsNotRead.Join(f.vis.CallsNotRead())
 	f.out = shell.NewOutputReading(f.text, f.script, f.vis, &s.CallsNotRead)
+	for _, d := range f.declared {
+		// declare "$n=value", n holding one literal name: an assignment to it
+		if name, from, ok := f.vis.DeclaredName(f.text, d.w); ok && !f.holeIn(d.w.Span.Start, from) {
+			f.assigns = append(f.assigns, assignment{at: d.w.Span.Start, name: name, parts: d.w.Parts, from: from, fn: d.fn})
+		}
+	}
+	slices.SortStableFunc(f.assigns, func(a, b assignment) int { return a.at - b.at })
 	f.byAt = map[int]*assignment{}
 	for i := range f.assigns {
 		f.byAt[f.assigns[i].at] = &f.assigns[i] // one before a call of a function reaches its body
@@ -333,10 +343,19 @@ func (f *secretFlow) funcAt(at int) *function {
 	return in
 }
 
+// declared is an argument w of declare and its like, in the function fn.
+type declared struct {
+	w  shell.Word
+	fn *function
+}
+
 // assign adds w when it is NAME=value, or an element NAME[subscript]=value:
 // a literal NAME at its head (shell.AssignedName).
 func (f *secretFlow) assign(w shell.Word, cmd *shell.Simple, fn *function) {
 	name, from, _, ok := shell.AssignedName(f.text, w)
+	if !ok && cmd == nil {
+		f.declared = append(f.declared, declared{w, fn}) // its name may be a parameter's value: read once f.vis is
+	}
 	if !ok || f.holeIn(w.Span.Start, from) {
 		return
 	}

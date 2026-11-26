@@ -1,0 +1,21 @@
+# situation: on issues opened, a step passes the issue's body in the
+#   environment variable BODY, sets n to the name VAL, assigns a fixed word
+#   to the variable that n names with declare, and writes X=$VAL to
+#   $GITHUB_ENV.
+# reason: n holds one literal name when declare runs, so bash assigns the
+#   fixed word to VAL, and VAL holds no value of the env when echo runs.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: echo appends the one line X=fixed to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          n=VAL
+          declare "$n=fixed"
+          echo "X=$VAL" >> "$GITHUB_ENV"

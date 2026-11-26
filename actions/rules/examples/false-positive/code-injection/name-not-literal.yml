@@ -1,10 +1,11 @@
 # situation: on issues opened, a step passes the issue's title in the
-#   environment variable TITLE, sets n to the name TITLE, assigns a fixed
-#   command to the variable that n names with declare, and runs TITLE with
-#   eval.
+#   environment variable TITLE, sets n to the name TITLE by a command
+#   substitution, assigns a fixed command to the variable that n names with
+#   declare, and runs TITLE with eval.
 # reason: bash assigns the fixed command to TITLE, so TITLE holds the fixed
 #   command when eval runs, and the title of the issue does not run.
-# cause: the variable name of the assignment is not a literal word, so the
+# cause: the variable name of the assignment is not a literal word, and n
+#   holds the output of a command substitution, not one literal name, so the
 #   rule reads TITLE as holding the value of the env.
 # attack-value: github.event.issue.title = "echo PWNED"
 # attack-run-behavior: eval runs the fixed command, which prints "safe".
@@ -18,6 +19,6 @@ jobs:
       - env:
           TITLE: ${{ github.event.issue.title }}
         run: |
-          n=TITLE
+          n=$(printf TITLE)
           declare "$n=echo safe"
           eval "$TITLE"
