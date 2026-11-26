@@ -96,6 +96,31 @@ func WindowsRunner(j *workflow.Job) bool {
 	return windows || hosted && len(j.RunsOn.Value.Items) > 0
 }
 
+// windowsLabeled is whether a label of the runs-on of j is windows or
+// begins with windows-, in any case, and no label is a ${{ }}: the reading
+// of a Windows runner that runnerVariable keeps instead of WindowsRunner.
+// A runs-on that does not decide the OS (a custom label that begins with
+// windows-, a ${{ }} of a matrix) has a runner variable read for one OS
+// only, and either OS misses a value: windowsLabeled keeps the output of
+// the taint the same until the taint reads both OSes for such a runs-on,
+// and then WindowsRunner alone answers.
+func windowsLabeled(j *workflow.Job) bool {
+	if j == nil || j.RunsOn.Status != workflow.Present {
+		return false
+	}
+	windows := false
+	for _, l := range j.RunsOn.Value.Items {
+		if l.HasExpr() {
+			return false
+		}
+		label := strings.ToLower(strings.TrimSpace(l.AsString()))
+		if label == "windows" || strings.HasPrefix(label, "windows-") {
+			windows = true
+		}
+	}
+	return windows
+}
+
 // RunnerVariableOf is the environment variable the runner writes the value
 // of the context path to in every step, the reverse of RunnerVariable.
 func RunnerVariableOf(path []expr.PathElem) (name string, ok bool) {
@@ -116,7 +141,7 @@ func (c scope) runnerVariable(name string) (RunnerValue, bool) {
 	if v, ok := RunnerVariable(name, false); ok {
 		return v, true
 	}
-	if !WindowsRunner(c.job) {
+	if !windowsLabeled(c.job) {
 		return RunnerValue{}, false
 	}
 	for _, e := range c.envs {
