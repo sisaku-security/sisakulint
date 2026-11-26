@@ -1,0 +1,20 @@
+{"schema":"sisakulint/facts/v0","facts":[
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/checkout","ref":"v4.2.2"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/labeler","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.definition","repo":"actions/labeler","ref":"v5"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","file":"action.yml","content":"runs:\n  using: node24\n  main: index.js\n","archive_substituted":false}},
+{"query":{"kind":"action.runs-using","repo":"actions/checkout","ref":"v4.2.2"},"state":"found","value":"node24"},
+{"query":{"kind":"action.runs-using","repo":"actions/labeler","ref":"v5"},"state":"found","value":"node24"},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":".github/workflows/label-reusable.yml"},"state":"found","value":true},
+{"query":{"kind":"dependabot.version-updates","package_ecosystem":"github-actions","input_path":".github/workflows/labeled.yml"},"state":"found","value":true},
+{"query":{"kind":"git.ref-commit","repo":"actions/checkout","ref":"v4.2.2"},"state":"found","value":{"ref":"refs/tags/v4.2.2","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"git.ref-commit","repo":"actions/labeler","ref":"v5"},"state":"found","value":{"ref":"refs/tags/v5","sha":"11bd71901bbe5b1630ceea73d27597364c9af683"}},
+{"query":{"kind":"package.advisories","package":"actions/checkout"},"state":"found","value":[]},
+{"query":{"kind":"package.advisories","package":"actions/labeler"},"state":"found","value":[]},
+{"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
+{"query":{"kind":"repo.archived","repo":"actions/checkout"},"state":"found","value":false},
+{"query":{"kind":"repo.archived","repo":"actions/labeler"},"state":"found","value":false},
+{"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":".github/workflows/labeled.yml"},"state":"unknown","reason":"the example does not answer it"},
+{"query":{"kind":"repo.pull-request-target-allowed","input_path":".github/workflows/labeler.yml"},"state":"unknown","reason":"the example does not answer it"}
+]}

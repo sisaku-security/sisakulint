@@ -94,7 +94,6 @@ var botConditionsMeta = lint.Meta{
 	Citations: []lint.Citation{cvss, zizmorBots},
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
-		{ID: lint.MustUndetectedFormID("caller-by-repository-name"), Text: "a comparison with a bot in a reusable workflow that a workflow of the same repository calls by the name owner/repo/.github/workflows/<file>@<ref> of the repository (the repository that --repo names) instead of the path ./.github/workflows/<file>: the rule does not resolve the call by the name to the file, so the rule reads the if on the events of the reusable workflow alone (workflow_call), which no attacker triggers", Disposition: lint.Todo(lint.NeedSameFile)},
 		appCommitEventLimit,
 		forkReviewLimit,
 		{ID: lint.MustUndetectedFormID("caller-value"), Text: "an actor compared in an action through inputs.<name>, which a caller gives under with:, such as with: who: ${{ github.actor }}: the rule does not follow the value under with: into inputs.<name>", Disposition: lint.Todo(lint.NeedRepoFile)},

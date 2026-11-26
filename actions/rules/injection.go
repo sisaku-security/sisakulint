@@ -60,8 +60,15 @@ func envEvidence(c *lint.RuleContext, env []ir.Handle, text string) []lint.Relat
 func valueEvidence(c *lint.RuleContext, r ir.ExprRef, text string) (evidence, related []lint.Related) {
 	for i, w := range r.With {
 		note := "the caller gives it here"
+		// the default is in the file of the reference: a reference in a
+		// composite action of the inputs that a step of the input runs is
+		// in another input than the one of the rule
+		def := c.InFile(w)
+		if !c.InFile(r.At) {
+			def = w.InputName() != "" && w.InputName() == r.At.InputName()
+		}
 		switch {
-		case c.InFile(w):
+		case def:
 			note = "the input's default gives " + text + " here"
 		case i == 0:
 			note = "a caller gives " + text + " here"
@@ -368,7 +375,7 @@ var fileOutputBase = lint.CVSS{
 
 var (
 	scriptVarLimit   = lint.UndetectedForm{ID: lint.MustUndetectedFormID("script-var"), Text: "a shell variable no env of the workflow sets: one the script sets (from a file, an artifact, an API), a positional parameter of a function the script calls with the value, or the runner", Disposition: lint.Todo(lint.NeedSameFile)}
-	nestedShellLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("nested-shell"), Text: "what another shell or program the script starts writes to the environment file, from its code (eval, bash -c, sh -c) or from the environment it reads itself (python -c and the like)", Disposition: lint.Todo(lint.NeedSameFile)}
+	nestedShellLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("nested-shell"), Text: "what another shell or program the script starts writes to the environment file, from its code (eval; bash -c and sh -c whose code is not one word in single quotes, or whose code reads the arguments after it as $1 and the like, or whose -c comes after an option of the shell the rule does not read, or whose code reads a variable the script assigns before the command (T=\"pre-$T\"; bash -c '...'): one word in single quotes is read as a script of its own) or from the environment it reads itself (python -c and the like)", Disposition: lint.Todo(lint.NeedSameFile)}
 	wrappedTeeLimit  = lint.UndetectedForm{ID: lint.MustUndetectedFormID("wrapped-tee"), Text: "tee run through another command or by its path (sudo tee, command tee, /usr/bin/tee): the rule reads tee by its name alone", Disposition: lint.Todo(lint.NeedSameFile)}
 	otherShellLimit  = lint.UndetectedForm{ID: lint.MustUndetectedFormID("other-shell"), Text: "a run of pwsh, cmd or python, and a run whose shell the rule cannot determine to be bash or sh: a shell: value whose command is not bash or sh, such as pwsh -File {0}; a shell: value of bash or sh with an option that the rule does not read, such as bash -c 'make' {0}, bash -v {0} or bash -O extglob {0}; a shell: value that names bash or sh by a path, such as /usr/bin/bash -e {0}, on a runner where the rule does not know that the path exists (any runner other than one whose runs-on is a single label that starts with ubuntu-, or with macos- for /bin/bash and /bin/sh) or in a step of a composite action; a shell: that is an expression; or a step without shell: whose job and workflow have no defaults.run.shell and whose job has a runs-on that is not a single label that starts with ubuntu-, macos- or windows-, such as self-hosted or an expression: the rule reads the runs of bash and sh only", Disposition: lint.Todo(lint.NeedSameFile)}
 )

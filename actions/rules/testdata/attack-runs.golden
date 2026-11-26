@@ -161,6 +161,7 @@ actions/rules/examples/true-negative/code-injection/controlled.unlisted-activity
 actions/rules/examples/true-negative/code-injection/controlled.unnamed-format-argument.yml	true-negative	not run: carrier-wrapped
 actions/rules/examples/true-negative/code-injection/env-variable.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable-wiki.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/env-variable.git-config-data.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable.pipe-to-file.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable.reader-stdin-redirected.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/wiki.yml	true-negative	no harm

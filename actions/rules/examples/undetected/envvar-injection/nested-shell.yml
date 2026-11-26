@@ -2,8 +2,9 @@
 #   through eval, bash -c and python -c.
 # reason: a todo (the same file): reading what another shell or program
 #   writes to the environment file would find it.
-# cause: the tree does not read the code of eval or bash -c, and python
-#   reads the value from its environment itself.
+# cause: the tree does not read the code of eval, nor that of bash -c
+#   written as two words in single quotes, and python reads the value from
+#   its environment itself.
 # attack-value: github.event.issue.title = "x\nPWNED=1"
 # attack-run-behavior: eval runs echo "a=$T", bash -c runs it with T from
 #   its environment, and python prints a= and T, each appending a=x and
@@ -18,5 +19,5 @@ jobs:
           T: ${{ github.event.issue.title }}
         run: |
           eval 'echo "a=$T" >> "$GITHUB_ENV"'
-          bash -c 'echo "a=$T" >> "$GITHUB_ENV"'
+          bash -c 'echo "a=$T"'' >> "$GITHUB_ENV"'
           python3 -c 'import os; print("a=" + os.environ["T"])' >> "$GITHUB_ENV"

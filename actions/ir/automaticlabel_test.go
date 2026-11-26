@@ -110,13 +110,16 @@ func TestAutomaticLabelCaller(t *testing.T) {
 
 // TestAutomaticLabelCallerStepNeeds: the if of the step of the caller's
 // job that runs a composite action reads the results of the jobs the job
-// needs (attacker.StepIf), so the label is what lets the attacker in.
+// needs (attacker.StepIf). A step of a workflow names ./x in the checked
+// out tree, so the call is not resolved (calls.Call.Resolved) and other
+// callers may run the action past no if: the worst case lets the attacker
+// in whatever the label, as the taint rules read the action on every event.
 func TestAutomaticLabelCallerStepNeeds(t *testing.T) {
 	action := "runs:\n  using: composite\n  steps:\n    - uses: actions/checkout@v4.2.2\n      with:\n        ref: ${{ github.event.pull_request.head.sha }}\n    - run: npm ci\n      shell: bash\n"
 	for _, c := range []struct {
 		label string
 		want  []analysis.AutomaticLabel
-	}{{"safe-to-test", free}, {"other", nil}} {
+	}{{"safe-to-test", free}, {"other", free}} {
 		caller := "on:\n  pull_request_target:\n    types: [labeled]\njobs:\n  pre:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n  build:\n    needs: pre\n    runs-on: ubuntu-latest\n    steps:\n      - if: needs.pre.result == 'failure' || github.event.label.name == '" + c.label + "'\n        uses: ./x\n"
 		x := labeledIR(t, "x/action.yml", freeConfig,
 			[2]string{".github/workflows/labeler.yml", labelerYML},
@@ -380,5 +383,38 @@ func TestAutomaticLabelNeedsResult(t *testing.T) {
 		[2]string{".github/workflows/ci.yml", caller})
 	if sites := x.allCheckoutSites(); len(sites) != 0 {
 		t.Errorf("caller: got %+v, want no site (the job that calls the workflow does not run)", sites)
+	}
+}
+
+// TestAutomaticLabelCalledLabeler: actions/labeler in a reusable workflow
+// or a composite action that a workflow on pull_request_target calls lets
+// the attacker in as the labeler of a job does.
+func TestAutomaticLabelCalledLabeler(t *testing.T) {
+	labelerStep := "      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.PAT }}\n"
+	for _, c := range []struct {
+		name   string
+		at     string
+		labels [][2]string
+	}{
+		{"job", ".github/workflows/labeler.yml", [][2]string{{".github/workflows/labeler.yml", labelerYML}}},
+		{"reusable", ".github/workflows/label.yml", [][2]string{
+			{".github/workflows/labeler.yml", "on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    secrets: inherit\n"},
+			{".github/workflows/label.yml", "on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep}}},
+		{"composite", ".github/actions/label/action.yml", [][2]string{
+			{".github/workflows/labeler.yml", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n"},
+			{".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n" + strings.ReplaceAll(labelerStep, "      ", "    ")}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			files := append(slices.Clone(c.labels), [2]string{".github/workflows/build.yml", labeledWorkflow("    if: github.event.label.name == 'safe-to-test'\n", headCheckout)})
+			x := labeledIR(t, ".github/workflows/build.yml", freeConfig, files...)
+			sites := x.allCheckoutSites()
+			if len(sites) != 1 {
+				t.Fatalf("%d sites", len(sites))
+			}
+			a := sites[0].automaticApproval
+			if !slices.Equal(a.AutomaticLabels, free) || a.At.InputName() != c.at || a.Token != labeler.TokenSourceAccount {
+				t.Errorf("got %+v", a)
+			}
+		})
 	}
 }

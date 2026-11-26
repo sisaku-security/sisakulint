@@ -273,7 +273,10 @@
         "cache-save.cache-approval",
         "cache-save.environment",
         "cache-save.automatic-approval",
-        "cache-save.uses-text"
+        "cache-save.uses-text",
+        "cache-save.chain",
+        "cache-save.caller-at",
+        "cache-save.shared-refs"
       ],
       "fixes": [
         "Job.CacheModeNoWrite"

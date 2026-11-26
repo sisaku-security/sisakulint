@@ -129,12 +129,25 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 		}
 	}
 	for _, s := range v.CacheSaves() {
+		// a step of a composite action of the inputs that many job steps run:
+		// the first of them reports each reference, with the others related
+		shared := map[[2]int]ir.SharedCacheRef{}
+		for _, r := range s.SharedRefs() {
+			k := 1
+			if r.Key {
+				k = 0
+			}
+			shared[[2]int{k, r.Index}] = r
+		}
 		// before the approval: a run of workflow_dispatch has no label
 		dispatched := len(s.DispatchOn()) > 0
 		if dispatched {
 			for i, refs := range [][]ir.ExprRef{s.KeyRefs(), s.PathRefs()} {
 				what := [...]string{"key", "path"}[i]
-				for _, r := range refs {
+				for n, r := range refs {
+					if shared[[2]int{i, n}].Elsewhere {
+						continue
+					}
 					if r.Verdict == analysis.Inconclusive && r.InconclusiveKind == analysis.InconclusiveRefInputDispatch {
 						c.Inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: c.At(r.At),
 							Note: fmt.Sprintf("%s is in the %s of %s, which saves to the cache of the scope of the ref of the run; the one who dispatches the workflow chooses the value and the ref", r.Text, what, s.UsesText())})
@@ -151,8 +164,12 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 		}
 		labeler := labelerRelated(c, s.CacheApproval(), s.AutomaticApproval())
 		seen := anchors{}
-		report := func(refs []ir.ExprRef, args func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs, what string) {
-			for _, r := range refs {
+		report := func(k int, refs []ir.ExprRef, args func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs, what string) {
+			for n, r := range refs {
+				sh := shared[[2]int{k, n}]
+				if sh.Elsewhere {
+					continue
+				}
 				at := c.At(r.At)
 				switch r.Verdict {
 				case analysis.Controlled:
@@ -161,6 +178,14 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 						continue
 					}
 					evidence, related := valueEvidence(c, r, r.Text)
+					if chain := s.Chain(); len(chain) > 0 {
+						// a step of a composite action of the inputs: the step of
+						// the job that runs it is where the job saves
+						evidence = append(evidence, lint.Related{Location: c.At(s.CallerAt()), Note: "runs " + hopsText(chain) + ", whose step " + s.UsesText() + " saves to the cache in the job"})
+						for _, o := range sh.Others {
+							related = append(related, lint.Related{Location: c.At(o), Note: "runs " + hopsText(chain) + " too, in a job that saves " + r.Text + " to the cache"})
+						}
+					}
 					c.Report(lint.FindingDraft{Location: at, Anchor: seen.next(what+" "+r.Text, ir.FixPlan{}), Args: args(r, on), Evidence: evidence, Related: append(related, labeler...), Condition: cond})
 				case analysis.Inconclusive:
 					if dispatched && r.InconclusiveKind == analysis.InconclusiveRefInputDispatch {
@@ -171,10 +196,10 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 				}
 			}
 		}
-		report(s.KeyRefs(), func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs {
+		report(0, s.KeyRefs(), func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs {
 			return CachePoisoningAttackerKey{Uses: s.UsesText(), Expression: r.Text, CacheWriteOn: eventsOf(on)}
 		}, "key")
-		report(s.PathRefs(), func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs {
+		report(1, s.PathRefs(), func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs {
 			return CachePoisoningAttackerPath{Uses: s.UsesText(), Expression: r.Text, CacheWriteOn: eventsOf(on)}
 		}, "path")
 	}

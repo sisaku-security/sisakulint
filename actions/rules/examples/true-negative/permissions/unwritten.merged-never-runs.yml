@@ -1,0 +1,21 @@
+# situation: the workflow runs only on pull_request with types: [opened]; the
+#   job deploy has if: github.event.pull_request.merged == true, writes no
+#   permissions, and runs the action some/action.
+# reason: a pull request is not merged when the pull request is opened, so
+#   github.event.pull_request.merged is false in every run of the workflow,
+#   the if of the job deploy is false in every run, and GitHub never runs the
+#   job deploy
+#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/data/reusables/actions/jobs/section-using-conditions-to-control-job-execution.md).
+# attack: the attacker publishes the code of the action some/action, which the
+#   job deploy runs.
+# attack-run-behavior: GitHub never runs the job deploy, so no code runs with
+#   the GITHUB_TOKEN of the job deploy.
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: some/action@0123456789abcdef0123456789abcdef01234567

@@ -180,16 +180,6 @@ var dangerousTriggersMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		forkReviewLimit, labelApprovedCheckoutLimit,
-		// actions/labeler in a reusable workflow or in a composite action
-		// (labeler-call) is a miss that the rule does not declare: the label
-		// that the called actions/labeler adds starts a job on labeled, and
-		// the rule does not report that job. The form is not declared, as
-		// the example of the form has a job that calls the reusable workflow
-		// on an event of an attacker and passes the reusable workflow a
-		// secret, the rule reports dangerous-triggers.secrets on the calling
-		// job, and an example of an undetected form must have no finding of
-		// the rule. That finding on the calling job is the false positive
-		// no-sink: no code of the attacker runs in the calling job.
 		outsideBotLabelLimit, labelerPullRequestLimit, labelerNotInputLimit, scriptLabelLimit, labelerOtherEventLimit,
 		{ID: lint.MustUndetectedFormID("remote-caller"), Text: "a reusable workflow called from another repository: the caller's events, token and secrets are not seen", Disposition: lint.Limitation(lint.DeciderRemoteCaller)},
 		{ID: lint.MustUndetectedFormID("id-token"), Text: "a job with id-token write and no other: code run there takes an OIDC token for the clouds that trust the repository", Disposition: lint.Todo(lint.NeedSameFile)},

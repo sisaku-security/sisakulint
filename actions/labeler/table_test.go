@@ -1,9 +1,11 @@
 package labeler
 
 import (
+	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/gh-intel/sisakulint/actions/attacker"
 	"github.com/gh-intel/sisakulint/actions/calls"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/workflow"
@@ -16,8 +18,13 @@ func filesOf(t *testing.T, root fstest.MapFS, names ...string) []calls.File {
 	var out []calls.File
 	for _, n := range names {
 		tree := cst.ParseMode(root[n].Data, cst.ModeGitHub)
-		w, _ := workflow.Parse(tree)
-		out = append(out, calls.File{Name: facts.MustCleanInputPath(n), Tree: tree, Workflow: w})
+		f := calls.File{Name: facts.MustCleanInputPath(n), Tree: tree}
+		if strings.HasPrefix(n, ".github/workflows/") {
+			f.Workflow, _ = workflow.Parse(tree)
+		} else {
+			f.Action, _ = workflow.ParseActionMetadata(tree)
+		}
+		out = append(out, f)
 	}
 	return out
 }
@@ -122,5 +129,111 @@ func TestTableTwoLabelers(t *testing.T) {
 	got := Read(filesOf(t, root, ".github/workflows/a.yml", ".github/workflows/b.yml"), root, func(facts.InputPath) bool { return false }).Steps()
 	if len(got) != 1 || got[0].Input.String() != ".github/workflows/b.yml" {
 		t.Errorf("got %v, want the labeler of b.yml", got)
+	}
+}
+
+// TestTableCalled: actions/labeler in a reusable workflow or a composite
+// action that a workflow on pull_request_target calls is read on the
+// events of the caller, as in the job of the caller; one that nothing of
+// the repository calls is not.
+func TestTableCalled(t *testing.T) {
+	labelerStep := `      - uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.PAT }}
+`
+	for _, c := range []struct {
+		name, callee, calleeSrc, caller string
+		want                            int
+	}{
+		{"reusable", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    secrets: inherit\n", 1},
+		{"composite", ".github/actions/label/action.yml",
+			"runs:\n  using: composite\n  steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n", 1},
+		{"reusable called on push", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: push\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n", 0},
+		{"composite behind a false if", ".github/actions/label/action.yml",
+			"runs:\n  using: composite\n  steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  label:\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n", 0},
+		{"reusable not called", ".github/workflows/label.yml",
+			"on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n" + labelerStep,
+			"on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n", 0},
+		{"composite given the PAT", ".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ secrets.PAT }}\n", 1},
+		{"composite given the GITHUB_TOKEN", ".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ github.token }}\n", 0},
+		{"composite with the default GITHUB_TOKEN", ".github/actions/label/action.yml", "inputs:\n  token:\n    default: ${{ github.token }}\nruns:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n", 0},
+		{"composite in a job for the same repository", ".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    if: github.event.pull_request.head.repo.full_name == github.repository\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ secrets.PAT }}\n", 0},
+		{"composite in a step for the same repository", ".github/actions/label/action.yml", "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - if: github.event.pull_request.head.repo.full_name == github.repository\n        uses: ./.github/actions/label\n        with:\n          token: ${{ secrets.PAT }}\n", 0},
+		{"reusable given the GITHUB_TOKEN", ".github/workflows/label.yml", "on:\n  workflow_call:\n    inputs:\n      token:\n        type: string\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    with:\n      token: ${{ github.token }}\n", 0},
+		{"reusable given the PAT", ".github/workflows/label.yml", "on:\n  workflow_call:\n    inputs:\n      token:\n        type: string\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ inputs.token }}\n", "on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    with:\n      token: ${{ secrets.PAT }}\n", 1},
+		{"reusable given the GITHUB_TOKEN as a secret", ".github/workflows/label.yml", "on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.LABELER_PAT }}\n", "on: pull_request_target\njobs:\n  label:\n    uses: ./.github/workflows/label.yml\n    secrets:\n      LABELER_PAT: ${{ secrets.GITHUB_TOKEN }}\n", 0},
+		{"reusable in a job for the same repository", ".github/workflows/label.yml", "on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.LABELER_PAT }}\n", "on: pull_request_target\njobs:\n  label:\n    if: github.event.pull_request.head.repo.full_name == github.repository\n    uses: ./.github/workflows/label.yml\n    secrets: inherit\n", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := fstest.MapFS{
+				".github/labeler.yml":      {Data: []byte(freeConfig)},
+				c.callee:                   {Data: []byte(c.calleeSrc)},
+				".github/workflows/ci.yml": {Data: []byte(c.caller)},
+			}
+			got := Read(filesOf(t, root, ".github/workflows/ci.yml", c.callee), root, func(facts.InputPath) bool { return false }).Steps()
+			if len(got) != c.want {
+				t.Fatalf("got %v, want %d steps", got, c.want)
+			}
+			if c.want == 1 && (got[0].Input.String() != c.callee || got[0].Token != TokenSourceAccount || got[0].Unknown || got[0].Labels["safe-to-test"] != freeReach) {
+				t.Errorf("got %+v", got[0])
+			}
+		})
+	}
+}
+
+// TestTableCalledToken: the token that a calling job makes with
+// actions/create-github-app-token is the app's, read among the steps of
+// that job; an environment of a calling job may hold the run, so the step
+// is Unknown.
+func TestTableCalledToken(t *testing.T) {
+	action := "runs:\n  using: composite\n  steps:\n    - uses: actions/labeler@v5\n      with:\n        repo-token: ${{ inputs.token }}\n"
+	for _, c := range []struct {
+		name, caller string
+		token        TokenSource
+		unknown      bool
+	}{
+		{"app token", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - id: app\n        uses: actions/create-github-app-token@v2\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ steps.app.outputs.token }}\n", TokenSourceApp, false},
+		{"environment", "on: pull_request_target\njobs:\n  label:\n    runs-on: ubuntu-latest\n    environment: approval\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/label\n        with:\n          token: ${{ secrets.PAT }}\n", TokenSourceAccount, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := fstest.MapFS{
+				".github/labeler.yml":              {Data: []byte(freeConfig)},
+				".github/actions/label/action.yml": {Data: []byte(action)},
+				".github/workflows/ci.yml":         {Data: []byte(c.caller)},
+			}
+			got := Read(filesOf(t, root, ".github/workflows/ci.yml", ".github/actions/label/action.yml"), root, func(facts.InputPath) bool { return false }).Steps()
+			if len(got) != 1 || got[0].Token != c.token || got[0].Unknown != c.unknown {
+				t.Errorf("got %+v", got)
+			}
+		})
+	}
+}
+
+// TestTableOtherRepo: a job that calls a workflow of another repository at
+// the path of an input runs that repository's workflow, when the
+// repository of the inputs is known.
+func TestTableOtherRepo(t *testing.T) {
+	root := fstest.MapFS{
+		".github/labeler.yml":                  {Data: []byte(freeConfig)},
+		".github/workflows/label-reusable.yml": {Data: []byte("on: workflow_call\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.PAT }}\n")},
+		".github/workflows/ci.yml":             {Data: []byte("on: pull_request_target\njobs:\n  label:\n    uses: other-org/lib/.github/workflows/label-reusable.yml@v1\n    secrets: inherit\n")},
+	}
+	files := filesOf(t, root, ".github/workflows/ci.yml", ".github/workflows/label-reusable.yml")
+	repo, err := facts.ParseRepo("example-org/app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadIn(attacker.Outsider, repo, files, root, func(facts.InputPath) bool { return false }).Steps(); len(got) != 0 {
+		t.Errorf("another repository's workflow: got %v", got)
+	}
+	repo, _ = facts.ParseRepo("other-org/lib")
+	if got := ReadIn(attacker.Outsider, repo, files, root, func(facts.InputPath) bool { return false }).Steps(); len(got) != 1 {
+		t.Errorf("the repository's own workflow: got %v", got)
 	}
 }

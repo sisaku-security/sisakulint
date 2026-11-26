@@ -679,3 +679,91 @@ func (c *Callers) valueEventsIn(st *resolving, name calls.Node, own func() []ana
 	}
 	return c.eventsOrIn(st, name, valueEventNames(), false, own)
 }
+
+// Chains are, for each way that a workflow on the event e calls name, the
+// ifs of the jobs and steps of the calls on the way (callIfs); one chain
+// with no ifs for a name that nothing calls, and one more for the callers
+// of a name not all among the inputs (CallerCoverageAll), whose ifs are not
+// known (the worst case). A nil e keeps the callers on any event. A nil c
+// gives the one chain with no ifs.
+func (c *Callers) Chains(name calls.Node, e *analysis.EventActivity) [][]attacker.PlacedIf {
+	if c == nil {
+		return [][]attacker.PlacedIf{nil}
+	}
+	return c.chains(name, e, map[calls.Node]bool{})
+}
+
+func (c *Callers) chains(name calls.Node, e *analysis.EventActivity, seen map[calls.Node]bool) [][]attacker.PlacedIf {
+	callsOf := c.g.CallsOf(name)
+	if seen[name] || len(callsOf) == 0 {
+		return [][]attacker.PlacedIf{nil}
+	}
+	seen[name] = true
+	defer delete(seen, name)
+	var out [][]attacker.PlacedIf
+	if c.g.Coverage(name) != analysis.CallerCoverageAll {
+		out = append(out, nil)
+	}
+	for _, call := range callsOf {
+		f, ok := c.g.File(call.Caller)
+		if !ok {
+			continue
+		}
+		ifs := callIfs(f.Workflow, call)
+		// a caller that runs on events of its own calls past its ifs alone
+		// in those runs, also when it is called too
+		own := f.Workflow != nil && len(EventsOn(f.Workflow, valueEventNames())) > 0
+		if e != nil {
+			own = f.Workflow != nil && slices.Contains(EventsOn(f.Workflow, []workflow.EventName{e.Name()}), *e)
+		}
+		if len(c.g.CallsOf(call.Caller)) == 0 {
+			if e != nil && !own {
+				continue // a caller that does not run on e
+			}
+			out = append(out, ifs)
+			continue
+		}
+		if own {
+			out = append(out, ifs)
+		}
+		for _, up := range c.chains(call.Caller, e, seen) {
+			out = append(out, append(slices.Clone(ifs), up...))
+		}
+	}
+	return out
+}
+
+// callIfs are the ifs a call of the workflow w goes through: its job's
+// (with the jobs it needs, attacker.JobIfs) and its step's, a step of its
+// job, or of a composite action when it has no job.
+func callIfs(w *workflow.Workflow, call calls.Call) []attacker.PlacedIf {
+	var out []attacker.PlacedIf
+	if call.Job != nil {
+		out = append(out, attacker.JobIfs(w, call.Job)...)
+	}
+	if call.Step != nil {
+		out = append(out, attacker.StepIf(w, call.Job, call.Step.If))
+	}
+	return out
+}
+
+// callerNarrowings are the narrowings of the ifs of each chain of calls of
+// name (Chains on any event): a value is narrowed in name when an if of
+// every chain narrows it; none when a chain has no ifs.
+func (c *Callers) callerNarrowings(name calls.Node) [][]attacker.Narrowing {
+	if c == nil {
+		return nil
+	}
+	chains := c.chains(name, nil, map[calls.Node]bool{})
+	out := make([][]attacker.Narrowing, len(chains))
+	for i, ch := range chains {
+		if len(ch) == 0 {
+			return nil
+		}
+		out[i] = make([]attacker.Narrowing, len(ch))
+		for k, p := range ch {
+			out[i][k] = c.table.NarrowingOf(p)
+		}
+	}
+	return out
+}

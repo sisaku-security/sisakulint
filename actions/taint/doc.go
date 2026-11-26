@@ -83,6 +83,8 @@
 //	                and an output of one that the runner prints
 //	request.go      RequestSite: a request a command of a run sends, what an attacker may decide of its destination,
 //	                and the secrets it carries there
+//	nested.go       the code after -c of bash and sh in single quotes (shell.NestedScripts), read for the
+//	                writes to the environment files, the requests and the variables read as code of the run
 //	requestaction.go RequestActionSite, RequestActionSites: the inputs of a step of an action that sends its credential
 //	                where the input says
 //	table.go        Control, Lookup, LookupText, LeadingDash, RepoName, TableEvents, ActivityTypes

@@ -35,14 +35,14 @@ type CommandArgument struct {
 // an attacker may control, into s.Arguments. A word read as the command or
 // a wrapper is not one of them, nor an assignment.
 func (c scope) arguments(s *Sink) {
-	text := Masked(s.Value)
+	text := s.text()
 	var holes []hole
 	for i, p := range s.Value.Parts {
 		if p.Expr {
 			holes = append(holes, hole{shell.Span{Start: p.Span.Start, End: p.Span.End}, i})
 		}
 	}
-	sc := ReadScript(c.scripts, s.Value).Script
+	sc := c.readSink(s).Script
 	shell.WalkSimple(sc.List, func(x *shell.Simple) {
 		words := make([]shell.CommandWord, len(x.Words))
 		var found []CommandArgument

@@ -6,11 +6,9 @@ import (
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
 	"github.com/gh-intel/sisakulint/actions/attacker"
-	"github.com/gh-intel/sisakulint/actions/calls"
 	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/labeler"
-	"github.com/gh-intel/sisakulint/actions/taint"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
@@ -58,7 +56,7 @@ func (x *IR) automaticApprovalThrough(evs []analysis.EventActivity, own []attack
 	}
 	var out AutomaticApproval
 	for _, e := range labeled {
-		for _, chain := range x.callerChains(x.name, e, map[calls.Node]bool{}) {
+		for _, chain := range x.callersOf().Chains(x.name, &e) {
 			ifs := append(slices.Clone(own), chain...)
 			for _, s := range tab.Steps() {
 				a := admits(x.table(), s, e, ifs)
@@ -196,56 +194,6 @@ func sortedLabels(m map[string]labeler.Reach) []string {
 		out = append(out, k)
 	}
 	slices.Sort(out)
-	return out
-}
-
-// callerChains are, for each way that a workflow on the event e calls the
-// input name, the ifs of the jobs and steps of the calls on the way; one
-// chain with no ifs for an input that nothing calls (its own on has e).
-func (x *IR) callerChains(name calls.Node, e analysis.EventActivity, seen map[calls.Node]bool) [][]attacker.PlacedIf {
-	c := x.callersOf()
-	if c == nil || seen[name] {
-		return [][]attacker.PlacedIf{nil}
-	}
-	g := c.Graph()
-	callsOf := g.CallsOf(name)
-	if len(callsOf) == 0 {
-		return [][]attacker.PlacedIf{nil}
-	}
-	seen[name] = true
-	defer delete(seen, name)
-	var out [][]attacker.PlacedIf
-	for _, call := range callsOf {
-		f, ok := g.File(call.Caller)
-		if !ok {
-			continue
-		}
-		ifs := callIfs(f.Workflow, call)
-		if len(g.CallsOf(call.Caller)) == 0 {
-			if f.Workflow == nil || !slices.Contains(taint.EventsOn(f.Workflow, []workflow.EventName{e.Name()}), e) {
-				continue // a caller that does not run on e
-			}
-			out = append(out, ifs)
-			continue
-		}
-		for _, up := range x.callerChains(call.Caller, e, seen) {
-			out = append(out, append(slices.Clone(ifs), up...))
-		}
-	}
-	return out
-}
-
-// callIfs are the ifs a call of the workflow w goes through: its job's
-// (with the jobs it needs, attacker.JobIfs) and its step's, a step of its
-// job, or of a composite action when it has no job.
-func callIfs(w *workflow.Workflow, call calls.Call) []attacker.PlacedIf {
-	var out []attacker.PlacedIf
-	if call.Job != nil {
-		out = append(out, attacker.JobIfs(w, call.Job)...)
-	}
-	if call.Step != nil {
-		out = append(out, attacker.StepIf(w, call.Job, call.Step.If))
-	}
 	return out
 }
 

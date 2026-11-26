@@ -1,0 +1,10 @@
+on: pull_request_target
+permissions: {}
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: ./.github/actions/label
+        with:
+          token: ${{ secrets.LABELER_PAT }}

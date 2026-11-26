@@ -21,6 +21,7 @@ type skippedJobs struct {
 type skippedJob struct {
 	span    cst.Span
 	skipped bool
+	steps   []cst.Span // the run steps GitHub skips in every run (job.StepAlwaysSkipped)
 }
 
 // alwaysSkipped is whether GitHub skips, in every run, the job that the
@@ -28,8 +29,22 @@ type skippedJob struct {
 // outermost alias b is used through), or, for an element of the workflow
 // in no job, every job of the workflow. An element of an action.yml is not
 // in a job. The job of a remote called workflow is skipped when the job of
-// the input that calls it is.
+// the input that calls it is. An element of a run step that GitHub skips
+// in every run (job.StepAlwaysSkipped) is skipped too.
 func (x *IR) alwaysSkipped(b workflow.Base) bool {
+	return x.skippedAt(b, true)
+}
+
+// jobAlwaysSkipped is alwaysSkipped of the job alone, for an element that
+// GitHub reads for the whole job whatever the if of its step is: the
+// secrets that a job references reach the runner of the job even from a
+// step that GitHub skips (testdata/observed/secret-exposure, the job
+// if-false of s1-secrets.yml).
+func (x *IR) jobAlwaysSkipped(b workflow.Base) bool {
+	return x.skippedAt(b, false)
+}
+
+func (x *IR) skippedAt(b workflow.Base, steps bool) bool {
 	s := x.skippedJobsOf()
 	if s.whole {
 		return true
@@ -40,7 +55,15 @@ func (x *IR) alwaysSkipped(b workflow.Base) bool {
 	p := b.Primary()
 	for _, j := range s.jobs {
 		if j.span.Start <= p.Start && p.End <= j.span.End {
-			return j.skipped
+			if j.skipped || !steps {
+				return j.skipped
+			}
+			for _, st := range j.steps {
+				if st.Start <= p.Start && p.End <= st.End {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return s.all
@@ -64,7 +87,16 @@ func (x *IR) skippedJobsOf() *skippedJobs {
 			}
 			j := je.Value.Value
 			skipped := job.AlwaysSkipped(w, &j)
-			s.jobs = append(s.jobs, skippedJob{span: j.Base.Primary(), skipped: skipped})
+			sj := skippedJob{span: j.Base.Primary(), skipped: skipped}
+			if !skipped && j.Steps.Status == workflow.Present {
+				for i := range j.Steps.Value.Items {
+					st := &j.Steps.Value.Items[i]
+					if job.StepAlwaysSkipped(w, &j, st) {
+						sj.steps = append(sj.steps, st.Base.Primary())
+					}
+				}
+			}
+			s.jobs = append(s.jobs, sj)
 			s.all = s.all && skipped
 		}
 	})

@@ -1,0 +1,12 @@
+name: label
+description: runs actions/labeler with a personal access token
+inputs:
+  token:
+    description: the token of actions/labeler
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/labeler@v5
+      with:
+        repo-token: ${{ inputs.token }}
