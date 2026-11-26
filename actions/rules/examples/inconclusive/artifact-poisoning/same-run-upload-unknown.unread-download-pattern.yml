@@ -1,0 +1,30 @@
+# situation: on pull_request_target, the job build checks out and builds the
+#   pull request's head and uploads part-1; the job deploy, which needs
+#   build, downloads the artifacts that the pattern part-+(@(1|2)) names
+#   and runs ./part-1/deploy.sh.
+# reason: the pattern has an extglob inside an extglob, which the rule does
+#   not read, so whether the download takes part-1, and whether
+#   ./part-1/deploy.sh is the pull request's build, is not known from the
+#   workflow.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+# attack-run-behavior: when the pattern matches part-1, the job deploy
+#   downloads the fork's build into part-1, and ./part-1/deploy.sh prints
+#   PWNED, with the base repository's token and secrets.
+on: pull_request_target
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci && npm run build
+      - uses: actions/upload-artifact@v4
+        with: {name: part-1, path: dist}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {pattern: 'part-+(@(1|2))'}
+      - run: ./part-1/deploy.sh

@@ -70,7 +70,10 @@ func TestExpandBraces(t *testing.T) {
 		t.Fatal("no cases")
 	}
 	for _, tc := range c.Braces {
-		got := expandBraces(tc.Pattern)
+		got, ok := expandBraces(tc.Pattern)
+		if !ok {
+			t.Errorf("expandBraces(%q): over the bound", tc.Pattern)
+		}
 		for v, want := range tc.Versions {
 			if !slices.Equal(got, want) {
 				t.Errorf("expandBraces(%q) = %q, want %q (minimatch %s)", tc.Pattern, got, want, v)

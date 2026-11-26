@@ -79,6 +79,16 @@
    "known": true
   },
   {
+   "source": "derived",
+   "pattern": "!?\\-",
+   "name": "--",
+   "versions": {
+    "v10.2.4": true,
+    "v9.0.3": true
+   },
+   "known": true
+  },
+  {
    "source": "patterns.js",
    "pattern": "!\\!a*",
    "name": "!ab",
@@ -299,6 +309,16 @@
    "source": "patterns.js",
    "pattern": "*",
    "name": ".js",
+   "versions": {
+    "v10.2.4": false,
+    "v9.0.3": false
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "*",
+   "name": ".part-1",
    "versions": {
     "v10.2.4": false,
     "v9.0.3": false
@@ -5056,6 +5076,16 @@
    "known": true
   },
   {
+   "source": "derived",
+   "pattern": "*\\a",
+   "name": "xa",
+   "versions": {
+    "v10.2.4": false,
+    "v9.0.3": false
+   },
+   "known": true
+  },
+  {
    "source": "escaping.js",
    "pattern": "*\\a*",
    "name": "xay",
@@ -5312,6 +5342,16 @@
    "versions": {
     "v10.2.4": true,
     "v9.0.3": true
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "*\\{",
+   "name": "{",
+   "versions": {
+    "v10.2.4": false,
+    "v9.0.3": false
    },
    "known": true
   },
@@ -9189,6 +9229,16 @@
    "source": "patterns.js",
    "pattern": "???",
    "name": "js",
+   "versions": {
+    "v10.2.4": false,
+    "v9.0.3": false
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "?\\a",
+   "name": "xa",
    "versions": {
     "v10.2.4": false,
     "v9.0.3": false
@@ -13232,6 +13282,36 @@
    "source": "patterns.js",
    "pattern": "b*/",
    "name": "de",
+   "versions": {
+    "v10.2.4": false,
+    "v9.0.3": false
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "build-*\\|test",
+   "name": "build-x",
+   "versions": {
+    "v10.2.4": true,
+    "v9.0.3": true
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "build-*\\|test",
+   "name": "foo-test",
+   "versions": {
+    "v10.2.4": true,
+    "v9.0.3": true
+   },
+   "known": true
+  },
+  {
+   "source": "derived",
+   "pattern": "build-*\\|test",
+   "name": "other",
    "versions": {
     "v10.2.4": false,
     "v9.0.3": false

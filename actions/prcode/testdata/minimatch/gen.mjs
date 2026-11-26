@@ -85,6 +85,13 @@ function starBesideExtglob(p) {
   }
   return false
 }
+// braceEscape is whether p has braces that minimatch expands and a \:
+// brace-expansion 5.0.2 to 5.0.4, which minimatch 10 bundles in the
+// actions, turns a \ and the character after it into . (periodPattern
+// /\\./g), and 2.0.1 keeps them.
+function braceEscape(p) {
+  return /\{(?:(?!\{).)*\}/.test(p) && p.includes('\\')
+}
 function posix(p) {
   return /\[[^\]]*\[:[a-z]+:\]/.test(p)
 }
@@ -101,7 +108,7 @@ function add(version, source, pattern, name, match) {
   if (!c) {
     // minimatch takes the leading ! (and a # comment) before it reads the rest
     const body = pattern.startsWith('#') ? '' : pattern.replace(/^!+/, '')
-    c = { source, pattern, name, versions: {}, known: !nested(body) && !posix(body) && !starBesideExtglob(body) }
+    c = { source, pattern, name, versions: {}, known: !nested(body) && !posix(body) && !starBesideExtglob(body) && !braceEscape(body) }
     cases.set(key, c)
   }
   c.versions[version] = match
@@ -227,6 +234,28 @@ const probe = [
 ]
 for (const [p, name, match, versions] of probe) {
   for (const v of versions) add(v, 'probe', p, name, match)
+}
+
+// Cases whose match follows from the source of minimatch v9.0.3 and
+// v10.2.4 (src/index.ts and src/ast.ts), which the tests above do not
+// have: the quick tests of parse compare the rest of the part as written,
+// \ included (starDotExtTest, qmarksTestNoExt with the length of the whole
+// part); an escaped | stays a | of the regular expression, which then
+// binds ^ to the first alternative and $ to the last; a part of only *
+// does not match a name that starts with . (the default pattern * of
+// actions/upload-artifact/merge).
+const derived = [
+  ['*\\a', 'xa', false],
+  ['?\\a', 'xa', false],
+  ['*\\{', '{', false],
+  ['!?\\-', '--', true],
+  ['build-*\\|test', 'foo-test', true],
+  ['build-*\\|test', 'build-x', true],
+  ['build-*\\|test', 'other', false],
+  ['*', '.part-1', false],
+]
+for (const [p, name, match] of derived) {
+  for (const v of ['v10.2.4', 'v9.0.3']) add(v, 'derived', p, name, match)
 }
 
 const out = {

@@ -357,8 +357,8 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 
 // TestArtifactPoisoningPatterns: the pattern of actions/upload-artifact/merge
 // and of actions/download-artifact, read as minimatch reads it. A pattern
-// that the releases of minimatch read differently makes the merge
-// inconclusive, and the download take every artifact.
+// that the rule does not read makes the merge and the download
+// inconclusive.
 func TestArtifactPoisoningPatterns(t *testing.T) {
 	checkout := "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: out}\n"
 	merge := func(pattern string) map[string]string {
@@ -388,8 +388,12 @@ func TestArtifactPoisoningPatterns(t *testing.T) {
 		{"download !(x)*", download("!(x)*"), 1, 0},
 		{"download other-{a,b}", download("other-{a,b}"), 0, 0},
 		{"download part-@(x|y)", download("part-@(x|y)"), 0, 0},
-		{"download part-[[:digit:]]", download("part-[[:digit:]]"), 1, 0},
-		{"download part-+(@(1|2))", download("part-+(@(1|2))"), 1, 0},
+		{"download part-[[:digit:]]", download("part-[[:digit:]]"), 0, 1},
+		{"download part-+(@(1|2))", download("part-+(@(1|2))"), 0, 1},
+		{"download pattern empty", download(""), 1, 0},
+		{"merge in the job of the upload", map[string]string{".github/workflows/w.yml": "on: pull_request_target\njobs:\n  build:\n" + checkout + "      - uses: actions/upload-artifact/merge@v4\n        with: {name: out, pattern: 'part-*'}\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n"}, 1, 0},
+		{"merge with no pattern of a dot name", map[string]string{".github/workflows/w.yml": strings.Replace(merge("part-*")[".github/workflows/w.yml"], "{name: out, pattern: 'part-*'}", "{name: out}", 1)}, 1, 0},
+		{"merge with no pattern skips a name with a dot", map[string]string{".github/workflows/w.yml": strings.Replace(strings.Replace(merge("part-*")[".github/workflows/w.yml"], "{name: out, pattern: 'part-*'}", "{name: out}", 1), "name: part-1,", "name: .part-1,", 1)}, 0, 0},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, c.files, downloadFacts{})
 		if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != c.findings {

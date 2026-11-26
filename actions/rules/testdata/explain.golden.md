@@ -17681,7 +17681,7 @@
           uses: ./.github/workflows/label-reusable.yml
           secrets: inherit
       ```
-- same-run-upload-unknown: a download of the current run whose job needs, directly or through other jobs, a job of one of these forms: a job that calls a ./ reusable workflow that is not among the inputs; a job that uses a ./ action that is not among the inputs; or a job that uses actions/upload-artifact/merge with a pattern (or a with) that is a \${{ }}, or with a pattern that versions of minimatch read differently (an extglob inside an extglob, such as part-+(@(1|2)); a POSIX character class, such as part-&#91;&#91;:digit:]]; or a \* that has an extglob on one side and, on the other side, the start of the pattern, the end of the pattern, or another extglob, such as @(part)\*): what the needed job uploads is not known, so whether the downloaded artifact holds the code of a pull request is not known
+- same-run-upload-unknown: a download of the current run in one of these forms: the job of the download needs, directly or through other jobs, a job that calls a ./ reusable workflow that is not among the inputs, a job that checks out the code of a pull request and then uses a ./ action that is not among the inputs, or a job that uses actions/upload-artifact/merge with a pattern (or a with) that is a \${{ }} or with a pattern that the rule does not read; or the download is by actions/download-artifact with a pattern that the rule does not read, and a job that the job of the download needs uploads the code of a pull request. In both forms, whether the downloaded artifact holds the code of a pull request is not known. A pattern that the rule does not read is a pattern with an extglob inside an extglob, such as part-+(@(1|2)); a \* that has an extglob on one side and, on the other side, the start of the pattern, the end of the pattern, or another extglob, such as @(part)\*; braces together with a \\ escape, such as {a,b}\\-x; braces that expand to more than 100000 names; a POSIX character class, such as part-&#91;&#91;:digit:]]; or a pattern whose match takes more steps than the rule allows
   - disposition: todo (needs: repo-file)
   - example: same-run-upload-unknown.yml (workflow, inconclusive)
     ```yaml
@@ -17722,21 +17722,55 @@
             with: {name: dist}
           - run: ./dist/deploy.sh
     ```
-  - example: same-run-upload-unknown.release-dependent.yml (workflow, inconclusive)
+  - example: same-run-upload-unknown.unread-download-pattern.yml (workflow, inconclusive)
+    ```yaml
+    # situation: on pull_request_target, the job build checks out and builds the
+    #   pull request's head and uploads part-1; the job deploy, which needs
+    #   build, downloads the artifacts that the pattern part-+(@(1|2)) names
+    #   and runs ./part-1/deploy.sh.
+    # reason: the pattern has an extglob inside an extglob, which the rule does
+    #   not read, so whether the download takes part-1, and whether
+    #   ./part-1/deploy.sh is the pull request's build, is not known from the
+    #   workflow.
+    # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
+    # attack-run-behavior: when the pattern matches part-1, the job deploy
+    #   downloads the fork's build into part-1, and ./part-1/deploy.sh prints
+    #   PWNED, with the base repository's token and secrets.
+    on: pull_request_target
+    jobs:
+      build:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4.2.2
+            with:
+              ref: ${{ github.event.pull_request.head.sha }}
+          - run: npm ci && npm run build
+          - uses: actions/upload-artifact@v4
+            with: {name: part-1, path: dist}
+      deploy:
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/download-artifact@v4
+            with: {pattern: 'part-+(@(1|2))'}
+          - run: ./part-1/deploy.sh
+    ```
+  - example: same-run-upload-unknown.unread-pattern.yml (workflow, inconclusive)
     ```yaml
     # situation: on pull_request_target, the job build checks out and builds the
     #   pull request's head and uploads part-1; the job merge merges the
-    #   artifacts that the pattern part-+(@(1|2)) names into dist; the job
-    #   deploy downloads dist and runs ./dist/deploy.sh.
-    # reason: the pattern has an extglob inside an extglob, which versions of
-    #   minimatch read differently, so whether the merge takes part-1, and
-    #   whether dist holds the pull request's build, is not known from the
-    #   workflow.
+    #   artifacts that the pattern part-@(1|2)* names into dist; the job deploy
+    #   downloads dist and runs ./dist/deploy.sh.
+    # reason: in the pattern, a * follows an extglob at the end of the pattern,
+    #   which versions of minimatch read differently (minimatch 9.0.3 requires
+    #   one or more characters for the *, and minimatch 10.2.4 does not), so
+    #   whether the merge takes part-1, and whether dist holds the pull
+    #   request's build, is not known from the workflow.
     # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
-    # attack-run-behavior: when the merge reads the pattern as matching
-    #   part-1, the merge uploads the build of the fork's head again as dist,
-    #   the job deploy downloads dist, and ./dist/deploy.sh prints PWNED, with
-    #   the base repository's token and secrets.
+    # attack-run-behavior: with actions/upload-artifact/merge v7 (minimatch
+    #   10.2.4), the merge takes part-1 and uploads the build of the fork's head
+    #   again as dist, the job deploy downloads dist, and ./dist/deploy.sh
+    #   prints PWNED, with the base repository's token and secrets.
     on: pull_request_target
     jobs:
       build:
@@ -17752,8 +17786,8 @@
         needs: build
         runs-on: ubuntu-latest
         steps:
-          - uses: actions/upload-artifact/merge@v4
-            with: {name: dist, pattern: 'part-+(@(1|2))'}
+          - uses: actions/upload-artifact/merge@v7
+            with: {name: dist, pattern: 'part-@(1|2)*'}
       deploy:
         needs: merge
         runs-on: ubuntu-latest
@@ -18172,45 +18206,6 @@
               name: out
               event: push
           - run: bash build.sh
-    ```
-- release-dependent-pattern: a download of the current run by actions/download-artifact whose input pattern has a form that versions of minimatch read differently (an extglob inside an extglob, such as part-+(@(1|2)); a POSIX character class, such as part-&#91;&#91;:digit:]]; or a \* that has an extglob on one side and, on the other side, the start of the pattern, the end of the pattern, or another extglob, such as @(part)\*): the rule reads such a pattern as one that matches the name of every artifact, but the pattern may not match the artifact that holds the code of the pull request. For example, with minimatch 9.0.3, which actions/download-artifact v4 uses, the pattern part-&#91;&#91;:digit:]] makes the download step fail
-  - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
-  - disposition: todo (needs: same-file)
-  - example: release-dependent-pattern.yml (workflow, false-positive)
-    ```yaml
-    # situation: on pull_request_target, the job build checks out and builds the
-    #   pull request's head and uploads part-1; the job deploy, which needs
-    #   build, downloads the artifacts that the pattern part-[[:digit:]] names
-    #   with actions/download-artifact v4 and runs ./part-1/deploy.sh.
-    # reason: actions/download-artifact v4 uses minimatch 9.0.3, which turns the
-    #   pattern part-[[:digit:]] into a regular expression that JavaScript
-    #   refuses ("Invalid regular expression: /^part\-[\p{Nd}]$/u: Invalid
-    #   escape", seen on a GitHub-hosted runner on 2026-11-26), so the
-    #   download step fails and nothing runs after it.
-    # cause: the rule does not read a POSIX character class in a pattern, and
-    #   reads the pattern as one that matches the name of every artifact.
-    # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"build\":\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\"}}"
-    # attack-run-behavior: the job build uploads the fork's build as part-1,
-    #   the download step of the job deploy fails, and ./part-1/deploy.sh does
-    #   not run.
-    on: pull_request_target
-    jobs:
-      build:
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v4.2.2
-            with:
-              ref: ${{ github.event.pull_request.head.sha }}
-          - run: npm ci && npm run build
-          - uses: actions/upload-artifact@v4
-            with: {name: part-1, path: dist}
-      deploy:
-        needs: build
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/download-artifact@v4
-            with: {pattern: 'part-[[:digit:]]'}
-          - run: ./part-1/deploy.sh
     ```
 - no-exec-bit: a file of the artifact run by its path with no chmod (./x.sh, or after a wrapper such as sudo ./x.sh): the files of an artifact lose their mode, so the step fails and runs nothing
   - finding kinds: artifact-poisoning.executed

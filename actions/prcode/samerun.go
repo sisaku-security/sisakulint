@@ -271,12 +271,14 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 			}
 			id := j.ID.AsString()
 			needed := neededJobs(w, id)
-			for _, s := range j.Steps.Value.Items {
+			steps := j.Steps.Value.Items
+			order := workflow.OrderOf(steps)
+			for _, s := range steps {
 				if key := strings.ToLower(id) + "/" + strconv.Itoa(s.Order); seen[key] || s.Uses.Status != workflow.Present || !isMerge(s.Uses.Value) {
 					continue
 				}
 				for _, u := range all {
-					if !needed[u.job] || u.before4 {
+					if !needed[u.job] && !(u.job == strings.ToLower(id) && uploadedBefore(steps, order, u, s)) || u.before4 {
 						continue
 					}
 					if takes, known := mergeTakes(s.With, u.name); !known {
@@ -305,9 +307,21 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 	return out
 }
 
+// uploadedBefore is whether the step of steps that uploads u may run
+// before s, a merge in the same job.
+func uploadedBefore(steps []workflow.Step, order workflow.StepOrder, u SameRunUpload, s workflow.Step) bool {
+	for _, x := range steps {
+		if x.Base.Node == u.Upload.Node {
+			return order.MayRunAfter(x.Order, s.Order)
+		}
+	}
+	return false
+}
+
 // mergeTakes is whether a merge step with with takes the artifact name,
 // as the merge filters the names with minimatch: its pattern, when it has
-// one, else every artifact of the run. known is false when the pattern is
+// one, else * (merge/action.yml), which takes every name that does not
+// start with a dot. known is false when the pattern is
 // a ${{ }}, or the with is one, or the releases of minimatch read the
 // pattern differently (matchArtifactName): which names the merge takes is
 // not known.
@@ -317,11 +331,11 @@ func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string)
 		return false, false
 	case workflow.Present:
 	default:
-		return true, true
+		return matchArtifactName("*", name)
 	}
 	e, ok := with.Value.Lookup("pattern")
 	if !ok {
-		return true, true
+		return matchArtifactName("*", name)
 	}
 	if e.Value.Status != workflow.Present || e.Value.Value.Parts != nil {
 		return false, false
@@ -430,12 +444,14 @@ func uploadBefore4(u workflow.Uses) bool {
 //
 // A uses in a job that s needs whose uploads are not known (unknown, by
 // the job), under a name s may take, is added to SameRunUnknown when no
-// upload is found.
+// upload is found; so is the pattern of s, when the rule does not read it
+// (matchArtifactName) and an upload of ups may be one it takes.
 func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknown map[string][]unknownUpload) {
 	if !s.currentRun || s.Job == nil || len(ups) == 0 && len(unknown) == 0 {
 		return
 	}
 	needed := neededJobs(w, s.Job.ID.AsString())
+	patternUnknown := false // the pattern of s may take an upload of ups, which the rule does not read
 	defer func() {
 		if len(s.SameRunUploads) > 0 || len(s.PRCodeOn) == 0 {
 			return
@@ -443,16 +459,24 @@ func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknow
 		for _, je := range w.Jobs.Value.Entries {
 			if k := strings.ToLower(je.Value.Value.ID.AsString()); needed[k] {
 				for _, x := range unknown[k] {
-					if x.anyName || s.takesName(x.name) {
+					if takes, known := s.takesName(x.name); x.anyName || takes || !known {
 						s.SameRunUnknown = append(s.SameRunUnknown, x.uses)
 					}
 				}
 			}
 		}
+		if patternUnknown {
+			p, _ := s.input("pattern")
+			s.SameRunUnknown = append(s.SameRunUnknown, p.Value)
+		}
 	}()
 	var on []analysis.EventActivity
 	for _, u := range ups {
-		if !needed[u.job] || !u.anyName && !s.takesName(u.name) {
+		takes, known := true, true
+		if !u.anyName {
+			takes, known = s.takesName(u.name)
+		}
+		if !needed[u.job] || !takes && known {
 			continue
 		}
 		if u.before4 && !(s.action == downloaderArtifact && s.release() == releaseBefore) {
@@ -460,6 +484,10 @@ func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload, unknow
 		}
 		both := slices.DeleteFunc(slices.Clone(s.PRCodeOn), func(e analysis.EventActivity) bool { return !slices.Contains(u.events, e) })
 		if len(both) == 0 {
+			continue
+		}
+		if !known {
+			patternUnknown = true
 			continue
 		}
 		s.SameRunUploads = append(s.SameRunUploads, u)
@@ -504,27 +532,31 @@ func neededJobs(w *workflow.Workflow, id string) map[string]bool {
 }
 
 // takesName is whether the download s takes an artifact uploaded with the
-// name upload: a download with neither name nor pattern takes every
-// artifact; a pattern takes the names minimatch matches to it
-// (matchArtifactName); a ${{ }}, a pattern that the releases of minimatch
-// read differently and a name of dawidd6/action-download-artifact read as
-// a regular expression may name any artifact.
-func (s DownloadSite) takesName(upload string) bool {
+// name upload: a download with neither name nor pattern, or with an empty
+// pattern, takes every artifact; a pattern takes the names minimatch
+// matches to it (matchArtifactName), and known is false for a pattern the
+// rule does not read; a ${{ }} and a name of
+// dawidd6/action-download-artifact read as a regular expression may name
+// any artifact.
+func (s DownloadSite) takesName(upload string) (takes, known bool) {
 	if re, ok := s.input("name_is_regexp"); ok && s.action == downloaderDawidd6 && (re.Status != workflow.Present || re.Value.Parts != nil || strings.EqualFold(strings.TrimSpace(re.Value.AsString()), "true")) {
-		return true
+		return true, true
 	}
 	name, nameOK := s.input("name")
 	pattern, patternOK := s.input("pattern")
 	switch {
 	case nameOK && (name.Status != workflow.Present || name.Value.Parts != nil):
-		return true
+		return true, true
 	case nameOK:
-		return strings.EqualFold(strings.TrimSpace(name.Value.AsString()), upload)
+		return strings.EqualFold(strings.TrimSpace(name.Value.AsString()), upload), true
 	case patternOK && (pattern.Status != workflow.Present || pattern.Value.Parts != nil):
-		return true
+		return true, true
 	case patternOK:
-		match, known := matchArtifactName(strings.TrimSpace(pattern.Value.AsString()), upload) // core.getInput trims the input
-		return match || !known
+		p := strings.TrimSpace(pattern.Value.AsString()) // core.getInput trims the input
+		if p == "" {
+			return true, true // download-artifact filters by a pattern only when it is not empty
+		}
+		return matchArtifactName(p, upload)
 	}
-	return true
+	return true, true
 }

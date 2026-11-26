@@ -192,11 +192,22 @@ func (p *reParser) quantifier(n reNode) (reNode, bool) {
 	return n, true
 }
 
-// match is whether the regular expression, between ^ and $, matches s; it
-// takes one from *budget for each step, and stops when *budget is below 0.
+// match is RegExp.prototype.test: whether the regular expression matches
+// s at some position (minimatch builds it as ^source$, and a | at the top
+// of the source binds ^ to the first alternative and $ to the last one
+// only). It takes one from *budget for each step, and stops when *budget
+// is below 0.
 func (r *mmRegexp) match(s string, budget *int) bool {
 	m := reMatcher{s: []rune(s), budget: budget}
-	return m.alts(r.alts, 0, func(pos int) bool { return pos == len(m.s) })
+	for start := 0; start <= len(m.s); start++ {
+		if m.alts(r.alts, start, func(int) bool { return true }) {
+			return true
+		}
+		if *budget < 0 {
+			return false
+		}
+	}
+	return false
 }
 
 type reMatcher struct {
