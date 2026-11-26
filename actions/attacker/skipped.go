@@ -99,19 +99,41 @@ func (e runEvent) lookup(p []expr.PathElem) (expr.Value, bool) {
 		return expr.String(e.activityType.String()), true
 	case e.knows == knowsEvent && len(p) == 4 && expr.HasPrefix(p, "github", "event", "pull_request", "merged") && mergedFalse(e):
 		return expr.Bool(false), true
+	case e.knows >= knowsEventName && len(p) >= 3 && expr.HasPrefix(p, "github", "event", "pull_request") && !hasPullRequest(e.name):
+		return expr.Null(), true
 	}
 	return expr.Value{}, false
 }
 
+// hasPullRequest is whether the payload of the event n has pull_request:
+// the payload of any other event has none, so github.event.pull_request
+// and each property under it are null.
+func hasPullRequest(n workflow.EventName) bool {
+	switch n {
+	case workflow.EventNamePullRequest, workflow.EventNamePullRequestTarget,
+		workflow.EventNamePullRequestReview, workflow.EventNamePullRequestReviewComment:
+		return true
+	}
+	return false
+}
+
 // mergedFalse is whether github.event.pull_request.merged is false in
 // every payload of e: a pull request is merged only when it is closed, and
-// a merged pull request is not reopened, so it is false on opened and
-// reopened of pull_request and pull_request_target.
+// a merged pull request is not reopened, so it is false on the activity
+// types of pull_request and pull_request_target that happen only on an
+// open pull request (opened, reopened, synchronize, converted_to_draft,
+// ready_for_review). closed, and the types that may happen on a closed
+// pull request (edited, labeled, and the like), are not known.
 func mergedFalse(e runEvent) bool {
 	if e.name != workflow.EventNamePullRequest && e.name != workflow.EventNamePullRequestTarget {
 		return false
 	}
-	return e.activityType == workflow.ActivityTypeOpened || e.activityType == workflow.ActivityTypeReopened
+	switch e.activityType {
+	case workflow.ActivityTypeOpened, workflow.ActivityTypeReopened, workflow.ActivityTypeSynchronize,
+		workflow.ActivityTypeConvertedToDraft, workflow.ActivityTypeReadyForReview:
+		return true
+	}
+	return false
 }
 
 // skipCache keeps what skippedJobs reads of a workflow on each run event:

@@ -87,11 +87,15 @@ type Job struct {
 // the run: its sequence is a ${{ }}, a value is a mapping or a sequence,
 // or include or an entry of it is a ${{ }} (then no variable is Known).
 // exclude only takes combinations away, so its values are not given.
+// InEvery is that every combination has the name: it is a key of the
+// matrix, and the matrix has no include, whose entries may add a
+// combination without it.
 type MatrixVariable struct {
-	Name   string
-	Values []String
-	Types  []expr.ValueType
-	Known  bool
+	Name    string
+	Values  []String
+	Types   []expr.ValueType
+	Known   bool
+	InEvery bool
 }
 
 func (r *reader) job(e *entry, p pos) Field[Job] {
@@ -231,7 +235,8 @@ func (r *reader) matrixVariables(ents []entry, p pos) []MatrixVariable {
 		out[i].Types = append(out[i].Types, types...)
 		out[i].Known = out[i].Known && known
 	}
-	open := false
+	open, include := false, false
+	keyed := map[string]bool{} // by expr.FoldName
 	for i := range ents {
 		e := &ents[i]
 		switch {
@@ -239,6 +244,7 @@ func (r *reader) matrixVariables(ents []entry, p pos) []MatrixVariable {
 			open = true
 		case e.dup:
 		case e.prop && e.name == "include":
+			include = true
 			if !r.include(e, p, add) {
 				open = true
 			}
@@ -247,7 +253,11 @@ func (r *reader) matrixVariables(ents []entry, p pos) []MatrixVariable {
 		default:
 			vals, types, known := r.scalars(e, p)
 			add(e.name, vals, types, known)
+			keyed[expr.FoldName(e.name)] = true
 		}
+	}
+	for i := range out {
+		out[i].InEvery = !include && keyed[expr.FoldName(out[i].Name)]
 	}
 	if open {
 		for i := range out {
