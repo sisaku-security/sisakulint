@@ -688,43 +688,42 @@ func (f *secretFlow) valueOf(ps []shell.Part, from, at, depth int) []seg {
 const valueLimit = 8
 
 // valuesOf are the values the parts ps may have from the byte from on, as
-// pieces, a variable read as the script has it at at: one for each way
-// through the assignments of its variables that reach at (if/else, the
-// arms of case), up to valueLimit. The first is valueOf's.
+// pieces, a variable read as the script has it at at: one for each
+// assignment that reaches at (if/else, the arms of case) of the one
+// variable of ps that more than one reaches, up to valueLimit. When more
+// than one variable of ps has more than one, the values are not combined
+// (a run may set them together): valueOf's is the one. The first is
+// valueOf's.
 func (f *secretFlow) valuesOf(ps []shell.Part, from, at, depth int) [][]seg {
-	alts := map[int][][]seg{}
-	ways := [][]int{nil}
+	several, alts := -1, [][]seg(nil)
 	for i, p := range ps {
 		if p.Span.End <= from || p.Kind != shell.PartParam && p.Kind != shell.PartParamOp {
 			continue
 		}
-		vs := f.varValues(p.Name.String(), p.Span.Start, depth)
-		alts[i] = vs
-		var next [][]int
-		for j := range vs {
-			for _, w := range ways {
-				if len(next) >= valueLimit {
-					break
-				}
-				next = append(next, append(slices.Clone(w), j))
+		if vs := f.varValues(p.Name.String(), p.Span.Start, depth); len(vs) > 1 {
+			if several >= 0 {
+				return [][]seg{f.valueOf(ps, from, at, depth)}
 			}
+			several, alts = i, vs
 		}
-		ways = next
 	}
-	out := make([][]seg, len(ways))
-	for k, w := range ways {
-		n := 0
-		out[k] = f.valueWith(ps, from, at, depth, func(i int) []seg {
-			n++
-			return alts[i][w[n-1]]
-		})
+	if several < 0 {
+		return [][]seg{f.valueOf(ps, from, at, depth)}
+	}
+	out := make([][]seg, 0, min(len(alts), valueLimit))
+	for _, v := range alts[:min(len(alts), valueLimit)] {
+		out = append(out, f.valueWith(ps, from, at, depth, func(i int) []seg {
+			if i == several {
+				return v
+			}
+			return f.varValue(ps[i].Name.String(), ps[i].Span.Start, depth)
+		}))
 	}
 	return out
 }
 
 // valueWith is the value of the parts ps from the byte from on, as pieces,
-// with value(i), the value of the variable the i-th part reads, asked once
-// for each such part in order.
+// with value(i), the value of the variable the i-th part reads.
 func (f *secretFlow) valueWith(ps []shell.Part, from, at, depth int, value func(i int) []seg) []seg {
 	var out []seg
 	for i, p := range ps {

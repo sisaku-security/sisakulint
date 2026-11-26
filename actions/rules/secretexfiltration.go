@@ -235,6 +235,9 @@ var secretExfiltrationMeta = lint.Meta{
 		nameNotLiteralLimit,
 		recursiveUnsetLocalLimit,
 		unsetCallerLocalLimit,
+		severalDestinationsLimit,
+		destinationValueLimit,
+		severalDestinationVariablesLimit,
 	}),
 	FalsePositiveForms: []lint.FalsePositiveForm{
 		branchNotRun(kindSecretExfiltrationUntrustedDestination),

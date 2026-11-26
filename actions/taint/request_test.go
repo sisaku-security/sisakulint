@@ -303,3 +303,12 @@ func TestRequestSiteEveryReachingValue(t *testing.T) {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
 }
+
+func TestRequestSiteSeveralVariablesNotCombined(t *testing.T) {
+	run := "if [ \"$X\" = 1 ]; then A=api; B=github.com; else A=api.github; B=com; fi\ncurl -d \"$T\" \"https://$A.$B/x\""
+	got := requests(t, onIssues("          T: ${{ secrets.T }}\n", run), false)
+	want := []string{"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal api.github.com"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
