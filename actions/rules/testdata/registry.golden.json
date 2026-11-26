@@ -19597,6 +19597,21 @@
       ],
       "inconclusive_kinds": [
         {
+          "id": "local-callee-unread",
+          "text": "a uses by a ./ path, of a job (a reusable workflow) or of a step of a workflow (a composite action), whose file (the workflow, or the action.yml or action.yaml of the directory) is not among the files the run read: the uses references inside the local callee are not checked; adding the file to the inputs resolves it",
+          "disposition": "todo",
+          "needs": [
+            "repo-file"
+          ],
+          "examples": [
+            {
+              "input_kind": "workflow",
+              "name": "local-callee-unread.yml",
+              "text": "# situation: on push, a job calls the reusable workflow\n#   ./.github/workflows/build.yml of the same repository, which is not\n#   among the files the linter read.\n# reason: the uses of other repositories inside the reusable workflow are\n#   in the file that the linter did not read, so whether they name a full\n#   commit SHA is not decided; adding the file to the inputs decides it.\n# attack: when the reusable workflow has a step with uses: actions/checkout@v4,\n#   the owner of actions/checkout, or whoever has taken over a token that\n#   pushes to it, moves the tag v4 to a commit of theirs, as the tags of\n#   tj-actions/changed-files were moved in 2025.\n# attack-run-behavior: when the job runs, the runner resolves @v4 to that\n#   commit, downloads it and runs its action as the step, in the job's\n#   workspace and environment.\non: push\npermissions: {}\njobs:\n  c:\n    uses: ./.github/workflows/build.yml\n"
+            }
+          ]
+        },
+        {
           "id": "archive-substituted",
           "text": "a uses pinned to a full SHA of an action of another repository whose action.yml (or action.yaml) in the archive the runner downloads is unlike its blob (export-subst): placeholders such as %d and %(describe) take the names of refs created after the commit, so the action that runs can change after the pin; a file whose placeholders are only %H does not change, and the rule does not distinguish a file with placeholders of refs from a file whose placeholders are only %H",
           "disposition": "limitation",

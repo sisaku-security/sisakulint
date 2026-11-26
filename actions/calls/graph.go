@@ -248,3 +248,45 @@ func (g *Graph) AddRemote(r *RemoteCalled, by Call) Node {
 
 // Remotes are the remote called workflows of g, in the order added.
 func (g *Graph) Remotes() []*RemoteCalled { return g.remotes }
+
+// UnreadCall is a call of caller by a ./ path whose file is not among the
+// files of a graph: Path is the file it runs (a workflow, or the
+// action.yml of a directory).
+type UnreadCall struct {
+	Call
+	Path string
+}
+
+// UnreadCalls are the calls caller makes by a ./ path of a file that is
+// not among the files of g, in the order written: a job's, and a step's
+// of a workflow that runs the input it names (Resolved). A step of a
+// composite action names the workspace of the job that runs it, which the
+// action does not know, so none of it is one.
+func (g *Graph) UnreadCalls(caller Node) []UnreadCall {
+	f, ok := g.File(caller)
+	if !ok {
+		return nil
+	}
+	var out []UnreadCall
+	for _, c := range callsIn(f) {
+		if c.repo != "" || !c.Resolved || c.Job == nil {
+			continue
+		}
+		u := c.Job.Uses
+		if c.Step != nil {
+			u = c.Step.Uses
+		}
+		if kindOf(u.Value) != workflow.UsesLocal {
+			continue // $/, which names the run's commit, is not asked of
+		}
+		if _, read := g.called(c.target); read {
+			continue
+		}
+		path := c.target
+		if c.Step != nil {
+			path = strings.TrimPrefix(path+"/action.yml", "/")
+		}
+		out = append(out, UnreadCall{Call: c.Call, Path: path})
+	}
+	return out
+}

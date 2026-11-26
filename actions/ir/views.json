@@ -308,7 +308,9 @@
         "uses.read-by-outside",
         "composite-call.actions",
         "uses.always-skipped",
-        "composite-call.always-skipped"
+        "composite-call.always-skipped",
+        "unread-callee.path",
+        "unread-callee.always-skipped"
       ],
       "fixes": []
     },

@@ -44,6 +44,7 @@ type IR struct {
 	panics         [summaryCount]any // what the making of each type panicked with
 	made           [summaryCount]int
 	uses           []*Uses
+	unreadCallees  []*UnreadCallee
 	checkoutSites  []*CheckoutSite
 	checkoutSiteOf map[*CheckoutSite]prcode.CheckoutSite // what the fixes of a site read (checkoutfix.go)
 

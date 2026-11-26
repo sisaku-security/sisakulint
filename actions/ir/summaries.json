@@ -1988,6 +1988,20 @@
       "fixes": []
     },
     {
+      "name": "UnreadCallee",
+      "list": "UnreadCallees",
+      "slug": "unread-callee",
+      "doc": "UnreadCallee is the summary of a uses by a ./ path, of a job (a reusable workflow) or of a step of a workflow (a composite action), whose file is not among the files the run read (calls.Graph.UnreadCalls): the uses of other repositories in that file are not read.",
+      "handles": [
+        {"name": "at", "doc": "the uses"}
+      ],
+      "fields": [
+        {"name": "path", "type": "string", "doc": "the file the uses runs, in the repository: the workflow, or the action.yml of the directory (action.yaml is read too)"},
+        {"name": "alwaysSkipped", "type": "bool", "doc": "whether GitHub skips, in every run, the job it is in"}
+      ],
+      "fixes": []
+    },
+    {
       "name": "Upload",
       "list": "Uploads",
       "slug": "upload",

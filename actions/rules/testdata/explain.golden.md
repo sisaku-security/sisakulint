@@ -31723,6 +31723,29 @@
 
 ### inconclusive
 
+- local-callee-unread: a uses by a ./ path, of a job (a reusable workflow) or of a step of a workflow (a composite action), whose file (the workflow, or the action.yml or action.yaml of the directory) is not among the files the run read: the uses references inside the local callee are not checked; adding the file to the inputs resolves it
+  - disposition: todo (needs: repo-file)
+  - example: local-callee-unread.yml (workflow, inconclusive)
+    ```yaml
+    # situation: on push, a job calls the reusable workflow
+    #   ./.github/workflows/build.yml of the same repository, which is not
+    #   among the files the linter read.
+    # reason: the uses of other repositories inside the reusable workflow are
+    #   in the file that the linter did not read, so whether they name a full
+    #   commit SHA is not decided; adding the file to the inputs decides it.
+    # attack: when the reusable workflow has a step with uses: actions/checkout@v4,
+    #   the owner of actions/checkout, or whoever has taken over a token that
+    #   pushes to it, moves the tag v4 to a commit of theirs, as the tags of
+    #   tj-actions/changed-files were moved in 2025.
+    # attack-run-behavior: when the job runs, the runner resolves @v4 to that
+    #   commit, downloads it and runs its action as the step, in the job's
+    #   workspace and environment.
+    on: push
+    permissions: {}
+    jobs:
+      c:
+        uses: ./.github/workflows/build.yml
+    ```
 - archive-substituted: a uses pinned to a full SHA of an action of another repository whose action.yml (or action.yaml) in the archive the runner downloads is unlike its blob (export-subst): placeholders such as %d and %(describe) take the names of refs created after the commit, so the action that runs can change after the pin; a file whose placeholders are only %H does not change, and the rule does not distinguish a file with placeholders of refs from a file whose placeholders are only %H
   - disposition: limitation (decided by: run-time)
   - example: archive-substituted.yml (workflow, inconclusive)
