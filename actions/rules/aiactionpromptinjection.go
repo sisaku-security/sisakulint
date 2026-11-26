@@ -32,16 +32,9 @@ var valueUnknown = lint.MustInconclusiveKindID("value-unknown")
 
 func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v ir.AIActionPromptInjectionReader) error {
 	// a value of the env of a job or of the workflow reaches each agent
-	// step under it from one place: reported there once
-	done := map[string]bool{}
-	once := func(loc lint.Location, key string) bool {
-		k := fmt.Sprintf("%+v %s", loc, key)
-		if done[k] {
-			return false
-		}
-		done[k] = true
-		return true
-	}
+	// step under it from one place: what each step gives it is joined there
+	// and reported after all the steps (outerReports)
+	outer := outerReports{}
 	for _, s := range v.AgentSteps() {
 		if s.Substituted() {
 			substitutedAgent(c, s.At(), s.Chain())
@@ -50,8 +43,35 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 		rp := agentPlace{c: c, at: s.At(), chain: s.Chain(), inner: s.InnerAt()}
 		gr := gateReachOf(c, s.Action(), s.ActorOn(), s.OpenGates(), s.InconclusiveSettings())
 		seen := anchors{}
+		outerSeen := map[string]anchors{} // by the key path of the value of the env
 		for _, p := range s.PromptRefs() {
 			r := p.Ref
+			loc := rp.At(r.At)
+			isOuter := p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv
+			var anchor string
+			if isOuter {
+				// each reference of one text of the value, whatever the
+				// step gives it, so that every step counts it the same
+				k := loc.KeyPath().String()
+				if outerSeen[k] == nil {
+					outerSeen[k] = anchors{}
+				}
+				anchor = outerSeen[k].next(r.Text, ir.FixPlan{})
+			}
+			report := func(f lint.FindingDraft) {
+				if isOuter {
+					outer.finding(rp, f)
+					return
+				}
+				rp.Report(f)
+			}
+			inconclusive := func(d lint.InconclusiveDraft) {
+				if isOuter {
+					outer.inconclusive(rp, d)
+					return
+				}
+				rp.Inconclusive(d)
+			}
 			switch r.Verdict {
 			case analysis.Controlled:
 				// the runs the attacker triggers as the actor reach it only
@@ -66,48 +86,98 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 				case len(within(own, gr.bot)) > 0:
 					cond = isPublic(c)
 				case len(within(own, gr.undecided)) > 0:
-					if !once(rp.At(r.At), gateExpr.String()) {
-						continue
-					}
-					rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(r.At), Related: slices.Concat(evidence, related), Note: r.Text + " reaches the agent only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
+					inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: loc, Related: slices.Concat(evidence, related), Note: r.Text + " reaches the agent only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
 					continue
 				default:
 					continue
 				}
 				// one value can have several: which one, and which of the same text
-				f := lint.FindingDraft{Location: rp.At(r.At), Condition: cond, Evidence: evidence, Related: related, Anchor: seen.next(r.Text, ir.FixPlan{})}
-				if !once(f.Location, f.Anchor) {
-					continue
+				if !isOuter {
+					anchor = seen.next(r.Text, ir.FixPlan{})
 				}
-				if p.Route == analysis.PromptRouteEnv {
+				f := lint.FindingDraft{Location: loc, Condition: cond, Evidence: evidence, Related: related, Anchor: anchor}
+				if p.Route.InEnv() {
 					f.Args = AIActionPromptInjectionEnv{Action: s.Action(), Env: p.Env.String(), ExprRef: r.Text}
 				} else {
 					f.Args = AIActionPromptInjectionPrompt{Action: s.Action(), Input: p.Input, ExprRef: r.Text}
 				}
-				rp.Report(f)
+				report(f)
 			case analysis.Inconclusive:
 				if r.InconclusiveKind == analysis.InconclusiveRefInputDispatch && s.PromptDispatch() {
 					// whether the gate lets the dispatcher in is the dispatcher's
-					if !once(rp.At(r.At), inputDispatch.String()) {
-						continue
-					}
-					rp.Inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: rp.At(r.At),
+					inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: loc,
 						Note: r.Text + " reaches the agent as text and refers to an input of workflow_dispatch, whose value the one who dispatches the workflow chooses; the rule does not determine the text that the value gives the agent"})
 					continue
 				}
 				if len(s.AttackerOn()) == 0 && len(s.WrittenValueOn()) == 0 {
 					continue // no run has a value the attacker writes
 				}
-				if !once(rp.At(r.At), valueUnknown.String()) {
-					continue
-				}
-				rp.Inconclusive(lint.InconclusiveDraft{KindID: valueUnknown, Location: rp.At(r.At),
+				inconclusive(lint.InconclusiveDraft{KindID: valueUnknown, Location: loc,
 					Note: fmt.Sprintf("%s reaches the agent as text; whether an attacker controls it is not analyzed (%s)", r.Text, r.InconclusiveKind)})
 			}
 		}
 	}
+	outer.report()
 	unansweredAgents(c, v.CompositeCalls(), false)
 	return nil
+}
+
+// outerReports are what the agent steps give each reference of a value of
+// the env of a job or of the workflow, by its place, in the order the
+// places are first given: the value reaches the agent of a step that gives
+// a finding, so the reference is that finding, the one with no condition
+// of those, and the first of the steps of the file that gives it; else
+// each kind of inconclusive place the steps give it, once.
+type outerReports struct {
+	order []string
+	at    map[string]*outerReport
+}
+
+type outerReport struct {
+	rp           agentPlace
+	finding      *lint.FindingDraft
+	inconclusive []lint.InconclusiveDraft
+}
+
+func (o *outerReports) of(rp agentPlace, l lint.Location) *outerReport {
+	k := fmt.Sprintf("%+v", l)
+	if o.at == nil {
+		o.at = map[string]*outerReport{}
+	}
+	r, ok := o.at[k]
+	if !ok {
+		r = &outerReport{rp: rp}
+		o.at[k] = r
+		o.order = append(o.order, k)
+	}
+	return r
+}
+
+func (o *outerReports) finding(rp agentPlace, f lint.FindingDraft) {
+	r := o.of(rp, f.Location)
+	if r.finding == nil || r.finding.Condition != nil && f.Condition == nil {
+		r.rp, r.finding = rp, &f
+	}
+}
+
+func (o *outerReports) inconclusive(rp agentPlace, d lint.InconclusiveDraft) {
+	r := o.of(rp, d.Location)
+	if !slices.ContainsFunc(r.inconclusive, func(e lint.InconclusiveDraft) bool { return e.KindID == d.KindID }) {
+		r.inconclusive = append(r.inconclusive, d)
+	}
+}
+
+func (o *outerReports) report() {
+	for _, k := range o.order {
+		r := o.at[k]
+		if r.finding != nil {
+			r.rp.Report(*r.finding)
+			continue
+		}
+		for _, d := range r.inconclusive {
+			r.rp.Inconclusive(d)
+		}
+	}
 }
 
 // gateReach are the events of a step's ActorOn on which its gates let the

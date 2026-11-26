@@ -3,6 +3,7 @@ package rules
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -884,22 +885,82 @@ func TestAgentPlaceInconclusiveRelated(t *testing.T) {
 	}
 }
 
-// TestJobEnvTwoAgentSteps: a value of the env of the job that reaches two
-// agent steps is one finding, at the env, and no error of a finding
-// reported twice (runAdded fails on one); an env of a step whose name
-// differs only in case does not replace it (a Linux runner keeps both).
-func TestJobEnvTwoAgentSteps(t *testing.T) {
-	step := func(env string) string {
-		return "      - uses: anthropics/claude-code-action@v1\n" + env + "        with:\n          allowed_non_write_users: \"*\"\n          github_token: t\n          prompt: Label the issue whose body is in the env BODY\n          claude_args: --allowedTools Bash\n"
-	}
-	head := "on: {issues: {types: [opened]}}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    env:\n      BODY: ${{ github.event.issue.body }}\n    steps:\n"
-	for name, src := range map[string]string{
-		"two steps": head + step("") + step(""),
-		"case":      head + step("        env:\n          body: fixed text\n"),
-	} {
-		rep, in := runAdded(t, map[string]string{".github/workflows/w.yml": src})
-		if got := marked(t, rep, in, AIActionPromptInjectionID); len(got) != 1 {
-			t.Errorf("%s: %v, want one finding", name, got)
+// injectionLines are the places of ai-action-prompt-injection in rep, each
+// as <kind> <certainty> <line> <the text it points at>, sorted; with the
+// action of the arguments of a finding when action is set.
+func injectionLines(rep lint.Report, action bool) []string {
+	var out []string
+	for _, f := range rep.Findings {
+		if f.Rule != AIActionPromptInjectionID {
+			continue
 		}
+		kind := f.InconclusiveKind.String()
+		if f.Certainty != lint.CertaintyInconclusive {
+			kind = f.Args.KindID().String()
+		}
+		l := fmt.Sprintf("%s %s %d %s", kind, f.Certainty, f.Location.Position().Line, f.SpanText)
+		if a, ok := f.Args.(AIActionPromptInjectionEnv); ok && action {
+			l += " " + a.Action.String()
+		}
+		out = append(out, l)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// TestJobEnvTwoAgentSteps: a value of the env of the job or of the
+// workflow that reaches several agent steps is one place, at the env,
+// whatever the order of the steps: a finding with no condition when one
+// step gives one, else one with the condition, else each kind of
+// inconclusive place once; and no error of a finding reported twice
+// (runAdded fails on one). An env of a step whose name differs only in
+// case replaces it only where runs-on decides Windows, whose runner folds
+// the names.
+func TestJobEnvTwoAgentSteps(t *testing.T) {
+	const prompt = "Label the issue whose body is in the env BODY"
+	const anyUser, anyBot, users = `allowed_non_write_users: "*"`, `allowed_bots: "*"`, `allowed_non_write_users: ${{ vars.USERS }}`
+	claude := func(gate, prompt, env string) string {
+		return "      - uses: anthropics/claude-code-action@v1\n" + env + "        with:\n          " + gate + "\n          github_token: t\n          prompt: \"" + prompt + "\"\n          claude_args: --allowedTools Bash\n"
+	}
+	// gemini-cli passes ISSUE_BODY to its tools, not BODY, with no settings
+	gemini := "      - uses: google-github-actions/run-gemini-cli@v0\n        with:\n          prompt: Label the issue whose body is in ISSUE_BODY\n"
+	job := func(runsOn, body string) string {
+		return "on: {issues: {types: [opened]}}\njobs:\n  a:\n    runs-on: " + runsOn + "\n    env:\n      BODY: " + body + "\n    steps:\n"
+	}
+	const body = "${{ github.event.issue.body }}"
+	const env, envPublic = "ai-action-prompt-injection.env confirmed 6 github.event.issue.body", "ai-action-prompt-injection.env conditional 6 github.event.issue.body"
+	for _, c := range []struct {
+		name, src string
+		action    bool
+		want      []string
+	}{
+		{"two steps", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"the first step has the value in its prompt too", job("ubuntu-latest", body) + claude(anyUser, "Label this issue: "+body, "") + claude(anyUser, prompt, ""), false,
+			[]string{env, "ai-action-prompt-injection.prompt confirmed 12 github.event.issue.body"}},
+		{"a bot's gate, then anyone's", job("ubuntu-latest", body) + claude(anyBot, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"anyone's gate, then a bot's", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + claude(anyBot, prompt, ""), false, []string{env}},
+		{"two bots' gates", job("ubuntu-latest", body) + claude(anyBot, prompt, "") + claude(anyBot, prompt, ""), false, []string{envPublic}},
+		{"an undecided gate, then anyone's", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"an undecided gate alone", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(users, prompt, ""), false,
+			[]string{"gate-expr inconclusive 6 github.event.issue.body"}},
+		{"the action of the strongest step", strings.Replace(job("ubuntu-latest", body), "BODY:", "ISSUE_BODY:", 1) + claude(anyBot, prompt, "") + gemini, true,
+			[]string{env + " run-gemini-cli"}},
+		{"one text twice in the value", job("ubuntu-latest", `"`+body+` `+body+`"`) + claude(anyUser, prompt, "") + claude(anyUser, prompt, ""), false,
+			[]string{env, env}},
+		{"a case-only name on Linux", job("ubuntu-latest", body) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false, []string{env}},
+		{"a case-only name on Windows", job("windows-latest", body) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false, nil},
+		{"a case-only name where runs-on does not decide the OS (unknown-os-case)", strings.Replace(job("${{ matrix.os }}", body), "    runs-on:", "    strategy: {matrix: {os: [ubuntu-latest, windows-latest]}}\n    runs-on:", 1) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false,
+			[]string{"ai-action-prompt-injection.env confirmed 7 github.event.issue.body"}},
+	} {
+		rep, _ := runAdded(t, map[string]string{".github/workflows/w.yml": c.src})
+		if got := injectionLines(rep, c.action); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	// a value of the env of the workflow that reaches the agent steps of two jobs
+	wf := "on: {issues: {types: [opened]}}\nenv:\n  BODY: " + body + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "") + "  b:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "")
+	rep, _ := runAdded(t, map[string]string{".github/workflows/w.yml": wf})
+	if got, want := injectionLines(rep, false), []string{"ai-action-prompt-injection.env confirmed 3 github.event.issue.body"}; !slices.Equal(got, want) {
+		t.Errorf("the env of the workflow: %q, want %q", got, want)
 	}
 }
