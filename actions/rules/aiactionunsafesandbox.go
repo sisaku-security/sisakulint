@@ -156,6 +156,7 @@ var aiActionUnsafeSandboxMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		jobEnvComposite(true),
+		windowsLabelOtherOS(true),
 		wholeEnv,
 		mergedCommitPush(),
 		{ID: lint.MustUndetectedFormID("other-agent-action"), Text: "an action that runs an AI agent and is not in the linter's table of the actions that run an AI agent, such as a wrapper action in another repository", Disposition: lint.Todo(lint.NeedFact)},

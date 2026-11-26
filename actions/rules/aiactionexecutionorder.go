@@ -271,6 +271,7 @@ var aiActionExecutionOrderMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		jobEnvComposite(true),
+		windowsLabelOtherOS(true),
 		wholeEnv,
 		appCommitEventLimit,
 		{ID: lint.MustUndetectedFormID("remote-composite"), Text: agentRemoteCompositeText, Disposition: lint.Todo(lint.NeedFact)},

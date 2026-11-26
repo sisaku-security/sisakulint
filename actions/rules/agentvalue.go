@@ -144,6 +144,21 @@ func unknownOSCase(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint
 		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
 }
 
+// windowsLabelOtherOS is the undetected form windows-label-other-os of the
+// rules of agent actions: a runs-on that the rules read as a Windows
+// runner, where the runner that has the labels is a Linux or macOS runner.
+// A rule that reads the env only in a run of the linter that adds an
+// attacker who writes vars or secrets gives valueRun.
+func windowsLabelOtherOS(valueRun bool) lint.UndetectedForm {
+	value, eg := "a value that an attacker writes", "body: fixed text in the env of the step, and BODY: ${{ github.event.issue.body }} in the env of the job"
+	if valueRun {
+		value, eg = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets that the workflow writes", "guide: fixed text in the env of the step, and GUIDE: ${{ vars.GUIDE }} in the env of the job"
+	}
+	return lint.UndetectedForm{ID: lint.MustUndetectedFormID("windows-label-other-os"),
+		Text:        value + " in the env of the job or in the env of the workflow, in a job whose runs-on has the label windows, or has only labels of GitHub-hosted Windows runners (such as windows-latest), when the env of the step or the env of the job also has a variable whose name is the same as the name of the variable that holds the attacker's value except for upper and lower case (for example, " + eg + "), and when the runner that runs the job is a Linux runner or a macOS runner that has the label windows or the label windows-latest as a custom label (a self-hosted runner that is made without the default labels may have such a custom label). The rule reads the runs-on as a Windows runner, and a Windows runner ignores upper and lower case when the Windows runner compares the names of variables, so the rule reads the variable of the nearer env as the variable that replaces the variable that holds the attacker's value. A Linux runner and a macOS runner keep upper and lower case distinct, so on the Linux runner or on the macOS runner both variables reach the agent",
+		Disposition: lint.Limitation(lint.DeciderRunTime)}
+}
+
 // jobEnvComposite is the undetected form job-env-composite of the rules of
 // agent actions: the agent step of a composite action is read with the env
 // of the step alone. A rule that reads the env only in a run of the linter

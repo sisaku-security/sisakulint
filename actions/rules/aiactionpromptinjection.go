@@ -313,6 +313,7 @@ var aiActionPromptInjectionMeta = lint.Meta{
 		forkReviewLimit,
 		repositoryDispatchLimit, appCommitEventLimit, dispatchRelayLimit, dispatchInputCallLimit, dispatchDerivedLimit,
 		jobEnvComposite(false),
+		windowsLabelOtherOS(false),
 		{ID: lint.MustUndetectedFormID("action-fetches"), Text: "what the action fetches itself into the prompt: claude-code-action's tag mode (no prompt input) puts the title, the body and the comments of the issue or the pull request in it", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("agent-reads"), Text: "what the agent reads through its tools on its own, such as gh issue view: the prompt and the agent decide it", Disposition: lint.Limitation(lint.DeciderRunTime)},
 		{ID: lint.MustUndetectedFormID("other-agent-action"), Text: "an action that runs an AI agent and is not in the linter's table of the actions that run an AI agent, such as a wrapper action in another repository", Disposition: lint.Todo(lint.NeedFact)},
