@@ -112,3 +112,17 @@ func TestMatchArtifactNameBounds(t *testing.T) {
 		t.Errorf("part-{1..100000}: %v %v", match, known)
 	}
 }
+
+// TestJSTrim: the trim of core.getInput, which is JavaScript's, not Go's.
+func TestJSTrim(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{" part-* ", "part-*"},
+		{"\ufeffpart-*\ufeff", "part-*"},
+		{"\u0085part-*\u0085", "\u0085part-*\u0085"},
+		{"\u00a0\u3000part-*\u2028", "part-*"},
+	} {
+		if got := jsTrim(c.in); got != c.want {
+			t.Errorf("jsTrim(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

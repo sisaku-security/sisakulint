@@ -101,7 +101,7 @@ func inputName(with workflow.Field[workflow.Map[workflow.String]], def string) (
 			if e.Value.Status != workflow.Present || e.Value.Value.Parts != nil {
 				return def, true
 			}
-			return strings.TrimSpace(e.Value.Value.AsString()), false
+			return jsTrim(e.Value.Value.AsString()), false
 		}
 	}
 	return def, false
@@ -322,6 +322,11 @@ func uploadedBefore(steps []workflow.Step, order workflow.StepOrder, u SameRunUp
 	return false
 }
 
+// jsTrim is s as core.getInput of @actions/core gives an input:
+// String.prototype.trim of JavaScript, which removes the characters of \s
+// (U+FEFF among them, and not U+0085, which strings.TrimSpace removes).
+func jsTrim(s string) string { return strings.TrimFunc(s, isJSSpace) }
+
 // mergeTakes is whether a merge step with with takes the artifact name,
 // as the merge filters the names with minimatch: its pattern, when it has
 // one, else * (merge/action.yml), which takes every name that does not
@@ -343,7 +348,7 @@ func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string)
 	if e.Value.Status != workflow.Present || e.Value.Value.Parts != nil {
 		return false, false
 	}
-	return matchArtifactName(strings.TrimSpace(e.Value.Value.AsString()), name) // core.getInput trims the input
+	return matchArtifactName(jsTrim(e.Value.Value.AsString()), name)
 }
 
 // unguarded are the events on which the checkout c brings the code of the
@@ -551,11 +556,11 @@ func (s DownloadSite) takesName(upload string) (takes, known bool) {
 	case nameOK && (name.Status != workflow.Present || name.Value.Parts != nil):
 		return true, true
 	case nameOK:
-		return strings.EqualFold(strings.TrimSpace(name.Value.AsString()), upload), true
+		return strings.EqualFold(jsTrim(name.Value.AsString()), upload), true
 	case patternOK && (pattern.Status != workflow.Present || pattern.Value.Parts != nil):
 		return true, true
 	case patternOK:
-		p := strings.TrimSpace(pattern.Value.AsString()) // core.getInput trims the input
+		p := jsTrim(pattern.Value.AsString())
 		if p == "" {
 			return true, true // download-artifact filters by a pattern only when it is not empty
 		}
