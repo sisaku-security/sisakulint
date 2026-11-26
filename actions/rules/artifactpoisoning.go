@@ -67,7 +67,7 @@ func (artifactPoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.Arti
 		}
 		if len(refs) == 0 && len(same) == 0 && len(s.SameRunUnknown()) > 0 {
 			c.Inconclusive(lint.InconclusiveDraft{KindID: sameRunUploadUnknown, Location: c.At(s.At()), Related: downloadEvidence(c, s.CodeRunSteps()),
-				Note: fmt.Sprintf("the rule cannot tell which artifacts of the current run this download takes, because of: %s", strings.Join(s.SameRunUnknown(), ", "))})
+				Note: fmt.Sprintf("the rule cannot tell whether the artifact that this download takes holds the code of a pull request, because of: %s", strings.Join(s.SameRunUnknown(), ", "))})
 		}
 		if len(refs) == 0 && len(same) == 0 {
 			if len(s.InconclusiveValues()) > 0 {

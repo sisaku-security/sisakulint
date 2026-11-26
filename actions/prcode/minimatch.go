@@ -258,10 +258,11 @@ func matchParts(file []string, pattern []globPart, budget *int) bool {
 
 // minimatchBraces is minimatch's braceExpand: the pattern itself unless a
 // { is followed by a } with no { or line break between them. ok is false
-// when the releases may expand it differently: brace-expansion 5.0.2 to
-// 5.0.4, which minimatch 10 bundles in the actions, turns a \ and the
-// character after it into . (its periodPattern /\\./g), and keeps at most
-// braceExpandMax names.
+// when the releases may expand it differently: the brace expansion that
+// minimatch 10 bundles in the actions (brace-expansion 5.0.3 in
+// actions/upload-artifact v7, @isaacs/brace-expansion 5.0.0 in
+// actions/download-artifact v8) turns a \ and the character after it into
+// . (its periodPattern /\\./g), and keeps at most braceExpandMax names.
 func minimatchBraces(p string) ([]string, bool) {
 	has := false
 	for i := 0; i < len(p) && !has; i++ {
@@ -331,13 +332,31 @@ func expandBraces(str string) ([]string, bool) {
 	return out, true
 }
 
-// braceExpander stops expand when a list of names would be longer than
-// braceExpandMax: brace-expansion v2.0.1 has no bound, and a pattern such
-// as {1..2000000} would take seconds and memory.
-type braceExpander struct{ over bool }
+// braceExpander stops expand, and the pattern is not read (over), when a
+// list of names would be longer than braceExpandMax, when the strings it
+// reads and makes come to more than braceWorkMax bytes (brace-expansion
+// v2.0.1 has no bound: {1..2000000}, or {x} many times before {a,b}, takes
+// seconds), and where the releases differ: a number beyond 2^53 (which
+// JavaScript reads as a float), a step of 0 (which loops in JavaScript),
+// and a set that brace-expansion expands again as {a},b} (5.0.3, in
+// actions/upload-artifact v7, expands it again as the top, 2.0.1 does not).
+type braceExpander struct {
+	over bool
+	work int
+}
+
+// braceWorkMax bounds the bytes that one expansion reads and makes.
+const braceWorkMax = 4 << 20
 
 func (b *braceExpander) bounded(n int) bool {
 	if n > braceExpandMax {
+		b.over = true
+	}
+	return !b.over
+}
+
+func (b *braceExpander) spend(n int) bool {
+	if b.work += n; b.work > braceWorkMax {
 		b.over = true
 	}
 	return !b.over
@@ -412,7 +431,7 @@ func balanced(str string) (pre, body, post string, ok bool) {
 
 // braceExpand is expand of brace-expansion v2.0.1.
 func (b *braceExpander) braceExpand(str string, isTop bool) []string {
-	if b.over {
+	if b.over || !b.spend(len(str)) {
 		return nil
 	}
 	pre, body, post, ok := balanced(str)
@@ -434,7 +453,8 @@ func (b *braceExpander) braceExpand(str string, isTop bool) []string {
 	seq := numSeq || alphaSeq
 	if !seq && !strings.Contains(body, ",") {
 		if commaThenClose(post) {
-			return b.braceExpand(pre+"{"+body+escClose+post, false)
+			b.over = true // brace-expansion 5.0.3 expands it again as the top, 2.0.1 does not
+			return nil
 		}
 		return []string{str}
 	}
@@ -459,15 +479,20 @@ func (b *braceExpander) braceExpand(str string, isTop bool) []string {
 	}
 	var vals []string
 	if seq {
-		x, y := braceNumeric(n[0]), braceNumeric(n[1])
-		width := max(len(n[0]), len(n[1]))
-		incr := 1
+		x, okX := braceNumeric(n[0])
+		y, okY := braceNumeric(n[1])
+		incr, okI := 1, true
 		if len(n) == 3 {
-			incr = braceNumeric(n[2])
+			incr, okI = braceNumeric(n[2])
 			if incr < 0 {
 				incr = -incr
 			}
 		}
+		if !okX || !okY || !okI || incr == 0 {
+			b.over = true // beyond 2^53, or a step of 0: not read
+			return nil
+		}
+		width := max(len(n[0]), len(n[1]))
 		reverse := y < x
 		if reverse {
 			incr = -incr
@@ -476,20 +501,16 @@ func (b *braceExpander) braceExpand(str string, isTop bool) []string {
 		for _, s := range n {
 			pad = pad || isPadded(s)
 		}
-		if incr != 0 {
-			span := y - x
-			if span < 0 {
-				span = -span
-			}
-			step := incr
-			if step < 0 {
-				step = -step
-			}
-			if !b.bounded(span/step + 1) {
-				return nil
-			}
+		span := y - x
+		if span < 0 {
+			span = -span
 		}
-		for i := x; reverse && i >= y || !reverse && i <= y; i += incr {
+		count := span/max(incr, -incr) + 1
+		if !b.bounded(count) {
+			return nil
+		}
+		for k := 0; k < count; k++ {
+			i := x + k*incr
 			var c string
 			if alphaSeq {
 				c = string(rune(i))
@@ -509,10 +530,10 @@ func (b *braceExpander) braceExpand(str string, isTop bool) []string {
 					}
 				}
 			}
-			vals = append(vals, c)
-			if incr == 0 {
-				break // brace-expansion loops forever; a step of 0 is not a sequence anyone writes
+			if !b.spend(len(c)) {
+				return nil
 			}
+			vals = append(vals, c)
 		}
 	} else {
 		for _, s := range n {
@@ -528,6 +549,9 @@ func (b *braceExpander) braceExpand(str string, isTop bool) []string {
 	for _, v := range vals {
 		for _, p := range posts {
 			e := pre + v + p
+			if !b.spend(len(e)) {
+				return nil
+			}
 			if !isTop || seq || e != "" {
 				out = append(out, e)
 			}
@@ -621,17 +645,19 @@ func isPadded(s string) bool {
 	return len(s) >= 2 && s[0] == '0' && s[1] >= '0' && s[1] <= '9'
 }
 
-// braceNumeric is numeric of brace-expansion: the integer of s, or the
-// code of its first character.
-func braceNumeric(s string) int {
+// braceNumeric is numeric of brace-expansion for a part of a sequence:
+// the integer of s, or the code of its first character. ok is false for an
+// integer beyond 2^53, which JavaScript reads as a float.
+func braceNumeric(s string) (int, bool) {
 	if isInteger(s) {
 		n, err := strconv.Atoi(s)
-		if err == nil {
-			return n
+		if err != nil || n > 1<<53 || n < -(1<<53) {
+			return 0, false
 		}
+		return n, true
 	}
 	for _, r := range s {
-		return int(r)
+		return int(r), true
 	}
-	return 0
+	return 0, true
 }

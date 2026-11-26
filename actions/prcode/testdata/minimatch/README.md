@@ -36,7 +36,7 @@ A pattern is not known (`matchArtifactName` returns `known` false) when the rule
 
 - an extglob inside an extglob (10.2 parses extglobs only to a depth, `maxExtglobRecursion`, and flattens some nested ones);
 - a `*` that has an extglob on one side and, on the other side, the start or the end of the part or another extglob, such as `@(foo)*` (9.0.3 reads that `*` as one or more characters, 10.2 as any);
-- braces together with a `\` escape (brace-expansion 5.0.2 to 5.0.4, which minimatch 10 bundles in the actions, turns a `\` and the character after it into `.`), and braces that expand to more than 100000 names (`EXPANSION_MAX` of brace-expansion 5);
+- braces together with a `\` escape (the brace expansion that minimatch 10 bundles in the actions, brace-expansion 5.0.3 (in actions/upload-artifact v7) and @isaacs/brace-expansion 5.0.0 (in actions/download-artifact v8), turns a `\` and the character after it into `.`), and braces that expand to more than 100000 names (`EXPANSION_MAX` of brace-expansion 5);
 - a POSIX class such as `[:alpha:]` in `[...]`, which both releases turn into a regular expression with the `u` flag (in the run above, `part-[[:digit:]]` failed the step of both actions, as `\-` is an error in that flag);
 - a pattern whose match takes more steps than `matchBudget`.
 

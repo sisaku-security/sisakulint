@@ -86,9 +86,9 @@ function starBesideExtglob(p) {
   return false
 }
 // braceEscape is whether p has braces that minimatch expands and a \:
-// brace-expansion 5.0.2 to 5.0.4, which minimatch 10 bundles in the
-// actions, turns a \ and the character after it into . (periodPattern
-// /\\./g), and 2.0.1 keeps them.
+// the brace expansion that minimatch 10 bundles in the actions
+// (brace-expansion 5.0.3 (in actions/upload-artifact v7) and @isaacs/brace-expansion 5.0.0 (in actions/download-artifact v8)) turns a \ and the character after it into .
+// (periodPattern /\\./g), and 2.0.1 keeps them.
 function braceEscape(p) {
   return /\{(?:(?!\{).)*\}/.test(p) && p.includes('\\')
 }

@@ -404,3 +404,21 @@ func TestArtifactPoisoningPatterns(t *testing.T) {
 		}
 	}
 }
+
+// TestArtifactPoisoningMergeOfTwoUploads: a merge takes every upload its
+// pattern matches, each on its own events; the download runs only on the
+// event of the second.
+func TestArtifactPoisoningMergeOfTwoUploads(t *testing.T) {
+	build := func(id, event, ref, name string) string {
+		return "  " + id + ":\n    if: github.event_name == '" + event + "'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ " + ref + " }}\n      - run: make\n      - uses: actions/upload-artifact@v4\n        with: {name: " + name + ", path: out}\n"
+	}
+	src := "on:\n  pull_request_target:\n  workflow_run:\n    workflows: [ci]\n    types: [completed]\njobs:\n" +
+		build("build1", "pull_request_target", "github.event.pull_request.head.sha", "part-1") +
+		build("build2", "workflow_run", "github.event.workflow_run.head_sha", "part-2") +
+		"  merge:\n    needs: [build1, build2]\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: 'part-*'}\n" +
+		"  deploy:\n    needs: merge\n    if: always() && github.event_name == 'workflow_run'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n"
+	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, map[string]string{".github/workflows/w.yml": src}, downloadFacts{})
+	if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != 1 {
+		t.Errorf("%d findings, want 1: %+v", got, rep.Findings)
+	}
+}

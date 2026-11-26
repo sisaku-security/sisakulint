@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 // minimatchCases is testdata/minimatch/cases.json: the cases of the tests
@@ -38,8 +40,8 @@ func readMinimatchCases(t *testing.T) minimatchCases {
 }
 
 // TestMinimatchFixtures: matchArtifactName reads each pattern of the
-// table as minimatch reads it, and does not read the patterns that the
-// releases of minimatch read differently.
+// table as minimatch reads it, and returns known false for the patterns
+// that the table marks as not read.
 func TestMinimatchFixtures(t *testing.T) {
 	c := readMinimatchCases(t)
 	if len(c.Match) == 0 {
@@ -79,5 +81,34 @@ func TestExpandBraces(t *testing.T) {
 				t.Errorf("expandBraces(%q) = %q, want %q (minimatch %s)", tc.Pattern, got, want, v)
 			}
 		}
+	}
+}
+
+// TestMatchArtifactNameBounds: a pattern whose braces the rule does not
+// read is not known, and stops at once: more than braceExpandMax names,
+// more than braceWorkMax bytes, a number beyond 2^53, a step of 0, a \
+// escape with braces, and a set that brace-expansion expands again.
+func TestMatchArtifactNameBounds(t *testing.T) {
+	for _, p := range []string{
+		"part-{1..2000000}",
+		strings.Repeat("{a,b}", 21),
+		`{a,b}\-x`,
+		"part-{9223372036854775806..9223372036854775807}",
+		"part-{1..3..0}",
+		"part-{1..99999999999999999999}",
+		strings.Repeat("{x}", 22) + "{a,b}",
+		"z{1..99999}" + strings.Repeat("x", 100),
+		"p{1,2}{a},}",
+	} {
+		start := time.Now()
+		if _, known := matchArtifactName(p, "part-1"); known {
+			t.Errorf("matchArtifactName(%q): known", p)
+		}
+		if d := time.Since(start); d > time.Second {
+			t.Errorf("matchArtifactName(%q) took %v", p, d)
+		}
+	}
+	if match, known := matchArtifactName("part-{1..100000}", "part-99999"); !match || !known {
+		t.Errorf("part-{1..100000}: %v %v", match, known)
 	}
 }

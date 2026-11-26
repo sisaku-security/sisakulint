@@ -260,7 +260,11 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 		return nil
 	}
 	var out []SameRunUpload
-	seen := map[string]bool{} // jobs.<id>.steps[<order>]
+	// seen are the merge steps (jobs.<id>/<order>) whose pattern is not
+	// known, and the pairs of a merge step and an upload of all
+	// (jobs.<id>/<order>/<index>) already read: a merge takes every upload
+	// its pattern matches, each on its own events
+	seen := map[string]bool{}
 	for changed := true; changed; {
 		changed = false
 		all := append(slices.Clone(ups), out...)
@@ -277,10 +281,12 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 				if key := strings.ToLower(id) + "/" + strconv.Itoa(s.Order); seen[key] || s.Uses.Status != workflow.Present || !isMerge(s.Uses.Value) {
 					continue
 				}
-				for _, u := range all {
-					if !needed[u.job] && !(u.job == strings.ToLower(id) && uploadedBefore(steps, order, u, s)) || u.before4 {
+				for ui, u := range all {
+					pair := strings.ToLower(id) + "/" + strconv.Itoa(s.Order) + "/" + strconv.Itoa(ui)
+					if seen[pair] || !needed[u.job] && !(u.job == strings.ToLower(id) && uploadedBefore(steps, order, u, s)) || u.before4 {
 						continue
 					}
+					seen[pair] = true
 					if takes, known := mergeTakes(s.With, u.name); !known {
 						k := strings.ToLower(id)
 						x := unknownUpload{uses: s.Uses.Value.String}
@@ -297,9 +303,7 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 					}
 					m := SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + " of " + u.Text + ")", Checkout: u.Checkout, Upload: s.Base, Unless: u.Unless, events: evs}
 					m.name, m.anyName = inputName(s.With, mergedArtifactName)
-					out = append(out, m)
-					seen[strings.ToLower(id)+"/"+strconv.Itoa(s.Order)], changed = true, true
-					break
+					out, changed = append(out, m), true
 				}
 			}
 		}
@@ -321,10 +325,9 @@ func uploadedBefore(steps []workflow.Step, order workflow.StepOrder, u SameRunUp
 // mergeTakes is whether a merge step with with takes the artifact name,
 // as the merge filters the names with minimatch: its pattern, when it has
 // one, else * (merge/action.yml), which takes every name that does not
-// start with a dot. known is false when the pattern is
-// a ${{ }}, or the with is one, or the releases of minimatch read the
-// pattern differently (matchArtifactName): which names the merge takes is
-// not known.
+// start with a dot. known is false when the pattern is a ${{ }}, or the
+// with is one, or the rule does not read the pattern (matchArtifactName):
+// which names the merge takes is not known.
 func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string) (takes, known bool) {
 	switch with.Status {
 	case workflow.Dynamic:

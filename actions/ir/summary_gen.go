@@ -109,7 +109,7 @@ const (
 	FieldDownloadSitePRRunRefs                                      // download-site.pr-run-refs: what makes it take an attacker's run
 	FieldDownloadSiteSameRunUploads                                 // download-site.same-run-uploads: the uploads of the current run that check out the code of a pull request, when it takes the current run
 	FieldDownloadSiteInconclusiveValues                             // download-site.inconclusive-values: the inputs that decide the run whose analysis is inconclusive, as written
-	FieldDownloadSiteSameRunUnknown                                 // download-site.same-run-unknown: the uses, as written, in the jobs it needs whose uploads of the current run are not known
+	FieldDownloadSiteSameRunUnknown                                 // download-site.same-run-unknown: as written, the uses in the jobs it needs whose uploads of the current run are not known, and its own pattern when the rule does not read it
 	FieldDownloadSiteDynamic                                        // download-site.dynamic: whether with is a whole ${{ }}
 	FieldDownloadSitePRCodeOn                                       // download-site.pr-code-on: the privileged events it can run on, of those of its references
 	FieldDownloadSiteDispatchOn                                     // download-site.dispatch-on: the runs of workflow_dispatch the step can run on
@@ -1593,7 +1593,7 @@ type DownloadSite struct {
 	prRunRefs          []PRRunRef                   // what makes it take an attacker's run
 	sameRunUploads     []SameRunUpload              // the uploads of the current run that check out the code of a pull request, when it takes the current run
 	inconclusiveValues []string                     // the inputs that decide the run whose analysis is inconclusive, as written
-	sameRunUnknown     []string                     // the uses, as written, in the jobs it needs whose uploads of the current run are not known
+	sameRunUnknown     []string                     // as written, the uses in the jobs it needs whose uploads of the current run are not known, and its own pattern when the rule does not read it
 	dynamic            bool                         // whether with is a whole ${{ }}
 	prCodeOn           []analysis.EventActivity     // the privileged events it can run on, of those of its references
 	dispatchOn         []analysis.EventActivity     // the runs of workflow_dispatch the step can run on
@@ -3474,7 +3474,7 @@ func (x ArtifactPoisoningOfDownloadSite) SameRunUploads() []SameRunUpload { retu
 // InconclusiveValues is the inputs that decide the run whose analysis is inconclusive, as written.
 func (x ArtifactPoisoningOfDownloadSite) InconclusiveValues() []string { return x.s.inconclusiveValues }
 
-// SameRunUnknown is the uses, as written, in the jobs it needs whose uploads of the current run are not known.
+// SameRunUnknown is as written, the uses in the jobs it needs whose uploads of the current run are not known, and its own pattern when the rule does not read it.
 func (x ArtifactPoisoningOfDownloadSite) SameRunUnknown() []string { return x.s.sameRunUnknown }
 
 // Dynamic is whether with is a whole ${{ }}.

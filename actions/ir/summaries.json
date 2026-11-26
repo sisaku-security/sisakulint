@@ -1250,7 +1250,7 @@
         {
           "name": "sameRunUnknown",
           "type": "[]string",
-          "doc": "the uses, as written, in the jobs it needs whose uploads of the current run are not known",
+          "doc": "as written, the uses in the jobs it needs whose uploads of the current run are not known, and its own pattern when the rule does not read it",
           "display": true
         },
         {
