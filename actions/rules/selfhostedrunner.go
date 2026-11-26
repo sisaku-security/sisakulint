@@ -2,6 +2,7 @@ package rules
 
 import (
 	"context"
+	"sync"
 
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/ir"
@@ -59,6 +60,11 @@ func trustedLabel(ctx context.Context, c *lint.RuleContext, ls []workflow.Runner
 }
 
 func (selfHostedRunner) Check(ctx context.Context, c *lint.RuleContext, v ir.SelfHostedRunnerReader) error {
+	// reached is false when the facts answer that no pull request from a
+	// fork reaches any runner of the repository (neither condition of the
+	// findings can hold): then a label the rule cannot determine leaves
+	// nothing undecided. It asks the facts only for such a label.
+	reached := sync.OnceValue(func() bool { return !c.Refuted(ctx, lint.Any(*isPublic(c), *forkPRRuns(c))) })
 	for _, j := range v.Jobs() {
 		for _, r := range j.RunnerLabels() {
 			if r.HasSelfHostedLabel && !trustedLabel(ctx, c, append([]workflow.RunnerLabelName{r.Label}, r.With...)) {
@@ -67,6 +73,9 @@ func (selfHostedRunner) Check(ctx context.Context, c *lint.RuleContext, v ir.Sel
 			}
 		}
 		for _, g := range j.InconclusiveLabels() {
+			if !reached() {
+				continue
+			}
 			if g.Dispatch {
 				c.Inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: c.At(g.At), Note: g.Text + " refers to an input of workflow_dispatch, whose value the one who dispatches the workflow chooses; the rule does not determine the runner that the label names"})
 				continue
