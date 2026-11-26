@@ -66,19 +66,19 @@ func RunnerVariable(name string, windows bool) (RunnerValue, bool) {
 
 // WindowsRunner is whether the runs-on of j decides a Windows runner. No
 // label is a ${{ }}, no label is linux or macOS (the labels a self-hosted
-// runner has for the other operating systems), and a label is windows (the
-// label a self-hosted runner has for Windows) or a label of a GitHub-hosted
-// Windows runner (workflow.HostedWindowsLabels) where no label is
-// self-hosted and no group picks the runner. Labels compare in any case.
-// Any other label that begins with windows- is a custom label, which a
-// runner of any operating system may have. It is false for nil, a step of
-// an action.yml, whose job is the caller's.
+// runner has for the other operating systems), and either a label is
+// windows (the label a self-hosted runner has for Windows) or runs-on is
+// not a mapping and every label is one of a GitHub-hosted Windows runner
+// (workflow.HostedWindowsLabels), as job.Hosted reads a GitHub-hosted
+// runner. Labels compare in any case. Any other label that begins with
+// windows- is a custom label, which a runner of any operating system may
+// have. It is false for nil, a step of an action.yml, whose job is the
+// caller's.
 func WindowsRunner(j *workflow.Job) bool {
 	if j == nil || j.RunsOn.Status != workflow.Present {
 		return false
 	}
-	hosted := j.RunsOnForm != workflow.RunsOnFormMapping
-	var labels []workflow.RunnerLabelName
+	hosted, windows := j.RunsOnForm != workflow.RunsOnFormMapping, false
 	for _, l := range j.RunsOn.Value.Items {
 		if l.HasExpr() {
 			return false
@@ -90,15 +90,10 @@ func WindowsRunner(j *workflow.Job) bool {
 		if n.Equal(workflow.LinuxLabel) || n.Equal(workflow.MacOSLabel) {
 			return false
 		}
-		hosted = hosted && !n.Equal(workflow.SelfHostedLabel)
-		labels = append(labels, n)
+		windows = windows || n.Equal(workflow.WindowsLabel)
+		hosted = hosted && slices.ContainsFunc(workflow.HostedWindowsLabels(), n.Equal)
 	}
-	for _, n := range labels {
-		if n.Equal(workflow.WindowsLabel) || hosted && slices.ContainsFunc(workflow.HostedWindowsLabels, n.Equal) {
-			return true
-		}
-	}
-	return false
+	return windows || hosted && len(j.RunsOn.Value.Items) > 0
 }
 
 // RunnerVariableOf is the environment variable the runner writes the value

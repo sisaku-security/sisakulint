@@ -86,6 +86,9 @@ func TestWindowsRunner(t *testing.T) {
 		{"[self-hosted, macOS, windows]", false},
 		{"{group: g, labels: windows-latest}", false},
 		{"{group: g, labels: [self-hosted, windows]}", true},
+		{"windows", true},
+		{"{labels: windows-latest}", false},
+		{"[windows-2022, gpu]", false},
 	} {
 		if got := WindowsRunner(jobOf(t, c.runsOn)); got != c.want {
 			t.Errorf("WindowsRunner(runs-on: %s) = %v, want %v", c.runsOn, got, c.want)
