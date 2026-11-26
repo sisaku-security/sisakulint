@@ -682,6 +682,11 @@
           "doc": "whether it is a value of the matrix"
         },
         {
+          "name": "With",
+          "type": "[]workflow.RunnerLabelName",
+          "doc": "the other labels of the same runs-on that a runner of the label also has"
+        },
+        {
           "name": "At",
           "type": "Handle",
           "doc": "where it is written",
@@ -1736,7 +1741,7 @@
         {
           "name": "passwordForm",
           "type": "PasswordForm",
-          "doc": "whether the password is written in the workflow, read from secrets, or read from another context"
+          "doc": "whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context"
         },
         {
           "name": "passwordText",

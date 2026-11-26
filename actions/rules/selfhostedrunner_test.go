@@ -125,3 +125,57 @@ func TestSelfHostedRunnerIncidents(t *testing.T) {
 		t.Errorf("%+v", rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional))
 	}
 }
+
+// trustFacts answers repo.public true and repo.runner-label-trusted true
+// for the labels of trusted, in lower case; any other fact is unknown.
+type trustFacts struct{ trusted []string }
+
+func (f trustFacts) Resolve(_ context.Context, q facts.Query) facts.RawAnswer {
+	switch x := q.(type) {
+	case facts.RepoPublic:
+		return facts.RawAnswer{State: facts.StateFound, Value: []byte("true")}
+	case facts.RepoRunnerLabelTrusted:
+		for _, l := range f.trusted {
+			if x.RunnerLabel.String() == l {
+				return facts.RawAnswer{State: facts.StateFound, Value: []byte("true")}
+			}
+		}
+		return facts.RawAnswer{State: facts.StateFound, Value: []byte("false")}
+	}
+	return facts.RawAnswer{State: facts.StateUnknown, Reason: "not in the table"}
+}
+
+// TestSelfHostedRunnerTrusted: a label of runs-on that the owner declares
+// trusted (repo.runner-label-trusted) drops the findings of the job, also
+// for a runs-on a ${{ }} of the matrix gives; a trusted label of another
+// job, or of another combination, does not.
+func TestSelfHostedRunnerTrusted(t *testing.T) {
+	eco := "    strategy:\n      matrix:\n        include: [{r: ubuntu-latest}, {r: eco}]\n"
+	ternary := "${{ matrix.r == 'eco' && fromJSON('[\"self-hosted\",\"linux\",\"eco\"]') || matrix.r }}"
+	for _, c := range []struct {
+		name, runsOn, strategy string
+		trusted                []string
+		public                 int
+	}{
+		{"none trusted", "[self-hosted, linux, fast]", "", nil, 1},
+		{"trusted", "[self-hosted, linux, fast]", "", []string{"fast"}, 0},
+		{"trusted case", "[self-hosted, linux, FAST]", "", []string{"fast"}, 0},
+		{"other trusted", "[self-hosted, linux, slow]", "", []string{"fast"}, 1},
+		{"self-hosted alone", "self-hosted", "", []string{"fast"}, 1},
+		{"ternary", ternary, eco, nil, 1},
+		{"ternary trusted", ternary, eco, []string{"eco"}, 0},
+		{"ternary other", ternary, eco, []string{"fast"}, 1},
+	} {
+		src := "on: pull_request\njobs:\n  a:\n    runs-on: " + c.runsOn + "\n" + c.strategy + "    steps:\n      - run: echo\n"
+		rep, _, _ := checkRules(t, []lint.Rule{SelfHostedRunner}, wfFile(src), trustFacts{trusted: c.trusted})
+		n := 0
+		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed) {
+			if f.Args.KindID().String() == "self-hosted-runner.public" {
+				n++
+			}
+		}
+		if n != c.public || len(rep.FindingsWith(lint.CertaintyInconclusive)) != 0 {
+			t.Errorf("%s: %d confirmed public, want %d; %+v", c.name, n, c.public, rep.FindingsWith(lint.CertaintyInconclusive))
+		}
+	}
+}

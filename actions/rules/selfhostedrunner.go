@@ -40,10 +40,28 @@ func forkPRRuns(c *lint.RuleContext) *lint.Condition {
 	return &all
 }
 
-func (selfHostedRunner) Check(_ context.Context, c *lint.RuleContext, v ir.SelfHostedRunnerReader) error {
+// trustedLabel is whether the owner declares a label of ls trusted
+// (repo.runner-label-trusted answered true): a job runs only on a runner
+// that has every label of its runs-on, so one label whose runners no pull
+// request from a fork reaches keeps the job away from such a runner. A
+// label no source answers is not trusted, and leaves the finding as it is.
+func trustedLabel(ctx context.Context, c *lint.RuleContext, ls []workflow.RunnerLabelName) bool {
+	for _, l := range ls {
+		fl, err := facts.ParseRunnerLabel(l.String())
+		if err != nil {
+			continue // a label of runs-on is a label of a runner
+		}
+		if a := (facts.RepoRunnerLabelTrusted{Repo: c.Repo(), RunnerLabel: fl}).Ask(ctx, c.Resolver); a.State == facts.StateFound && a.Value {
+			return true
+		}
+	}
+	return false
+}
+
+func (selfHostedRunner) Check(ctx context.Context, c *lint.RuleContext, v ir.SelfHostedRunnerReader) error {
 	for _, j := range v.Jobs() {
 		for _, r := range j.RunnerLabels() {
-			if r.HasSelfHostedLabel {
+			if r.HasSelfHostedLabel && !trustedLabel(ctx, c, append([]workflow.RunnerLabelName{r.Label}, r.With...)) {
 				c.Report(lint.FindingDraft{Location: c.At(r.At), Args: SelfHostedRunnerPublic{Label: r.Label.String()}, Condition: isPublic(c)})
 				c.Report(lint.FindingDraft{Location: c.At(r.At), Anchor: "private", Args: SelfHostedRunnerPrivate{Label: r.Label.String()}, Condition: forkPRRuns(c)})
 			}
@@ -110,7 +128,7 @@ var (
 var selfHostedRunnerMeta = lint.Meta{
 	ID:       SelfHostedRunnerID,
 	Problem:  "a repository has a self-hosted runner, which the code of a pull request from a fork reaches, of anyone in a public repository, of whoever may read it in a private or internal one that runs the workflows of such pull requests, and whose state persists for the jobs after it",
-	Expected: "the jobs on GitHub-hosted runners, or on self-hosted runners that no pull request from a fork reaches; or a private or internal repository that does not run the workflows of pull requests from its forks. The rule reads the labels of runs-on only: the rule does not distinguish an ephemeral runner from another runner, and does not read the settings of a runner group. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs",
+	Expected: "the jobs on GitHub-hosted runners, or on self-hosted runners that no pull request from a fork reaches; or a private or internal repository that does not run the workflows of pull requests from its forks; or a runs-on with a label whose runners, the owner declares (repo.runner-label-trusted), no pull request from a fork reaches. The rule reads the labels of runs-on only, with the labels a whole ${{ }} gives for each combination of the values of the matrix it reads: the rule does not distinguish an ephemeral runner from another runner, and does not read the settings of a runner group. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs",
 	Facets:   lint.Facets{Weakness: []lint.Weakness{lint.WeaknessUntrustedCodeExecution}, AttackMeans: []lint.AttackMeans{lint.AttackMeansCode}},
 	FindingKinds: []lint.FindingKind{{
 		FindingText:     textSelfHostedRunnerPrivate,

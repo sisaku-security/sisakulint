@@ -98,7 +98,7 @@ func (x *IR) projectJob(j job.Job) *Job {
 		o.runsOnAt = x.handleOf(j.Job.RunsOn.Value.Base)
 	}
 	for _, r := range j.RunnerLabels {
-		o.runnerLabels = append(o.runnerLabels, RunnerLabel{Label: r.Label, HasSelfHostedLabel: r.HasSelfHostedLabel, Matrix: r.Matrix, At: x.handleOf(r.At)})
+		o.runnerLabels = append(o.runnerLabels, RunnerLabel{Label: r.Label, HasSelfHostedLabel: r.HasSelfHostedLabel, Matrix: r.Matrix, With: r.With, At: x.handleOf(r.At)})
 	}
 	for _, g := range j.InconclusiveLabels {
 		o.inconclusiveLabels = append(o.inconclusiveLabels, InconclusiveLabel{Text: g.Text, Dispatch: g.Dispatch, At: x.handleOf(g.At)})

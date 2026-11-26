@@ -14,5 +14,6 @@
 {"query":{"kind":"repo.archived","repo":"actions/github-script"},"state":"found","value":false},
 {"query":{"kind":"repo.archived","repo":"anthropics/claude-code-action"},"state":"found","value":false},
 {"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
-{"query":{"kind":"repo.public"},"state":"found","value":true}
+{"query":{"kind":"repo.public"},"state":"found","value":true},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"self-hosted"},"state":"unknown","reason":"the example does not answer it"}
 ]}

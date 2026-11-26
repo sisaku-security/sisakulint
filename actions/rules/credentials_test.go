@@ -33,11 +33,23 @@ func TestCredentials(t *testing.T) {
 		{"constant", "${{ 'hunter2' }}", ptr(true), []string{"credentials.public", "confirmed"}, 0},
 		{"secret", "${{ secrets.REG }}", ptr(true), nil, 0},
 		{"env", "${{ env.PW }}", ptr(true), nil, 1},
+		{"variable", "${{ vars.PW }}", ptr(true), []string{"credentials.configuration-variable", "confirmed"}, 0},
+		{"variable unknown", "${{ vars.PW }}", nil, []string{"credentials.configuration-variable", "confirmed"}, 0},
+		{"variable private", "${{ vars['PW'] }}", ptr(false), []string{"credentials.configuration-variable", "confirmed"}, 0},
+		{"secret or variable", "${{ secrets.PW || vars.PW }}", ptr(true), []string{"credentials.configuration-variable", "confirmed"}, 0},
+		{"variable and env", "${{ vars.PW }}${{ env.SUFFIX }}", ptr(true), nil, 1},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{Credentials}, wfFile(fmt.Sprintf(pwJob, c.password)), exposureFacts{public: c.public})
 		var got []string
 		for _, f := range rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional) {
 			got = append(got, f.Args.KindID().String(), certainty(f))
+			if f.Args.KindID() == kindCredentialsConfigurationVariable {
+				// the kind holds whatever repo.public is: no condition
+				if f.Condition != nil {
+					t.Errorf("%s: %s", c.name, condJSON(t, f))
+				}
+				continue
+			}
 			if want := map[string]string{"credentials.public": publicCond, "credentials.private": privateCond}[f.Args.KindID().String()]; condJSON(t, f) != want {
 				t.Errorf("%s: %s", c.name, condJSON(t, f))
 			}

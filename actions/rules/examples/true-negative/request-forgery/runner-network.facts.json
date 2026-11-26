@@ -1,5 +1,7 @@
 {"schema":"sisakulint/facts/v0","facts":[
 {"query":{"kind":"repo.action-list"},"state":"found","value":["*","!untrusted/*","!suspicious/*","!tj-actions/changed-files@v39","!docker://aquasec/trivy:*","!example-org/unlisted-*","!docker://example-org/unlisted-*","!example-org/partly-listed/hidden@*"]},
 {"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
-{"query":{"kind":"repo.public"},"state":"found","value":true}
+{"query":{"kind":"repo.public"},"state":"found","value":true},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"linux"},"state":"unknown","reason":"the example does not answer it"},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"self-hosted"},"state":"unknown","reason":"the example does not answer it"}
 ]}

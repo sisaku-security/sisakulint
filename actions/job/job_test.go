@@ -177,6 +177,13 @@ func TestRunners(t *testing.T) {
 		{"input", "${{ inputs.runner }}", "", 0, 1},
 		{"mixed", "ubuntu-${{ matrix.v }}", "    strategy:\n      matrix: {v: [a]}\n", 0, 1},
 		{"dynamic list", "${{ fromJSON(inputs.labels) }}", "", 0, 1},
+		{"ternary", "${{ matrix.r == 'eco' && fromJSON('[\"self-hosted\",\"eco\"]') || matrix.r }}", "    strategy:\n      matrix:\n        include: [{r: hosted-x}, {r: eco}]\n", 1, 0},
+		{"ternary hosted", "${{ matrix.r == 'x' && 'ubuntu-latest' || 'macos-latest' }}", "    strategy:\n      matrix: {r: [x, y]}\n", 0, 0},
+		{"ternary two variables", "${{ matrix.a == '1' && matrix.b || 'ubuntu-latest' }}", "    strategy:\n      matrix: {a: ['1', '2'], b: [self-hosted, linux]}\n", 1, 0},
+		{"ternary input", "${{ matrix.r == 'x' && inputs.r || 'ubuntu-latest' }}", "    strategy:\n      matrix: {r: [x]}\n", 0, 1},
+		{"ternary no matrix", "${{ github.event_name == 'push' && 'self-hosted' || 'ubuntu-latest' }}", "", 0, 1},
+		{"ternary not labels", "${{ matrix.r == 'x' && fromJSON('{\"a\":1}') || 'ubuntu-latest' }}", "    strategy:\n      matrix: {r: [x]}\n", 0, 1},
+		{"ternary open matrix", "${{ matrix.r == 'x' && 'self-hosted' || 'ubuntu-latest' }}", "    strategy:\n      matrix: {r: ['${{ inputs.r }}']}\n", 0, 1},
 	} {
 		j := one(t, "on: push\njobs:\n  a:\n    runs-on: "+c.runsOn+"\n"+c.strategy+"    steps:\n      - run: echo\n")
 		self := 0
@@ -301,6 +308,33 @@ func TestCalled(t *testing.T) {
 		j := one(t, src)
 		if j.CalledOnly != c.only || j.CalledKind != c.kind || j.CalledRepo.String() != c.repo {
 			t.Errorf("%s %q: %v %v %q, want %v %v %q", c.on, c.job, j.CalledOnly, j.CalledKind, j.CalledRepo, c.only, c.kind, c.repo)
+		}
+	}
+}
+
+// TestRunnersWith: the other labels a runner of a label also has: the
+// labels written beside it, and the items of the array a ${{ }} gives.
+func TestRunnersWith(t *testing.T) {
+	for _, c := range []struct{ name, runsOn, strategy, want string }{
+		{"list", "[self-hosted, linux, fast]", "", "linux,fast"},
+		{"alone", "self-hosted", "", ""},
+		{"matrix item", "[self-hosted, '${{ matrix.l }}']", "    strategy:\n      matrix: {l: [a, b]}\n", ""},
+		{"evaluated", "${{ matrix.r == 'eco' && fromJSON('[\"self-hosted\",\"eco\"]') || matrix.r }}", "    strategy:\n      matrix: {r: [hosted, eco]}\n", "eco"},
+		{"evaluated in list", "[linux, '${{ matrix.r == ''eco'' && ''self-hosted'' || ''x'' }}']", "    strategy:\n      matrix: {r: [eco]}\n", "linux"},
+	} {
+		j := one(t, "on: push\njobs:\n  a:\n    runs-on: "+c.runsOn+"\n"+c.strategy+"    steps:\n      - run: echo\n")
+		var got []string
+		n := 0
+		for _, r := range j.RunnerLabels {
+			if r.HasSelfHostedLabel {
+				n++
+				for _, w := range r.With {
+					got = append(got, w.String())
+				}
+			}
+		}
+		if n != 1 || strings.Join(got, ",") != c.want {
+			t.Errorf("%s: %d self-hosted, with %q, want %q", c.name, n, got, c.want)
 		}
 	}
 }

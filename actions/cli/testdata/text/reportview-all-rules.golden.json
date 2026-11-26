@@ -1258,7 +1258,7 @@
       "kind_id": "self-hosted-runner.private",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "2ca2e0b729355196c84c0576167e9fa22562d0a9b4d445acf5b2b8594632971d",
       "args": {
         "kind_id": "self-hosted-runner.private",
@@ -1309,7 +1309,7 @@
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "dd887304d96690b73d6b88e0fe229f0f869007e15f4452950fed371768adf0ae",
       "args": {
         "kind_id": "self-hosted-runner.public",
@@ -5411,7 +5411,7 @@
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "128d760488135a1f6de23cd9cae0f28022b8149e23f77ef730d259f619c0dfea",
       "args": {
         "kind_id": "self-hosted-runner.public",
@@ -5443,7 +5443,7 @@
       "kind_id": "self-hosted-runner.private",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "911597ea22dea4be3262807a8109b0629452dcd4529890ef4cd2dfa40a0696e6",
       "args": {
         "kind_id": "self-hosted-runner.private",
@@ -7213,6 +7213,33 @@
       "related": []
     },
     {
+      "rule": "credentials",
+      "severity": "medium",
+      "certainty": "confirmed",
+      "kind_id": "credentials.configuration-variable",
+      "detected": "the password of services.db is read from a configuration variable: ${{ vars.REGISTRY_PASSWORD }}",
+      "consequence": "GitHub keeps the value of a configuration variable as plain text: the runner does not mask the value in the log of a workflow run, and the REST API gives the value to whoever may read the configuration variables of the repository, such as an app that has the Variables permission on the repository",
+      "remedy": "revoke the password, and pass a new one from a secret of the repository, ${{ secrets.NAME }}",
+      "fingerprint": "a860f9c30746944ac8d96e4425a7cca1339a404efef2129fc2e3c46cea985577",
+      "args": {
+        "kind_id": "credentials.configuration-variable",
+        "container": "services.db",
+        "password": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/images.yml",
+          "line": 18,
+          "column": 21,
+          "key_path": "jobs.images.services.db.credentials.password",
+          "job": "images",
+          "source": "          password: ${{ vars.REGISTRY_PASSWORD }}"
+        }
+      ],
+      "related": []
+    },
+    {
       "rule": "action-list",
       "severity": "high",
       "certainty": "confirmed",
@@ -7229,7 +7256,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/images.yml",
-          "line": 15,
+          "line": 20,
           "column": 15,
           "key_path": "jobs.images.steps[0].uses",
           "job": "images",
@@ -7237,7 +7264,7 @@
           "source": "      - uses: docker://alpine:3",
           "snippet": [
             {
-              "line": 15,
+              "line": 20,
               "text": "      - uses: docker://alpine:3",
               "at": true
             }
@@ -7271,7 +7298,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/images.yml",
-          "line": 15,
+          "line": 20,
           "column": 15,
           "key_path": "jobs.images.steps[0].uses",
           "job": "images",
@@ -7279,7 +7306,7 @@
           "source": "      - uses: docker://alpine:3",
           "snippet": [
             {
-              "line": 15,
+              "line": 20,
               "text": "      - uses: docker://alpine:3",
               "at": true
             }
@@ -8771,7 +8798,7 @@
       "kind_id": "self-hosted-runner.public",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a public repository",
       "consequence": "anyone who opens a pull request can run their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners, though the rule still reports the job, as the rule reads the labels of runs-on only (the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "run the jobs of a public repository on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. An owner of the organization can instead put the self-hosted runners in a runner group that does not allow public repositories: no job of the repository reaches those runners; declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config), and the rule reports nothing for the job (otherwise the false positive form group-access). An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "74ae8cb3e5adac7bd888d6d68d76eade6325aaa3777e9d61f3676072ef347544",
       "args": {
         "kind_id": "self-hosted-runner.public",
@@ -8803,7 +8830,7 @@
       "kind_id": "self-hosted-runner.private",
       "detected": "the job runs on a self-hosted runner (self-hosted) of a private or internal repository that runs the workflows of pull requests from its forks",
       "consequence": "one who may read the repository and fork it, which every member of the enterprise reads for an internal one, can open a pull request that runs their code on the runner, whose state persists for the jobs after it: their secrets, their tokens and the runner's network",
-      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, the rule still reports the job, as the rule reads the labels of runs-on only. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
+      "remedy": "turn off Run workflows from fork pull requests, which the rule reads as the fact repo.fork-pr-run-workflows (with the fact false, the rule reports nothing), or run the jobs on GitHub-hosted runners: with a label of a GitHub-hosted runner in runs-on, the rule reports nothing. On self-hosted runners that no pull request from a fork reaches, declare a label of runs-on that only those runners have trusted with the fact repo.runner-label-trusted (true for the label, in a file of facts, --fact, or fact in --config): the rule then reports nothing for the job. An ephemeral runner removes the files and the processes that a job leaves on the machine of the runner before the next job, and the code of a pull request still reaches the network of the runner while the job runs.",
       "fingerprint": "9244e66d3183472681cbccaef0c91e28386c576d75bc8267e640468c2f9fe5af",
       "args": {
         "kind_id": "self-hosted-runner.private",
@@ -12596,6 +12623,45 @@
       "related": []
     },
     {
+      "rule": "unset-configuration-variable",
+      "certainty": "confirmed",
+      "kind_id": "unset-configuration-variable.empty-value",
+      "detected": "the expression ${{ vars.REGISTRY_PASSWORD }} reads the configuration variable REGISTRY_PASSWORD as a value, and no list of defined names that this run of the linter has (repo.configuration-variables, and repo.environment-configuration-variables of each environment whose configuration variables the place of the expression reads) has the name REGISTRY_PASSWORD",
+      "consequence": "GitHub gives the empty string for a configuration variable that no level (repository, organization, environment) defines, and GitHub reports no error, so the expression gives the empty string where the workflow expects the value of the configuration variable. A misspelled name shows only in what the workflow run does, such as an empty argument of a step",
+      "remedy": "define the configuration variable at the repository, organization or environment level, or correct the name in the expression; when the workflow reads a missing configuration variable on purpose as meaning that the setting is not given, write the default value after ||, such as vars.NAME || 'default'",
+      "fingerprint": "c7ca70784d895af749e29b8c7b3f6373a8eea40ada55d774711cd38a5ee8bbf4",
+      "args": {
+        "kind_id": "unset-configuration-variable.empty-value",
+        "name": "REGISTRY_PASSWORD",
+        "expression": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/images.yml",
+          "line": 18,
+          "column": 25,
+          "key_path": "jobs.images.services.db.credentials.password",
+          "job": "images",
+          "source": "          password: ${{ vars.REGISTRY_PASSWORD }}"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "all",
+        "parts": [
+          {
+            "id": 1,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.configuration-variables\"},\"eq\":[\"BUILD_ENV\",\"DEPLOY_URL\",\"DRY_RUN\",\"TIMEOUT\"]}",
+            "truth": "true"
+          }
+        ],
+        "truth": "unknown"
+      }
+    },
+    {
       "rule": "allowed-actions",
       "certainty": "confirmed",
       "kind_id": "allowed-actions.unpinned-action",
@@ -15427,6 +15493,11 @@
         "        password: hunter2",
         "    services:",
         "      redis: redis",
+        "      db:",
+        "        image: ghcr.io/o/db@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "        credentials:",
+        "          username: u",
+        "          password: ${{ vars.REGISTRY_PASSWORD }}",
         "    steps:",
         "      - uses: docker://alpine:3"
       ]

@@ -179,7 +179,7 @@ const (
 	FieldPrintedOutputTransform                                     // printed-output.transform: how the shell changed the value: the operator of an expansion, or the command
 	FieldPrintedOutputText                                          // printed-output.text: the ${{ }} as written
 	FieldPrintedOutputAlwaysSkipped                                 // printed-output.always-skipped: whether GitHub skips, in every run, the job it is in: on every event and activity type of the on of its workflow, an if that a run of the job goes through (attacker.JobIfs) is false by github.event_name and github.event.action alone; of a remote called workflow, also when the job of the input that calls it is; of an action.yml, never
-	FieldRegistryCredentialsPasswordForm                            // registry-credentials.password-form: whether the password is written in the workflow, read from secrets, or read from another context
+	FieldRegistryCredentialsPasswordForm                            // registry-credentials.password-form: whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context
 	FieldRegistryCredentialsPasswordText                            // registry-credentials.password-text: the password as written, for the note of an inconclusive one
 	FieldRegistryCredentialsContainer                               // registry-credentials.container: container, or services.<name>
 	FieldRemoteCallUsesText                                         // remote-call.uses-text: the uses of the job as written
@@ -926,17 +926,19 @@ func (x RequestSite) equal(y RequestSite) bool {
 
 // RunnerLabel is a label of the runs-on of a job: as written, or a value of the matrix a whole ${{ matrix.<name> }} takes.
 type RunnerLabel struct {
-	Label              workflow.RunnerLabelName // the label, trimmed where GitHub trims it
-	HasSelfHostedLabel bool                     // whether it is the label every self-hosted runner has
-	Matrix             bool                     // whether it is a value of the matrix
-	At                 Handle                   // where it is written
+	Label              workflow.RunnerLabelName   // the label, trimmed where GitHub trims it
+	HasSelfHostedLabel bool                       // whether it is the label every self-hosted runner has
+	Matrix             bool                       // whether it is a value of the matrix
+	With               []workflow.RunnerLabelName // the other labels of the same runs-on that a runner of the label also has
+	At                 Handle                     // where it is written
 }
 
 func (x RunnerLabel) equal(y RunnerLabel) bool {
 	return true &&
 		x.Label == y.Label &&
 		x.HasSelfHostedLabel == y.HasSelfHostedLabel &&
-		x.Matrix == y.Matrix
+		x.Matrix == y.Matrix &&
+		slices.Equal(x.With, y.With)
 }
 
 // SameRunUpload is an upload of the current run, in a job that checks out the code of a pull request before the upload, whose artifact a download of the current run takes.
@@ -2027,7 +2029,7 @@ func (s *PrintedOutput) summaryHandles() []Handle { return []Handle{s.at} }
 type RegistryCredentials struct {
 	key          Key
 	passwordAt   Handle       // the password
-	passwordForm PasswordForm // whether the password is written in the workflow, read from secrets, or read from another context
+	passwordForm PasswordForm // whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context
 	passwordText string       // the password as written, for the note of an inconclusive one
 	container    string       // container, or services.<name>
 }
@@ -4155,7 +4157,7 @@ func (x CredentialsOfRegistryCredentials) Key() Key { return x.s.key }
 // PasswordAt is the handle on the password.
 func (x CredentialsOfRegistryCredentials) PasswordAt() Handle { return x.s.passwordAt }
 
-// PasswordForm is whether the password is written in the workflow, read from secrets, or read from another context.
+// PasswordForm is whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context.
 func (x CredentialsOfRegistryCredentials) PasswordForm() PasswordForm { return x.s.passwordForm }
 
 // PasswordText is the password as written, for the note of an inconclusive one.
