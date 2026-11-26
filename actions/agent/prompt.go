@@ -58,12 +58,13 @@ func geminiPasses(n workflow.EnvName) bool {
 // of the workflow w, which the agent's process gets and its tools read,
 // but under codex-action's safety-strategy unprivileged-user, whose sudo
 // resets the env, and the names gemini-cli drops when no settings is
-// given. An env hides a name of the env around it (the step's the job's,
-// the job's the workflow's) as the runner of the job compares the names:
-// in any case where the runs-on of j decides Windows, as written elsewhere.
-// An env that is one whole ${{ }} hides the env around it, whose names it
-// may set. j is nil for a step of an action.yml, whose caller's env is not
-// read.
+// given. A variable of an env hides the variable of the same name of its
+// outer envs (the env of the job and the env of the workflow for the env
+// of the step, the env of the workflow for the env of the job), the names
+// compared as the runner of the job compares them: in any case where the
+// runs-on of j decides Windows, as written elsewhere. An env that is one
+// whole ${{ }} may set any name, so its outer envs are not read. j is nil
+// for a step of an action.yml, whose caller's env is not read.
 func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workflow.Workflow) []PromptValue {
 	var out []PromptValue
 	if s.With.Status == workflow.Present {
@@ -95,7 +96,7 @@ func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workfl
 	set := map[string]bool{}
 	for _, l := range levels {
 		if l.env.Status == workflow.Dynamic {
-			break // which names it sets, and so which names around it reach the agent, is not known
+			break // which names it sets, and so which variables of the outer envs reach the agent, is not known
 		}
 		if l.env.Status != workflow.Present {
 			continue
