@@ -27,7 +27,7 @@ A case is a pattern, a name, the match that each release's test expects, and `kn
 | `extglob-ending-with-state-char.js` | 2 | 0 | — |
 | runs of the actions (`probe`) | 14 | 0 | — |
 
-The runs of the actions are those of the run 45824870034 of https://github.com/gh-intel/workflow-probe (branch `probe/artifact-called-workflow`): `actions/upload-artifact/merge` v4 and v7 and `actions/download-artifact` v4, with the artifacts `part-1` and `x` in the run.
+The runs of the actions are those of one run on a GitHub-hosted runner on 2026-11-26: `actions/upload-artifact/merge` v4 and v7 and `actions/download-artifact` v4, with the artifacts `part-1` and `x` in the run.
 
 A pattern is not known (`matchArtifactName` returns `known` false) when the releases read it differently:
 

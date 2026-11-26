@@ -207,9 +207,8 @@ for (const m of usurp.matchAll(/t\.equal\(minimatch\('([^']*)', '([^']*)', o\), 
 }
 
 // The runs of actions/upload-artifact/merge and actions/download-artifact
-// v4 (minimatch 9.0.3) and merge v7 (10.2.4) in the run 45824870034 of
-// https://github.com/gh-intel/workflow-probe (branch
-// probe/artifact-called-workflow), with the artifacts part-1 and x.
+// v4 (minimatch 9.0.3) and merge v7 (10.2.4) in a run on a GitHub-hosted
+// runner on 2026-11-26, with the artifacts part-1 and x.
 const probe = [
   ['part-@(x|y)', 'part-1', false, ['v10.2.4', 'v9.0.3']],
   ['part-@(1|2)', 'part-1', true, ['v10.2.4', 'v9.0.3']],
