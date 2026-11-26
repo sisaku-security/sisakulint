@@ -1,0 +1,18 @@
+# situation: on push, a job calls the reusable workflow
+#   ./.github/workflows/build.yml of the same repository, which is not
+#   among the files the linter read.
+# reason: the uses of other repositories inside the reusable workflow are
+#   in the file that the linter did not read, so whether they name a full
+#   commit SHA is not decided; adding the file to the inputs decides it.
+# attack: when the reusable workflow has a step with uses: actions/checkout@v4,
+#   the owner of actions/checkout, or whoever has taken over a token that
+#   pushes to it, moves the tag v4 to a commit of theirs, as the tags of
+#   tj-actions/changed-files were moved in 2025.
+# attack-run-behavior: when the job runs, the runner resolves @v4 to that
+#   commit, downloads it and runs its action as the step, in the job's
+#   workspace and environment.
+on: push
+permissions: {}
+jobs:
+  c:
+    uses: ./.github/workflows/build.yml

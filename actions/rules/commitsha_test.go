@@ -453,3 +453,48 @@ func TestCommitSHAOutsideReadByOutside(t *testing.T) {
 		}
 	}
 }
+
+// TestCommitSHALocalCalleeUnread: a ./ callee that is not among the inputs
+// is one local-callee-unread at the uses of its caller; a callee among
+// them is read, and is none.
+func TestCommitSHALocalCalleeUnread(t *testing.T) {
+	const caller = `on: push
+jobs:
+  call:
+    uses: ./.github/workflows/called.yml
+  steps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@` + sha + `
+      - uses: ./local
+`
+	const called = "on: workflow_call\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n"
+	const action = "runs:\n  using: composite\n  steps:\n    - uses: actions/checkout@v4\n"
+	for _, c := range []struct {
+		name  string
+		files map[string]string
+		want  []string
+	}{
+		{"both missing", map[string]string{".github/workflows/caller.yml": caller},
+			[]string{".github/workflows/caller.yml ./.github/workflows/called.yml", ".github/workflows/caller.yml ./local"}},
+		{"workflow missing", map[string]string{".github/workflows/caller.yml": caller, "local/action.yml": action},
+			[]string{".github/workflows/caller.yml ./.github/workflows/called.yml"}},
+		{"action missing", map[string]string{".github/workflows/caller.yml": caller, ".github/workflows/called.yml": called},
+			[]string{".github/workflows/caller.yml ./local"}},
+		{"both present", map[string]string{".github/workflows/caller.yml": caller, ".github/workflows/called.yml": called, "local/action.yaml": action}, nil},
+	} {
+		rep, in, _ := checkRules(t, []lint.Rule{CommitSHA}, c.files, nil)
+		var got []string
+		for _, f := range rep.FindingsWith(lint.CertaintyInconclusive) {
+			if f.InconclusiveKind != localCalleeUnread {
+				continue
+			}
+			i, _ := in.Lookup(f.Location.File.Input)
+			got = append(got, f.Location.File.Input.String()+" "+string(i.Tree.Bytes()[f.Location.Span.Start:f.Location.Span.End]))
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
