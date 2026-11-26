@@ -63,6 +63,10 @@ func everyRunNote(secret bool, a analysis.AgentAction, r ir.EveryRunRef) string 
 	switch r.Route {
 	case analysis.AgentValueRouteStepEnv:
 		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the step"
+	case analysis.AgentValueRouteJobEnv:
+		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the job"
+	case analysis.AgentValueRouteWorkflowEnv:
+		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the workflow"
 	case analysis.AgentValueRouteSettingInput:
 		route = r.Ref.Text + " reaches the settings of the agent through the input " + r.Input.String() + " of " + textAgentAction(a)
 	case analysis.AgentValueRouteCompositeInput:
