@@ -336,7 +336,7 @@ var aiActionPromptInjectionMeta = lint.Meta{
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionPromptInjectionPrompt),
 		unknownOSCase(nil, kindAIActionPromptInjectionEnv),
-		githubEnvUnreadWrite(nil, kindAIActionPromptInjectionEnv),
+		githubEnvWrite(nil, kindAIActionPromptInjectionEnv),
 		{ID: lint.MustFalsePositiveFormID("no-env-tool"), Text: "an env of the step, of the job or of the workflow, where the agent of the step has no tool to read the env: ai-inference without copilot-allow-tools, claude-code-action's tag mode, which allows no shell but git", FindingKinds: []lint.FindingKindID{kindAIActionPromptInjectionEnv}, Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustFalsePositiveFormID("indirect-value"), Text: "a value through an env or an input (${{ env.X }}, ${{ inputs.x }}) that is the attacker's only in their own run, such as the body of a comment, read as theirs in a maintainer's run too, past a closed gate", FindingKinds: []lint.FindingKindID{kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv}, Disposition: lint.Todo(lint.NeedSameFile)},
 		writerString(kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv), ifUnnarrowedFalsePositive(kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv),
