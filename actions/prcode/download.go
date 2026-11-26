@@ -60,8 +60,9 @@ type DownloadSite struct {
 	// SameRunUnknown are what makes the artifacts it takes of the current
 	// run not known: the uses in the jobs it needs whose uploads are not
 	// known (a ./ workflow or action the inputs do not have, a merge whose
-	// pattern is a ${{ }} or one the rule does not read), and its own
-	// pattern when the rule does not read it
+	// pattern is a ${{ }} or one the rule does not read, a merge when the
+	// rule stops reading the merges), and its own pattern when the rule
+	// does not read it
 	SameRunUnknown []workflow.String
 	Dynamic        bool // whether with is a whole ${{ }}
 
@@ -139,7 +140,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 		if onCall(w) {
 			all = append(all, taint.CalledMark()) // a caller not among the inputs runs it on its own event
 		}
-		ups, unknown := sameRunUploadsIn(c, name, w, m, 0)
+		ups := sameRunUploadsIn(c, name, w, m, 0)
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
 		}
@@ -166,7 +167,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 				}
 				site.CallFromPR = callFromPR(w, site.DispatchInput, site.PRCodeOn)
 				site.read(job.ActionsReadOf(j.Permissions, w.Permissions))
-				site.sameRun(w, ups, unknown)
+				site.sameRun(w, ups)
 				site.DispatchInput = site.dispatchRead // the inputs the release reads, of the run it takes
 				site.CallFromPR = site.CallFromPR && site.DispatchInput
 				site.Approval, site.Environment = job.ApprovalOf(site.PRCodeOn, site.Job)

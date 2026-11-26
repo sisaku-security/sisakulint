@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -420,5 +421,121 @@ func TestArtifactPoisoningMergeOfTwoUploads(t *testing.T) {
 	rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, map[string]string{".github/workflows/w.yml": src}, downloadFacts{})
 	if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != 1 {
 		t.Errorf("%d findings, want 1: %+v", got, rep.Findings)
+	}
+}
+
+// TestArtifactPoisoningMergeScale: merges that take each other's artifacts
+// are read once for each merge step and each first upload, so a chain of
+// merges in one job and a parallel group of merges, which may each run
+// after the others, end; past mergeReadMax the merges are inconclusive.
+func TestArtifactPoisoningMergeScale(t *testing.T) {
+	checkout := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n"
+	deploy := func(name string) string {
+		return "  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: " + name + "}\n      - run: ./deploy.sh\n"
+	}
+	upload := func(name string) string {
+		return "      - uses: actions/upload-artifact@v4\n        with: {name: " + name + ", path: .}\n"
+	}
+	merge := func(indent, name, pattern string) string {
+		return indent + "- uses: actions/upload-artifact/merge@v4\n" + indent + "  with: {name: " + name + ", pattern: '" + pattern + "'}\n"
+	}
+	chain := checkout + upload("part-0")
+	for i := 1; i <= 40; i++ {
+		chain += merge("      ", "part-"+strconv.Itoa(i), "part-*")
+	}
+	chain += deploy("part-40")
+	parallel := checkout + upload("part-0") + "      - parallel:\n"
+	for i := 1; i <= 20; i++ {
+		parallel += merge("          ", "part-a"+strconv.Itoa(i), "part-*")
+	}
+	parallel += deploy("part-a20")
+	long := checkout
+	for i := range 10 {
+		long += upload("s-" + strconv.Itoa(i))
+	}
+	long += merge("      ", "m-1", "s-*")
+	for i := 2; i <= 150; i++ {
+		long += merge("      ", "m-"+strconv.Itoa(i), "m-"+strconv.Itoa(i-1))
+	}
+	long += deploy("m-150")
+	for _, c := range []struct {
+		name                   string
+		src                    string
+		findings, inconclusive int
+	}{
+		{"chain", chain, 1, 0},
+		{"parallel", parallel, 1, 0},
+		{"past the reads", long, 0, 1},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), downloadFacts{})
+		if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != c.findings {
+			t.Errorf("%s: %d findings, want %d: %+v", c.name, got, c.findings, rep.Findings)
+		}
+		if got := len(rep.FindingsWith(lint.CertaintyInconclusive)); got != c.inconclusive {
+			t.Errorf("%s: %d inconclusive, want %d: %+v", c.name, got, c.inconclusive, rep.Findings)
+		}
+	}
+}
+
+// TestArtifactPoisoningUnreadThroughMerge: an upload whose content the
+// rule does not read, of a merge whose pattern is a ${{ }} or of a ./
+// reusable workflow that the inputs do not have, passes through a later
+// merge to the download, which is inconclusive.
+func TestArtifactPoisoningUnreadThroughMerge(t *testing.T) {
+	tail := "  merge2:\n    needs: merge1\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: intermediate}\n  deploy:\n    needs: merge2\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./deploy.sh\n"
+	build := "  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: .}\n"
+	merge1 := func(pattern string) string {
+		return "  merge1:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: intermediate, pattern: '" + pattern + "'}\n"
+	}
+	for _, c := range []struct {
+		name                   string
+		src                    string
+		findings, inconclusive int
+	}{
+		{"merge with a pattern that is a ${{ }}", "on: pull_request_target\njobs:\n" + build + merge1("${{ vars.P }}") + tail, 0, 1},
+		{"merge with a pattern that takes part-1", "on: pull_request_target\njobs:\n" + build + merge1("part-*") + tail, 1, 0},
+		{"./ workflow not among the inputs", "on: pull_request_target\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n" + merge1("*") + tail, 0, 1},
+		{"merge with a pattern that is a ${{ }}, of another name", "on: pull_request_target\njobs:\n" + build + merge1("${{ vars.P }}") + strings.Replace(tail, "pattern: intermediate", "pattern: other", 1), 0, 0},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), downloadFacts{})
+		if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != c.findings {
+			t.Errorf("%s: %d findings, want %d: %+v", c.name, got, c.findings, rep.Findings)
+		}
+		if got := len(rep.FindingsWith(lint.CertaintyInconclusive)); got != c.inconclusive {
+			t.Errorf("%s: %d inconclusive, want %d: %+v", c.name, got, c.inconclusive, rep.Findings)
+		}
+	}
+}
+
+// TestArtifactPoisoningCalledPerCaller: the upload of a reusable workflow
+// is read as an upload of the job that calls it on the events of that
+// call: a call with if: false uploads nothing, though another workflow
+// calls the same workflow on pull_request_target.
+func TestArtifactPoisoningCalledPerCaller(t *testing.T) {
+	files := func(callIf string) map[string]string {
+		return map[string]string{
+			".github/workflows/build.yml": "on: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - uses: actions/upload-artifact@v4\n        with: {name: out, path: .}\n",
+			".github/workflows/other.yml": "on: pull_request_target\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n",
+			".github/workflows/w.yml":     "on: pull_request_target\njobs:\n  build:\n" + callIf + "    uses: ./.github/workflows/build.yml\n  deploy:\n    needs: build\n    if: always()\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./deploy.sh\n",
+		}
+	}
+	for _, c := range []struct {
+		name     string
+		callIf   string
+		findings int
+	}{
+		{"call with if: false", "    if: false\n", 0},
+		{"call", "", 1},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files(c.callIf), downloadFacts{})
+		var inW []lint.Finding
+		for _, f := range rep.Findings {
+			if strings.HasSuffix(f.Location.File.Input.String(), "/w.yml") {
+				inW = append(inW, f)
+			}
+		}
+		if len(inW) != c.findings {
+			t.Errorf("%s: %d findings in w.yml, want %d: %+v", c.name, len(inW), c.findings, rep.Findings)
+		}
 	}
 }
