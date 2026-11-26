@@ -48,6 +48,7 @@ func (unsecureCommands) Check(_ context.Context, c *lint.RuleContext, v ir.Unsec
 				ref = refs[w.RefIndex]
 			}
 			at := c.At(w.At)
+			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a text counts, whatever it gives
 			switch {
 			case s.UnsecureFlag() == analysis.UnsecureExpression && (ref.Verdict == analysis.Controlled || ref.Verdict == analysis.Inconclusive):
 				c.Inconclusive(lint.InconclusiveDraft{KindID: flagExpressionKind, Location: at,
@@ -59,7 +60,7 @@ func (unsecureCommands) Check(_ context.Context, c *lint.RuleContext, v ir.Unsec
 				on := eventsOf(cmds)
 				slices.SortFunc(on, func(a, b workflow.EventName) int { return strings.Compare(a.String(), b.String()) })
 				evidence, related := valueEvidence(c, ref, w.Text)
-				f := lint.FindingDraft{Location: at, Anchor: seen.next(w.Path, ir.FixPlan{}), Evidence: evidence, Related: related,
+				f := lint.FindingDraft{Location: at, Anchor: anchor, Evidence: evidence, Related: related,
 					Args: UnsecureCommandsControlled{ExprRef: w.Text, ControlledOn: on, Flag: s.UnsecureFlagPlace()}}
 				if onlyGollum(cmds) {
 					f.Args = UnsecureCommandsWiki{ExprRef: w.Text, Flag: s.UnsecureFlagPlace()}

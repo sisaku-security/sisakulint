@@ -34,11 +34,13 @@ func (codeInjection) Check(_ context.Context, c *lint.RuleContext, v ir.CodeInje
 		seen := anchors{}
 		kind := s.Kind()
 		for i, r := range s.Refs() {
+			// every reference of a text counts, whatever it gives, so that
+			// the anchor of one does not move with what another gives
+			o := s.RefFix(i)
+			anchor := seen.next(r.Text, o)
 			if r.Verdict == analysis.Controlled && r.QuotedJSON {
 				continue
 			}
-			o := s.RefFix(i)
-			anchor := seen.next(r.Text, o)
 			at := c.At(r.At)
 			switch r.Verdict {
 			case analysis.Controlled:

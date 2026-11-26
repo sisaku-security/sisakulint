@@ -91,13 +91,14 @@ func (aiActionExcessiveTools) Check(_ context.Context, c *lint.RuleContext, v ir
 			default:
 				continue // an edit: what it adds to is a grant of a command
 			}
+			anchor := seen.next(g.Permission, ir.FixPlan{}) // every grant counts, whatever it gives
 			var partner []lint.Related
 			if g.Partner != "" {
 				partner = []lint.Related{{Location: rp.At(g.PartnerAt), Note: g.Partner + " lets the agent change what " + g.Permission + " runs"}}
 			}
 			switch stepReach {
 			case reached:
-				rp.Report(lint.FindingDraft{Location: rp.At(g.At), Args: args, Condition: stepCond, Evidence: evidence, Related: partner, Anchor: seen.next(g.Permission, ir.FixPlan{})})
+				rp.Report(lint.FindingDraft{Location: rp.At(g.At), Args: args, Condition: stepCond, Evidence: evidence, Related: partner, Anchor: anchor})
 			case reachGate:
 				rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(g.At), Related: slices.Concat(evidence, partner), Note: g.Permission + ": what an attacker writes reaches the step only in a run they trigger, and whom it lets start the agent then is not decided"})
 			default:
@@ -108,6 +109,7 @@ func (aiActionExcessiveTools) Check(_ context.Context, c *lint.RuleContext, v ir
 		var unread []ir.SettingRef // a ${{ }} whose value is not analyzed, on a step an attacker's run reaches
 		for _, p := range s.SettingRefs() {
 			r := p.Ref
+			anchor := seen.next(r.Text, ir.FixPlan{}) // every reference of a text counts, whatever it gives
 			if r.Verdict == analysis.Inconclusive && len(s.AttackerOn()) > 0 {
 				unread = append(unread, p)
 			}
@@ -118,7 +120,7 @@ func (aiActionExcessiveTools) Check(_ context.Context, c *lint.RuleContext, v ir
 			evidence, related := valueEvidence(c, r, r.Text)
 			switch rch {
 			case reached:
-				rp.Report(lint.FindingDraft{Location: rp.At(r.At), Args: AIActionExcessiveToolsSettingValue{Action: s.Action(), Input: p.Input, ExprRef: r.Text}, Condition: cond, Evidence: evidence, Related: related, Anchor: seen.next(r.Text, ir.FixPlan{})})
+				rp.Report(lint.FindingDraft{Location: rp.At(r.At), Args: AIActionExcessiveToolsSettingValue{Action: s.Action(), Input: p.Input, ExprRef: r.Text}, Condition: cond, Evidence: evidence, Related: related, Anchor: anchor})
 				valued[p.Input] = true
 			case reachGate:
 				rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(r.At), Related: slices.Concat(evidence, related), Note: r.Text + " reaches the settings only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
@@ -156,9 +158,10 @@ func checkStartMode(c *lint.RuleContext, rp agentReporter, gr gateReach, s ir.AI
 	switch m.Mode {
 	case analysis.ClaudeStartModeAuto, analysis.ClaudeStartModePlan:
 		evidence := everyRunEvidence(c, s.Action(), s.EveryRunRefs(), m.On)
+		anchor := seen.next(m.Source, ir.FixPlan{}) // every such mode counts, whatever it gives
 		switch rch {
 		case reached:
-			rp.Report(lint.FindingDraft{Location: rp.At(m.At), Args: AIActionExcessiveToolsAutoMode{Action: s.Action(), Source: m.Source}, Condition: cond, Evidence: evidence, Anchor: seen.next(m.Source, ir.FixPlan{})})
+			rp.Report(lint.FindingDraft{Location: rp.At(m.At), Args: AIActionExcessiveToolsAutoMode{Action: s.Action(), Source: m.Source}, Condition: cond, Evidence: evidence, Anchor: anchor})
 		case reachGate:
 			rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(m.At), Related: evidence, Note: m.Source + ": what an attacker writes reaches the step only in a run they trigger, and whom it lets start the agent then is not decided"})
 		default:

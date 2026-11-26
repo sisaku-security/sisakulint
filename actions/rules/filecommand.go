@@ -41,11 +41,12 @@ func (r fileCommand) Check(_ context.Context, c *lint.RuleContext, v ir.FileComm
 				ref = refs[w.RefIndex]
 			}
 			o := s.WriteFix(i)
+			anchor := seen.next(w.Text, o) // every write of a text counts, whatever it gives
 			at := c.At(w.At)
 			switch {
 			case len(w.Reach) > 0:
 				evidence, related := valueEvidence(c, ref, w.Text)
-				f := lint.FindingDraft{Location: at, Args: r.controlled(w.Text, eventsOf(w.Reach)), Anchor: seen.next(w.Text, o), Evidence: evidence, Related: related}
+				f := lint.FindingDraft{Location: at, Args: r.controlled(w.Text, eventsOf(w.Reach)), Anchor: anchor, Evidence: evidence, Related: related}
 				if onlyGollum(w.Reach) {
 					f.Args, f.Condition = r.wiki(w.Text), wikiOpenCond(c)
 				}
