@@ -174,7 +174,7 @@ var aiActionUnsafeSandboxMeta = lint.Meta{
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionUnsafeSandboxPrivileges),
 		unknownOSCase(valueAttackers, kindAIActionUnsafeSandboxCommands, kindAIActionUnsafeSandboxPrivileges),
-		githubEnvUnknownName(valueAttackers, kindAIActionUnsafeSandboxCommands, kindAIActionUnsafeSandboxPrivileges),
+		githubEnvUnreadWrite(valueAttackers, kindAIActionUnsafeSandboxCommands, kindAIActionUnsafeSandboxPrivileges),
 		{ID: lint.MustFalsePositiveFormID("old-version"), Text: "a version of the action without the input, which it ignores: codex-action before v1.10 has no permission-profile", FindingKinds: []lint.FindingKindID{kindAIActionUnsafeSandboxCommands}, Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustFalsePositiveFormID("scrub-opt-in"), Text: "a step of claude-code-action or its base-action whose subprocess env scrub an earlier step turns on by writing CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 to $GITHUB_ENV, or a container's env or the env key of the step's settings turns on: the CLI starts in the default mode whatever permission mode the step gives the CLI, and the rule, which does not read the scrub from $GITHUB_ENV, from a container's env or from the settings, reports claude's bypass", FindingKinds: []lint.FindingKindID{kindAIActionUnsafeSandboxCommands}, Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustFalsePositiveFormID("tag-mode-settings"), Text: "the defaultMode of settings on a step of claude-code-action in its tag mode, whose --permission-mode acceptEdits wins over settings", FindingKinds: []lint.FindingKindID{kindAIActionUnsafeSandboxCommands}, Disposition: lint.Todo(lint.NeedSameFile)},

@@ -24,6 +24,10 @@ type secretFileWrite struct {
 	at      shell.Span // the command that writes it
 	value   string     // literal: the value
 	literal bool       // the value is written in the run, with no variable nor ${{ }}
+	// always is that every run of the step writes it: the step has no if,
+	// and the command that writes is an item of the list of the script, not
+	// inside a branch, a loop, a function or a list of && and ||
+	always bool
 }
 
 // stepKey is a step of a job (the job's id, "" in an action.yml), by its
@@ -72,6 +76,11 @@ func (c scope) writesOf(i int) []secretFileWrite {
 		return nil
 	}
 	w := e.secretFlowOf(&sink).fileWrites()
+	if s.If.Status != workflow.Absent {
+		for i := range w {
+			w[i].always = false // the step may not run
+		}
+	}
 	(*c.cross)[k] = w
 	return w
 }
@@ -123,6 +132,10 @@ func (f *secretFlow) fileWrites() []secretFileWrite {
 			r.piece(o)
 		}
 		r.end()
+		top := w.Top != nil && w.At == w.Top && !w.InFunc
+		for i := range r.out {
+			r.out[i].always = top
+		}
 		out = append(out, r.out...)
 	}
 	return out

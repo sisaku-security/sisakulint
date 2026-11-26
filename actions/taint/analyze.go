@@ -228,20 +228,23 @@ func StepValues(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.
 
 // StepValuesIn is StepValues with pick given the job of the step too (nil
 // in an action.yml). A value of the env of the job or of the workflow is
-// left out when a step before writes its variable to $GITHUB_ENV, which
-// replaces it (compared in any case where the runs-on of the job decides
-// Windows); a write whose name the run does not spell is not read.
+// left out when the last write of its variable to $GITHUB_ENV by a step
+// before, which replaces it (the names compared in any case where the
+// runs-on of the job decides Windows), is a literal that every run of that
+// step writes; a write whose name the run does not spell is not read.
 func StepValuesIn(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.ActionMetadata, pick func(workflow.Step, *workflow.Job) []Pick) []StepValue {
 	var out []StepValue
 	walk(cl, name, w, a, nil, func(c scope, s workflow.Step) {
 		for i, p := range pick(s, c.job) {
 			if p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv {
 				// what a step before writes to $GITHUB_ENV replaces the
-				// variable of the env of the job and of the workflow
+				// variable of the env of the job and of the workflow: left
+				// out when the last write is a literal that every run of
+				// its step writes
 				fold := WindowsRunner(c.job)
-				if _, ok := c.lastEnvWrite(func(n string) bool {
+				if w, ok := c.lastEnvWrite(func(n string) bool {
 					return n == p.Env.String() || fold && expr.EqualName(n, p.Env.String())
-				}); ok {
+				}); ok && w.literal && w.always {
 					continue
 				}
 			}
