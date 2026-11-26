@@ -140,7 +140,7 @@ func unknownOSCase(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint
 		value, eg = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets that the workflow writes", "guide: fixed text in the env of the step, and GUIDE: ${{ vars.GUIDE }} in the env of the job"
 	}
 	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("unknown-os-case"),
-		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner (for example, a runs-on that is a ${{ }} of a matrix, or the labels of a self-hosted runner without the label windows), when the env of the step or the env of the job also has a variable whose name is the same as the name of the variable that holds the attacker's value except for upper and lower case (for example, " + eg + "). A Windows runner ignores upper and lower case when the Windows runner compares the names of variables, so on a Windows runner the variable in the env of the step replaces the variable in the env of the job, the variable in the env of the job replaces the variable in the env of the workflow, and the attacker's value does not reach the agent. A Linux runner and a macOS runner keep upper and lower case distinct, so on those runners both variables reach the agent. The rule ignores upper and lower case only in a job whose runs-on decides a Windows runner",
+		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner (for example, a runs-on that is a ${{ }} of a matrix, or the labels of a self-hosted runner without the label windows), when the env of the step or the env of the job also has a variable whose name is the same as the name of the variable that holds the attacker's value except for upper and lower case (for example, " + eg + "). A Windows runner ignores upper and lower case when the Windows runner compares the names of variables, so on a Windows runner the variable in the env of the step replaces the variable in the env of the job, the variable in the env of the job replaces the variable in the env of the workflow, and the attacker's value does not reach the agent. A Linux runner and a macOS runner keep upper and lower case distinct, so on a Linux runner and on a macOS runner both variables reach the agent. The rule ignores upper and lower case only in a job whose runs-on decides a Windows runner",
 		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
 }
 
@@ -154,6 +154,28 @@ func jobEnvComposite(valueRun bool) lint.UndetectedForm {
 		value = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets, which the workflow puts"
 	}
 	return lint.UndetectedForm{ID: lint.MustUndetectedFormID("job-env-composite"),
-		Text:        value + " in the env of the job or in the env of the workflow, where the job runs a composite action, in the repository or in another repository, and a step of the composite action runs the agent: the process of the agent also gets the env of the job and the env of the workflow, but the rule reads only the env of the step of the composite action",
+		Text:        value + " in the env of the job or in the env of the workflow, where the job runs a composite action, in the same repository or in another repository, and a step of the composite action runs the agent: the process of the agent also gets the env of the job and the env of the workflow, but the rule reads only the env of the step of the composite action",
 		Disposition: lint.Todo(lint.NeedSameFile)}
+}
+
+// wholeEnv is the undetected form whole-env of the rules of agent actions
+// that read the env only in a run of the linter that adds an attacker who
+// writes vars or secrets (ai-action-prompt-injection declares the form in
+// whole-with): an env that is one whole ${{ }}, and the env around it.
+var wholeEnv = lint.UndetectedForm{ID: lint.MustUndetectedFormID("whole-env"),
+	Text:        "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env of the step, of the job or of the workflow that is one whole ${{ }}, or in the env of the job or of the workflow around an env that is one whole ${{ }}: the names and the values of an env that is one whole ${{ }} are not known, and the env may set a variable whose name is the name of a variable of the env of the job or of the env of the workflow around it, which that variable replaces; so the rule counts neither the values of the whole ${{ }} nor the values of the env around it as values that reach the agent",
+	Disposition: lint.Todo(lint.NeedSameFile)}
+
+// githubEnvUnknownName is the false positive form github-env-unknown-name
+// of the rules of agent actions, of kinds: a variable of the env of the job
+// or of the workflow that a step before replaces through $GITHUB_ENV under
+// a name the rule does not read. added is as for unknownOSCase.
+func githubEnvUnknownName(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint.FalsePositiveForm {
+	value := "a value that an attacker writes"
+	if added != nil {
+		value = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets that the workflow writes"
+	}
+	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("github-env-unknown-name"),
+		Text:         value + " in the env of the job or in the env of the workflow, when a step before the step of the agent writes to $GITHUB_ENV a variable whose name is the name of the variable that holds the attacker's value, and the rule does not read the name of the written variable: a name that a variable or a ${{ }} makes in the run (for example, echo \"${NAME}=fixed\" >> \"$GITHUB_ENV\"), a run that the rule does not read as a run of bash or sh (a shell other than bash or sh, or a runs-on whose default shell the rule does not decide), or an action that writes to $GITHUB_ENV. A variable that a step writes to $GITHUB_ENV replaces the variable of the same name in the env of the job and in the env of the workflow for the steps after that step, so the attacker's value does not reach the agent. The rule reads only the names that a run of bash or sh writes to $GITHUB_ENV as text",
+		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
 }

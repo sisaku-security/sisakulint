@@ -309,6 +309,7 @@ var aiActionExcessiveToolsMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		jobEnvComposite(true),
+		wholeEnv,
 		npmAbbreviation(kindAIActionExcessiveToolsRunCode),
 		npmOptionValueCommand(kindAIActionExcessiveToolsRunCode),
 		appCommitEventLimit,
@@ -338,6 +339,7 @@ var aiActionExcessiveToolsMeta = lint.Meta{
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionExcessiveToolsWriteToken),
 		unknownOSCase(valueAttackers, kindAIActionExcessiveToolsAutoMode, kindAIActionExcessiveToolsRunCode, kindAIActionExcessiveToolsSendNetwork, kindAIActionExcessiveToolsSettingValue, kindAIActionExcessiveToolsWriteToken),
+		githubEnvUnknownName(valueAttackers, kindAIActionExcessiveToolsAutoMode, kindAIActionExcessiveToolsRunCode, kindAIActionExcessiveToolsSendNetwork, kindAIActionExcessiveToolsSettingValue, kindAIActionExcessiveToolsWriteToken),
 		npmUnknownCommand(kindAIActionExcessiveToolsRunCode),
 		npmOptionValueOperand(kindAIActionExcessiveToolsRunCode),
 		ignoredPnpmfile(kindAIActionExcessiveToolsRunCode),

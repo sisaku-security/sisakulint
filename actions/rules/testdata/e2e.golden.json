@@ -4303,7 +4303,7 @@
         "kind_id": "ai-action-prompt-injection.remote-callee-unknown"
       },
       "detected": "the rule does not read the jobs and the steps of the reusable workflow owner/repo/.github/workflows/release.yml@main, as the linter asked the fact workflow.definition for the reusable workflow and got no answer (github: .github/workflows/release.yml of owner/repo@019216bb322ee2a2b2259739ceacae26020c46bb could not be read: HTTP 422)",
-      "consequence": "a value an attacker writes reaches an AI agent as text: a ${{ }} in an input the action writes into the agent's prompt, or in an env of the step that the agent reads, on a run that gets past the action's check of the actor",
+      "consequence": "a value an attacker writes reaches an AI agent as text: a ${{ }} in an input the action writes into the agent's prompt, or in the env of the step, of the job or of the workflow, which the agent reads, on a run that gets past the action's check of the actor",
       "remedy": "the rule ai-action-prompt-injection examined the place and could not decide whether the place has the problem that the rule looks for. A person decides: look at the place and at where the value at the place comes from. When the place does not have the problem, an entry for the place in a file of acceptances (--accept; the form of the file is schema/acceptances-v0.json) makes the place no longer add 8 to the exit code",
       "related": [],
       "evidence": [],

@@ -955,11 +955,26 @@ func TestJobEnvTwoAgentSteps(t *testing.T) {
 		{"a case-only name on Windows", job("windows-latest", body) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false, nil},
 		{"a case-only name where runs-on does not decide the OS (unknown-os-case)", strings.Replace(job("${{ matrix.os }}", body), "    runs-on:", "    strategy: {matrix: {os: [ubuntu-latest, windows-latest]}}\n    runs-on:", 1) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false,
 			[]string{"ai-action-prompt-injection.env confirmed 7 github.event.issue.body"}},
+		{"a step before writes the name to $GITHUB_ENV", job("ubuntu-latest", body) + "      - run: echo \"BODY=fixed\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, nil},
+		{"a step before writes the name in another case to $GITHUB_ENV on Linux", job("ubuntu-latest", body) + "      - run: echo \"body=fixed\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the name in another case to $GITHUB_ENV on Windows", job("windows-latest", body) + "      - run: echo \"body=fixed\" >> \"$GITHUB_ENV\"\n        shell: bash\n" + claude(anyUser, prompt, ""), false, nil},
+		{"a step after writes the name to $GITHUB_ENV", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + "      - run: echo \"BODY=fixed\" >> \"$GITHUB_ENV\"\n", false, []string{env}},
+		{"a step env that is one whole ${{ }} (whole-with)", job("ubuntu-latest", body) + claude(anyUser, prompt, "        env: ${{ fromJSON(vars.STEP_ENV) }}\n"), false, nil},
+		{"an undecided gate, then a bot's", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(anyBot, prompt, ""), false,
+			[]string{envPublic, "gate-expr inconclusive 6 github.event.issue.body"}},
 	} {
 		rep, _ := runAdded(t, map[string]string{".github/workflows/w.yml": c.src})
 		if got := injectionLines(rep, c.action); !slices.Equal(got, c.want) {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+	// an input of workflow_dispatch in the env of the job: the dispatcher's
+	// for a step that runs on workflow_dispatch, not analyzed for a step
+	// that runs on issues only
+	dispatch := "on:\n  workflow_dispatch:\n    inputs:\n      x: {type: string}\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    env:\n      X: ${{ inputs.x }}\n    steps:\n" + claude(anyUser, prompt, "") + strings.Replace(claude(anyUser, prompt, ""), "      - uses:", "      - if: github.event_name == 'issues'\n        uses:", 1)
+	rep0, _ := runAdded(t, map[string]string{".github/workflows/w.yml": dispatch})
+	if got, want := injectionLines(rep0, false), []string{"input-dispatch inconclusive 11 inputs.x", "value-unknown inconclusive 11 inputs.x"}; !slices.Equal(got, want) {
+		t.Errorf("an input of workflow_dispatch in the env of the job: %q, want %q", got, want)
 	}
 	// a value of the env of the workflow that reaches the agent steps of two jobs
 	wf := "on: {issues: {types: [opened]}}\nenv:\n  BODY: " + body + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "") + "  b:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "")

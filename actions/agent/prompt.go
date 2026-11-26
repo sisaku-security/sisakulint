@@ -61,8 +61,9 @@ func geminiPasses(n workflow.EnvName) bool {
 // given. An env hides a name of the env around it (the step's the job's,
 // the job's the workflow's) as the runner of the job compares the names:
 // in any case where the runs-on of j decides Windows, as written elsewhere.
-// j is nil for a step of an action.yml, whose caller's env is not read;
-// the env of w is not read in a job that calls a workflow.
+// An env that is one whole ${{ }} hides the env around it, whose names it
+// may set. j is nil for a step of an action.yml, whose caller's env is not
+// read.
 func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workflow.Workflow) []PromptValue {
 	var out []PromptValue
 	if s.With.Status == workflow.Present {
@@ -84,7 +85,7 @@ func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workfl
 	levels := []level{{analysis.PromptRouteEnv, s.Env}}
 	if j != nil {
 		levels = append(levels, level{analysis.PromptRouteJobEnv, j.Env})
-		if j.Kind != workflow.JobCall && w != nil {
+		if w != nil {
 			levels = append(levels, level{analysis.PromptRouteWorkflowEnv, w.Env})
 		}
 	}
@@ -93,6 +94,9 @@ func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workfl
 	filter := a == analysis.AgentActionGeminiCLI && !inputOf(s, analysis.AgentInputSettings).present
 	set := map[string]bool{}
 	for _, l := range levels {
+		if l.env.Status == workflow.Dynamic {
+			break // which names it sets, and so which names around it reach the agent, is not known
+		}
 		if l.env.Status != workflow.Present {
 			continue
 		}

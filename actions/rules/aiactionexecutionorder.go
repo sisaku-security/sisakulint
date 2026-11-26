@@ -271,6 +271,7 @@ var aiActionExecutionOrderMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		jobEnvComposite(true),
+		wholeEnv,
 		appCommitEventLimit,
 		{ID: lint.MustUndetectedFormID("remote-composite"), Text: agentRemoteCompositeText, Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustUndetectedFormID("action-metadata"), Text: "an agent's step in an action metadata file: the steps of its caller's job after it, and the credentials its inputs pass to the steps after it, are not read", Disposition: lint.Todo(lint.NeedRepoFile)},
@@ -308,6 +309,7 @@ var aiActionExecutionOrderMeta = lint.Meta{
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionExecutionOrderEditedCode),
 		unknownOSCase(valueAttackers, kindAIActionExecutionOrderEditedCode, kindAIActionExecutionOrderLaterSecrets),
+		githubEnvUnknownName(valueAttackers, kindAIActionExecutionOrderEditedCode, kindAIActionExecutionOrderLaterSecrets),
 		{ID: lint.MustFalsePositiveFormID("cleaned-workspace"), Text: "a step that is not a checkout of the workspace (git clean, git checkout -- ., a checkout of another path that puts back the code the later step runs) takes the agent's edits away before the later step", FindingKinds: []lint.FindingKindID{kindAIActionExecutionOrderEditedCode}, Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustFalsePositiveFormID("earlier-file-secret"), Text: "a later step's secret that a step before the agent leaves on the runner (docker/login-action's config, an .npmrc, a line of $GITHUB_ENV), which the agent reads in its own step: the rule counts only the secrets of the env and the with of the agent's step, its job and its workflow", FindingKinds: []lint.FindingKindID{kindAIActionExecutionOrderLaterSecrets}, Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustFalsePositiveFormID("scrub-opt-in"), Text: "a step of claude-code-action or its base-action whose subprocess env scrub an earlier step turns on by writing CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 to $GITHUB_ENV, or a container's env or the env key of the step's settings turns on: the CLI starts in the default mode whatever permission mode the step gives the CLI, and the rule, which does not read the scrub from $GITHUB_ENV, from a container's env or from the settings, reports the edits of acceptEdits and the auto mode before the steps after the agent", FindingKinds: []lint.FindingKindID{kindAIActionExecutionOrderEditedCode, kindAIActionExecutionOrderLaterSecrets}, Disposition: lint.Todo(lint.NeedSameFile)},

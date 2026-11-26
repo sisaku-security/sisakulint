@@ -25,7 +25,7 @@ func (x *IR) allAgentSteps() []*AgentStep {
 			}
 			var out []taint.Pick
 			for _, p := range agent.Prompts(s, a.Action, j, x.workflow) {
-				out = append(out, taint.Pick{Value: p.Value, Route: p.Route})
+				out = append(out, taint.Pick{Value: p.Value, Route: p.Route, Env: p.Env})
 			}
 			return out
 		}) {
@@ -194,7 +194,7 @@ func (x *IR) remoteAgentSteps(j *workflow.Job, steps []workflow.Step, at int, ev
 			}
 			var picks []taint.Pick
 			for _, p := range agent.Prompts(t, pa.Action, nil, nil) {
-				picks = append(picks, taint.Pick{Value: p.Value, Route: p.Route})
+				picks = append(picks, taint.Pick{Value: p.Value, Route: p.Route, Env: p.Env})
 			}
 			return picks
 		})

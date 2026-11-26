@@ -201,3 +201,30 @@ func TestAgentStepEveryRunGrants(t *testing.T) {
 		t.Errorf("later steps on: with no attacker added %v, with variables-writer %v", b, g)
 	}
 }
+
+// TestAgentStepEveryRunWorkflowEnv: a variable in the env of the workflow
+// reaches the agent by the route of the env of the workflow, and one that
+// a step before writes to $GITHUB_ENV, which replaces it, does not.
+func TestAgentStepEveryRunWorkflowEnv(t *testing.T) {
+	p := analysis.BarrierPasses{}.With(analysis.BarrierVariableValue)
+	for _, c := range []struct {
+		name, before string
+		want         []string
+	}{
+		{"the env of the workflow", "", []string{"workflow-env W vars.W"}},
+		{"written to $GITHUB_ENV before", "      - run: echo \"W=fixed\" >> \"$GITHUB_ENV\"\n", nil},
+	} {
+		src := "on: {schedule: [{cron: '0 0 * * *'}]}\nenv:\n  W: ${{ vars.W }}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n" + c.before + "      - uses: anthropics/claude-code-action@v1\n        with:\n          prompt: Triage by the guide in W\n"
+		got := passesIR(t, src, p).allAgentSteps()
+		if len(got) != 1 {
+			t.Fatalf("%s: %d steps", c.name, len(got))
+		}
+		var refs []string
+		for _, r := range got[0].everyRunRefs {
+			refs = append(refs, r.Route.String()+" "+r.Env.String()+" "+r.Ref.Text)
+		}
+		if !slices.Equal(refs, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, refs, c.want)
+		}
+	}
+}

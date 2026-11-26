@@ -2,6 +2,7 @@ package agent
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
@@ -34,8 +35,8 @@ func promptLines(ps []PromptValue) []string {
 
 // TestPromptsOuterEnv: the env of the job and of the workflow reach the
 // agent but for a name an inner env sets, compared in any case only where
-// the runs-on of the job decides Windows, whose runner folds the names; the
-// env of the workflow not in a job that calls a workflow.
+// the runs-on of the job decides Windows, whose runner folds the names; an
+// env that is one whole ${{ }} hides the env around it.
 func TestPromptsOuterEnv(t *testing.T) {
 	src := func(runsOn, wfEnv, jobEnv, stepEnv string) string {
 		return "on: issues\nenv: {" + wfEnv + "}\njobs:\n  a:\n    runs-on: " + runsOn + "\n    env: {" + jobEnv + "}\n    steps:\n      - uses: anthropics/claude-code-action@v1\n        with: {prompt: p}\n        env: {" + stepEnv + "}\n"
@@ -50,6 +51,8 @@ func TestPromptsOuterEnv(t *testing.T) {
 		{"an OS runs-on does not decide", src("${{ matrix.os }}", "", "BODY: x", "body: y"), []string{"input prompt", "env body", "job-env BODY"}},
 		{"the job's env hides the workflow's on windows", src("windows-latest", "BODY: x, W: w", "body: y", ""), []string{"input prompt", "job-env body", "workflow-env W"}},
 		{"the workflow's env", src("ubuntu-latest", "BODY: x", "", ""), []string{"input prompt", "workflow-env BODY"}},
+		{"a step env that is one whole ${{ }}", strings.Replace(src("ubuntu-latest", "W: w", "BODY: x", ""), "        env: {}\n", "        env: ${{ fromJSON(vars.E) }}\n", 1), []string{"input prompt"}},
+		{"a job env that is one whole ${{ }}", strings.Replace(src("ubuntu-latest", "W: w", "", "S: s"), "    env: {}\n", "    env: ${{ fromJSON(vars.E) }}\n", 1), []string{"input prompt", "env S"}},
 	} {
 		w, _ := workflow.Parse(cst.Parse([]byte(c.src)))
 		j := w.Jobs.Value.Entries[0].Value.Value
@@ -58,14 +61,6 @@ func TestPromptsOuterEnv(t *testing.T) {
 		if got := promptLines(Prompts(s, a.Action, &j, w)); !slices.Equal(got, c.want) {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
-	}
-	// a job that calls a workflow gets no env of the workflow: the callee's
-	// steps get the env of the callee
-	call, _ := workflow.Parse(cst.Parse([]byte("on: issues\nenv: {W: w}\njobs:\n  a:\n    uses: ./.github/workflows/c.yml\n")))
-	cj := call.Jobs.Value.Entries[0].Value.Value
-	s := stepOf(t, "uses: anthropics/claude-code-action@v1\n        with: {prompt: p}")
-	if got := promptLines(Prompts(s, analysis.AgentActionClaudeCode, &cj, call)); !slices.Equal(got, []string{"input prompt"}) {
-		t.Errorf("a job that calls a workflow: %q, want only the input", got)
 	}
 }
 

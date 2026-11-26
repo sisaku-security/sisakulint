@@ -181,6 +181,7 @@ type Pick struct {
 	// env.<name> are read from the level above on (the job's for the
 	// step's, the workflow's for the job's, none for the workflow's)
 	Route analysis.PromptRoute
+	Env   workflow.EnvName // the name of the variable, by a route of an env
 }
 
 // envFrom are the levels of env, from the step's, above which the
@@ -226,11 +227,24 @@ func StepValues(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.
 }
 
 // StepValuesIn is StepValues with pick given the job of the step too (nil
-// in an action.yml).
+// in an action.yml). A value of the env of the job or of the workflow is
+// left out when a step before writes its variable to $GITHUB_ENV, which
+// replaces it (compared in any case where the runs-on of the job decides
+// Windows); a write whose name the run does not spell is not read.
 func StepValuesIn(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.ActionMetadata, pick func(workflow.Step, *workflow.Job) []Pick) []StepValue {
 	var out []StepValue
 	walk(cl, name, w, a, nil, func(c scope, s workflow.Step) {
 		for i, p := range pick(s, c.job) {
+			if p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv {
+				// what a step before writes to $GITHUB_ENV replaces the
+				// variable of the env of the job and of the workflow
+				fold := WindowsRunner(c.job)
+				if _, ok := c.lastEnvWrite(func(n string) bool {
+					return n == p.Env.String() || fold && expr.EqualName(n, p.Env.String())
+				}); ok {
+					continue
+				}
+			}
 			out = append(out, StepValue{Step: s, Job: c.job, StepIndex: len(c.before), Index: i, Value: p.Value, InEnv: p.Route.InEnv(), ReachableOn: c.events, WrittenValueOn: c.anyEvents, Refs: c.refs(p.Value, envFrom(p.Route), writtenText)})
 		}
 	})

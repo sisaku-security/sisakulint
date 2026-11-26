@@ -852,7 +852,7 @@ func (x PRRunRef) equal(y PRRunRef) bool {
 		x.Input == y.Input
 }
 
-// PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step.
+// PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step, of the job or of the workflow.
 type PromptRef struct {
 	Route      analysis.PromptRoute     // an input, or an env of the step, of the job or of the workflow
 	Input      analysis.AgentInput      // the input, by the route of an input

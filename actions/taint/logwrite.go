@@ -94,14 +94,19 @@ func unsecureOf(v string) analysis.UnsecureState {
 // crossWrite is the last write of name to $GITHUB_ENV of the steps done
 // before the step of f.
 func (f *secretFlow) crossWrite(name string) (secretFileWrite, bool) {
-	c := f.c
+	return f.c.lastEnvWrite(func(n string) bool { return n == name })
+}
+
+// lastEnvWrite is the last write to $GITHUB_ENV, of a name that match
+// takes, of the steps done before the step of c.
+func (c scope) lastEnvWrite(match func(name string) bool) (secretFileWrite, bool) {
 	for i := len(c.before) - 1; i >= 0; i-- {
 		if !c.order.DoneBefore(c.before[i].Order, len(c.before)) {
 			continue
 		}
 		ws := c.writesOf(i)
 		for j := len(ws) - 1; j >= 0; j-- {
-			if ws[j].file == analysis.EnvironmentFileEnv && ws[j].name == name {
+			if ws[j].file == analysis.EnvironmentFileEnv && match(ws[j].name) {
 				return ws[j], true
 			}
 		}
