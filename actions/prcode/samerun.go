@@ -308,7 +308,9 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload, u
 // mergeTakes is whether a merge step with with takes the artifact name,
 // as the merge filters the names with minimatch: its pattern, when it has
 // one, else every artifact of the run. known is false when the pattern is
-// a ${{ }}, or the with is one: which names the merge takes is not known.
+// a ${{ }}, or the with is one, or the releases of minimatch read the
+// pattern differently (matchArtifactName): which names the merge takes is
+// not known.
 func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string) (takes, known bool) {
 	switch with.Status {
 	case workflow.Dynamic:
@@ -324,80 +326,7 @@ func mergeTakes(with workflow.Field[workflow.Map[workflow.String]], name string)
 	if e.Value.Status != workflow.Present || e.Value.Value.Parts != nil {
 		return false, false
 	}
-	return minimatch(strings.TrimSpace(e.Value.Value.AsString()), name), true
-}
-
-// minimatch is whether the pattern p takes name as minimatch reads it
-// with no options: each leading ! negates, braces expand into
-// alternatives, a [!...] class is negated, and a * or ? does not take a
-// leading dot. An extglob (@(...), +(...), ...) is not read, and is read as
-// taking it.
-func minimatch(p, name string) bool {
-	neg := false
-	for strings.HasPrefix(p, "!") {
-		p, neg = p[1:], !neg
-	}
-	for _, alt := range expandBraces(p) {
-		if extglob(alt) {
-			return true
-		}
-		alt = strings.ReplaceAll(alt, "[!", "[^")
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(alt, ".") {
-			continue
-		}
-		if ok, err := path.Match(alt, name); ok || err != nil {
-			return !neg // a pattern path.Match cannot read is read as taking it
-		}
-	}
-	return neg
-}
-
-// extglob is whether p has an extglob of minimatch: one of @!+*? before (.
-func extglob(p string) bool {
-	for i := 1; i < len(p); i++ {
-		if p[i] == '(' && strings.IndexByte("@!+*?", p[i-1]) >= 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// expandBraces are the alternatives of the first {a,b} of p, each with its
-// own braces expanded; p itself when it has none with a comma.
-func expandBraces(p string) []string {
-	open := strings.IndexByte(p, '{')
-	if open < 0 {
-		return []string{p}
-	}
-	depth, parts, start := 0, []string(nil), open+1
-	for i := open; i < len(p); i++ {
-		switch p[i] {
-		case '{':
-			depth++
-		case ',':
-			if depth == 1 {
-				parts, start = append(parts, p[start:i]), i+1
-			}
-		case '}':
-			if depth--; depth == 0 {
-				if parts == nil {
-					rest := expandBraces(p[i+1:])
-					out := make([]string, 0, len(rest))
-					for _, r := range rest {
-						out = append(out, p[:i+1]+r)
-					}
-					return out
-				}
-				parts = append(parts, p[start:i])
-				var out []string
-				for _, alt := range parts {
-					out = append(out, expandBraces(p[:open]+alt+p[i+1:])...)
-				}
-				return out
-			}
-		}
-	}
-	return []string{p}
+	return matchArtifactName(strings.TrimSpace(e.Value.Value.AsString()), name) // core.getInput trims the input
 }
 
 // unguarded are the events on which the checkout c brings the code of the
@@ -576,9 +505,10 @@ func neededJobs(w *workflow.Workflow, id string) map[string]bool {
 
 // takesName is whether the download s takes an artifact uploaded with the
 // name upload: a download with neither name nor pattern takes every
-// artifact; a ${{ }}, a pattern with braces (minimatch, which path.Match
-// does not read) and a name of dawidd6/action-download-artifact read as a
-// regular expression may name any artifact.
+// artifact; a pattern takes the names minimatch matches to it
+// (matchArtifactName); a ${{ }}, a pattern that the releases of minimatch
+// read differently and a name of dawidd6/action-download-artifact read as
+// a regular expression may name any artifact.
 func (s DownloadSite) takesName(upload string) bool {
 	if re, ok := s.input("name_is_regexp"); ok && s.action == downloaderDawidd6 && (re.Status != workflow.Present || re.Value.Parts != nil || strings.EqualFold(strings.TrimSpace(re.Value.AsString()), "true")) {
 		return true
@@ -593,12 +523,8 @@ func (s DownloadSite) takesName(upload string) bool {
 	case patternOK && (pattern.Status != workflow.Present || pattern.Value.Parts != nil):
 		return true
 	case patternOK:
-		p := strings.TrimSpace(pattern.Value.AsString())
-		if strings.ContainsAny(p, "{}") {
-			return true
-		}
-		ok, err := path.Match(p, upload)
-		return ok || err != nil
+		match, known := matchArtifactName(strings.TrimSpace(pattern.Value.AsString()), upload) // core.getInput trims the input
+		return match || !known
 	}
 	return true
 }
