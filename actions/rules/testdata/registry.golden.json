@@ -1945,7 +1945,7 @@
         },
         {
           "id": "whole-env",
-          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
+          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env that is one whole ${{ }} sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
           "finding_kinds": [
             "ai-action-excessive-tools.auto-mode",
             "ai-action-excessive-tools.run-code",
@@ -3533,7 +3533,7 @@
         },
         {
           "id": "whole-env",
-          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
+          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env that is one whole ${{ }} sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
           "finding_kinds": [
             "ai-action-execution-order.edited-code",
             "ai-action-execution-order.later-secrets"
@@ -4676,7 +4676,7 @@
           },
           {
             "id": "agent-reads-env",
-            "text": "the env of the step, of the job and of the workflow reaches the process of the agent, inside a composite action too, and the tools of the agent read the variables of those envs; a workflow puts a value in those envs for the agent, as the commands of run-gemini-cli read ISSUE_TITLE",
+            "text": "the env of the step, the env of the job and the env of the workflow reach the process of the agent, inside a composite action too, and the tools of the agent read the variables of the env of the step, of the job and of the workflow; a workflow puts a value in the env of the step, of the job or of the workflow for the agent, as the commands of run-gemini-cli read ISSUE_TITLE",
             "observed": [],
             "cites": [
               "https://github.com/actions/runner/blob/197ca027b90de199464dee3bb9ff198a1db60967/src/Runner.Worker/Handlers/CompositeActionHandler.cs",
@@ -8205,7 +8205,7 @@
         },
         {
           "id": "whole-env",
-          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
+          "text": "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets in an env that is one whole ${{ }} (an env of the step, an env of the job or an env of the workflow), or in an outer env of an env that is one whole ${{ }} (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job). The names and the values of the variables of an env that is one whole ${{ }} are not known, and the env that is one whole ${{ }} may set a variable with the same name as a variable of an outer env, and the variable that the env that is one whole ${{ }} sets then replaces the variable of the outer env, so the rule counts neither the values of the whole ${{ }} nor the values of the outer envs as values that reach the agent",
           "finding_kinds": [
             "ai-action-unsafe-sandbox.commands",
             "ai-action-unsafe-sandbox.privileges"

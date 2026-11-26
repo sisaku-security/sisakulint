@@ -302,7 +302,7 @@ var aiActionPromptInjectionMeta = lint.Meta{
 			attackerWritesPre,
 			promptSteersPre,
 			{ID: textInPrompt, Text: "the action writes the input into the agent's prompt: claude-code-action's prompt in its agent mode, its base-action's, codex-action's and run-gemini-cli's prompt, ai-inference's prompt, system-prompt and the variables of input", Cites: []lint.Citation{claudeAgentMode, aiInferencePrompt}},
-			{ID: agentReadsEnv, Text: "the env of the step, of the job and of the workflow reaches the process of the agent, inside a composite action too, and the tools of the agent read the variables of those envs; a workflow puts a value in those envs for the agent, as the commands of run-gemini-cli read ISSUE_TITLE", Cites: []lint.Citation{runnerComposite, geminiTriage}},
+			{ID: agentReadsEnv, Text: "the env of the step, the env of the job and the env of the workflow reach the process of the agent, inside a composite action too, and the tools of the agent read the variables of the env of the step, of the job and of the workflow; a workflow puts a value in the env of the step, of the job or of the workflow for the agent, as the commands of run-gemini-cli read ISSUE_TITLE", Cites: []lint.Citation{runnerComposite, geminiTriage}},
 			actorNotAuthorPre,
 			callersEventsPre,
 		},
