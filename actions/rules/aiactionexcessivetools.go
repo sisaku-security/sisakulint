@@ -336,6 +336,7 @@ var aiActionExcessiveToolsMeta = lint.Meta{
 	}),
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionExcessiveToolsWriteToken),
+		unknownOSCase(valueAttackers, kindAIActionExcessiveToolsAutoMode, kindAIActionExcessiveToolsRunCode, kindAIActionExcessiveToolsSendNetwork, kindAIActionExcessiveToolsSettingValue, kindAIActionExcessiveToolsWriteToken),
 		npmUnknownCommand(kindAIActionExcessiveToolsRunCode),
 		npmOptionValueOperand(kindAIActionExcessiveToolsRunCode),
 		ignoredPnpmfile(kindAIActionExcessiveToolsRunCode),

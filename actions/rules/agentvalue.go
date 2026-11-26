@@ -127,3 +127,19 @@ func refusedActorValueRun(kinds []lint.FindingKindID) lint.FalsePositiveForm {
 		Text:         "in a run of the linter that adds variables-writer or secrets-writer, a job or a step in which a value of vars or secrets reaches the agent, and whose if lets in only the workflow runs whose actor is a bot (such as github.actor == 'dependabot[bot]'), where the step of claude-code-action has no input allowed_bots: claude-code-action stops in a workflow run whose actor is a bot that the input allowed_bots does not list (" + claudeHumanActor.String() + "). The rule evaluates the if with the values of github.event_name and github.event.action only, and reads every other value in the if as unknown; then the rule reads every workflow run of an event on which the if is not false by the values of github.event_name and github.event.action alone as a workflow run that an account with write access to the repository starts and that the checks of claude-code-action let in. On GitHub, the if lets in only the workflow runs whose actor is a bot, and claude-code-action stops in each of those workflow runs because the step that uses claude-code-action has no input allowed_bots, so the agent starts in no workflow run that the if lets in",
 		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: valueAttackers}
 }
+
+// unknownOSCase is the false positive form unknown-os-case of the rules of
+// agent actions, of kinds: a value of the env of a job or of the workflow
+// that an env of a nearer level hides only on Windows, in a job whose
+// runs-on does not decide the OS. A rule that reads the env only in a run
+// of the linter that adds an attacker who writes vars or secrets gives
+// added (valueAttackers), and nil when it reads the env in every run.
+func unknownOSCase(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint.FalsePositiveForm {
+	value, eg := "a value that an attacker writes", "body: fixed text in the env of the step, and BODY: ${{ github.event.issue.body }} in the env of the job"
+	if added != nil {
+		value, eg = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets", "guide: fixed text in the env of the step, and GUIDE: ${{ vars.GUIDE }} in the env of the job"
+	}
+	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("unknown-os-case"),
+		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner, such as a ${{ }} of a matrix or the labels of a self-hosted runner without the label windows, where the env of the step or the env of the job has a variable whose name differs from the name of the variable that holds the value only in upper and lower case (" + eg + "): a Windows runner compares the names of the variables in any case, so the variable of the env of the step replaces the variable of the env of the job, the variable of the env of the job replaces the variable of the env of the workflow, and the value does not reach the agent; a Linux runner and a macOS runner compare the names in the same case only, and both variables reach the agent. The rule compares the names in any case only in a job whose runs-on decides a Windows runner",
+		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
+}
