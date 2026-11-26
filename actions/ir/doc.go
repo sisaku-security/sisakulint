@@ -23,7 +23,7 @@
 // The summary types, and the types of the values their fields hold, are
 // those of summaries.json; summary_gen.go is made from it and views.json
 // by go generate (internal/irgen). Each type is made in the file of what
-// it summarizes (Uses in uses.go, CheckoutSite in checkout.go with its
+// it summarizes (Uses and UnreadCallee in uses.go, CheckoutSite in checkout.go with its
 // fixes in checkoutfix.go, Sink in sink.go, AgentStep in agent.go,
 // CompositeCall in composite.go; the summaries of the quality rules in
 // quality.go, but ExpressionMistake in expression.go and

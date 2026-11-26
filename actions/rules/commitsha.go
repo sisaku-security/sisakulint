@@ -28,6 +28,10 @@ var (
 	PinSHAID    = lint.MustFixKindID("pin-sha")
 )
 
+// localCalleeUnread is the inconclusive kind of a uses by a ./ path whose
+// file is not among the files the run read.
+var localCalleeUnread = lint.MustInconclusiveKindID("local-callee-unread")
+
 type commitSHA struct{}
 
 var (
@@ -56,6 +60,14 @@ func (commitSHA) Check(ctx context.Context, c *lint.RuleContext, v ir.CommitSHAR
 		case !fullSHA.MatchString(u.Ref()):
 			c.Report(finding(ctx, c, u))
 		}
+	}
+	// a ./ callee that the run did not read: its uses are not checked
+	for _, u := range v.UnreadCallees() {
+		if u.AlwaysSkipped() {
+			continue // GitHub skips its job in every run
+		}
+		c.Inconclusive(lint.InconclusiveDraft{KindID: localCalleeUnread, Location: c.At(u.At()),
+			Note: "the local callee " + u.Path() + " was not among the read files, so the uses references inside it were not checked; add the file to the inputs"})
 	}
 	// a uses pinned to a full SHA whose action's file in the archive the
 	// runner downloads is unlike its blob (export-subst, action.definition):
@@ -244,6 +256,7 @@ var commitSHAMeta = lint.Meta{
 		remoteCompositeStepsLimit(commitSHAInStepText, ""),
 	}, checkedOutLocalLimits(commitSHAInStepText)...)),
 	InconclusiveKinds: withRemoteCalleeUnknown([]lint.InconclusiveKind{
+		{ID: localCalleeUnread, Text: "a uses by a ./ path, of a job (a reusable workflow) or of a step of a workflow (a composite action), whose file (the workflow, or the action.yml or action.yaml of the directory) is not among the files the run read: the uses references inside the local callee are not checked; adding the file to the inputs resolves it", Disposition: lint.Todo(lint.NeedRepoFile)},
 		{ID: archiveSubstituted, Text: "a uses pinned to a full SHA of an action of another repository whose action.yml (or action.yaml) in the archive the runner downloads is unlike its blob (export-subst): placeholders such as %d and %(describe) take the names of refs created after the commit, so the action that runs can change after the pin; a file whose placeholders are only %H does not change, and the rule does not distinguish a file with placeholders of refs from a file whose placeholders are only %H", Disposition: lint.Limitation(lint.DeciderRunTime)},
 	}),
 	FixKinds: []lint.FixKind{{

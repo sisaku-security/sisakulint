@@ -150,3 +150,25 @@ func (x *IR) allUses() []*Uses {
 	})
 	return x.uses
 }
+
+// allUnreadCallees are the uses by a ./ path of the input whose file is not
+// among the files of the run (calls.Graph.UnreadCalls); none when the IR
+// reads no callers.
+func (x *IR) allUnreadCallees() []*UnreadCallee {
+	x.once(SummaryUnreadCallee, func() {
+		g := x.callersOf().Graph()
+		if g == nil || x.name.IsZero() {
+			return
+		}
+		var out []*UnreadCallee
+		for _, c := range g.UnreadCalls(x.name) {
+			b := c.Job.Uses.Value.Base
+			if c.Step != nil {
+				b = c.Step.Uses.Value.Base
+			}
+			out = append(out, &UnreadCallee{key: keyOf(x.paths, x.input, x.tree, b), at: x.handleOf(b), path: c.Path, alwaysSkipped: x.alwaysSkipped(b)})
+		}
+		x.unreadCallees = out
+	})
+	return x.unreadCallees
+}
