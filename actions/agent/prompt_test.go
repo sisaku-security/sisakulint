@@ -48,6 +48,8 @@ func TestPromptsOuterEnv(t *testing.T) {
 		{"linux keeps BODY and body apart", src("ubuntu-latest", "", "BODY: x", "body: y"), []string{"input prompt", "env body", "job-env BODY"}},
 		{"windows folds them", src("windows-latest", "", "BODY: x", "body: y"), []string{"input prompt", "env body"}},
 		{"a windows label of a self-hosted runner", src("[self-hosted, windows]", "", "BODY: x", "body: y"), []string{"input prompt", "env body"}},
+		{"a linux runner with a windows-prefixed custom label", src("[self-hosted, linux, windows-build]", "", "BODY: x", "body: y"), []string{"input prompt", "env body", "job-env BODY"}},
+		{"self-hosted labels of two OSes do not decide", src("[self-hosted, linux, windows]", "", "BODY: x", "body: y"), []string{"input prompt", "env body", "job-env BODY"}},
 		{"an OS runs-on does not decide", src("${{ matrix.os }}", "", "BODY: x", "body: y"), []string{"input prompt", "env body", "job-env BODY"}},
 		{"the job's env hides the workflow's on windows", src("windows-latest", "BODY: x, W: w", "body: y", ""), []string{"input prompt", "job-env body", "workflow-env W"}},
 		{"the workflow's env", src("ubuntu-latest", "BODY: x", "", ""), []string{"input prompt", "workflow-env BODY"}},

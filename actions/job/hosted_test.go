@@ -50,13 +50,13 @@ func TestHostedLabelsUpstream(t *testing.T) {
 	if os.Getenv("ACTIONS_UPSTREAM") == "" {
 		t.Skip("ACTIONS_UPSTREAM is not set")
 	}
-	out, err := exec.Command("curl", "-sSfL", hostedLabelsSource).Output()
+	out, err := exec.Command("curl", "-sSfL", workflow.HostedRunnerLabelsSource).Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, l := range hostedSudoLabels {
+	for _, l := range hostedLabels {
 		if !strings.Contains(string(out), ">"+l.String()+"</a></code>") {
-			t.Errorf("%s is not in %s", l, hostedLabelsSource)
+			t.Errorf("%s is not in %s", l, workflow.HostedRunnerLabelsSource)
 		}
 	}
 }
