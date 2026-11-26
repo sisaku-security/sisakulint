@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
+	"github.com/gh-intel/sisakulint/actions/expr"
+	"github.com/gh-intel/sisakulint/actions/taint"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
@@ -13,8 +15,7 @@ import (
 type PromptValue struct {
 	Route analysis.PromptRoute
 	Input analysis.AgentInput // by PromptRouteInput
-	Env   workflow.EnvName    // by PromptRouteEnv
-	Level int                 // by PromptRouteEnv: 0 the step's env, 1 the next of outer, ...
+	Env   workflow.EnvName    // by a route of an env (analysis.PromptRoute.InEnv)
 	Value workflow.String
 }
 
@@ -53,13 +54,16 @@ func geminiPasses(n workflow.EnvName) bool {
 
 // Prompts are the values of s, a step of the agent action a, that reach
 // the agent as text: the inputs a writes into its prompt but under a
-// whole with that is a ${{ }}, and the env of the step, which the agent's
-// process gets and its tools read, but under codex-action's
-// safety-strategy unprivileged-user, whose sudo resets the env, and the
-// names gemini-cli drops when no settings is given. outer are the env
-// around the step, inner first (the job's, then the workflow's), which the
-// agent's process gets too but for a name an inner env sets.
-func Prompts(s workflow.Step, a analysis.AgentAction, outer ...workflow.Field[workflow.Map[workflow.String]]) []PromptValue {
+// whole with that is a ${{ }}, and the env of the step, of its job j and
+// of the workflow w, which the agent's process gets and its tools read,
+// but under codex-action's safety-strategy unprivileged-user, whose sudo
+// resets the env, and the names gemini-cli drops when no settings is
+// given. An env hides a name of the env around it (the step's the job's,
+// the job's the workflow's) as the runner of the job compares the names:
+// in any case where the runs-on of j decides Windows, as written elsewhere.
+// j is nil for a step of an action.yml, whose caller's env is not read;
+// the env of w is not read in a job that calls a workflow.
+func Prompts(s workflow.Step, a analysis.AgentAction, j *workflow.Job, w *workflow.Workflow) []PromptValue {
 	var out []PromptValue
 	if s.With.Status == workflow.Present {
 		for _, in := range promptInputs[a] {
@@ -73,27 +77,43 @@ func Prompts(s workflow.Step, a analysis.AgentAction, outer ...workflow.Field[wo
 			return out
 		}
 	}
+	type level struct {
+		route analysis.PromptRoute
+		env   workflow.Field[workflow.Map[workflow.String]]
+	}
+	levels := []level{{analysis.PromptRouteEnv, s.Env}}
+	if j != nil {
+		levels = append(levels, level{analysis.PromptRouteJobEnv, j.Env})
+		if j.Kind != workflow.JobCall && w != nil {
+			levels = append(levels, level{analysis.PromptRouteWorkflowEnv, w.Env})
+		}
+	}
+	fold := taint.WindowsRunner(j)
 	// settings may allow any name (allowedEnvironmentVariables)
 	filter := a == analysis.AgentActionGeminiCLI && !inputOf(s, analysis.AgentInputSettings).present
-	seen := map[string]bool{}
-	for lvl, env := range append([]workflow.Field[workflow.Map[workflow.String]]{s.Env}, outer...) {
-		if env.Status != workflow.Present {
+	set := map[string]bool{}
+	for _, l := range levels {
+		if l.env.Status != workflow.Present {
 			continue
 		}
-		for _, e := range env.Value.Entries {
+		for _, e := range l.env.Value.Entries {
 			n, ok := workflow.EnvNameOf(e.Key.AsString())
-			// compared as written: a Linux runner keeps BODY and body apart,
-			// so an inner body leaves an outer BODY (Windows folds them; a
-			// value read there as reaching the agent may then not)
-			if !ok || seen[n.String()] {
+			if !ok {
 				continue
 			}
-			seen[n.String()] = true
+			k := n.String()
+			if fold {
+				k = expr.FoldName(k)
+			}
+			if set[k] {
+				continue
+			}
+			set[k] = true
 			if filter && !geminiPasses(n) {
 				continue
 			}
 			if v, ok := fieldValue(e.Value); ok {
-				out = append(out, PromptValue{Route: analysis.PromptRouteEnv, Env: n, Level: lvl, Value: v})
+				out = append(out, PromptValue{Route: l.route, Env: n, Value: v})
 			}
 		}
 	}

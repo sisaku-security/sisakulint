@@ -11,6 +11,7 @@ import (
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
 	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // passesIR is the IR of the workflow src at .github/workflows/w.yml, read
@@ -105,7 +106,7 @@ func TestAgentStepEveryRun(t *testing.T) {
 	var refs []ref
 	for _, r := range a.everyRunRefs {
 		name := r.Input.String()
-		if r.Route == analysis.AgentValueRouteStepEnv {
+		if r.Env != (workflow.EnvName{}) {
 			name = r.Env.String()
 		}
 		refs = append(refs, ref{r.Route, name, r.Ref.Text, r.Source, r.Direct})
@@ -120,7 +121,7 @@ func TestAgentStepEveryRun(t *testing.T) {
 		{analysis.AgentValueRoutePromptInput, "prompt", "vars.P", "vars.P", true},
 		{analysis.AgentValueRouteStepEnv, "GUIDE", "vars.G", "vars.G", true},
 		{analysis.AgentValueRouteStepEnv, "B", "env.FROM_VAR", "vars.V", false},
-		{analysis.AgentValueRouteStepEnv, "FROM_VAR", "vars.V", "vars.V", true}, // the job's env
+		{analysis.AgentValueRouteJobEnv, "FROM_VAR", "vars.V", "vars.V", true},
 		{analysis.AgentValueRouteSettingInput, "claude_args", "vars.A", "vars.A", true},
 	}
 	if !slices.Equal(refs, want) {

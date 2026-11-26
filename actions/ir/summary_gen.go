@@ -586,7 +586,7 @@ func (x EnvironmentFileWrite) equal(y EnvironmentFileWrite) bool {
 
 // EveryRunRef is a reference that reaches the agent of a step of an agent action and whose value the attacker chooses in every run, whoever starts the run: a variable or a secret, in a run of an attacker who writes vars or secrets.
 type EveryRunRef struct {
-	Route          analysis.AgentValueRoute // an input written into the prompt, an env of the step, a setting input, or an input of a composite action of another repository whose step runs the agent
+	Route          analysis.AgentValueRoute // an input written into the prompt, an env of the step, of the job or of the workflow, a setting input, or an input of a composite action of another repository whose step runs the agent
 	Input          analysis.AgentInput      // the input, by the route of an input
 	Env            workflow.EnvName         // the name of the env, by the route of an env
 	CompositeInput workflow.InputName       // the input of the composite action that the with of the step gives, by the route of an input of a composite action; the zero InputName when the with is a ${{ }} as a whole
@@ -854,7 +854,7 @@ func (x PRRunRef) equal(y PRRunRef) bool {
 
 // PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step.
 type PromptRef struct {
-	Route      analysis.PromptRoute     // an input or an env
+	Route      analysis.PromptRoute     // an input, or an env of the step, of the job or of the workflow
 	Input      analysis.AgentInput      // the input, by the route of an input
 	Env        workflow.EnvName         // the env's name, by the route of an env
 	Ref        ExprRef                  // the reference

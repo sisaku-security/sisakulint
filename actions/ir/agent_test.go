@@ -128,7 +128,7 @@ func TestAgentStepPromptRefs(t *testing.T) {
 		"input env.C on issue_comment.created others issue_comment.created",
 		"input github.sha on  others ",
 		"env github.event.issue.title on issue_comment.created,issues.labeled,issues.opened others issue_comment.created,issues.labeled",
-		"env github.event.comment.body on issue_comment.created others ", // the job's env C
+		"job-env github.event.comment.body on issue_comment.created others ",
 	}
 	if !slices.Equal(lines, want) {
 		t.Errorf("got\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
