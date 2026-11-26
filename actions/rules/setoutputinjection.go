@@ -40,7 +40,7 @@ func (setOutputInjection) Check(_ context.Context, c *lint.RuleContext, v ir.Set
 				ref = refs[w.RefIndex]
 			}
 			at := c.At(w.At)
-			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a text counts, whatever it gives
+			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a path counts, whatever the write gives
 			// the editor of a wiki is not an attacker of the rule: a value of
 			// gollum gives an inconclusive place
 			cmds := withoutGollum(w.Commands)

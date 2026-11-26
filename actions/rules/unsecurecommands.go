@@ -48,7 +48,7 @@ func (unsecureCommands) Check(_ context.Context, c *lint.RuleContext, v ir.Unsec
 				ref = refs[w.RefIndex]
 			}
 			at := c.At(w.At)
-			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a text counts, whatever it gives
+			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a path counts, whatever the write gives
 			switch {
 			case s.UnsecureFlag() == analysis.UnsecureExpression && (ref.Verdict == analysis.Controlled || ref.Verdict == analysis.Inconclusive):
 				c.Inconclusive(lint.InconclusiveDraft{KindID: flagExpressionKind, Location: at,

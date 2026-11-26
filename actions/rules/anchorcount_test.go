@@ -38,10 +38,10 @@ func TestAnchorCountsEveryReference(t *testing.T) {
 	}
 }
 
-// TestAnchorFixSequences: the references a fix replaces and those it does
-// not are counted apart, so the finding that remains after a fix keeps its
-// fingerprint: output-clobbering fixes the value of NAME=value, not the
-// name.
+// TestAnchorFixSequences pins what the counting keeps: the references a
+// fix replaces and those it does not are counted apart, so the finding that
+// remains after a fix keeps its fingerprint. output-clobbering fixes the
+// value of NAME=value, not the name.
 func TestAnchorFixSequences(t *testing.T) {
 	src := func(value string) string {
 		return "on: issue_comment\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - id: s\n        env:\n          BODY: ${{ github.event.comment.body }}\n        run: |\n          echo \"a=" + value + "\" >> \"$GITHUB_OUTPUT\"\n          echo \"${{ github.event.comment.body }}=b\" >> \"$GITHUB_OUTPUT\"\n"
@@ -51,5 +51,23 @@ func TestAnchorFixSequences(t *testing.T) {
 	a, b := fingerprintsAt(before, OutputClobberingID, 11), fingerprintsAt(after, OutputClobberingID, 11)
 	if len(a) != 1 || len(b) != 1 || a[0] != b[0] {
 		t.Errorf("the finding of the name: %v before the fix of the value, %v after it, want one and the same", a, b)
+	}
+}
+
+// TestAnchorCountsQuotedJSON: code-injection counts a toJson reference in a
+// heredoc whose quoted delimiter toJson cannot write (QuotedJSON, which
+// gives no finding) before it leaves the reference out, so the later
+// reference of the same text keeps its fingerprint whether the delimiter
+// makes the earlier one QuotedJSON ('JSON') or not ('{JSON'). Both get no
+// fix, so both are in the sequence of the references with no fix.
+func TestAnchorCountsQuotedJSON(t *testing.T) {
+	src := func(delim string) string {
+		return "on: issues\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          cat <<'" + delim + "'\n          ${{ toJson(github.event.issue) }}\n          " + delim + "\n          echo '${{ toJson(github.event.issue) }}'\n"
+	}
+	quoted, _ := runAdded(t, map[string]string{".github/workflows/w.yml": src("JSON")})
+	notQuoted, _ := runAdded(t, map[string]string{".github/workflows/w.yml": src("{JSON")})
+	a, b := fingerprintsAt(quoted, CodeInjectionID, 10), fingerprintsAt(notQuoted, CodeInjectionID, 10)
+	if len(a) != 1 || len(b) != 1 || a[0] != b[0] {
+		t.Errorf("the finding of the echo: %v after a QuotedJSON reference, %v after one that is not, want one and the same", a, b)
 	}
 }

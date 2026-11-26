@@ -48,10 +48,12 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 			r := p.Ref
 			loc := rp.At(r.At)
 			isOuter := p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv
-			// every reference of one text counts, whatever it gives, so
-			// that the anchor of one does not move with what another gives:
-			// of the step, or of the value of an outer env, which every step
-			// then counts the same
+			// every reference of one text counts, whatever the reference
+			// gives, so that the anchor of one reference does not move with
+			// what another reference gives. The references of the step are
+			// counted for the step; the references of the value of an outer
+			// env are counted by the key path of the value, so every step
+			// counts the references of the value the same
 			var anchor string
 			if isOuter {
 				k := loc.KeyPath().String()

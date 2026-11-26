@@ -27,9 +27,11 @@ func inconclusiveKind[K analysis.InconclusiveRefKind | analysis.InconclusiveWrit
 // that the anchor of each says which of the same text it is.
 type anchors map[string]int
 
-// next is the anchor of one more finding of text that gets o. Those with a
-// fix and those without are counted apart, so that those a fix leaves keep
-// their anchors after it.
+// next is the anchor of one more reference of text that gets o, counted
+// whether the reference gives a finding or not, so that the anchor of one
+// reference does not move with what another gives. Those with a fix and
+// those without are counted apart, so that those a fix leaves keep their
+// anchors after it.
 func (a anchors) next(text string, o ir.FixPlan) string {
 	key := text
 	if o.NoFix != nil {
