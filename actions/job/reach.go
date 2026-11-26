@@ -9,31 +9,80 @@ import (
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-// AlwaysSkipped is whether GitHub skips the job j of w in every run:
-// on every event and activity type that the on of w may start a run on
-// (taint.WorkflowEvents), one of the ifs that a run of j goes through
-// (attacker.JobIfs) is false, read by github.event_name and
-// github.event.action alone (attacker.EventOnly), which also reads an if
-// that calls a status function after every job that its job depends on is
-// skipped (if: failure() after a job whose if is false, for one). A
-// workflow without on, or with an on of no event, starts no run.
-func AlwaysSkipped(w *workflow.Workflow, j *workflow.Job) bool {
-	return skippedOnEvery(w, attacker.JobIfs(w, j))
+// Reach is the one answer to whether a job or a step of a workflow ever
+// runs: the ifs that a run of it goes through, the ifs of the job and of
+// the jobs it depends on through needs (attacker.JobIfs, which reads
+// attacker.NeedJobs), then, for a step, the if of the step
+// (attacker.StepIf). JobReach and StepReach make it; the skip table of the
+// IR (ir.skippedJobs) and the reads of called workflows read it.
+//
+// A uses step is read as its job: its if is left out. Whether the action
+// has a pre step is not known from the read files, and the pre step of an
+// action runs whatever the if of its step is, so a uses step stays
+// reported even when its if is false.
+type Reach struct {
+	w    *workflow.Workflow
+	j    *workflow.Job
+	ifs  []attacker.PlacedIf
+	step *attacker.PlacedIf // the if of a run step, read on the matrix of j too
 }
 
-// StepAlwaysSkipped is whether GitHub skips the step s of the job j of w
-// in every run, as AlwaysSkipped reads it, with the if of s
-// (attacker.StepIf) read after the ifs of the job. The pre step of an
-// action runs whatever the if of its step is, so a uses step is not read
-// so.
-func StepAlwaysSkipped(w *workflow.Workflow, j *workflow.Job, s *workflow.Step) bool {
-	if s.Uses.Status != workflow.Absent || s.If.Status != workflow.Present {
-		return false
+// JobReach is the Reach of the job j of w.
+func JobReach(w *workflow.Workflow, j *workflow.Job) Reach {
+	return Reach{w: w, j: j, ifs: attacker.JobIfs(w, j)}
+}
+
+// StepReach is the Reach of the step s of the job j of w: that of j, with
+// the if of s after it unless s is a uses step.
+func StepReach(w *workflow.Workflow, j *workflow.Job, s *workflow.Step) Reach {
+	r := JobReach(w, j)
+	if s.Uses.Status == workflow.Absent && s.If.Status == workflow.Present {
+		p := attacker.StepIf(w, j, s.If)
+		r.ifs = append(r.ifs, p)
+		r.step = &p
 	}
-	if skippedOnEvery(w, append(attacker.JobIfs(w, j), attacker.StepIf(w, j, s.If))) {
+	return r
+}
+
+// Ifs are the ifs that a run goes through, the job's first.
+func (r Reach) Ifs() []attacker.PlacedIf { return r.ifs }
+
+// AlwaysSkipped is whether GitHub skips it in every run: on every event
+// and activity type that the on of its workflow may start a run on
+// (taint.WorkflowEvents), one of its ifs is false, read by
+// github.event_name and github.event.action alone (attacker.EventOnly),
+// which also reads an if that calls a status function after every job
+// that its job depends on is skipped (if: failure() after a job whose if
+// is false, for one). The if of a run step is also read on every value of
+// the matrix of its job that it reads (matrixSkipped). A workflow without
+// on, or with an on of no event, starts no run.
+func (r Reach) AlwaysSkipped() bool {
+	if skippedOnEvery(r.w, r.ifs) {
 		return true
 	}
-	return matrixSkipped(w, j, attacker.StepIf(w, j, s.If))
+	return r.step != nil && matrixSkipped(r.w, r.j, *r.step)
+}
+
+// skippedOnEvery is whether one of ifs is false on every event and
+// activity type of taint.WorkflowEvents of w.
+func skippedOnEvery(w *workflow.Workflow, ifs []attacker.PlacedIf) bool {
+	evs, _, known := taint.WorkflowEvents(w)
+	if !known {
+		return false
+	}
+	for _, e := range evs {
+		stopped := false
+		for _, p := range ifs {
+			if attacker.EventOnly(p, e) == expr.TruthFalse {
+				stopped = true
+				break
+			}
+		}
+		if !stopped {
+			return false
+		}
+	}
+	return true
 }
 
 // maxMatrixCombinations bounds the combinations of values matrixSkipped
@@ -190,26 +239,4 @@ func matrixValue(s workflow.String, t expr.ValueType) (expr.Value, bool) {
 		return expr.Number(f), err == nil
 	}
 	return expr.Value{}, false
-}
-
-// skippedOnEvery is whether one of ifs is false on every event and
-// activity type of taint.WorkflowEvents of w.
-func skippedOnEvery(w *workflow.Workflow, ifs []attacker.PlacedIf) bool {
-	evs, _, known := taint.WorkflowEvents(w)
-	if !known {
-		return false
-	}
-	for _, e := range evs {
-		stopped := false
-		for _, p := range ifs {
-			if attacker.EventOnly(p, e) == expr.TruthFalse {
-				stopped = true
-				break
-			}
-		}
-		if !stopped {
-			return false
-		}
-	}
-	return true
 }

@@ -159,7 +159,7 @@ func (r calledReader) workflow(n calls.Node) (Secrets, []CalledContextRead) {
 	var reads []CalledContextRead
 	seen := map[string]bool{}
 	for _, je := range f.Workflow.Jobs.Value.Entries {
-		if je.Value.Status != workflow.Present || AlwaysSkipped(f.Workflow, &je.Value.Value) {
+		if je.Value.Status != workflow.Present || JobReach(f.Workflow, &je.Value.Value).AlwaysSkipped() {
 			continue // GitHub skips such a job in every run: its runner gets no secret
 		}
 		js, jr := r.job(n, f.Workflow, je.Value.Value, true)
