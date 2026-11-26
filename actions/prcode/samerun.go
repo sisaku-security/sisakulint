@@ -35,11 +35,17 @@ type SameRunUpload struct {
 	anyName bool                     // the name is a ${{ }}, which may be any name
 	before4 bool                     // the release is v1 to v3, whose artifact only actions/download-artifact v1 to v3 takes during the run
 	events  []analysis.EventActivity // the events on which the checkout brings the code of the pull request and the upload runs
-	// unread is whether the rule does not read what the upload holds,
-	// which may be the code of a pull request: the upload is of cause, a
-	// ./ workflow or action that the inputs do not have, or a merge whose
-	// pattern is not known or that the rule stops reading (mergeReadMax),
-	// or a merge of such an upload
+}
+
+// upload is an upload of the current run as the merges and the downloads
+// read it: a SameRunUpload, or, when unread, an upload whose content the
+// rule does not read, which may hold the code of a pull request. The
+// upload is then of cause (or of a merge of what cause uploads): a ./
+// workflow or action that the inputs do not have, or a merge whose pattern
+// is not known or whose reading the rule ends early (mergeReadMax); its
+// Checkout and Upload are those of cause.
+type upload struct {
+	SameRunUpload
 	unread bool
 	cause  workflow.String
 }
@@ -127,14 +133,20 @@ const maxCallDepth = 10
 // events on which that call runs, and those that
 // actions/upload-artifact/merge uploads again under its name. A ./
 // workflow or action that the inputs do not have gives an unread upload.
-func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int) []SameRunUpload {
+// read are the uploads of the workflows already read, by the workflow and
+// its depth: each is read once, on the events of all its callers, and kept
+// to the events of each call.
+func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int, read map[calledAt][]upload) []upload {
 	g := c.Graph()
 	var called []calls.CalledCall
 	if g != nil {
 		called = g.CalledBy(name)
 	}
 	checkouts := AnalyzeIn(c, name, w, nil, m)
-	out := sameRunUploads(c, w, checkouts)
+	var out []upload
+	for _, u := range sameRunUploads(c, w, checkouts) {
+		out = append(out, upload{SameRunUpload: u})
+	}
 	out = append(out, compositeUploads(c, w, checkouts, g, called)...)
 	if depth < maxCallDepth && w.Jobs.Status == workflow.Present {
 		evs := c.EventsOr(name, prCodeEvents, true, func() []analysis.EventActivity { return taint.EventsOf(w, prCodeEvents) })
@@ -161,11 +173,17 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 				f, _ = g.File(called[i].Called)
 			}
 			if f.Workflow == nil {
-				out = append(out, SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id, Checkout: j.Uses.Value.Base, Upload: j.Uses.Value.Base, anyName: true, events: callEvs, unread: true, cause: j.Uses.Value.String})
+				out = append(out, upload{SameRunUpload: SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id, Checkout: j.Uses.Value.Base, Upload: j.Uses.Value.Base, anyName: true, events: callEvs}, unread: true, cause: j.Uses.Value.String})
 				continue
 			}
-			for _, u := range sameRunUploadsIn(c, called[i].Called, f.Workflow, m, depth+1) {
-				u.events = slices.DeleteFunc(u.events, func(e analysis.EventActivity) bool { return !slices.Contains(callEvs, e) })
+			at := calledAt{called[i].Called, depth + 1}
+			inner, ok := read[at]
+			if !ok {
+				inner = sameRunUploadsIn(c, called[i].Called, f.Workflow, m, depth+1, read)
+				read[at] = inner
+			}
+			for _, u := range inner {
+				u.events = slices.DeleteFunc(slices.Clone(u.events), func(e analysis.EventActivity) bool { return !slices.Contains(callEvs, e) })
 				if len(u.events) == 0 {
 					continue
 				}
@@ -178,13 +196,19 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 	return append(out, mergeUploads(c, w, out)...)
 }
 
+// calledAt is a workflow that sameRunUploadsIn reads, at a depth of calls.
+type calledAt struct {
+	name  calls.Node
+	depth int
+}
+
 // compositeUploads are the uploads of actions/upload-artifact among the
 // steps of the composite actions of the inputs that a step of the job of a
 // checkout of checkouts uses after the checkout (one level: an action that
 // such an action uses is not read). called are the calls of w (CalledBy);
 // a ./ action that the inputs do not have gives an unread upload.
-func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []CheckoutSite, g *calls.Graph, called []calls.CalledCall) []SameRunUpload {
-	var out []SameRunUpload
+func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []CheckoutSite, g *calls.Graph, called []calls.CalledCall) []upload {
+	var out []upload
 	for _, co := range checkouts {
 		if co.Job == nil || !co.Placed || co.CheckoutCode != analysis.CodePR || len(co.PRCodeOn) == 0 || co.Approval != analysis.ApprovalNone {
 			continue
@@ -212,7 +236,7 @@ func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []Checko
 				f, _ = g.File(called[i].Called)
 			}
 			if f.Action == nil {
-				out = append(out, SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + ")", Checkout: co.Step.Base, Upload: s.Base, Unless: unless, anyName: true, events: evs, unread: true, cause: s.Uses.Value.String})
+				out = append(out, upload{SameRunUpload: SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + ")", Checkout: co.Step.Base, Upload: s.Base, Unless: unless, anyName: true, events: evs}, unread: true, cause: s.Uses.Value.String})
 				continue
 			}
 			a := f.Action
@@ -232,7 +256,7 @@ func compositeUploads(c *taint.Callers, w *workflow.Workflow, checkouts []Checko
 				}
 				u := SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id + " (" + s.Uses.Value.Text() + ")", Checkout: co.Step.Base, Upload: s.Base, Unless: unless, before4: uploadBefore4(x.Uses.Value), events: xevs}
 				u.name, u.anyName = inputName(x.With, defaultArtifactName)
-				out = append(out, u)
+				out = append(out, upload{SameRunUpload: u})
 			}
 		}
 	}
@@ -254,7 +278,8 @@ func isMerge(u workflow.Uses) bool {
 }
 
 // mergeReadMax bounds the reads of mergeUploads, each of an upload by a
-// merge step that may take it: past it, the rule stops reading the merges.
+// merge step of its job or of a job that needs its job: past it, the rule
+// ends the reading of the merges early.
 const mergeReadMax = 100000
 
 // mergeStep is a step of actions/upload-artifact/merge in a job of a
@@ -263,13 +288,16 @@ type mergeStep struct {
 	job     string // the ID of the job, in lower case
 	jobText string // the ID of the job, as written
 	step    workflow.Step
-	steps   []workflow.Step // the steps of the job
+	orderOf map[cst.Node]int // the order of each step of the job, by its node
 	order   workflow.StepOrder
 	keeps   []analysis.EventActivity // the events of the uploads that the ifs of the job and of the step let through
 	name    string                   // the input name, mergedArtifactName when it has none
 	anyName bool                     // the name is a ${{ }}
-	takes   map[string][2]bool       // mergeTakes of the step, by the name of an artifact
+	takes   map[string]nameMatch     // mergeTakes of the step, by the name of an artifact
 }
+
+// nameMatch is whether a pattern takes a name, and whether that is known.
+type nameMatch struct{ takes, known bool }
 
 // mergeUploads are the uploads of actions/upload-artifact/merge in the
 // jobs of w that take an upload of ups, or of another merge, from a job
@@ -279,12 +307,13 @@ type mergeStep struct {
 // pattern matches, each on its own events; a merge whose pattern is not
 // known gives an unread upload.
 //
-// The merges read each upload of ups once for each merge step it passes
-// through, on the union of the events of the ways to that step: what a
-// merge step uploads from an upload of ups is the same artifact whichever
-// merges came before. Past mergeReadMax reads, each merge step of w gives
-// an unread upload (unreadMerges).
-func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) []SameRunUpload {
+// What a merge step uploads from an upload of ups (its origin) is the
+// same artifact whichever merges came before, so the merges keep one
+// upload for each merge step, origin and cause of an unread upload, on the
+// union of the events of the ways to it, and read it again only when its
+// events grow. Past mergeReadMax reads, what the merges uploaded is not
+// read: each merge step of w gives only an unread upload (unreadMerges).
+func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []upload) []upload {
 	if len(ups) == 0 || w.Jobs.Status != workflow.Present {
 		return nil
 	}
@@ -305,11 +334,20 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) [
 		steps := j.Steps.Value.Items
 		order := workflow.OrderOf(steps)
 		jobIfs := attacker.JobIfs(w, &j)
+		var orderOf map[cst.Node]int
 		for _, s := range steps {
 			if s.Uses.Status != workflow.Present || !isMerge(s.Uses.Value) {
 				continue
 			}
-			m := &mergeStep{job: strings.ToLower(id), jobText: id, step: s, steps: steps, order: order, keeps: taint.FilterCode(c.Table(), evs, append(slices.Clone(jobIfs), attacker.StepIf(w, &j, s.If))...), takes: map[string][2]bool{}}
+			if orderOf == nil {
+				orderOf = map[cst.Node]int{}
+				for _, x := range steps {
+					if _, ok := orderOf[x.Base.Node]; !ok {
+						orderOf[x.Base.Node] = x.Order
+					}
+				}
+			}
+			m := &mergeStep{job: strings.ToLower(id), jobText: id, step: s, orderOf: orderOf, order: order, keeps: taint.FilterCode(c.Table(), evs, append(slices.Clone(jobIfs), attacker.StepIf(w, &j, s.If))...), takes: map[string]nameMatch{}}
 			m.name, m.anyName = inputName(s.With, mergedArtifactName)
 			takers[m.job] = append(takers[m.job], len(merges))
 			for k := range neededJobs(w, id) {
@@ -341,27 +379,29 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) [
 		}
 		for _, mi := range takers[u.job] {
 			m := merges[mi]
-			if u.job == m.job && !uploadedBefore(m.steps, m.order, u, m.step) {
-				continue
-			}
 			if reads++; reads > mergeReadMax {
-				return append(all[len(ups):], unreadMerges(merges)...)
+				return unreadMerges(merges)
 			}
-			tk, ok := m.takes[u.name]
+			if u.job == m.job {
+				// in the job of the merge: the step that uploads u may run before the merge
+				if x, ok := m.orderOf[u.Upload.Node]; !ok || !m.order.MayRunAfter(x, m.step.Order) {
+					continue
+				}
+			}
+			nm, ok := m.takes[u.name]
 			if !ok {
-				t, k := mergeTakes(m.step.With, u.name)
-				tk = [2]bool{t, k}
-				m.takes[u.name] = tk
+				nm.takes, nm.known = mergeTakes(m.step.With, u.name)
+				m.takes[u.name] = nm
 			}
-			takes, known := tk[0], tk[1]
-			if known && !takes && !u.anyName {
+			known := nm.known
+			if known && !nm.takes && !u.anyName {
 				continue
 			}
 			evs := slices.DeleteFunc(slices.Clone(u.events), func(e analysis.EventActivity) bool { return !slices.Contains(m.keeps, e) })
 			if len(evs) == 0 {
 				continue
 			}
-			n := SameRunUpload{job: m.job, Text: "jobs." + m.jobText + " (" + m.step.Uses.Value.Text() + " of " + u.Text + ")", Checkout: u.Checkout, Upload: m.step.Base, Unless: u.Unless, events: evs, unread: u.unread, cause: u.cause}
+			n := upload{SameRunUpload: SameRunUpload{job: m.job, Text: "jobs." + m.jobText + " (" + m.step.Uses.Value.Text() + " of " + u.Text + ")", Checkout: u.Checkout, Upload: m.step.Base, Unless: u.Unless, events: evs}, unread: u.unread, cause: u.cause}
 			n.name, n.anyName = m.name, m.anyName
 			if !known && !n.unread {
 				n.unread, n.cause = true, m.step.Uses.Value.String
@@ -381,16 +421,16 @@ func mergeUploads(c *taint.Callers, w *workflow.Workflow, ups []SameRunUpload) [
 	return all[len(ups):]
 }
 
-// unreadMerges are, when the rule stops reading the merges (mergeReadMax),
-// an unread upload of each merge step of merges, on the events of the
-// uploads that its job and its step let through.
-func unreadMerges(merges []*mergeStep) []SameRunUpload {
-	var out []SameRunUpload
+// unreadMerges are, when the rule ends the reading of the merges early
+// (mergeReadMax), an unread upload of each merge step of merges, on the
+// events of the uploads that its job and its step let through.
+func unreadMerges(merges []*mergeStep) []upload {
+	var out []upload
 	for _, m := range merges {
 		if len(m.keeps) == 0 {
 			continue
 		}
-		u := SameRunUpload{job: m.job, Text: "jobs." + m.jobText + " (" + m.step.Uses.Value.Text() + ")", Checkout: m.step.Base, Upload: m.step.Base, events: m.keeps, unread: true, cause: m.step.Uses.Value.String}
+		u := upload{SameRunUpload: SameRunUpload{job: m.job, Text: "jobs." + m.jobText + " (" + m.step.Uses.Value.Text() + ")", Checkout: m.step.Base, Upload: m.step.Base, events: m.keeps}, unread: true, cause: m.step.Uses.Value.String}
 		u.name, u.anyName = m.name, m.anyName
 		out = append(out, u)
 	}
@@ -406,17 +446,6 @@ func unionEvents(evs, more []analysis.EventActivity) []analysis.EventActivity {
 		}
 	}
 	return out
-}
-
-// uploadedBefore is whether the step of steps that uploads u may run
-// before s, a merge in the same job.
-func uploadedBefore(steps []workflow.Step, order workflow.StepOrder, u SameRunUpload, s workflow.Step) bool {
-	for _, x := range steps {
-		if x.Base.Node == u.Upload.Node {
-			return order.MayRunAfter(x.Order, s.Order)
-		}
-	}
-	return false
 }
 
 // jsTrim is s as core.getInput of @actions/core gives an input:
@@ -551,7 +580,7 @@ func uploadBefore4(u workflow.Uses) bool {
 // may take are added to SameRunUnknown; so is the pattern of s, when the
 // rule does not read it (matchArtifactName) and an upload of ups may be one
 // it takes.
-func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload) {
+func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []upload) {
 	if !s.currentRun || s.Job == nil || len(ups) == 0 {
 		return
 	}
@@ -586,7 +615,7 @@ func (s *DownloadSite) sameRun(w *workflow.Workflow, ups []SameRunUpload) {
 			addUnknown(p.Value)
 			continue
 		}
-		s.SameRunUploads = append(s.SameRunUploads, u)
+		s.SameRunUploads = append(s.SameRunUploads, u.SameRunUpload)
 		on = unionEvents(on, both)
 	}
 	if len(s.SameRunUploads) > 0 {

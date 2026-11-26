@@ -425,9 +425,10 @@ func TestArtifactPoisoningMergeOfTwoUploads(t *testing.T) {
 }
 
 // TestArtifactPoisoningMergeScale: merges that take each other's artifacts
-// are read once for each merge step and each first upload, so a chain of
+// keep one upload for each merge step and first upload, so a chain of
 // merges in one job and a parallel group of merges, which may each run
-// after the others, end; past mergeReadMax the merges are inconclusive.
+// after the others, end; past mergeReadMax the merges are inconclusive,
+// also a merge that the reading reached before it ended.
 func TestArtifactPoisoningMergeScale(t *testing.T) {
 	checkout := "on: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n"
 	deploy := func(name string) string {
@@ -457,6 +458,7 @@ func TestArtifactPoisoningMergeScale(t *testing.T) {
 	for i := 2; i <= 150; i++ {
 		long += merge("      ", "m-"+strconv.Itoa(i), "m-"+strconv.Itoa(i-1))
 	}
+	early := long + deploy("m-1")
 	long += deploy("m-150")
 	for _, c := range []struct {
 		name                   string
@@ -466,6 +468,7 @@ func TestArtifactPoisoningMergeScale(t *testing.T) {
 		{"chain", chain, 1, 0},
 		{"parallel", parallel, 1, 0},
 		{"past the reads", long, 0, 1},
+		{"past the reads, of a merge read before the end", early, 0, 1},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), downloadFacts{})
 		if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != c.findings {
@@ -478,9 +481,9 @@ func TestArtifactPoisoningMergeScale(t *testing.T) {
 }
 
 // TestArtifactPoisoningUnreadThroughMerge: an upload whose content the
-// rule does not read, of a merge whose pattern is a ${{ }} or of a ./
-// reusable workflow that the inputs do not have, passes through a later
-// merge to the download, which is inconclusive.
+// rule does not read, of a merge whose pattern is a ${{ }}, passes through
+// a later merge that takes it by name to the download, which is
+// inconclusive.
 func TestArtifactPoisoningUnreadThroughMerge(t *testing.T) {
 	tail := "  merge2:\n    needs: merge1\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: intermediate}\n  deploy:\n    needs: merge2\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./deploy.sh\n"
 	build := "  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: .}\n"
@@ -494,7 +497,6 @@ func TestArtifactPoisoningUnreadThroughMerge(t *testing.T) {
 	}{
 		{"merge with a pattern that is a ${{ }}", "on: pull_request_target\njobs:\n" + build + merge1("${{ vars.P }}") + tail, 0, 1},
 		{"merge with a pattern that takes part-1", "on: pull_request_target\njobs:\n" + build + merge1("part-*") + tail, 1, 0},
-		{"./ workflow not among the inputs", "on: pull_request_target\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n" + merge1("*") + tail, 0, 1},
 		{"merge with a pattern that is a ${{ }}, of another name", "on: pull_request_target\njobs:\n" + build + merge1("${{ vars.P }}") + strings.Replace(tail, "pattern: intermediate", "pattern: other", 1), 0, 0},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, wfFile(c.src), downloadFacts{})

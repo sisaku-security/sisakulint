@@ -35,8 +35,9 @@
 //	downloadtables.go  the commits of the releases of the two download actions
 //	samerun.go   SameRunUpload: the uploads of the current run, after a checkout of a pull request's code, that a download of the current run takes:
 //	             those of actions/upload-artifact, of a composite action of the inputs, of a ./ reusable workflow, and of
-//	             actions/upload-artifact/merge (mergeUploads, each merge step once for each first upload, up to
-//	             mergeReadMax); the unread uploads, of uses whose uploads are not known
+//	             actions/upload-artifact/merge (mergeUploads: one upload for each merge step, first upload and
+//	             unread cause, up to mergeReadMax reads); upload: those uploads, and the unread ones of uses whose
+//	             uploads are not known
 //	minimatch.go matchArtifactName: the names that a pattern of the merge or the download takes, as minimatch reads it
 //	             (the brace expansion, the parts between /, matchParts); minimatch_ast.go the regular expression of a
 //	             part (src/ast.ts of minimatch), minimatch_regexp.go which it runs by backtracking
