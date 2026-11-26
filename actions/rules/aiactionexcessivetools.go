@@ -308,6 +308,7 @@ var aiActionExcessiveToolsMeta = lint.Meta{
 	Citations: []lint.Citation{cvss},
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
+		jobEnvComposite(true),
 		npmAbbreviation(kindAIActionExcessiveToolsRunCode),
 		npmOptionValueCommand(kindAIActionExcessiveToolsRunCode),
 		appCommitEventLimit,

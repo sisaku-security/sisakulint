@@ -143,3 +143,17 @@ func unknownOSCase(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint
 		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner, such as a ${{ }} of a matrix or the labels of a self-hosted runner without the label windows, where the env of the step or the env of the job has a variable whose name differs from the name of the variable that holds the value only in upper and lower case (" + eg + "): a Windows runner compares the names of the variables in any case, so the variable of the env of the step replaces the variable of the env of the job, the variable of the env of the job replaces the variable of the env of the workflow, and the value does not reach the agent; a Linux runner and a macOS runner compare the names in the same case only, and both variables reach the agent. The rule compares the names in any case only in a job whose runs-on decides a Windows runner",
 		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
 }
+
+// jobEnvComposite is the undetected form job-env-composite of the rules of
+// agent actions: the agent step of a composite action is read with the env
+// of the step alone. A rule that reads the env only in a run of the linter
+// that adds an attacker who writes vars or secrets gives valueRun.
+func jobEnvComposite(valueRun bool) lint.UndetectedForm {
+	value := "a value that an attacker writes, which the workflow puts"
+	if valueRun {
+		value = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets, which the workflow puts"
+	}
+	return lint.UndetectedForm{ID: lint.MustUndetectedFormID("job-env-composite"),
+		Text:        value + " in the env of the job or in the env of the workflow, where the job runs a composite action of the repository or of another repository whose step runs the agent: the process of the agent also gets the env of the job and the env of the workflow, and the rule reads a step of a composite action with the env of the step only",
+		Disposition: lint.Todo(lint.NeedSameFile)}
+}

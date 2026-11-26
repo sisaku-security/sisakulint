@@ -270,6 +270,7 @@ var aiActionExecutionOrderMeta = lint.Meta{
 	Citations: []lint.Citation{cvss},
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
+		jobEnvComposite(true),
 		appCommitEventLimit,
 		{ID: lint.MustUndetectedFormID("remote-composite"), Text: agentRemoteCompositeText, Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustUndetectedFormID("action-metadata"), Text: "an agent's step in an action metadata file: the steps of its caller's job after it, and the credentials its inputs pass to the steps after it, are not read", Disposition: lint.Todo(lint.NeedRepoFile)},

@@ -263,6 +263,12 @@ func actionDefinitionAnswer(q facts.ActionDefinition) facts.RawAnswer {
 		v.Content = "inputs:\n  anthropic-api-key:\n    description: The API key of Anthropic.\n  note:\n    description: A note for the triage.\nruns:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        anthropic_api_key: ${{ inputs.anthropic-api-key }}\n        prompt: \"Triage the open issues. ${{ inputs.note }}\"\n        claude_args: --allowedTools Bash\n"
 	case "example-org/claude-note-unsafe-composite":
 		v.Content = "inputs:\n  anthropic-api-key:\n    description: The API key of Anthropic.\n  note:\n    description: A note for the triage.\nruns:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        anthropic_api_key: ${{ inputs.anthropic-api-key }}\n        prompt: \"Triage the open issues. ${{ inputs.note }}\"\n        claude_args: --dangerously-skip-permissions\n"
+	case "example-org/claude-guide-composite": // job-env-composite of the agent rules
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        prompt: Triage the issue by the guide in the env GUIDE\n        claude_args: --allowedTools Bash\n"
+	case "example-org/claude-guide-unsafe-composite": // job-env-composite of ai-action-unsafe-sandbox
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        prompt: Triage the issue by the guide in the env GUIDE\n        claude_args: --dangerously-skip-permissions\n"
+	case "example-org/gemini-label-composite": // job-env-composite of ai-action-prompt-injection
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: google-github-actions/run-gemini-cli@v0\n      with:\n        prompt: \"Label the issue whose body is in ISSUE_BODY\"\n"
 	case "example-org/codex-fix-composite":
 		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: openai/codex-action@v1\n      with:\n        openai-api-key: ${{ inputs.openai-api-key }}\n        allow-users: \"*\"\n        sandbox: danger-full-access\n        prompt: \"Fix issue #${{ github.event.issue.number }}\"\n"
 	case "example-org/substituted-agent-composite":
