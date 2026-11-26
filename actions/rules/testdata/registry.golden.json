@@ -10823,6 +10823,30 @@
             },
             {
               "input_kind": "workflow",
+              "name": ".github/workflows/caller.yml",
+              "text": "# situation: on pull_request_target, the job build calls the reusable\n#   workflow build.yml of the repository, whose job checks out and builds\n#   the pull request's head and uploads dist; the job deploy, which needs\n#   build, downloads dist and runs ./dist/deploy.sh.\n# reason: an artifact that the called workflow uploads is an artifact of the\n#   caller's run, which the job deploy downloads by its name, so the files\n#   that the pull request's build made decide the code that deploy runs\n#   with the base repository's token and secrets.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the called workflow checks out the fork's head, npm\n#   run build writes dist/deploy.sh, the upload takes dist, the job deploy\n#   downloads dist, and ./dist/deploy.sh prints PWNED, with the base\n#   repository's token and secrets.\non: pull_request_target\njobs:\n  build:\n    uses: ./.github/workflows/build.yml\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
+              "others": [
+                {
+                  "input_kind": "workflow",
+                  "name": ".github/workflows/build.yml",
+                  "text": "on: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: dist, path: dist}\n"
+                }
+              ]
+            },
+            {
+              "input_kind": "workflow",
+              "name": ".github/workflows/composite-caller.yml",
+              "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and runs the composite action .github/actions/build\n#   of the repository, whose step uploads dist; the job deploy, which needs\n#   build, downloads dist and runs ./dist/deploy.sh.\n# reason: the steps of a composite action run as a step of the job, so the\n#   upload is one of the job build, and the files that the pull request's\n#   build made decide the code that deploy runs with the base repository's\n#   token and secrets.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the job build checks out the fork's head, npm run\n#   build writes dist/deploy.sh, the step of the composite action uploads\n#   dist, the job deploy downloads dist, and ./dist/deploy.sh prints PWNED,\n#   with the base repository's token and secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: ./.github/actions/build\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
+              "others": [
+                {
+                  "input_kind": "action-metadata",
+                  "name": ".github/actions/build/action.yml",
+                  "text": "name: build\ndescription: uploads the build\nruns:\n  using: composite\n  steps:\n    - uses: actions/upload-artifact@v4\n      with: {name: dist, path: dist}\n"
+                }
+              ]
+            },
+            {
+              "input_kind": "workflow",
               "name": "executed.same-run-merge.yml",
               "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads part-1; the job merge, which needs build,\n#   merges the artifacts part-* into dist with actions/upload-artifact/merge;\n#   the job deploy, which needs merge, downloads dist and runs ./dist/deploy.sh.\n# reason: the merge downloads the artifact that the build of the pull\n#   request's code made and uploads its files again as dist, so the files\n#   that the download puts decide the code that deploy runs with the base\n#   repository's token and secrets.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the job build checks out the fork's head, and npm run\n#   build writes dist/deploy.sh; the upload takes dist as part-1, the merge\n#   uploads it again as dist, the job deploy downloads dist, and\n#   ./dist/deploy.sh prints PWNED, with the base repository's token and\n#   secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: dist}\n  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: part-*}\n  deploy:\n    needs: merge\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n"
             },
@@ -11703,7 +11727,7 @@
         },
         {
           "id": "same-run-upload-unknown",
-          "text": "a download of the current run whose job needs, directly or through other jobs, a job that calls a ./ reusable workflow or uses a ./ action that is not among the inputs, or uses actions/upload-artifact/merge with a pattern (or a with) that is a ${{ }}: what that job uploads is not known, so whether the artifact holds the code of a pull request is not known",
+          "text": "a download of the current run whose job needs, directly or through other jobs, a job of one of these forms: a job that calls a ./ reusable workflow that is not among the inputs; a job that uses a ./ action that is not among the inputs; or a job that uses actions/upload-artifact/merge with a pattern (or a with) that is a ${{ }}, or with a pattern that versions of minimatch read differently (an extglob inside an extglob, such as part-+(@(1|2)); a POSIX character class, such as part-[[:digit:]]; or a * that has an extglob on one side and, on the other side, the start of the pattern, the end of the pattern, or another extglob, such as @(part)*): what the needed job uploads is not known, so whether the downloaded artifact holds the code of a pull request is not known",
           "disposition": "todo",
           "needs": [
             "repo-file"
@@ -11713,6 +11737,11 @@
               "input_kind": "workflow",
               "name": "same-run-upload-unknown.yml",
               "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads part-1; the job merge merges the\n#   artifacts that the variable P names into dist; the job deploy downloads\n#   dist and runs ./dist/deploy.sh.\n# reason: the pattern of actions/upload-artifact/merge is a variable, so\n#   whether dist holds the artifact of the pull request's build is not known\n#   from the workflow.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: when the variable P is part-*, the merge uploads the\n#   build of the fork's head again as dist, the job deploy downloads dist,\n#   and ./dist/deploy.sh prints PWNED, with the base repository's token and\n#   secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: dist}\n  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: '${{ vars.P }}'}\n  deploy:\n    needs: merge\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n"
+            },
+            {
+              "input_kind": "workflow",
+              "name": "same-run-upload-unknown.release-dependent.yml",
+              "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads part-1; the job merge merges the\n#   artifacts that the pattern part-+(@(1|2)) names into dist; the job\n#   deploy downloads dist and runs ./dist/deploy.sh.\n# reason: the pattern has an extglob inside an extglob, which versions of\n#   minimatch read differently, so whether the merge takes part-1, and\n#   whether dist holds the pull request's build, is not known from the\n#   workflow.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: when the merge reads the pattern as matching\n#   part-1, the merge uploads the build of the fork's head again as dist,\n#   the job deploy downloads dist, and ./dist/deploy.sh prints PWNED, with\n#   the base repository's token and secrets.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: dist}\n  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: dist, pattern: 'part-+(@(1|2))'}\n  deploy:\n    needs: merge\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n"
             }
           ]
         },
@@ -11904,6 +11933,25 @@
               "input_kind": "workflow",
               "name": "search-filter.yml",
               "text": "# situation: on push, the job downloads with\n#   dawidd6/action-download-artifact v20, with the input event push, the\n#   artifact named out, from the newest push run of its own workflow into\n#   the workspace, and then runs build.sh with bash.\n# reason: the input event push makes the search list only the push runs of\n#   the workflow, which run the workflow of a commit pushed to the\n#   repository; no run of a pull request from a fork, and no run of a review\n#   of such a pull request, is in the list.\n# cause: the rule does not read the inputs event and commit, by which the\n#   search lists the runs.\n# attack-value: the file build.sh in the artifact named out, from the fork's pull_request run of the workflow = \"echo PWNED\\n\"\n# attack-run-behavior: the pull request from a fork changes the workflow to\n#   run on pull_request too, and the pull_request run uploads build.sh in\n#   the artifact named out; the next push run lists only the push runs,\n#   takes the artifact of the newest push run, which a push to the\n#   repository made, and bash build.sh runs that build.sh, not the\n#   attacker's.\non: push\npermissions:\n  actions: read\n  contents: read\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: dawidd6/action-download-artifact@v20\n        with:\n          name: out\n          event: push\n      - run: bash build.sh\n"
+            }
+          ]
+        },
+        {
+          "id": "release-dependent-pattern",
+          "text": "a download of the current run by actions/download-artifact whose input pattern has a form that versions of minimatch read differently (an extglob inside an extglob, such as part-+(@(1|2)); a POSIX character class, such as part-[[:digit:]]; or a * that has an extglob on one side and, on the other side, the start of the pattern, the end of the pattern, or another extglob, such as @(part)*): the rule reads such a pattern as one that matches the name of every artifact, but the pattern may not match the artifact that holds the code of the pull request. For example, with minimatch 9.0.3, which actions/download-artifact v4 uses, the pattern part-[[:digit:]] makes the download step fail",
+          "finding_kinds": [
+            "artifact-poisoning.executed",
+            "artifact-poisoning.download"
+          ],
+          "disposition": "todo",
+          "needs": [
+            "same-file"
+          ],
+          "examples": [
+            {
+              "input_kind": "workflow",
+              "name": "release-dependent-pattern.yml",
+              "text": "# situation: on pull_request_target, the job build checks out and builds the\n#   pull request's head and uploads part-1; the job deploy, which needs\n#   build, downloads the artifacts that the pattern part-[[:digit:]] names\n#   with actions/download-artifact v4 and runs ./part-1/deploy.sh.\n# reason: actions/download-artifact v4 uses minimatch 9.0.3, which turns the\n#   pattern part-[[:digit:]] into a regular expression that JavaScript\n#   refuses (\"Invalid regular expression: /^part\\-[\\p{Nd}]$/u: Invalid\n#   escape\", seen on a GitHub-hosted runner on 2026-11-26), so the\n#   download step fails and nothing runs after it.\n# cause: the rule does not read a POSIX character class in a pattern, and\n#   reads the pattern as one that matches the name of every artifact.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"build\\\":\\\"mkdir -p dist && echo 'echo PWNED' > dist/deploy.sh\\\"}}\"\n# attack-run-behavior: the job build uploads the fork's build as part-1,\n#   the download step of the job deploy fails, and ./part-1/deploy.sh does\n#   not run.\non: pull_request_target\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: dist}\n  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {pattern: 'part-[[:digit:]]'}\n      - run: ./part-1/deploy.sh\n"
             }
           ]
         },
