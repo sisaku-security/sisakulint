@@ -66,19 +66,19 @@ func RunnerVariable(name string, windows bool) (RunnerValue, bool) {
 
 // WindowsRunner is whether the runs-on of j decides a Windows runner. No
 // label is a ${{ }}, no label is linux or macOS (the labels a self-hosted
-// runner has for the other operating systems), and a label is windows (the
-// label a self-hosted runner has for Windows) or a label of a GitHub-hosted
-// Windows runner (workflow.HostedWindowsLabels) where no label is
-// self-hosted and no group picks the runner. Labels compare in any case.
-// Any other label that begins with windows- is a custom label, which a
-// runner of any operating system may have. It is false for nil, a step of
-// an action.yml, whose job is the caller's.
+// runner has for the other operating systems), and either a label is
+// windows (the label a self-hosted runner has for Windows) or runs-on is
+// not a mapping and every label is one of a GitHub-hosted Windows runner
+// (workflow.HostedWindowsLabels), as job.Hosted reads a GitHub-hosted
+// runner. Labels compare in any case. Any other label that begins with
+// windows- is a custom label, which a runner of any operating system may
+// have. It is false for nil, a step of an action.yml, whose job is the
+// caller's.
 func WindowsRunner(j *workflow.Job) bool {
 	if j == nil || j.RunsOn.Status != workflow.Present {
 		return false
 	}
-	hosted := j.RunsOnForm != workflow.RunsOnFormMapping
-	var labels []workflow.RunnerLabelName
+	hosted, windows := j.RunsOnForm != workflow.RunsOnFormMapping, false
 	for _, l := range j.RunsOn.Value.Items {
 		if l.HasExpr() {
 			return false
@@ -90,15 +90,35 @@ func WindowsRunner(j *workflow.Job) bool {
 		if n.Equal(workflow.LinuxLabel) || n.Equal(workflow.MacOSLabel) {
 			return false
 		}
-		hosted = hosted && !n.Equal(workflow.SelfHostedLabel)
-		labels = append(labels, n)
+		windows = windows || n.Equal(workflow.WindowsLabel)
+		hosted = hosted && slices.ContainsFunc(workflow.HostedWindowsLabels(), n.Equal)
 	}
-	for _, n := range labels {
-		if n.Equal(workflow.WindowsLabel) || hosted && slices.ContainsFunc(workflow.HostedWindowsLabels, n.Equal) {
-			return true
+	return windows || hosted && len(j.RunsOn.Value.Items) > 0
+}
+
+// windowsLabeled is whether a label of the runs-on of j is windows or
+// begins with windows-, in any case, and no label is a ${{ }}: the reading
+// of a Windows runner that runnerVariable keeps instead of WindowsRunner.
+// A runs-on that does not decide the OS (a custom label that begins with
+// windows-, a ${{ }} of a matrix) has a runner variable read for one OS
+// only, and either OS misses a value: windowsLabeled keeps the output of
+// the taint the same until the taint reads both OSes for such a runs-on,
+// and then WindowsRunner alone answers.
+func windowsLabeled(j *workflow.Job) bool {
+	if j == nil || j.RunsOn.Status != workflow.Present {
+		return false
+	}
+	windows := false
+	for _, l := range j.RunsOn.Value.Items {
+		if l.HasExpr() {
+			return false
+		}
+		label := strings.ToLower(strings.TrimSpace(l.AsString()))
+		if label == "windows" || strings.HasPrefix(label, "windows-") {
+			windows = true
 		}
 	}
-	return false
+	return windows
 }
 
 // RunnerVariableOf is the environment variable the runner writes the value
@@ -121,7 +141,7 @@ func (c scope) runnerVariable(name string) (RunnerValue, bool) {
 	if v, ok := RunnerVariable(name, false); ok {
 		return v, true
 	}
-	if !WindowsRunner(c.job) {
+	if !windowsLabeled(c.job) {
 		return RunnerValue{}, false
 	}
 	for _, e := range c.envs {

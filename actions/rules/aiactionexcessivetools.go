@@ -312,6 +312,7 @@ var aiActionExcessiveToolsMeta = lint.Meta{
 	Targets:   []lint.InputKind{lint.InputKindWorkflow, lint.InputKindActionMetadata},
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		jobEnvComposite(true),
+		windowsLabelOtherOS(true),
 		wholeEnv,
 		npmAbbreviation(kindAIActionExcessiveToolsRunCode),
 		npmOptionValueCommand(kindAIActionExcessiveToolsRunCode),

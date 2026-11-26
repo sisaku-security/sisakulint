@@ -24,7 +24,7 @@ var hostedSudoLabels = mustLabels(
 
 // hostedLabels are the labels of every GitHub-hosted runner of
 // workflow.HostedRunnerLabelsSource: hostedSudoLabels and the Windows ones.
-var hostedLabels = append(slices.Clone(hostedSudoLabels), workflow.HostedWindowsLabels...)
+var hostedLabels = append(slices.Clone(hostedSudoLabels), workflow.HostedWindowsLabels()...)
 
 func mustLabels(names ...string) []workflow.RunnerLabelName {
 	out := make([]workflow.RunnerLabelName, len(names))

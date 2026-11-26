@@ -54,9 +54,11 @@ const HostedRunnerLabelsSource = "https://raw.githubusercontent.com/github/docs/
 // HostedWindowsLabels are the labels of the GitHub-hosted Windows runners
 // of HostedRunnerLabelsSource. A self-hosted runner may have a custom label
 // of the same name, or any custom label that begins with windows-.
-var HostedWindowsLabels = []RunnerLabelName{
-	mustRunnerLabelName("windows-latest"), mustRunnerLabelName("windows-2025"), mustRunnerLabelName("windows-2025-vs2026"),
-	mustRunnerLabelName("windows-2022"), mustRunnerLabelName("windows-11-arm"), mustRunnerLabelName("windows-11-vs2026-arm"),
+func HostedWindowsLabels() []RunnerLabelName {
+	return []RunnerLabelName{
+		mustRunnerLabelName("windows-latest"), mustRunnerLabelName("windows-2025"), mustRunnerLabelName("windows-2025-vs2026"),
+		mustRunnerLabelName("windows-2022"), mustRunnerLabelName("windows-11-arm"), mustRunnerLabelName("windows-11-vs2026-arm"),
+	}
 }
 
 func mustRunnerLabelName(s string) RunnerLabelName {
