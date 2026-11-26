@@ -696,8 +696,9 @@ func trDecode(set string) string {
 // command is echo (or echo -n) of one word or printf of %s (or %s and \n)
 // and one word, and whose last is a tr that deletes the line break (-d,
 // --delete) or turns it into another byte; or a ${ } that removes the
-// longest end of the value from the first white-space character or line
-// break (${T%%[[:space:]]*}, ${T%%$'\n'*}).
+// longest end of the value from the first character of a set that holds
+// the line break, or the longest start to the last one
+// (${T%%[[:space:]]*}, ${T%%$'\n'*}, ${T##*[[:space:]_]}).
 func LineFree(script string, p *Part) bool {
 	if p != nil && p.Kind == PartParamOp && p.Param != nil {
 		return p.Param.cutsLines(script)
