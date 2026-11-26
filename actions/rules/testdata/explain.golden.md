@@ -31894,7 +31894,7 @@
 
 ## credentials
 
-- problem: the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it
+- problem: the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it, or is read from a configuration variable (vars.NAME), whose value GitHub keeps as plain text
 - expected: the password is read from a secret of the repository, \${{ secrets.NAME }}
 - severity: critical (the worst of its kinds)
 - targets: workflow
@@ -32059,11 +32059,88 @@
           steps:
             - run: make
       ```
+- credentials.configuration-variable
+  - detected: the password of {container} is read from a configuration variable: {password}
+  - arguments:
+    - {container}: container, or services.&lt;name>.
+    - {password}: The password as written, such as \${{ vars.REGISTRY_PASSWORD }}.
+  - consequence: GitHub keeps the value of a configuration variable as plain text: the runner does not mask the value in the log of a workflow run, and the REST API gives the value to whoever may read the configuration variables of the repository, such as an app that has the Variables permission on the repository
+  - remedy: revoke the password, and pass a new one from a secret of the repository, \${{ secrets.NAME }}
+  - severity: medium (found from the CVSS metrics below by the table)
+  - attackers: log-reader
+  - preconditions: plain-text-variable, readable-log
+  - true positives:
+    - configuration-variable.yml (workflow, true-positive)
+      ```yaml
+      # situation: the job's container credentials read the registry password
+      #   from the configuration variable REGISTRY_PASSWORD, ${{
+      #   vars.REGISTRY_PASSWORD }}, and a later step prints the same variable.
+      # reason: the password is the value of a configuration variable, not of a
+      #   secret. GitHub keeps the value of a configuration variable as plain
+      #   text, the runner does not register the value as a secret, and the REST
+      #   API gives the value to whoever may read the configuration variables of
+      #   the repository.
+      # attack: one who may read the logs of the repository reads the log of a
+      #   run of the workflow, and takes the password that the step printed; an
+      #   app that has the Variables permission on the repository reads the
+      #   password from the REST API without any run.
+      # attack-run-behavior: the runner evaluates ${{ vars.REGISTRY_PASSWORD }} to
+      #   the value of the variable and logs in to ghcr.io with u and the value;
+      #   the step echo prints the value in the log as it is, since the runner
+      #   masks only the values of secrets. The registry takes the same pair from
+      #   the reader of the log, who logs in to the account outside the run.
+      on: push
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          container:
+            image: ghcr.io/o/build@sha256:0000000000000000000000000000000000000000000000000000000000000000
+            credentials:
+              username: u
+              password: ${{ vars.REGISTRY_PASSWORD }}
+          steps:
+            - run: echo "$REGISTRY_PASSWORD"
+              env:
+                REGISTRY_PASSWORD: ${{ vars.REGISTRY_PASSWORD }}
+      ```
+  - true negatives:
+    - configuration-variable.yml (workflow, true-negative)
+      ```yaml
+      # situation: the job's container is pulled with the registry password read
+      #   from the secret REGISTRY_PASSWORD; the user name of the registry is read
+      #   from the configuration variable REGISTRY_USER, and a step prints the
+      #   variable.
+      # reason: the password is the value of a secret, which the runner masks in
+      #   the log and the REST API never gives; the configuration variable holds
+      #   the user name only, which is not a credential by itself.
+      # attack: one who may read the logs of the repository reads the log of a
+      #   run of the workflow to take the registry password; an app that has the
+      #   Variables permission on the repository reads the configuration variables
+      #   of the repository from the REST API.
+      # attack-run-behavior: the runner logs in to ghcr.io with the value of
+      #   vars.REGISTRY_USER and the value of the secret; the step echo prints the
+      #   user name, and the log has no password, since the runner masks the value
+      #   of the secret. The REST API gives the user name and only the name of the
+      #   secret, so neither the reader of the log nor the app gets the password.
+      on: push
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          container:
+            image: ghcr.io/o/build@sha256:0000000000000000000000000000000000000000000000000000000000000000
+            credentials:
+              username: ${{ vars.REGISTRY_USER }}
+              password: ${{ secrets.REGISTRY_PASSWORD }}
+          steps:
+            - run: echo "$REGISTRY_USER"
+              env:
+                REGISTRY_USER: ${{ vars.REGISTRY_USER }}
+      ```
 
 ### undetected forms
 
 - action-input: a credential written in the with of a step, such as the password of docker/login-action: which inputs of an action are credentials is not known
-  - finding kinds: credentials.public, credentials.private
+  - finding kinds: credentials.public, credentials.private, credentials.configuration-variable
   - disposition: todo (needs: fact)
   - example: action-input.yml (workflow, undetected)
     ```yaml
@@ -32090,7 +32167,7 @@
               password: hunter2
     ```
 - run-command: a password written in a run: docker login -p
-  - finding kinds: credentials.public, credentials.private
+  - finding kinds: credentials.public, credentials.private, credentials.configuration-variable
   - disposition: todo (needs: same-file)
   - example: run-command.yml (workflow, undetected)
     ```yaml
@@ -32112,7 +32189,7 @@
           - run: docker login -u u -p hunter2 ghcr.io
     ```
 - remote-callee: a job or a step inside a reusable workflow of another repository (uses: owner/repo/.github/workflows/&lt;file>@&lt;ref>) whose content the fact workflow.definition does not give. For every rule: a run that does not ask the fact (a run without --online and without the answer in --facts). For a quality rule, also: a run where the linter asked the fact and got no answer (an answer of unknown: the GitHub API did not give the file), and a call deeper than the 3 levels of reusable workflows that the linter reads, for which the linter does not ask the fact. The rule reads a reusable workflow of another repository only from the answer of workflow.definition. For a rule that is not a quality rule (a rule with a threat), the last two forms are the inconclusive kind remote-callee-unknown, not this form
-  - finding kinds: credentials.public, credentials.private
+  - finding kinds: credentials.public, credentials.private, credentials.configuration-variable
   - disposition: todo (needs: fact)
   - example: remote-callee.yml (workflow, undetected)
     ```yaml
@@ -32140,7 +32217,7 @@
 
 ### inconclusive
 
-- password-expr: a password read from a context other than secrets: env, vars, inputs, matrix
+- password-expr: a password read from a context other than secrets and vars: env, inputs, matrix; also a container, or the services, written as a whole \${{ }}, whose credentials the rule does not see
   - disposition: todo (needs: same-file)
   - example: password-expr.yml (workflow, inconclusive)
     ```yaml
@@ -32153,9 +32230,9 @@
     #   CONTAINER, which is not in any file. So whether the password is written
     #   in the repository is not known.
     # cause: the rule gives this kind to a password that reads any context
-    #   other than secrets, without following env.PW to where the workflow sets
-    #   it, and to a container written as a whole ${{ }} (other than values of
-    #   the matrix), whose credentials it does not see.
+    #   other than secrets and vars, without following env.PW to where the
+    #   workflow sets it, and to a container written as a whole ${{ }} (other
+    #   than values of the matrix), whose credentials it does not see.
     # attack: when a password is a value written in the repository, as env.PW is
     #   here (hunter2, set at the top of the file), whoever reads the workflow
     #   file takes it.
@@ -32247,11 +32324,24 @@
   - cites:
     - <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainercredentials>
     - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md>
+- precondition plain-text-variable: GitHub keeps the value of a configuration variable as plain text and does not register the value as a secret: the documentation of GitHub says that variables store non-sensitive configuration information, that variables render unmasked in build outputs, and that passwords belong in secrets; the REST API gives the value of a configuration variable to whoever may read the configuration variables of the repository, among them an app that has the Variables permission on the repository, and gives only the name of a secret
+  - cites:
+    - <https://github.com/github/docs/blob/6cbe6413ac7177bb692a78c171a74ae8be50d721/content/actions/concepts/workflows-and-actions/variables.md>
+    - <https://docs.github.com/en/rest/actions/variables#get-a-repository-variable>
+    - <https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps#repository-permissions-for-variables>
+- precondition readable-log: anyone signed in to GitHub reads the logs of a public repository (repo.public true), those with read access the logs of a private or internal one, where every member of the enterprise has read access to an internal one, for 90 days by default
+  - cites:
+    - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md>
+    - <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/data/reusables/actions/about-artifact-log-retention.md>
+    - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md>
 - precondition history-keeps: the history keeps the password after the file no longer has it, and one who had access keeps a clone, so only revoking it ends the exposure
   - cites:
     - <https://docs.github.com/en/account-and-profile/reference/permission-levels-for-a-personal-account-repository#access-after-removing-a-collaborator>
 - actor: repository-reader
   - via: reads the workflow file, or a clone or a fork of the repository
+  - gains: use-registry-account
+- actor: log-reader
+  - via: reads the log of a workflow run in which a step printed the value of the configuration variable that holds the password
   - gains: use-registry-account
 
 ### CVSS
@@ -32346,11 +32436,61 @@
   - reason: no report was found of a password written in the credentials of a workflow's container taken and used
   - cites: none
 
+#### credentials.configuration-variable
+
+- vector: CVSS:4.0/AV:N/AC:L/AT:P/PR:L/UI:N/VC:N/VI:N/VA:N/SC:H/SI:H/SA:L/E:U
+- CVSS-B: 5.6 (medium)
+- CVSS-BT: 1.4 (low)
+- impact: H (from SC, SI)
+- likelihood: low
+- severity: medium (impact H, likelihood low; the table: sisakulint --explain=terms)
+- AV: N
+  - reason: the attacker reads the log of a workflow run, or calls the REST API, over the network
+  - cites: none
+- AC: L
+  - reason: the value is plain text where it is printed and in the answer of the REST API
+  - cites: none
+- AT: P
+  - reason: a step of a workflow run must print the value, or the attacker must hold a credential that may read the configuration variables of the repository
+  - cites: none
+- PR: L
+  - reason: the value is read by one who reads the log of a workflow run that prints the value (signed in to GitHub; on a private or internal repository, with read access), or by one who may read the configuration variables of the repository through the REST API
+  - cites: none
+- UI: N
+  - reason: nobody does anything
+  - cites: none
+- VC: N
+  - reason: the workflow's run is not harmed as such
+  - cites: none
+- VI: N
+  - reason: the workflow's run is not harmed as such
+  - cites: none
+- VA: N
+  - reason: the workflow's run is not harmed as such
+  - cites: none
+- SC: H
+  - reason: the attacker pulls the private images of the account
+  - cites: none
+- SI: H
+  - reason: an account that may push lets them push images of theirs, which whoever runs them runs
+  - cites: none
+- SA: L
+  - reason: they can delete what the account may
+  - cites: none
+- E: U
+  - reason: no report was found of a registry password kept in a configuration variable taken and used
+  - cites: none
+
 ### citations
 
 - <https://www.first.org/cvss/v4.0/specification-document>
 - <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainercredentials>
 - <https://github.com/github/docs/blob/8b39dc44a066dda794bfacdd25653ff86324ef21/content/repositories/creating-and-managing-repositories/about-repositories.md>
+- <https://github.com/github/docs/blob/6cbe6413ac7177bb692a78c171a74ae8be50d721/content/actions/concepts/workflows-and-actions/variables.md>
+- <https://docs.github.com/en/rest/actions/variables#get-a-repository-variable>
+- <https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps#repository-permissions-for-variables>
+- <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/content/actions/how-tos/monitor-workflows/use-workflow-run-logs.md>
+- <https://github.com/github/docs/blob/ba6f6f9b9b31c4f0a991fbcb1005080526424804/data/reusables/actions/about-artifact-log-retention.md>
 - <https://docs.github.com/en/account-and-profile/reference/permission-levels-for-a-personal-account-repository#access-after-removing-a-collaborator>
 
 ## dangerous-triggers

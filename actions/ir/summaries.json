@@ -1735,7 +1735,7 @@
         {
           "name": "passwordForm",
           "type": "PasswordForm",
-          "doc": "whether the password is written in the workflow, read from secrets, or read from another context"
+          "doc": "whether the password is written in the workflow, read from secrets, read from a configuration variable, or read from another context"
         },
         {
           "name": "passwordText",

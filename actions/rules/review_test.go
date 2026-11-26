@@ -357,15 +357,23 @@ func TestReviewDocumentFactsReal(t *testing.T) {
 }
 
 // TestSharedTrueNegative: a true negative named <kind>+<kind> is the
-// true negative of each kind, and its declaration says both.
+// true negative of each kind, and its declaration says both. The kind
+// credentials.configuration-variable is not in the name, and has a true
+// negative of its own.
 func TestSharedTrueNegative(t *testing.T) {
 	m := exampledMeta(Credentials)
 	var texts []lint.FindingText
 	for _, k := range m.FindingKinds {
-		if len(k.TrueNegatives) != 1 || k.TrueNegatives[0].Name.String() != "private+public.yml" {
-			t.Errorf("%s: true negatives %v, not the one private+public.yml", k.ID, k.TrueNegatives)
+		want := "private+public.yml"
+		if k.ID == kindCredentialsConfigurationVariable {
+			want = "configuration-variable.yml"
 		}
-		texts = append(texts, k.FindingText)
+		if len(k.TrueNegatives) != 1 || k.TrueNegatives[0].Name.String() != want {
+			t.Errorf("%s: true negatives %v, not the one %s", k.ID, k.TrueNegatives, want)
+		}
+		if k.ID != kindCredentialsConfigurationVariable {
+			texts = append(texts, k.FindingText)
+		}
 	}
 	if got, want := declarationText(m, lint.ExampleTrueNegative, "private+public"), lint.TrueNegativeText(texts...); got != want {
 		t.Errorf("declaration %q, want %q", got, want)

@@ -10,13 +10,14 @@ import (
 type PasswordForm uint8
 
 const (
-	passwordFormUnset   PasswordForm = iota
-	PasswordFormLiteral              // written in the workflow: no ${{ }}, ${FOO}, or a ${{ }} of no context
-	PasswordFormSecret               // read from secrets and no other context
-	PasswordFormOther                // read from another context: env, vars, inputs, matrix
+	passwordFormUnset    PasswordForm = iota
+	PasswordFormLiteral               // written in the workflow: no ${{ }}, ${FOO}, or a ${{ }} of no context
+	PasswordFormSecret                // read from secrets and no other context
+	PasswordFormOther                 // read from another context: env, inputs, matrix
+	PasswordFormVariable              // read from vars, and from no context other than vars and secrets
 )
 
-var passwordFormNames = [...]string{"", "literal", "secret", "other"}
+var passwordFormNames = [...]string{"", "literal", "secret", "other", "variable"}
 
 func (f PasswordForm) String() string { return passwordFormNames[f] }
 
@@ -95,9 +96,12 @@ func wholeExpr(j workflow.Job, c workflow.Container) (workflow.String, bool) {
 // passwordFormOf is how s gives a password. GitHub evaluates ${{ }} alone
 // and the runner gives the password to docker login on its standard input,
 // so ${FOO} is the password as written. A ${{ }} whose
-// value is known before the run is written in the workflow too.
+// value is known before the run is written in the workflow too. A
+// password that reads vars is the value of a configuration variable,
+// which GitHub keeps as plain text; a password that reads a context other
+// than secrets and vars is PasswordFormOther, whatever else it reads.
 func passwordFormOf(s workflow.String) PasswordForm {
-	secret := false
+	secret, variable := false, false
 	for _, p := range s.Parts {
 		if !p.Expr || p.Tree == nil {
 			continue
@@ -109,11 +113,20 @@ func passwordFormOf(s workflow.String) PasswordForm {
 			continue
 		}
 		for _, name := range contextsOf(p.Tree) {
-			if !expr.EqualName(name, "secrets") {
+			switch {
+			case expr.EqualName(name, "secrets"):
+				secret = true
+			case expr.EqualName(name, "vars"):
+				variable = true
+			default:
 				return PasswordFormOther
 			}
-			secret = true
 		}
+	}
+	if variable {
+		// secrets.PW || vars.PW is the value of the variable where the
+		// secret is not set, so one vars is enough
+		return PasswordFormVariable
 	}
 	if secret {
 		return PasswordFormSecret

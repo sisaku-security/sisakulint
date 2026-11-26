@@ -4583,7 +4583,7 @@
         "kind_id": "credentials.remote-callee-unknown"
       },
       "detected": "the rule does not read the jobs and the steps of the reusable workflow owner/repo/.github/workflows/release.yml@main, as the linter asked the fact workflow.definition for the reusable workflow and got no answer (github: .github/workflows/release.yml of owner/repo@019216bb322ee2a2b2259739ceacae26020c46bb could not be read: HTTP 422)",
-      "consequence": "the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it",
+      "consequence": "the password of a registry is written in the workflow, where whoever reads the repository reads it, and its history keeps it, or is read from a configuration variable (vars.NAME), whose value GitHub keeps as plain text",
       "remedy": "the rule credentials examined the place and could not decide whether the place has the problem that the rule looks for. A person decides: look at the place and at where the value at the place comes from. When the place does not have the problem, an entry for the place in a file of acceptances (--accept; the form of the file is schema/acceptances-v0.json) makes the place no longer add 8 to the exit code",
       "related": [],
       "evidence": [],
@@ -6371,7 +6371,7 @@
           "input": ".github/workflows/images.yml"
         },
         "start": 28,
-        "end": 237,
+        "end": 440,
         "line": 4,
         "column": 5,
         "exact": true,
@@ -6392,8 +6392,8 @@
         "eq": true
       },
       "key_path": "jobs.build",
-      "span_text": "runs-on: ubuntu-latest\ncontainer:\n  image: ghcr.io/o/build:1\n  credentials:\n    username: u\n    password: hunter2\nservices:\n  redis: redis\nsteps:\n  - uses: docker://alpine:3",
-      "span_lines": "runs-on: ubuntu-latest\ncontainer:\n  image: ghcr.io/o/build:1\n  credentials:\n    username: u\n    password: hunter2\nservices:\n  redis: redis\nsteps:\n  - uses: docker://alpine:3",
+      "span_text": "runs-on: ubuntu-latest\ncontainer:\n  image: ghcr.io/o/build:1\n  credentials:\n    username: u\n    password: hunter2\nservices:\n  redis: redis\n  db:\n    image: ghcr.io/o/db@sha256:0000000000000000000000000000000000000000000000000000000000000000\n    credentials:\n      username: u\n      password: ${{ vars.REGISTRY_PASSWORD }}\nsteps:\n  - uses: docker://alpine:3",
+      "span_lines": "runs-on: ubuntu-latest\ncontainer:\n  image: ghcr.io/o/build:1\n  credentials:\n    username: u\n    password: hunter2\nservices:\n  redis: redis\n  db:\n    image: ghcr.io/o/db@sha256:0000000000000000000000000000000000000000000000000000000000000000\n    credentials:\n      username: u\n      password: ${{ vars.REGISTRY_PASSWORD }}\nsteps:\n  - uses: docker://alpine:3",
       "fingerprint": "b0f27725347aefcbd297b451d4d06074842083415d2ad0ae0a43d9256f089976"
     },
     {
@@ -6570,6 +6570,36 @@
       "fingerprint": "4cf411385678e9c7c891a021b8136765d109352bb59c42d893308f37d89e4469"
     },
     {
+      "rule": "credentials",
+      "severity": "medium",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/images.yml"
+        },
+        "start": 368,
+        "end": 397,
+        "line": 16,
+        "column": 21,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "credentials.configuration-variable",
+        "container": "services.db",
+        "password": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "detected": "the password of services.db is read from a configuration variable: ${{ vars.REGISTRY_PASSWORD }}",
+      "consequence": "GitHub keeps the value of a configuration variable as plain text: the runner does not mask the value in the log of a workflow run, and the REST API gives the value to whoever may read the configuration variables of the repository, such as an app that has the Variables permission on the repository",
+      "remedy": "revoke the password, and pass a new one from a secret of the repository, ${{ secrets.NAME }}",
+      "related": [],
+      "evidence": [],
+      "key_path": "jobs.build.services.db.credentials.password",
+      "span_text": "${{ vars.REGISTRY_PASSWORD }}",
+      "span_lines": "password: ${{ vars.REGISTRY_PASSWORD }}",
+      "fingerprint": "75129051b16919d7ab61fc5258e4ac2d5e75b97ff7c7f86a6b617afde479c3a4"
+    },
+    {
       "rule": "action-list",
       "severity": "high",
       "certainty": "confirmed",
@@ -6577,9 +6607,9 @@
         "file": {
           "input": ".github/workflows/images.yml"
         },
-        "start": 220,
-        "end": 237,
-        "line": 13,
+        "start": 423,
+        "end": 440,
+        "line": 18,
         "column": 15,
         "exact": true,
         "via": []
@@ -6617,9 +6647,9 @@
         "file": {
           "input": ".github/workflows/images.yml"
         },
-        "start": 220,
-        "end": 237,
-        "line": 13,
+        "start": 423,
+        "end": 440,
+        "line": 18,
         "column": 15,
         "exact": true,
         "via": []
@@ -15528,6 +15558,47 @@
       "related": [],
       "evidence": [],
       "fingerprint": "c8fe39128901e1ec46d246fa43d9b815cb22db965ac699036540cb4174dcb6d1"
+    },
+    {
+      "rule": "unset-configuration-variable",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/images.yml"
+        },
+        "start": 372,
+        "end": 394,
+        "line": 16,
+        "column": 25,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "unset-configuration-variable.empty-value",
+        "name": "REGISTRY_PASSWORD",
+        "expression": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "detected": "the expression ${{ vars.REGISTRY_PASSWORD }} reads the configuration variable REGISTRY_PASSWORD as a value, and no list of defined names that this run of the linter has (repo.configuration-variables, and repo.environment-configuration-variables of each environment whose configuration variables the place of the expression reads) has the name REGISTRY_PASSWORD",
+      "consequence": "GitHub gives the empty string for a configuration variable that no level (repository, organization, environment) defines, and GitHub reports no error, so the expression gives the empty string where the workflow expects the value of the configuration variable. A misspelled name shows only in what the workflow run does, such as an empty argument of a step",
+      "remedy": "define the configuration variable at the repository, organization or environment level, or correct the name in the expression; when the workflow reads a missing configuration variable on purpose as meaning that the setting is not given, write the default value after ||, such as vars.NAME || 'default'",
+      "related": [],
+      "evidence": [],
+      "condition": {
+        "all": [
+          {
+            "query": {
+              "kind": "repo.configuration-variables"
+            },
+            "eq": [
+              "BUILD_ENV",
+              "DEPLOY_URL",
+              "DRY_RUN",
+              "TIMEOUT"
+            ]
+          }
+        ]
+      },
+      "fingerprint": "8294c706012964292b7ab6f77b668a9211ed16bfd880a9db829c9ba2146183c1"
     },
     {
       "rule": "missing-timeout-minutes",

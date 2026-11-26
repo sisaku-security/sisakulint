@@ -7213,6 +7213,33 @@
       "related": []
     },
     {
+      "rule": "credentials",
+      "severity": "medium",
+      "certainty": "confirmed",
+      "kind_id": "credentials.configuration-variable",
+      "detected": "the password of services.db is read from a configuration variable: ${{ vars.REGISTRY_PASSWORD }}",
+      "consequence": "GitHub keeps the value of a configuration variable as plain text: the runner does not mask the value in the log of a workflow run, and the REST API gives the value to whoever may read the configuration variables of the repository, such as an app that has the Variables permission on the repository",
+      "remedy": "revoke the password, and pass a new one from a secret of the repository, ${{ secrets.NAME }}",
+      "fingerprint": "a860f9c30746944ac8d96e4425a7cca1339a404efef2129fc2e3c46cea985577",
+      "args": {
+        "kind_id": "credentials.configuration-variable",
+        "container": "services.db",
+        "password": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/images.yml",
+          "line": 18,
+          "column": 21,
+          "key_path": "jobs.images.services.db.credentials.password",
+          "job": "images",
+          "source": "          password: ${{ vars.REGISTRY_PASSWORD }}"
+        }
+      ],
+      "related": []
+    },
+    {
       "rule": "action-list",
       "severity": "high",
       "certainty": "confirmed",
@@ -7229,7 +7256,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/images.yml",
-          "line": 15,
+          "line": 20,
           "column": 15,
           "key_path": "jobs.images.steps[0].uses",
           "job": "images",
@@ -7237,7 +7264,7 @@
           "source": "      - uses: docker://alpine:3",
           "snippet": [
             {
-              "line": 15,
+              "line": 20,
               "text": "      - uses: docker://alpine:3",
               "at": true
             }
@@ -7271,7 +7298,7 @@
         {
           "role": "finding",
           "input": ".github/workflows/images.yml",
-          "line": 15,
+          "line": 20,
           "column": 15,
           "key_path": "jobs.images.steps[0].uses",
           "job": "images",
@@ -7279,7 +7306,7 @@
           "source": "      - uses: docker://alpine:3",
           "snippet": [
             {
-              "line": 15,
+              "line": 20,
               "text": "      - uses: docker://alpine:3",
               "at": true
             }
@@ -12596,6 +12623,45 @@
       "related": []
     },
     {
+      "rule": "unset-configuration-variable",
+      "certainty": "confirmed",
+      "kind_id": "unset-configuration-variable.empty-value",
+      "detected": "the expression ${{ vars.REGISTRY_PASSWORD }} reads the configuration variable REGISTRY_PASSWORD as a value, and no list of defined names that this run of the linter has (repo.configuration-variables, and repo.environment-configuration-variables of each environment whose configuration variables the place of the expression reads) has the name REGISTRY_PASSWORD",
+      "consequence": "GitHub gives the empty string for a configuration variable that no level (repository, organization, environment) defines, and GitHub reports no error, so the expression gives the empty string where the workflow expects the value of the configuration variable. A misspelled name shows only in what the workflow run does, such as an empty argument of a step",
+      "remedy": "define the configuration variable at the repository, organization or environment level, or correct the name in the expression; when the workflow reads a missing configuration variable on purpose as meaning that the setting is not given, write the default value after ||, such as vars.NAME || 'default'",
+      "fingerprint": "c7ca70784d895af749e29b8c7b3f6373a8eea40ada55d774711cd38a5ee8bbf4",
+      "args": {
+        "kind_id": "unset-configuration-variable.empty-value",
+        "name": "REGISTRY_PASSWORD",
+        "expression": "${{ vars.REGISTRY_PASSWORD }}"
+      },
+      "path": [
+        {
+          "role": "finding",
+          "input": ".github/workflows/images.yml",
+          "line": 18,
+          "column": 25,
+          "key_path": "jobs.images.services.db.credentials.password",
+          "job": "images",
+          "source": "          password: ${{ vars.REGISTRY_PASSWORD }}"
+        }
+      ],
+      "related": [],
+      "condition": {
+        "id": 0,
+        "op": "all",
+        "parts": [
+          {
+            "id": 1,
+            "op": "leaf",
+            "text": "{\"query\":{\"kind\":\"repo.configuration-variables\"},\"eq\":[\"BUILD_ENV\",\"DEPLOY_URL\",\"DRY_RUN\",\"TIMEOUT\"]}",
+            "truth": "true"
+          }
+        ],
+        "truth": "unknown"
+      }
+    },
+    {
       "rule": "allowed-actions",
       "certainty": "confirmed",
       "kind_id": "allowed-actions.unpinned-action",
@@ -15427,6 +15493,11 @@
         "        password: hunter2",
         "    services:",
         "      redis: redis",
+        "      db:",
+        "        image: ghcr.io/o/db@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "        credentials:",
+        "          username: u",
+        "          password: ${{ vars.REGISTRY_PASSWORD }}",
         "    steps:",
         "      - uses: docker://alpine:3"
       ]
