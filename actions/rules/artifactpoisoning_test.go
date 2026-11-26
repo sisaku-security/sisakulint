@@ -354,3 +354,49 @@ func TestArtifactPoisoningSameRunComposite(t *testing.T) {
 		t.Errorf("missing action: %+v", rep.Findings)
 	}
 }
+
+// TestArtifactPoisoningPatterns: the pattern of actions/upload-artifact/merge
+// and of actions/download-artifact, read as minimatch reads it. A pattern
+// that the releases of minimatch read differently makes the merge
+// inconclusive, and the download take every artifact.
+func TestArtifactPoisoningPatterns(t *testing.T) {
+	checkout := "    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: make\n      - uses: actions/upload-artifact@v4\n        with: {name: part-1, path: out}\n"
+	merge := func(pattern string) map[string]string {
+		return map[string]string{".github/workflows/w.yml": "on: pull_request_target\njobs:\n  build:\n" + checkout + "  merge:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/upload-artifact/merge@v4\n        with: {name: out, pattern: '" + pattern + "'}\n  deploy:\n    needs: merge\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./run.sh\n"}
+	}
+	download := func(pattern string) map[string]string {
+		return map[string]string{".github/workflows/w.yml": "on: pull_request_target\njobs:\n  build:\n" + checkout + "  deploy:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {pattern: '" + pattern + "'}\n      - run: ./run.sh\n"}
+	}
+	for _, c := range []struct {
+		name                   string
+		files                  map[string]string
+		findings, inconclusive int
+	}{
+		{"merge part-@(x|y)", merge("part-@(x|y)"), 0, 0},
+		{"merge part-+(x)", merge("part-+(x)"), 0, 0},
+		{"merge part-!(1)", merge("part-!(1)"), 0, 0},
+		{"merge #part-1", merge("#part-1"), 0, 0},
+		{"merge part-@(1|2)", merge("part-@(1|2)"), 1, 0},
+		{"merge part-{1..3}", merge("part-{1..3}"), 1, 0},
+		{"merge part-+(@(1|2))", merge("part-+(@(1|2))"), 0, 1},
+		{"merge part-[[:digit:]]", merge("part-[[:digit:]]"), 0, 1},
+		{"download part-*", download("part-*"), 1, 0},
+		{"download part-{1,2}", download("part-{1,2}"), 1, 0},
+		{"download part-[!x]*", download("part-[!x]*"), 1, 0},
+		{"download !other-*", download("!other-*"), 1, 0},
+		{"download part-@(1|2)", download("part-@(1|2)"), 1, 0},
+		{"download !(x)*", download("!(x)*"), 1, 0},
+		{"download other-{a,b}", download("other-{a,b}"), 0, 0},
+		{"download part-@(x|y)", download("part-@(x|y)"), 0, 0},
+		{"download part-[[:digit:]]", download("part-[[:digit:]]"), 1, 0},
+		{"download part-+(@(1|2))", download("part-+(@(1|2))"), 1, 0},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, c.files, downloadFacts{})
+		if got := len(rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)); got != c.findings {
+			t.Errorf("%s: %d findings, want %d: %+v", c.name, got, c.findings, rep.Findings)
+		}
+		if got := len(rep.FindingsWith(lint.CertaintyInconclusive)); got != c.inconclusive {
+			t.Errorf("%s: %d inconclusive, want %d: %+v", c.name, got, c.inconclusive, rep.Findings)
+		}
+	}
+}
