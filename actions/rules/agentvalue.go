@@ -64,9 +64,9 @@ func everyRunNote(secret bool, a analysis.AgentAction, r ir.EveryRunRef) string 
 	case analysis.AgentValueRouteStepEnv:
 		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the step"
 	case analysis.AgentValueRouteJobEnv:
-		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the job"
+		route = r.Ref.Text + " reaches the agent through the variable " + r.Env.String() + " in the env of the job"
 	case analysis.AgentValueRouteWorkflowEnv:
-		route = r.Ref.Text + " reaches the agent through the env " + r.Env.String() + " of the workflow"
+		route = r.Ref.Text + " reaches the agent through the variable " + r.Env.String() + " in the env of the workflow"
 	case analysis.AgentValueRouteSettingInput:
 		route = r.Ref.Text + " reaches the settings of the agent through the input " + r.Input.String() + " of " + textAgentAction(a)
 	case analysis.AgentValueRouteCompositeInput:
@@ -137,10 +137,10 @@ func refusedActorValueRun(kinds []lint.FindingKindID) lint.FalsePositiveForm {
 func unknownOSCase(added []lint.AddedAttacker, kinds ...lint.FindingKindID) lint.FalsePositiveForm {
 	value, eg := "a value that an attacker writes", "body: fixed text in the env of the step, and BODY: ${{ github.event.issue.body }} in the env of the job"
 	if added != nil {
-		value, eg = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets", "guide: fixed text in the env of the step, and GUIDE: ${{ vars.GUIDE }} in the env of the job"
+		value, eg = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets that the workflow writes", "guide: fixed text in the env of the step, and GUIDE: ${{ vars.GUIDE }} in the env of the job"
 	}
 	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("unknown-os-case"),
-		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner, such as a ${{ }} of a matrix or the labels of a self-hosted runner without the label windows, where the env of the step or the env of the job has a variable whose name differs from the name of the variable that holds the value only in upper and lower case (" + eg + "): a Windows runner compares the names of the variables in any case, so the variable of the env of the step replaces the variable of the env of the job, the variable of the env of the job replaces the variable of the env of the workflow, and the value does not reach the agent; a Linux runner and a macOS runner compare the names in the same case only, and both variables reach the agent. The rule compares the names in any case only in a job whose runs-on decides a Windows runner",
+		Text:         value + " in the env of the job or in the env of the workflow, in a job whose runs-on does not decide the OS of the runner (for example, a runs-on that is a ${{ }} of a matrix, or the labels of a self-hosted runner without the label windows), when the env of the step or the env of the job also has a variable whose name is the same as the name of the variable that holds the attacker's value except for upper and lower case (for example, " + eg + "). A Windows runner ignores upper and lower case when the Windows runner compares the names of variables, so on a Windows runner the variable in the env of the step replaces the variable in the env of the job, the variable in the env of the job replaces the variable in the env of the workflow, and the attacker's value does not reach the agent. A Linux runner and a macOS runner keep upper and lower case distinct, so on those runners both variables reach the agent. The rule ignores upper and lower case only in a job whose runs-on decides a Windows runner",
 		FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile), AddedAttackers: added}
 }
 
@@ -154,6 +154,6 @@ func jobEnvComposite(valueRun bool) lint.UndetectedForm {
 		value = "in a run of the linter that adds variables-writer or secrets-writer, a value of vars or secrets, which the workflow puts"
 	}
 	return lint.UndetectedForm{ID: lint.MustUndetectedFormID("job-env-composite"),
-		Text:        value + " in the env of the job or in the env of the workflow, where the job runs a composite action of the repository or of another repository whose step runs the agent: the process of the agent also gets the env of the job and the env of the workflow, and the rule reads a step of a composite action with the env of the step only",
+		Text:        value + " in the env of the job or in the env of the workflow, where the job runs a composite action, in the repository or in another repository, and a step of the composite action runs the agent: the process of the agent also gets the env of the job and the env of the workflow, but the rule reads only the env of the step of the composite action",
 		Disposition: lint.Todo(lint.NeedSameFile)}
 }

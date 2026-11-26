@@ -1,11 +1,12 @@
 # situation: on issues with the activity type assigned, a job whose if lets
 #   in only an issue that the owner of the repository opened has the
-#   variable GUIDE in its env and runs the composite action
-#   example-org/claude-guide-composite@v1 of another repository, whose step
-#   runs claude-code-action, whose prompt tells the agent to follow the
-#   guide in the env GUIDE, with Bash allowed, on a self-hosted runner,
-#   which the rule reads as a runner whose user has no sudo, and a later
-#   step of the job runs a script with the secret DEPLOY_TOKEN.
+#   variable GUIDE in the env of the job and runs the composite action
+#   example-org/claude-guide-composite@v1 of another repository. A step of
+#   the composite action runs claude-code-action, and the prompt tells the
+#   agent to follow the guide in the env GUIDE. The agent may run Bash, the
+#   job runs on a self-hosted runner, which the rule reads as a runner whose
+#   user has no sudo, and a later step of the job runs a script with the
+#   secret DEPLOY_TOKEN.
 # reason: a todo (the same file): an attacker who can write the variables of
 #   the repository (the added attacker variables-writer) writes the guide;
 #   the next workflow run for an issue that the owner opened gives the guide
