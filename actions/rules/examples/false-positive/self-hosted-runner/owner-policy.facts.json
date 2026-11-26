@@ -3,5 +3,7 @@
 {"query":{"kind":"repo.allow-forking"},"state":"unknown","reason":"the example does not answer it"},
 {"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
 {"query":{"kind":"repo.fork-pr-run-workflows"},"state":"unknown","reason":"the example does not answer it"},
-{"query":{"kind":"repo.public"},"state":"found","value":true}
+{"query":{"kind":"repo.public"},"state":"found","value":true},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"linux"},"state":"unknown","reason":"the example does not answer it"},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"self-hosted"},"state":"unknown","reason":"the example does not answer it"}
 ]}

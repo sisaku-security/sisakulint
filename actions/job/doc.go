@@ -28,8 +28,10 @@
 //	             secrets context without a name in the called workflows
 //	secretuse.go the reads of the secrets context that name no secret, and
 //	             the values taken out of a secret by fromJSON
-//	runners.go   the labels of runs-on, and the values of the matrix a value
-//	             takes (MatrixValues)
+//	runners.go   the labels of runs-on, with the other labels of the same
+//	             runs-on (RunnerLabel.With), the values of the matrix a value
+//	             takes (MatrixValues), and the labels a whole ${{ }} that
+//	             reads only the matrix gives for each combination of its values
 //	hosted.go    whether a job runs on a runner GitHub hosts (Hosted,
 //	             HostedSudo), and the names of its services and labels
 //	needs.go     every job a job depends on through needs (Ancestors), and

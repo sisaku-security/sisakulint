@@ -89,6 +89,9 @@ func String(s string) Value  { return Value{k: vString, s: s} }
 // objects by * makes (github.event.pull_request.labels.*.name).
 func Array(elems ...Value) Value { return Value{k: vArray, elems: elems} }
 
+// Elems are the items of a known array value.
+func (v Value) Elems() ([]Value, bool) { return v.elems, v.k == vArray }
+
 // Known is whether the value is known.
 func (v Value) Known() bool { return v.k != vUnknown && v.k != vAbstract }
 

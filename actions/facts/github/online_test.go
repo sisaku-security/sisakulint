@@ -22,7 +22,7 @@ func queriesOfEveryKind(t *testing.T, repo facts.Repo) []facts.Query {
 		facts.RenovateManagerEnabled{}, facts.RepoAllowForking{}, facts.RepoArchived{}, facts.RepoDefaultTokenWrite{},
 		facts.RepoEnvironmentProtected{}, facts.RepoForkPRRunWorkflows{}, facts.RepoForkPRSecrets{}, facts.RepoForkPRWriteTokens{},
 		facts.RepoConfigurationVariables{}, facts.RepoEnvironmentConfigurationVariables{},
-		facts.RepoActionList{}, facts.RepoAllowedActions{}, facts.RepoPublic{}, facts.RepoPullRequestTargetAllowed{}, facts.RepoForkPRAppChecks{}, facts.RepoMergeCommitAppChecks{}, facts.RepoWikiOpen{}, facts.RequestDestinationTrusted{}, facts.WorkflowDefinition{},
+		facts.RepoActionList{}, facts.RepoAllowedActions{}, facts.RepoPublic{}, facts.RepoPullRequestTargetAllowed{}, facts.RepoRunnerLabelTrusted{}, facts.RepoForkPRAppChecks{}, facts.RepoMergeCommitAppChecks{}, facts.RepoWikiOpen{}, facts.RequestDestinationTrusted{}, facts.WorkflowDefinition{},
 	} {
 		v := reflect.New(reflect.TypeOf(q)).Elem()
 		if f := v.FieldByName("Repo"); f.IsValid() {

@@ -36,6 +36,7 @@ const (
 	KindRepoMergeCommitAppChecks
 	KindRepoPublic
 	KindRepoPullRequestTargetAllowed
+	KindRepoRunnerLabelTrusted
 	KindRepoWikiOpen
 	KindRequestDestinationTrusted
 	KindTestCommit
@@ -46,7 +47,7 @@ const (
 	KindWorkflowDefinition
 )
 
-var kindNames = [...]string{"", "action.definition", "action.runs-using", "checkout.executed", "dependabot.version-updates", "download.executed", "git.commit-contains", "git.commit-ref", "git.commit-tags", "git.ref-commit", "package.advisories", "renovate.manager-enabled", "repo.action-list", "repo.allow-forking", "repo.allowed-actions", "repo.archived", "repo.configuration-variables", "repo.default-token-write", "repo.environment-configuration-variables", "repo.environment-protected", "repo.fork-pr-app-checks", "repo.fork-pr-run-workflows", "repo.fork-pr-secrets", "repo.fork-pr-write-tokens", "repo.merge-commit-app-checks", "repo.public", "repo.pull-request-target-allowed", "repo.wiki-open", "request.destination-trusted", "test.commit", "test.flag", "test.list", "test.repo-flag", "test.text", "workflow.definition"}
+var kindNames = [...]string{"", "action.definition", "action.runs-using", "checkout.executed", "dependabot.version-updates", "download.executed", "git.commit-contains", "git.commit-ref", "git.commit-tags", "git.ref-commit", "package.advisories", "renovate.manager-enabled", "repo.action-list", "repo.allow-forking", "repo.allowed-actions", "repo.archived", "repo.configuration-variables", "repo.default-token-write", "repo.environment-configuration-variables", "repo.environment-protected", "repo.fork-pr-app-checks", "repo.fork-pr-run-workflows", "repo.fork-pr-secrets", "repo.fork-pr-write-tokens", "repo.merge-commit-app-checks", "repo.public", "repo.pull-request-target-allowed", "repo.runner-label-trusted", "repo.wiki-open", "request.destination-trusted", "test.commit", "test.flag", "test.list", "test.repo-flag", "test.text", "workflow.definition"}
 
 // ActionDefinition is the fact action.definition: The file that defines the action that the runner runs for uses: <repo>/<path>@<ref> (without path, the action at the root of repo), as the archive of the commit that the runner downloads has it. The ref is read as the fact kind git.ref-commit reads it, the tag when a tag and a branch have the same name. In the directory, action.yml when it is a file or a symlink to a file, else action.yaml, else a Dockerfile (or dockerfile). Absent when the archive has none of these there; unknown when the archive cannot be read.
 type ActionDefinition struct {
@@ -602,6 +603,30 @@ func (q RepoPullRequestTargetAllowed) encodeJSON() ([]byte, error) {
 	return encodeFields("repo.pull-request-target-allowed", fs...)
 }
 
+// RepoRunnerLabelTrusted is the fact repo.runner-label-trusted: Whether the owner of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) declares that no runner with the label runner_label runs the code of a pull request from a fork: for example, the runners with the label are in a runner group that only selected workflows on protected refs may use, or only repositories that run no workflow of a pull request from a fork. The author of a pull request writes the runs-on of the workflow that its pull_request run uses, so the label the workflows of the default branch write tells nothing of the runner by itself: only the settings of the runners and of their groups, which no API that a token of the repository reads gives, keep a pull request from a fork away from them. A user answers the fact in a file of facts, with --fact, or with fact in --config, once for each label; no other source answers the fact. A job whose runs-on has a label that the fact answers true runs only on runners with that label, so self-hosted-runner does not report the job. --online never asks GitHub for this fact. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.
+type RepoRunnerLabelTrusted struct {
+	Repo        Repo
+	RunnerLabel RunnerLabel
+}
+
+func (RepoRunnerLabelTrusted) Kind() Kind { return KindRepoRunnerLabelTrusted }
+
+func (RepoRunnerLabelTrusted) query() {}
+
+// Ask asks r about q.
+func (q RepoRunnerLabelTrusted) Ask(ctx context.Context, r Resolver) Answer[bool] {
+	return ask[bool](ctx, r, q)
+}
+
+func (q RepoRunnerLabelTrusted) encodeJSON() ([]byte, error) {
+	var fs []field
+	if !q.Repo.IsZero() {
+		fs = append(fs, field{"repo", q.Repo})
+	}
+	fs = append(fs, field{"runner_label", q.RunnerLabel})
+	return encodeFields("repo.runner-label-trusted", fs...)
+}
+
 // RepoWikiOpen is the fact repo.wiki-open: Whether anyone with an account on GitHub may edit the wiki of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the wiki is on, the repository is public, and "Restrict editing to collaborators only" is off in its settings. The REST API tells only that it is false: has_wiki false (a wiki turned off is hidden), or a repository that is not public (GET /repos/{owner}/{repo}); whether only collaborators may edit is in no API. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.
 type RepoWikiOpen struct {
 	Repo Repo
@@ -771,6 +796,7 @@ var kinds = []KindInfo{
 	{Kind: KindRepoMergeCommitAppChecks, Provider: ProviderRepoSetting, Permission: Permission{}, Description: "Whether an app outside GitHub Actions, such as an outside CI, makes a commit status or a check run in the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) for a commit after the merge of a pull request puts the commit in a branch of the repository, whichever way the pull request is merged (a merge commit, a squash or a rebase), or for a commit that a merge queue of the repository makes for a pull request. The merge puts in the branch the commit that merges the pull request, whose message can have the title of the pull request, or the commits of the pull request, whose messages the author of the pull request writes. For a commit of a pull request, count only a commit status or a check run that the app makes after the commit is in the branch: a commit status or a check run that the app makes for a commit of a pull request from a fork while the pull request is open is repo.fork-pr-app-checks. Count a commit status or a check run that the app makes for a commit that a merge queue makes, even while the pull request is open. An app that checks each commit that is pushed to a branch of the repository makes such a commit status or check run. The commit status or the check run starts a run of status, check_suite or check_run, which runs the workflow of the default branch, whatever branch the commit is on. The payload of a run of any of the three events has the SHA of the commit, and the payload of a run of status or check_suite also has the message, the author name and the committer name of the commit. GitHub Actions makes a check run for each job of a workflow run: do not count those check runs, nor a commit status or a check run that a workflow makes with the GITHUB_TOKEN of its run, because GitHub's documents say that events that the GITHUB_TOKEN triggers create no workflow run (the documents name two exceptions, workflow_dispatch and repository_dispatch, which are not events of a commit status or a check run). Count a commit status or a check run that a workflow makes with another token, such as a personal access token or the installation access token of a GitHub App, as one that an app outside GitHub Actions makes, because the events of such a commit status or check run start workflow runs. --online never asks GitHub for this fact: the REST API lists the commit statuses and the check runs of one commit, which tells that an app made one for that commit, and does not tell that no app makes one for the commits to come; the REST API lists the installations of GitHub Apps of an organization only to an owner of the organization (GET /orgs/{org}/installations), and gives a GitHub App only the installation of that app (GET /repos/{owner}/{repo}/installation). A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.", AssumedValue: json.RawMessage("true"), AssumedReason: "write false in a file of facts when no app outside GitHub Actions makes a commit status or a check run for a commit after the merge of a pull request puts the commit in a branch of the repository, nor for a commit that a merge queue of the repository makes"},
 	{Kind: KindRepoPublic, Provider: ProviderRepoSetting, Permission: Permission{}, Description: "Whether the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) is public, so that anyone with an account can fork it and open a pull request, whose workflow may run on its self-hosted runners. The REST API gives it of a named repository: GET /repos/{owner}/{repo}, visibility public (private and internal are not). A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.", AssumedValue: json.RawMessage("true"), AssumedReason: "write false in a file of facts for a private or internal repository"},
 	{Kind: KindRepoPullRequestTargetAllowed, Provider: ProviderRepoSetting, Permission: Permission{}, Description: "Whether the Actions policies of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) let a run of the workflow file input_path start on pull_request_target. The argument input_path names one workflow file, and a file of facts answers the fact once for each workflow file. An event policy has a list of the events that the event policy allows, and the event policy blocks the runs of each event that the list does not have. GitHub adds to a public repository that has no applicable event policy a default policy that blocks pull_request_target. GitHub's documents say that GitHub enforces the default policy from 2026-12-02 on the public repositories that the default policy covered before the Actions policies became generally available on 2026-09-17. The documents do not say when GitHub enforces the default policy on a public repository created after the policies became generally available, and do not say whether a repository created on 2026-09-17 counts as created before. Write true unless a policy that is not in evaluate mode blocks the runs, because a policy in evaluate mode blocks no run. When the documents do not settle the answer, write false only after a run of the workflow file on pull_request_target has failed with the error of a policy (the documents show an example of the error only for workflow_dispatch: Event 'workflow_dispatch' is not allowed to trigger Actions workflows. Workflow file: '<the path>'.; the documents do not show the error for pull_request_target), and otherwise write nothing, so that a finding whose condition depends on the fact is conditional. --online never asks GitHub for this fact, whatever the token: the REST API gives the policies of a repository only to a token with write access to the repository permission Administration, and the REST API does not tell whether the default policy applies. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.", AssumedValue: json.RawMessage("true"), AssumedReason: "write false in a file of facts for a workflow file when the Actions policies block the runs of the workflow file on pull_request_target"},
+	{Kind: KindRepoRunnerLabelTrusted, Provider: ProviderUserSupplied, Permission: Permission{}, Description: "Whether the owner of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) declares that no runner with the label runner_label runs the code of a pull request from a fork: for example, the runners with the label are in a runner group that only selected workflows on protected refs may use, or only repositories that run no workflow of a pull request from a fork. The author of a pull request writes the runs-on of the workflow that its pull_request run uses, so the label the workflows of the default branch write tells nothing of the runner by itself: only the settings of the runners and of their groups, which no API that a token of the repository reads gives, keep a pull request from a fork away from them. A user answers the fact in a file of facts, with --fact, or with fact in --config, once for each label; no other source answers the fact. A job whose runs-on has a label that the fact answers true runs only on runners with that label, so self-hosted-runner does not report the job. --online never asks GitHub for this fact. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.", AssumedValue: json.RawMessage("false"), AssumedReason: "write true in a file of facts for a label whose runners no pull request from a fork reaches"},
 	{Kind: KindRepoWikiOpen, Provider: ProviderRepoSetting, Permission: Permission{}, Description: "Whether anyone with an account on GitHub may edit the wiki of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the wiki is on, the repository is public, and \"Restrict editing to collaborators only\" is off in its settings. The REST API tells only that it is false: has_wiki false (a wiki turned off is hidden), or a repository that is not public (GET /repos/{owner}/{repo}); whether only collaborators may edit is in no API. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.", AssumedValue: json.RawMessage("true"), AssumedReason: "GitHub's default is collaborators only, and a private repository or one without a wiki is never open, so write false in a file of facts where that is so"},
 	{Kind: KindRequestDestinationTrusted, Provider: ProviderUserSupplied, Permission: Permission{}, Description: "Whether the repository trusts the destination to receive the secret: that whoever runs the server of the destination may hold the secret (the vendor whose API the secret opens, a service of the repository's own). A user answers the fact in a file of facts, for a pair of a secret and a destination the workflows send the secret to, with true when the repository trusts the destination; no other source answers the fact. When no source answers the fact, a finding whose condition depends on the fact is conditional.", AssumedValue: json.RawMessage("false"), AssumedReason: "write true in a file of facts for a pair of a secret and a destination the repository trusts"},
 	{Kind: KindTestCommit, Provider: ProviderTest, Permission: Permission{}, Description: "A commit of a repository whose value is a commit, for tests."},
@@ -837,6 +863,8 @@ func kindOf(q Query) (Kind, bool) {
 		return KindRepoPublic, true
 	case RepoPullRequestTargetAllowed:
 		return KindRepoPullRequestTargetAllowed, true
+	case RepoRunnerLabelTrusted:
+		return KindRepoRunnerLabelTrusted, true
 	case RepoWikiOpen:
 		return KindRepoWikiOpen, true
 	case RequestDestinationTrusted:
@@ -900,6 +928,9 @@ func WithRepo(q Query, r Repo) (_ Query, ok bool) {
 	case RepoPullRequestTargetAllowed:
 		q.Repo = r
 		return q, true
+	case RepoRunnerLabelTrusted:
+		q.Repo = r
+		return q, true
 	case RepoWikiOpen:
 		q.Repo = r
 		return q, true
@@ -936,6 +967,7 @@ var normalizers = map[Kind]func([]byte) ([]byte, error){
 	KindRepoMergeCommitAppChecks:              normalize[bool],
 	KindRepoPublic:                            normalize[bool],
 	KindRepoPullRequestTargetAllowed:          normalize[bool],
+	KindRepoRunnerLabelTrusted:                normalize[bool],
 	KindRepoWikiOpen:                          normalize[bool],
 	KindRequestDestinationTrusted:             normalize[bool],
 	KindTestCommit:                            normalize[SHA],
@@ -1196,6 +1228,16 @@ var decoders = map[Kind]func([]byte) (Query, error){
 			return nil, err
 		}
 		return RepoPullRequestTargetAllowed(v), nil
+	},
+	KindRepoRunnerLabelTrusted: func(b []byte) (Query, error) {
+		var v struct {
+			Repo        Repo        `json:"repo"`
+			RunnerLabel RunnerLabel `json:"runner_label"`
+		}
+		if err := json.Unmarshal(b, &v); err != nil {
+			return nil, err
+		}
+		return RepoRunnerLabelTrusted(v), nil
 	},
 	KindRepoWikiOpen: func(b []byte) (Query, error) {
 		var v struct {

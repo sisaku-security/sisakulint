@@ -16,6 +16,7 @@ func TestXAssumeValues(t *testing.T) {
 		KindRepoMergeCommitAppChecks:     "true",
 		KindRepoPullRequestTargetAllowed: "true",
 		KindRequestDestinationTrusted:    "false",
+		KindRepoRunnerLabelTrusted:       "false",
 	}
 	for _, k := range Kinds() {
 		v, ok := want[k.Kind]

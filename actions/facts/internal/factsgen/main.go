@@ -55,7 +55,7 @@ func main() {
 
 // goTypes are the Go types an x-go-type may name, written by hand in
 // actions/facts (types.go, actionpattern.go).
-var goTypes = map[string]bool{"Repo": true, "SHA": true, "RefName": true, "RefCommit": true, "InputPath": true, "StepPath": true, "EnvironmentName": true, "SecretName": true, "RequestDestination": true, "PackageName": true, "PackageVersion": true, "GHSAID": true, "Advisory": true, "UsesPath": true, "RunsUsing": true, "ActionFile": true, "WorkflowFile": true, "PackageEcosystem": true, "RenovateManager": true, "ActionPattern": true, "ConfigurationVariableName": true, "AllowedActionsSetting": true, "AllowedActionsPattern": true}
+var goTypes = map[string]bool{"Repo": true, "SHA": true, "RefName": true, "RefCommit": true, "InputPath": true, "StepPath": true, "EnvironmentName": true, "RunnerLabel": true, "SecretName": true, "RequestDestination": true, "PackageName": true, "PackageVersion": true, "GHSAID": true, "Advisory": true, "UsesPath": true, "RunsUsing": true, "ActionFile": true, "WorkflowFile": true, "PackageEcosystem": true, "RenovateManager": true, "ActionPattern": true, "ConfigurationVariableName": true, "AllowedActionsSetting": true, "AllowedActionsPattern": true}
 
 // zeroIsNone are the x-go-types whose zero value is none (IsZero): an
 // argument of one may be left out.

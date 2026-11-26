@@ -9,6 +9,8 @@
 {"query":{"kind":"repo.default-token-write"},"state":"found","value":true},
 {"query":{"kind":"repo.fork-pr-run-workflows"},"state":"unknown","reason":"the example does not answer it"},
 {"query":{"kind":"repo.public"},"state":"found","value":true},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"linux"},"state":"unknown","reason":"the example does not answer it"},
+{"query":{"kind":"repo.runner-label-trusted","runner_label":"self-hosted"},"state":"unknown","reason":"the example does not answer it"},
 {"query":{"kind":"workflow.definition","repo":"example-org/self-hosted-workflow","path":".github/workflows/build.yml","ref":"11bd71901bbe5b1630ceea73d27597364c9af683"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"on: workflow_call\njobs:\n  build:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: make\n"}},
 {"query":{"kind":"workflow.definition","repo":"example-org/self-hosted-workflow","path":".github/workflows/build.yml","ref":"v1"},"state":"found","value":{"commit":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","content":"on: workflow_call\njobs:\n  build:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: make\n"}}
 ]}

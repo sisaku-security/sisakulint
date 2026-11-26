@@ -84,6 +84,12 @@
       "pattern": "^(?:[^/\\\\.@\\s][^/\\\\@\\s]*|\\.[^/\\\\.@\\s][^/\\\\@\\s]*|\\.\\.[^/\\\\@\\s]+)(?:/(?:[^/\\\\.@\\s][^/\\\\@\\s]*|\\.[^/\\\\.@\\s][^/\\\\@\\s]*|\\.\\.[^/\\\\@\\s]+))*$",
       "x-go-type": "UsesPath"
     },
+    "runner-label": {
+      "description": "A label of a runner, as runs-on writes it: 1 to 255 characters, no control character, no white space around it. GitHub compares labels without case; sisakulint writes them in lower case.",
+      "type": "string",
+      "pattern": "^[^\\s\\x00-\\x1f\\x7f-\\x9f](?:[^\\x00-\\x1f\\x7f-\\x9f]{0,253}[^\\s\\x00-\\x1f\\x7f-\\x9f])?$",
+      "x-go-type": "RunnerLabel"
+    },
     "step-path": {
       "description": "Where a step is in its input: jobs.<id>.steps[<n>] in a workflow, jobs.<id>.steps[<n>].parallel[<m>] for a step of the parallel group at n, runs.steps[<n>] in an action.yml, n and m from 0.",
       "type": "string",
@@ -396,6 +402,20 @@
       "x-provider": "repo-setting",
       "x-assume": {"value": true, "reason": "write false in a file of facts for a private or internal repository"}
     },
+    "repo.runner-label-trusted": {
+      "description": "Whether the owner of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo) declares that no runner with the label runner_label runs the code of a pull request from a fork: for example, the runners with the label are in a runner group that only selected workflows on protected refs may use, or only repositories that run no workflow of a pull request from a fork. The author of a pull request writes the runs-on of the workflow that its pull_request run uses, so the label the workflows of the default branch write tells nothing of the runner by itself: only the settings of the runners and of their groups, which no API that a token of the repository reads gives, keep a pull request from a fork away from them. A user answers the fact in a file of facts, with --fact, or with fact in --config, once for each label; no other source answers the fact. A job whose runs-on has a label that the fact answers true runs only on runners with that label, so self-hosted-runner does not report the job. --online never asks GitHub for this fact. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.",
+      "type": "object",
+      "properties": {
+        "kind": {"const": "repo.runner-label-trusted"},
+        "repo": {"$ref": "#/$defs/repo"},
+        "runner_label": {"$ref": "#/$defs/runner-label"}
+      },
+      "required": ["kind", "runner_label"],
+      "additionalProperties": false,
+      "x-value": {"type": "boolean"},
+      "x-provider": "user-supplied",
+      "x-assume": {"value": false, "reason": "write true in a file of facts for a label whose runners no pull request from a fork reaches"}
+    },
     "repo.wiki-open": {
       "description": "Whether anyone with an account on GitHub may edit the wiki of the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the wiki is on, the repository is public, and \"Restrict editing to collaborators only\" is off in its settings. The REST API tells only that it is false: has_wiki false (a wiki turned off is hidden), or a repository that is not public (GET /repos/{owner}/{repo}); whether only collaborators may edit is in no API. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.",
       "type": "object",
@@ -676,6 +696,7 @@
         {"$ref": "#/$defs/repo.fork-pr-write-tokens"},
         {"$ref": "#/$defs/repo.public"},
         {"$ref": "#/$defs/repo.pull-request-target-allowed"},
+        {"$ref": "#/$defs/repo.runner-label-trusted"},
         {"$ref": "#/$defs/repo.wiki-open"},
         {"$ref": "#/$defs/request.destination-trusted"},
         {"$ref": "#/$defs/test.commit"},

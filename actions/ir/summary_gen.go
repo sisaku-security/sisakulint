@@ -925,17 +925,19 @@ func (x RequestSite) equal(y RequestSite) bool {
 
 // RunnerLabel is a label of the runs-on of a job: as written, or a value of the matrix a whole ${{ matrix.<name> }} takes.
 type RunnerLabel struct {
-	Label              workflow.RunnerLabelName // the label, trimmed where GitHub trims it
-	HasSelfHostedLabel bool                     // whether it is the label every self-hosted runner has
-	Matrix             bool                     // whether it is a value of the matrix
-	At                 Handle                   // where it is written
+	Label              workflow.RunnerLabelName   // the label, trimmed where GitHub trims it
+	HasSelfHostedLabel bool                       // whether it is the label every self-hosted runner has
+	Matrix             bool                       // whether it is a value of the matrix
+	With               []workflow.RunnerLabelName // the other labels of the same runs-on that a runner of the label also has
+	At                 Handle                     // where it is written
 }
 
 func (x RunnerLabel) equal(y RunnerLabel) bool {
 	return true &&
 		x.Label == y.Label &&
 		x.HasSelfHostedLabel == y.HasSelfHostedLabel &&
-		x.Matrix == y.Matrix
+		x.Matrix == y.Matrix &&
+		slices.Equal(x.With, y.With)
 }
 
 // SameRunUpload is an upload of the current run, in a job that checks out the code of a pull request before the upload, whose artifact a download of the current run takes.

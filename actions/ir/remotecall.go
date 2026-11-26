@@ -58,7 +58,7 @@ func (x *IR) projectCalled(o *RemoteCall, c composite.Called) {
 			cj.CacheModeText, cj.CacheModeAt = m.Expr.Text(), pl.handle(m.Expr.Base)
 		}
 		for _, r := range a.RunnerLabels {
-			cj.RunnerLabels = append(cj.RunnerLabels, RunnerLabel{Label: r.Label, HasSelfHostedLabel: r.HasSelfHostedLabel, Matrix: r.Matrix, At: pl.handle(r.At)})
+			cj.RunnerLabels = append(cj.RunnerLabels, RunnerLabel{Label: r.Label, HasSelfHostedLabel: r.HasSelfHostedLabel, Matrix: r.Matrix, With: r.With, At: pl.handle(r.At)})
 		}
 		for _, g := range a.InconclusiveLabels {
 			cj.InconclusiveLabels = append(cj.InconclusiveLabels, InconclusiveLabel{Text: g.Text, Dispatch: g.Dispatch, At: pl.handle(g.At)})
