@@ -60,7 +60,13 @@ func (x *IR) projectCheckoutSite(s prcode.CheckoutSite) *CheckoutSite {
 	for _, v := range s.InconclusiveValues {
 		cs.inconclusiveValues = append(cs.inconclusiveValues, v.Text())
 	}
-	cs.codeRunSteps = x.codeRunSteps(s.CodeRunSteps)
+	var runs []prcode.CodeRunStep
+	for _, e := range s.CodeRunSteps {
+		if !x.alwaysSkipped(e.Step.Base) {
+			runs = append(runs, e) // a step GitHub skips in every run runs nothing
+		}
+	}
+	cs.codeRunSteps = x.codeRunSteps(runs)
 	if s.Job != nil {
 		cs.dispatchCacheOn = taint.Filter(x.table(), x.dispatchSaveOn(s.Job), attacker.StepIf(x.workflow, s.Job, s.Step.If))
 		on := x.cacheSaveOn(s.Job)
