@@ -467,10 +467,6 @@ var recursiveUnsetLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID
 // function, followed by an assignment or a second unset.
 var unsetCallerLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("unset-caller-local"), Text: "a variable that a shell function unsets after a calling function made the variable local, when an assignment to the variable or a second unset of the variable follows the unset (s=x; reset() { unset s; }; point() { local s=y; reset; s=z; }; point): bash takes away the local of the calling function, so that the assignment after the unset sets the variable outside the calling function, and a second unset takes away the local of the next calling function or unsets the variable outside the functions; the rule keeps the local of the calling function after the unset, gives the variable back the value from before the calling function made the variable local when the calling function returns, and reads the second unset as the first unset", Disposition: lint.Todo(lint.NeedSameFile)}
 
-// severalDestinationsLimit is a destination variable that more than one
-// assignment reaches: the rule reads the last one in the script.
-var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-values"), Text: "a request whose host comes from a variable that more than one assignment of the script may set before the request (if c; then U=https://hooks.example.com; else U=https://api.github.com; fi; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule reads the host of the request from the assignment that comes last in the text of the script, and does not judge the hosts of the other assignments", Disposition: lint.Todo(lint.NeedSameFile)}
-
 // nameNotLiteralFalsePositive is a variable of env the script sets again
 // by an assignment whose variable name is not literal: the rule reads the
 // variable as env's value.

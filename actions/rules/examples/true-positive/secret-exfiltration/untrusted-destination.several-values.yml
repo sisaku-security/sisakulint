@@ -1,12 +1,9 @@
 # situation: on push, a step sets U to https://hooks.example.com when the
 #   ref is refs/heads/main and to https://api.github.com otherwise, and
 #   sends the secret API_KEY to "$U/x" with curl.
-# reason: a todo (the same file): on a push to main, U holds
-#   https://hooks.example.com when curl runs, so the request carries the
-#   secret to hooks.example.com.
-# cause: the rule reads the host from the assignment that comes last in the
-#   script, U=https://api.github.com, a host of GitHub, and does not judge
-#   the host of the other assignment.
+# reason: on a push to main, U holds https://hooks.example.com when curl
+#   runs, so the request carries the secret to hooks.example.com; the rule
+#   judges the host of every assignment of U that reaches the request.
 # attack: the attacker takes over the server of hooks.example.com, by a
 #   breach of the vendor or by registering the domain when the domain
 #   lapses.

