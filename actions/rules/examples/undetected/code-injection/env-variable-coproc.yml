@@ -6,11 +6,11 @@
 #   the descriptor 4 is a copy of the coproc's input.
 # cause: the rule does not read the input of a coproc as code for the value
 #   of a variable, and does not follow a descriptor copied from the
-#   coproc's array. The coproc's output is copied to descriptor 5 before
-#   its input is closed, because bash unsets the array when the coproc exits.
+#   coproc's array.
 # attack-value: github.event.issue.title = "echo PWNED"
 # attack-run-behavior: the coproc's bash runs echo PWNED, and cat prints
-#   PWNED from the coproc's output through descriptor 5.
+#   PWNED from the coproc's output through descriptor 5, a copy made before
+#   the input is closed, because bash unsets the array when the coproc exits.
 on:
   issues:
     types: [opened]
