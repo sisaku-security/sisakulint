@@ -677,7 +677,14 @@
         "checkout-site.automatic-approval",
         "checkout-site.code-run-steps",
         "checkout-site.step-path",
-        "checkout-site.uses-text"
+        "checkout-site.uses-text",
+        "run-checkout-site.pr-code-on",
+        "run-checkout-site.approval",
+        "run-checkout-site.environment",
+        "run-checkout-site.code-run-steps",
+        "run-checkout-site.step-path",
+        "run-checkout-site.command",
+        "run-checkout-site.ref"
       ],
       "fixes": [
         "CheckoutSite.BaseCheckout"

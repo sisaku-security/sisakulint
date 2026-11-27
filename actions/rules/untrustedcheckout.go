@@ -103,8 +103,39 @@ func (untrustedCheckout) Check(_ context.Context, c *lint.RuleContext, v ir.Untr
 		f.Fix, f.NoFix = fixOf(s.BaseCheckout())
 		c.Report(f)
 	}
+	for _, s := range v.RunCheckoutSites() {
+		reportRunCheckout(c, s)
+	}
 	return nil
 }
+
+// reportRunCheckout reports gh pr checkout of a run, which has no guard: a
+// job a label approves is left out, as for a checkout that the guard does
+// not refuse with no free label (automaticLabelForms).
+func reportRunCheckout(c *lint.RuleContext, s ir.UntrustedCheckoutOfRunCheckoutSite) {
+	if len(s.PRCodeOn()) == 0 || s.Approval() == analysis.ApprovalLabel {
+		return
+	}
+	approval := environmentCond(c, s.Approval(), s.Environment())
+	f := lint.FindingDraft{Location: c.At(s.At())}
+	if runs := s.CodeRunSteps(); len(runs) > 0 {
+		f.Args = UntrustedCheckoutExecuted{Uses: ghPRCheckout, CheckoutRef: s.Ref(), PRCodeOn: eventsOf(s.PRCodeOn()), Runs: runNames(runs)}
+		f.Evidence = runEvidence(c, runs)
+		f.Condition = approval
+	} else {
+		var executed *lint.Condition
+		if q, ok := executedQuery(c, s.StepPath()); ok && !c.RemoteCalled() {
+			executed = factCond(q, true)
+		}
+		f.Args = UntrustedCheckoutCheckout{Uses: ghPRCheckout, CheckoutRef: s.Ref(), PRCodeOn: eventsOf(s.PRCodeOn())}
+		f.Condition = allOf(approval, executed)
+	}
+	f.NoFix = &lint.NoFix{Reason: ir.NoFixReasonManual, Note: "take out " + s.Command() + ", or read the pull request's files as data only"}
+	c.Report(f)
+}
+
+// ghPRCheckout is the command that untrusted-checkout reads in a run.
+const ghPRCheckout = "gh pr checkout"
 
 // checkoutBase is the CVSS of untrusted-checkout: the attacker's code runs
 // in the job, as code-injection's does.

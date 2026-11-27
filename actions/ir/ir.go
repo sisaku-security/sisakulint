@@ -39,14 +39,15 @@ type IR struct {
 	paths      *Paths
 	editor     edit.Editor // keeps what it looks up in the tree, for every fix of the input
 
-	skipped        skippedJobs // the jobs GitHub skips in every run (alwaysSkipped)
-	onces          [summaryCount]sync.Once
-	panics         [summaryCount]any // what the making of each type panicked with
-	made           [summaryCount]int
-	uses           []*Uses
-	unreadCallees  []*UnreadCallee
-	checkoutSites  []*CheckoutSite
-	checkoutSiteOf map[*CheckoutSite]prcode.CheckoutSite // what the fixes of a site read (checkoutfix.go)
+	skipped          skippedJobs // the jobs GitHub skips in every run (alwaysSkipped)
+	onces            [summaryCount]sync.Once
+	panics           [summaryCount]any // what the making of each type panicked with
+	made             [summaryCount]int
+	uses             []*Uses
+	unreadCallees    []*UnreadCallee
+	checkoutSites    []*CheckoutSite
+	checkoutSiteOf   map[*CheckoutSite]prcode.CheckoutSite // what the fixes of a site read (checkoutfix.go)
+	runCheckoutSites []*RunCheckoutSite
 
 	scripts  *shell.Memo    // each script read once, for taint, prcode and the plans
 	analysis taint.Analysis // made with the Sinks, which the plans read

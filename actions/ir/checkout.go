@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/expr"
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/prcode"
 	"github.com/gh-intel/sisakulint/actions/taint"
@@ -81,4 +82,25 @@ func (x *IR) projectCheckoutSite(s prcode.CheckoutSite) *CheckoutSite {
 // codeRunSteps is the projection of the steps that run what a site brings.
 func (x *IR) codeRunSteps(runs []prcode.CodeRunStep) []CodeRunStep {
 	return x.inputPlace().codeRunSteps(runs)
+}
+
+func (x *IR) allRunCheckoutSites() []*RunCheckoutSite {
+	x.once(SummaryRunCheckoutSite, func() {
+		var out []*RunCheckoutSite
+		for _, s := range prcode.AnalyzeRunCheckouts(x.callersOf(), x.name, x.workflow, x.scripts) {
+			out = append(out, &RunCheckoutSite{
+				key:          keyOf(x.paths, x.input, x.tree, s.Step.Base),
+				at:           x.spanOf(s.Step.Run.Value, expr.Span{Start: s.RefSpan.Start, End: s.RefSpan.End}),
+				prCodeOn:     s.PRCodeOn,
+				approval:     s.Approval,
+				environment:  s.Environment,
+				codeRunSteps: x.codeRunSteps(s.CodeRunSteps),
+				stepPath:     s.Path,
+				command:      s.Text,
+				ref:          s.Ref,
+			})
+		}
+		x.runCheckoutSites = out
+	})
+	return x.runCheckoutSites
 }

@@ -1,5 +1,5 @@
 // Package prcode is where a workflow or an action.yml brings the code of a
-// pull request with actions/checkout, or the artifact of a run a pull
+// pull request with actions/checkout (or a workflow with gh pr checkout in a run), or the artifact of a run a pull
 // request drives with actions/download-artifact or
 // dawidd6/action-download-artifact, and the
 // context of that job the rules of untrusted checkouts and of artifact
@@ -41,6 +41,8 @@
 //	             runner.temp read from the syntax of their ${{ }}
 //	dispatch.go  the inputs of workflow_dispatch that choose what a checkout or a download takes
 //	commit.go    MissingCommit
+//	runcheckout.go  RunCheckoutSite, AnalyzeRunCheckouts: gh pr checkout <n> in a run, with a literal number or a
+//	             whole ${{ }} of the event's pull request, and what runs after it in the run and the steps after
 //
 // Tests:
 //
@@ -64,5 +66,6 @@
 //	misread_test.go   forms of refs, forks and later checkouts that the analysis once read wrongly
 //	scale_test.go     the time of a job of many checkouts (ACTIONS_SCALE=1)
 //	upstream_test.go  each release published after the tables were taken is in them (ACTIONS_UPSTREAM=1)
+//	runcheckout_test.go  gh pr checkout: the number's forms and events, what runs after it in the run and after the step
 //	deps_test.go      what it depends on, and that actions/taint does not read it
 package prcode

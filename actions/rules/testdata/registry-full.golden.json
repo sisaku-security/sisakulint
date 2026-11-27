@@ -188683,6 +188683,119 @@
             },
             {
               "input_kind": "workflow",
+              "name": "executed.gh-pr-checkout.yml",
+              "text": "# situation: on a comment on a pull request, a run step brings the pull\n#   request's head with gh pr checkout and the issue's number, and npm ci\n#   runs in it.\n# reason: issue_comment runs the job with the base repository's token and\n#   secrets, and anyone who can comment starts it; gh pr checkout fetches\n#   the head of the pull request the comment is on, which its author, from\n#   a fork too, pushed, and has no guard as actions/checkout has.\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: gh pr checkout switches the workspace to the head of\n#   the pull request, and npm ci runs its preinstall script, which prints\n#   PWNED, with the job's token and secrets.\non:\n  issue_comment:\n    types: [created]\njobs:\n  a:\n    if: github.event.issue.pull_request\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - env:\n          GH_TOKEN: ${{ secrets.BOT_TOKEN }}\n        run: gh pr checkout \"${{ github.event.issue.number }}\"\n      - run: npm ci\n",
+              "facts": [
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "11d5960a326750d5838078e36cf38b85af677262"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "dependabot.version-updates",
+                    "package_ecosystem": "github-actions",
+                    "input_path": "executed.gh-pr-checkout.yml"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "11d5960a326750d5838078e36cf38b85af677262"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                }
+              ],
+              "notes": {
+                "situation": "on a comment on a pull request, a run step brings the pull request's head with gh pr checkout and the issue's number, and npm ci runs in it.",
+                "reason": "issue_comment runs the job with the base repository's token and secrets, and anyone who can comment starts it; gh pr checkout fetches the head of the pull request the comment is on, which its author, from a fork too, pushed, and has no guard as actions/checkout has.",
+                "attack_value": {
+                  "carrier": "the file package.json in the pull request's head",
+                  "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+                },
+                "attack_run_behavior": "gh pr checkout switches the workspace to the head of the pull request, and npm ci runs its preinstall script, which prints PWNED, with the job's token and secrets."
+              }
+            },
+            {
+              "input_kind": "workflow",
               "name": "executed.ghsa-gvh4-93cq-5xxp.yml",
               "text": "# situation: on pull_request_target, a job checks out the head commit of the\n#   pull request with actions/checkout v4.2.2, a release older than the first\n#   release of actions/checkout that refuses to check out the code of a pull\n#   request without the input allow-unsafe-pr-checkout, and runs npx\n#   markdownlint-cli. This is ci.yml of eigent-ai/eigent (commit\n#   2a406536e78b3cf50d9add8c3ef81a5b6d75db48, lines 4, 78 and 81).\n# reason: npx runs node_modules/.bin/markdownlint of the checkout when the\n#   checkout has the file, and the author of the pull request writes the file.\n# attack: the author of the pull request writes node_modules/.bin/markdownlint\n#   in the head commit.\n# attack-run-behavior: npx runs the file of the author.\n# advisory: https://github.com/eigent-ai/eigent/security/advisories/GHSA-gvh4-93cq-5xxp\non: pull_request_target\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npx markdownlint-cli '**/*.md'\n",
               "facts": [
@@ -193859,6 +193972,119 @@
             },
             {
               "input_kind": "workflow",
+              "name": "executed.gh-pr-checkout-push.yml",
+              "text": "# situation: on push, a run step brings a pull request with gh pr checkout\n#   and a literal number, and npm ci runs in it.\n# reason: a push to the repository is made by those who can write to it, not\n#   by the author of a pull request, and no attacker chooses the pull\n#   request: the number is written in the workflow.\n# attack-value: the file package.json in the head of pull request 1 = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: no run starts from the attacker's event: only a push\n#   by one who can write to the repository starts the job.\non: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - env:\n          GH_TOKEN: ${{ github.token }}\n        run: gh pr checkout 1\n      - run: npm ci\n",
+              "facts": [
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "11d5960a326750d5838078e36cf38b85af677262"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "dependabot.version-updates",
+                    "package_ecosystem": "github-actions",
+                    "input_path": "executed.gh-pr-checkout-push.yml"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/checkout",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "11d5960a326750d5838078e36cf38b85af677262"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                }
+              ],
+              "notes": {
+                "situation": "on push, a run step brings a pull request with gh pr checkout and a literal number, and npm ci runs in it.",
+                "reason": "a push to the repository is made by those who can write to it, not by the author of a pull request, and no attacker chooses the pull request: the number is written in the workflow.",
+                "attack_value": {
+                  "carrier": "the file package.json in the head of pull request 1",
+                  "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+                },
+                "attack_run_behavior": "no run starts from the attacker's event: only a push by one who can write to the repository starts the job."
+              }
+            },
+            {
+              "input_kind": "workflow",
               "name": "executed.job-needs-result.yml",
               "text": "# situation: the workflow runs on pull_request_target; the job test needs\n#   the job build, has the if needs.build.result == 'failure', checks out the\n#   head of the pull request, and runs npm ci.\n# reason: GitHub evaluates the if of the job test, which calls no status\n#   function, only when the job build succeeded, where needs.build.result is\n#   success, so the if is false; when the job build fails or is skipped,\n#   GitHub skips the job test; so the job test does not run\n#   (https://github.com/github/docs/blob/404a5f4de6cd5311e3ce2d5c076571291e0107d6/content/actions/reference/workflows-and-actions/expressions.md,\n#   status check functions).\n# attack-value: the file package.json in the pull request's head = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the attacker opens a pull request from a fork; GitHub\n#   runs the job build, and the if of the job test is false, so the job test\n#   does not run.\non: pull_request_target\npermissions: {}\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo built\n  test:\n    needs: build\n    if: needs.build.result == 'failure'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci\n",
               "facts": [
@@ -196269,7 +196495,7 @@
         },
         {
           "id": "git-in-run",
-          "text": "the code of a pull request fetched by git or gh in a run (git fetch origin pull/<n>/head, gh pr checkout), not by actions/checkout",
+          "text": "the code of a pull request fetched by git in a run (git fetch origin pull/<n>/head, git checkout), not by actions/checkout; and gh pr checkout whose number is a shell variable (\"$PR\" with PR: ${{ github.event.issue.number }} in env) or is not the number of the pull request of the event",
           "finding_kinds": [
             "untrusted-checkout.executed",
             "untrusted-checkout.checkout"
@@ -209293,7 +209519,7 @@
         },
         {
           "id": "git-in-run",
-          "text": "the code of a pull request fetched by git or gh in a run (git fetch origin pull/<n>/head, gh pr checkout), not by actions/checkout",
+          "text": "the code of a pull request fetched by git in a run (git fetch origin pull/<n>/head, git checkout), not by actions/checkout; and gh pr checkout whose number is a shell variable (\"$PR\" with PR: ${{ github.event.issue.number }} in env) or is not the number of the pull request of the event",
           "finding_kinds": [
             "untrusted-checkout-toctou.mutable-ref"
           ],

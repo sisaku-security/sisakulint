@@ -207,7 +207,7 @@ func checkoutActors(via string, gains []lint.Gain) []lint.Actor {
 // checkoutLimits are the forms both rules do not report.
 var checkoutLimits = []lint.UndetectedForm{
 	outsideCallerLimit,
-	{ID: lint.MustUndetectedFormID("git-in-run"), Text: "the code of a pull request fetched by git or gh in a run (git fetch origin pull/<n>/head, gh pr checkout), not by actions/checkout", Disposition: lint.Todo(lint.NeedSameFile)},
+	{ID: lint.MustUndetectedFormID("git-in-run"), Text: "the code of a pull request fetched by git in a run (git fetch origin pull/<n>/head, git checkout), not by actions/checkout; and gh pr checkout whose number is a shell variable (\"$PR\" with PR: ${{ github.event.issue.number }} in env) or is not the number of the pull request of the event", Disposition: lint.Todo(lint.NeedSameFile)},
 	{ID: lint.MustUndetectedFormID("artifact"), Text: "the code of a pull request brought by the artifact of a run it drives: artifact-poisoning reports it", Disposition: lint.OtherRule(ArtifactPoisoningID)},
 	{ID: lint.MustUndetectedFormID("cache"), Text: "the code of a pull request brought by a cache that another run or job wrote", Disposition: lint.Todo(lint.NeedSameFile)},
 	{ID: lint.MustUndetectedFormID("remote-action"), Text: "a checkout in an action of another repository: the rule does not read the action", Disposition: lint.Todo(lint.NeedFact)},

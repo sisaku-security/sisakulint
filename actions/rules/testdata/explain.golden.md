@@ -67832,6 +67832,33 @@
                   sync-labels: true
                   repo-token: ${{ secrets.PAT }}
         ```
+    - executed.gh-pr-checkout.yml (workflow, true-positive)
+      ```yaml
+      # situation: on a comment on a pull request, a run step brings the pull
+      #   request's head with gh pr checkout and the issue's number, and npm ci
+      #   runs in it.
+      # reason: issue_comment runs the job with the base repository's token and
+      #   secrets, and anyone who can comment starts it; gh pr checkout fetches
+      #   the head of the pull request the comment is on, which its author, from
+      #   a fork too, pushed, and has no guard as actions/checkout has.
+      # attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+      # attack-run-behavior: gh pr checkout switches the workspace to the head of
+      #   the pull request, and npm ci runs its preinstall script, which prints
+      #   PWNED, with the job's token and secrets.
+      on:
+        issue_comment:
+          types: [created]
+      jobs:
+        a:
+          if: github.event.issue.pull_request
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - env:
+                GH_TOKEN: ${{ secrets.BOT_TOKEN }}
+              run: gh pr checkout "${{ github.event.issue.number }}"
+            - run: npm ci
+      ```
     - executed.ghsa-gvh4-93cq-5xxp.yml (workflow, true-positive)
       ```yaml
       # situation: on pull_request_target, a job checks out the head commit of the
@@ -69134,6 +69161,27 @@
                   sync-labels: true
                   repo-token: ${{ secrets.PAT }}
         ```
+    - executed.gh-pr-checkout-push.yml (workflow, true-negative)
+      ```yaml
+      # situation: on push, a run step brings a pull request with gh pr checkout
+      #   and a literal number, and npm ci runs in it.
+      # reason: a push to the repository is made by those who can write to it, not
+      #   by the author of a pull request, and no attacker chooses the pull
+      #   request: the number is written in the workflow.
+      # attack-value: the file package.json in the head of pull request 1 = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+      # attack-run-behavior: no run starts from the attacker's event: only a push
+      #   by one who can write to the repository starts the job.
+      on: push
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4
+            - env:
+                GH_TOKEN: ${{ github.token }}
+              run: gh pr checkout 1
+            - run: npm ci
+      ```
     - executed.job-needs-result.yml (workflow, true-negative)
       ```yaml
       # situation: the workflow runs on pull_request_target; the job test needs
@@ -69721,7 +69769,7 @@
         call:
           uses: ./.github/workflows/called.yml
       ```
-- git-in-run: the code of a pull request fetched by git or gh in a run (git fetch origin pull/&lt;n>/head, gh pr checkout), not by actions/checkout
+- git-in-run: the code of a pull request fetched by git in a run (git fetch origin pull/&lt;n>/head, git checkout), not by actions/checkout; and gh pr checkout whose number is a shell variable ("\$PR" with PR: \${{ github.event.issue.number }} in env) or is not the number of the pull request of the event
   - finding kinds: untrusted-checkout.executed, untrusted-checkout.checkout
   - disposition: todo (needs: same-file)
   - example: git-in-run.yml (workflow, undetected)
@@ -73261,7 +73309,7 @@
         call:
           uses: ./.github/workflows/called.yml
       ```
-- git-in-run: the code of a pull request fetched by git or gh in a run (git fetch origin pull/&lt;n>/head, gh pr checkout), not by actions/checkout
+- git-in-run: the code of a pull request fetched by git in a run (git fetch origin pull/&lt;n>/head, git checkout), not by actions/checkout; and gh pr checkout whose number is a shell variable ("\$PR" with PR: \${{ github.event.issue.number }} in env) or is not the number of the pull request of the event
   - finding kinds: untrusted-checkout-toctou.mutable-ref
   - disposition: todo (needs: same-file)
   - example: git-in-run.yml (workflow, undetected)

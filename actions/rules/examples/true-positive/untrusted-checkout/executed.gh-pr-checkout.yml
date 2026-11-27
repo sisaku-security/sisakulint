@@ -1,0 +1,24 @@
+# situation: on a comment on a pull request, a run step brings the pull
+#   request's head with gh pr checkout and the issue's number, and npm ci
+#   runs in it.
+# reason: issue_comment runs the job with the base repository's token and
+#   secrets, and anyone who can comment starts it; gh pr checkout fetches
+#   the head of the pull request the comment is on, which its author, from
+#   a fork too, pushed, and has no guard as actions/checkout has.
+# attack-value: the file package.json in the pull request's head = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: gh pr checkout switches the workspace to the head of
+#   the pull request, and npm ci runs its preinstall script, which prints
+#   PWNED, with the job's token and secrets.
+on:
+  issue_comment:
+    types: [created]
+jobs:
+  a:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: gh pr checkout "${{ github.event.issue.number }}"
+      - run: npm ci

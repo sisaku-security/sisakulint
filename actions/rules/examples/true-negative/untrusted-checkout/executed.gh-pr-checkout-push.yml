@@ -1,0 +1,18 @@
+# situation: on push, a run step brings a pull request with gh pr checkout
+#   and a literal number, and npm ci runs in it.
+# reason: a push to the repository is made by those who can write to it, not
+#   by the author of a pull request, and no attacker chooses the pull
+#   request: the number is written in the workflow.
+# attack-value: the file package.json in the head of pull request 1 = "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
+# attack-run-behavior: no run starts from the attacker's event: only a push
+#   by one who can write to the repository starts the job.
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr checkout 1
+      - run: npm ci

@@ -1789,6 +1789,25 @@
       "fixes": []
     },
     {
+      "name": "RunCheckoutSite",
+      "list": "RunCheckoutSites",
+      "slug": "run-checkout-site",
+      "doc": "RunCheckoutSite is the summary of a command of a run step that brings the code of a pull request into the directory of the shell, gh pr checkout <n>, and can run on a privileged event (actions/prcode): the approval of its job, and the commands and the steps after it that run what it brings.",
+      "handles": [
+        {"name": "at", "doc": "the number of the pull request in the run"}
+      ],
+      "fields": [
+        {"name": "prCodeOn", "type": "[]analysis.EventActivity", "doc": "the privileged events the step can run on on which the number names a pull request"},
+        {"name": "approval", "type": "analysis.Approval", "doc": "what makes a person approve the run"},
+        {"name": "environment", "type": "facts.EnvironmentName", "doc": "the environment of the job, when the approval is ApprovalEnvironment"},
+        {"name": "codeRunSteps", "type": "[]CodeRunStep", "doc": "the commands after it in the same run and the steps after it that run what it brings"},
+        {"name": "stepPath", "type": "facts.StepPath", "doc": "the step as a file of facts names it"},
+        {"name": "command", "type": "string", "doc": "the command as written", "display": true},
+        {"name": "ref", "type": "string", "doc": "the number of the pull request as written", "display": true}
+      ],
+      "fixes": []
+    },
+    {
       "name": "RunsUsingSite",
       "list": "RunsUsingSites",
       "slug": "runs-using-site",

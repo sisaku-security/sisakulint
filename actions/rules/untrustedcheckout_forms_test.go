@@ -60,3 +60,29 @@ func TestCheckoutFormGuardedUnknown(t *testing.T) {
 		t.Errorf("unexamined %+v", rep.FindingsWith(lint.CertaintyInconclusive))
 	}
 }
+
+// TestCheckoutFormGhPRCheckout: gh pr checkout of the event's pull request
+// in a run is read as a checkout of its code; code run after it in the
+// same script runs it. The number in a shell variable set from env is the
+// undetected form git-in-run.
+func TestCheckoutFormGhPRCheckout(t *testing.T) {
+	for _, c := range []struct {
+		on, step, after, want string
+	}{
+		{"{issue_comment: {types: [created]}}", "      - run: gh pr checkout \"${{ github.event.issue.number }}\"\n", "      - run: npm ci\n", "untrusted-checkout.executed"},
+		{"pull_request_target", "      - run: gh pr checkout ${{ github.event.pull_request.number }} && npm ci\n", "", "untrusted-checkout.executed"},
+		{"pull_request_target", "      - run: gh pr checkout ${{ github.event.pull_request.number }}\n", "", "untrusted-checkout.checkout"},
+		{"push", "      - run: gh pr checkout 1\n", "      - run: npm ci\n", ""},
+		{"{issue_comment: {types: [created]}}", "      - env: {PR: '${{ github.event.issue.number }}'}\n        run: gh pr checkout \"$PR\"\n", "      - run: npm ci\n", ""},
+	} {
+		src := "on: " + c.on + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n" + c.step + c.after
+		rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout}, wfFile(src), checkoutFacts{})
+		got := rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)
+		switch {
+		case c.want == "" && len(got) != 0:
+			t.Errorf("%s: %+v", c.step, got)
+		case c.want != "" && (len(got) != 1 || got[0].Args.KindID().String() != c.want):
+			t.Errorf("%s: %+v; want %s", c.step, got, c.want)
+		}
+	}
+}
