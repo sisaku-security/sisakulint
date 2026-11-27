@@ -61739,6 +61739,38 @@
   - attackers: log-reader
   - preconditions: part-unmasked, header-printed, command-printed, output-kept, readable-log
   - true positives:
+    - public.and-false-output.yml (workflow, true-positive)
+      ```yaml
+      # situation: on push and on pull_request, in a public repository (repo.public
+      #   true), the env of the job `read` has the whole secret TOKEN, and an
+      #   output of the job `read` is the JSON of github.event_name == 'push' &&
+      #   env and the password of the JSON secret DB; the later job `print`
+      #   prints the output.
+      # reason: on pull_request, the operand before && is false, the output is
+      #   false and the password, which the runner does not mask, so the runner
+      #   keeps the output and the job `print` prints the password.
+      # attack: anyone signed in to GitHub opens the log of the job `print` in a
+      #   run on pull_request and reads the password.
+      # attack-run-behavior: on pull_request, the header of the step of the job
+      #   `print` shows the run: script of the step with the password in it,
+      #   unmasked.
+      on: [push, pull_request]
+      permissions: {}
+      jobs:
+        read:
+          runs-on: ubuntu-latest
+          env:
+            TOKEN: ${{ secrets.TOKEN }}
+          outputs:
+            credential: ${{ toJSON(github.event_name == 'push' && env) }}-${{ fromJSON(secrets.DB).password }}
+          steps:
+            - run: echo read
+        print:
+          needs: read
+          runs-on: ubuntu-latest
+          steps:
+            - run: echo "${{ needs.read.outputs.credential }}"
+      ```
     - public.case-output.yml (workflow, true-positive)
       ```yaml
       # situation: on push, in a public repository (repo.public true), an output of
@@ -61822,6 +61854,38 @@
             - env:
                 PASSWORD: ${{ fromJSON(env.DB).password }}
               run: ./migrate.sh
+      ```
+    - public.env-missing-output.yml (workflow, true-positive)
+      ```yaml
+      # situation: on push and on pull_request, in a public repository (repo.public
+      #   true), the env of the job `read` has the whole secret TOKEN under push,
+      #   and an output of the job `read` is env[github.event_name] and the
+      #   password of the JSON secret DB; the later job `print` prints the output.
+      # reason: on pull_request, the env has no variable pull_request,
+      #   env[github.event_name] is null, and the output has only the password,
+      #   which the runner does not mask, so the runner keeps the output and the
+      #   job `print` prints the password.
+      # attack: anyone signed in to GitHub opens the log of the job `print` in a
+      #   run on pull_request and reads the password.
+      # attack-run-behavior: on pull_request, the header of the step of the job
+      #   `print` shows the run: script of the step with the password in it,
+      #   unmasked.
+      on: [push, pull_request]
+      permissions: {}
+      jobs:
+        read:
+          runs-on: ubuntu-latest
+          env:
+            push: ${{ secrets.TOKEN }}
+          outputs:
+            credential: ${{ env[github.event_name] }}-${{ fromJSON(secrets.DB).password }}
+          steps:
+            - run: echo read
+        print:
+          needs: read
+          runs-on: ubuntu-latest
+          steps:
+            - run: echo "${{ needs.read.outputs.credential }}"
       ```
     - public.job-output.yml (workflow, true-positive)
       ```yaml
@@ -62040,7 +62104,7 @@
           - if: fromJSON(env.CONFIG).user != ''
             run: ./deploy.sh
     ```
-- output-with-secret: an output of a job whose value the rule reads as having a value that the runner masks in every run, while the value has no value that the runner masks in some runs: a whole secret that is empty in some runs (a secret that is not set), an operand before && that is false in some runs (github.event_name == 'push' && env), or env&#91;INDEX] whose INDEX names a variable that the env does not have in some runs. The rule assumes that the runner drops the output, and so the rule does not follow the output to the jobs that read the output; in a run where the value has no value that the runner masks, the value taken out of a secret reaches the later job
+- output-with-secret: an output of a job whose value the rule reads as having a value that the runner masks in every run, while the value has no value that the runner masks in some runs: a whole secret that is empty in some runs (a secret that is not set). The rule assumes that the runner drops the output, and so the rule does not follow the output to the jobs that read the output; in a run where the value has no value that the runner masks, the value taken out of a secret reaches the later job
   - finding kinds: unmasked-secret-exposure.private, unmasked-secret-exposure.public
   - disposition: todo (needs: same-file)
   - example: output-with-secret.yml (workflow, undetected)
@@ -62067,75 +62131,6 @@
         runs-on: ubuntu-latest
         outputs:
           credential: ${{ secrets.OPTIONAL_TOKEN }}${{ fromJSON(secrets.DB).password }}
-        steps:
-          - run: echo read
-      print:
-        needs: read
-        runs-on: ubuntu-latest
-        steps:
-          - run: echo "${{ needs.read.outputs.credential }}"
-    ```
-  - example: output-with-secret.and-false.yml (workflow, undetected)
-    ```yaml
-    # situation: on push and on pull_request, the env of the job `read` has the
-    #   whole secret TOKEN, and an output of the job `read` is the JSON of
-    #   github.event_name == 'push' && env and the password of the JSON secret
-    #   DB; the later job `print` prints the output.
-    # reason: a todo (the same file): on pull_request, the operand before && is
-    #   false, the output is false and the password, which the runner does not
-    #   mask, so the runner keeps the output and the job `print` prints the
-    #   password.
-    # cause: the rule reads the value of && as the last operand, the env with
-    #   the whole secret TOKEN, and assumes that the runner drops the output.
-    # attack: one who may read the log of the run opens the log of the job
-    #   `print` in a run on pull_request.
-    # attack-run-behavior: on pull_request, the header of the step of the job
-    #   `print` shows the run: script of the step with the password in it,
-    #   unmasked.
-    on: [push, pull_request]
-    permissions: {}
-    jobs:
-      read:
-        runs-on: ubuntu-latest
-        env:
-          TOKEN: ${{ secrets.TOKEN }}
-        outputs:
-          credential: ${{ toJSON(github.event_name == 'push' && env) }}-${{ fromJSON(secrets.DB).password }}
-        steps:
-          - run: echo read
-      print:
-        needs: read
-        runs-on: ubuntu-latest
-        steps:
-          - run: echo "${{ needs.read.outputs.credential }}"
-    ```
-  - example: output-with-secret.env-missing.yml (workflow, undetected)
-    ```yaml
-    # situation: on push and on pull_request, the env of the job `read` has the
-    #   whole secret TOKEN under push, and an output of the job `read` is
-    #   env[github.event_name] and the password of the JSON secret DB; the
-    #   later job `print` prints the output.
-    # reason: a todo (the same file): on pull_request, the env has no variable
-    #   pull_request, env[github.event_name] is null, and the output has only
-    #   the password, which the runner does not mask, so the runner keeps the
-    #   output and the job `print` prints the password.
-    # cause: the rule reads env[github.event_name] as one of the variables of
-    #   the env, each with a whole secret, and assumes that the runner drops the
-    #   output.
-    # attack: one who may read the log of the run opens the log of the job
-    #   `print` in a run on pull_request.
-    # attack-run-behavior: on pull_request, the header of the step of the job
-    #   `print` shows the run: script of the step with the password in it,
-    #   unmasked.
-    on: [push, pull_request]
-    permissions: {}
-    jobs:
-      read:
-        runs-on: ubuntu-latest
-        env:
-          push: ${{ secrets.TOKEN }}
-        outputs:
-          credential: ${{ env[github.event_name] }}-${{ fromJSON(secrets.DB).password }}
         steps:
           - run: echo read
       print:
