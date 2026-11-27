@@ -26,7 +26,7 @@ func values(t *testing.T, src string) []string {
 		if s.Env.Status == workflow.Present {
 			for _, e := range s.Env.Value.Entries {
 				if e.Value.Status == workflow.Present {
-					out = append(out, Pick{Value: e.Value.Value, InEnv: true})
+					out = append(out, Pick{Value: e.Value.Value, Route: analysis.PromptRouteEnv})
 				}
 			}
 		}
@@ -106,7 +106,7 @@ jobs:
 	w, _ := workflow.Parse(cst.ParseMode([]byte(src), cst.ModeGitHub))
 	sink := Analyze(w, nil).Sinks[0]
 	vals := StepValues(nil, calls.Node{}, w, nil, func(s workflow.Step) []Pick {
-		return []Pick{{Value: s.Env.Value.Entries[0].Value.Value, InEnv: true}}
+		return []Pick{{Value: s.Env.Value.Entries[0].Value.Value, Route: analysis.PromptRouteEnv}}
 	})
 	if len(vals) != 1 || len(vals[0].Refs) != len(sink.Refs) {
 		t.Fatalf("%+v", vals)

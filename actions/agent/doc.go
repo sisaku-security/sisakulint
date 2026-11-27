@@ -15,7 +15,7 @@
 //	          the settings under the subprocess env scrub; Supported: the
 //	          events an action runs on
 //	args.go   the words of claude_args and codex-args
-//	prompt.go Prompts: the values of a step that reach the agent as text
+//	prompt.go Prompts: the values of a step that reach the agent as text, of its env and of the env of its job and its workflow
 //	permissions.go the permissions of a step by the grammar of its action
 //	grant.go  Grants: what the permissions let the agent do
 //	mcp.go    the tools of the MCP servers claude-code-action runs

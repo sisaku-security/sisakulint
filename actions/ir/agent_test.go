@@ -110,7 +110,7 @@ jobs:
 `
 
 // TestAgentStepPromptRefs: each reference of
-// the prompt and the env, the events an attacker controls it on of those
+// the prompt and the env (the step's and the job's), the events an attacker controls it on of those
 // the action runs on, and of them those a run whose actor is not the
 // attacker reaches.
 func TestAgentStepPromptRefs(t *testing.T) {
@@ -128,6 +128,7 @@ func TestAgentStepPromptRefs(t *testing.T) {
 		"input env.C on issue_comment.created others issue_comment.created",
 		"input github.sha on  others ",
 		"env github.event.issue.title on issue_comment.created,issues.labeled,issues.opened others issue_comment.created,issues.labeled",
+		"job-env github.event.comment.body on issue_comment.created others ",
 	}
 	if !slices.Equal(lines, want) {
 		t.Errorf("got\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))

@@ -45,7 +45,9 @@
 //	              workflow too)
 //	container.go  Container: a job's container or one of its services
 //	image.go      ImageReference, ImageReferenceOf, DockerImageOf: an image as written
-//	runner_label.go RunnerLabelName, SelfHostedLabel: a label of runs-on, compared in any case
+//	runner_label.go RunnerLabelName, SelfHostedLabel, LinuxLabel, WindowsLabel, MacOSLabel,
+//	              HostedRunnerLabelsSource, HostedWindowsLabels: a label of runs-on, compared in
+//	              any case, and the labels GitHub gives runners
 //	envname.go    EnvName, EnvNameOf: the name of an environment variable
 //	inputname.go  InputName, InputNameOf: the name of an input of an action or a called workflow, as a with gives it
 //	permissions.go Permissions

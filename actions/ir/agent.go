@@ -18,14 +18,14 @@ func (x *IR) allAgentSteps() []*AgentStep {
 		// the values that reach the agent, read once for the input with
 		// what the sinks read (the callers, the env, the steps before)
 		prompts := map[stepAt][]taint.StepValue{}
-		for _, v := range taint.StepValues(x.callersOf(), x.name, x.workflow, x.action, func(s workflow.Step) []taint.Pick {
+		for _, v := range taint.StepValuesIn(x.callersOf(), x.name, x.workflow, x.action, func(s workflow.Step, j *workflow.Job) []taint.Pick {
 			a, ok := agent.Of(s)
 			if !ok {
 				return nil
 			}
 			var out []taint.Pick
-			for _, p := range agent.Prompts(s, a.Action) {
-				out = append(out, taint.Pick{Value: p.Value, InEnv: p.Route == analysis.PromptRouteEnv})
+			for _, p := range agent.Prompts(s, a.Action, j, x.workflow) {
+				out = append(out, taint.Pick{Value: p.Value, Route: p.Route})
 			}
 			return out
 		}) {
@@ -94,7 +94,7 @@ func (x *IR) allAgentSteps() []*AgentStep {
 		add := func(at stepAt, j *workflow.Job, steps []workflow.Step, evs []analysis.EventActivity, ifs ...attacker.PlacedIf) {
 			if a, ok := agent.Of(steps[at.step]); ok {
 				env := x.agentEnv(j, a)
-				o := x.projectAgentStep(x.inputPlace(), a, evs, ifs, prompts[at], settings[at], env, nil)
+				o := x.projectAgentStep(x.inputPlace(), a, j, evs, ifs, prompts[at], settings[at], env, nil)
 				o.automaticApproval = x.automaticApprovalOf(agent.Supported(a.Action, evs), j, ifs...)
 				x.projectLater(x.inputPlace(), o, a, j, j, steps, at.step, evs, env)
 				out = append(out, o)
@@ -193,8 +193,8 @@ func (x *IR) remoteAgentSteps(j *workflow.Job, steps []workflow.Step, at int, ev
 				return nil
 			}
 			var picks []taint.Pick
-			for _, p := range agent.Prompts(t, pa.Action) {
-				picks = append(picks, taint.Pick{Value: p.Value, InEnv: p.Route == analysis.PromptRouteEnv})
+			for _, p := range agent.Prompts(t, pa.Action, nil, nil) {
+				picks = append(picks, taint.Pick{Value: p.Value, Route: p.Route})
 			}
 			return picks
 		})
@@ -280,7 +280,7 @@ func (x *IR) remoteAgentSteps(j *workflow.Job, steps []workflow.Step, at int, ev
 				composite = append(composite, e)
 			}
 		}
-		o := x.projectAgentStep(pl, a, evs, all, prompts, settings, env, composite)
+		o := x.projectAgentStep(pl, a, nil, evs, all, prompts, settings, env, composite)
 		o.writtenValueOn = joinEvents(o.writtenValueOn, agent.Supported(a.Action, taint.FilterEventOnly(slices.Clone(withOn), innerIfs...)))
 		o.key, o.at, o.chain = keyOf(x.paths, x.input, x.tree, s.Uses.Value.Base), x.handleOf(s.Uses.Value.Base), in.Chain
 		o.automaticApproval = x.automaticApprovalOf(agent.Supported(a.Action, evs), j, all...)
@@ -455,11 +455,13 @@ func (x *IR) agentEnv(j *workflow.Job, a agent.Step) []workflow.Field[workflow.M
 	return append(env, a.Step.Env)
 }
 
-// projectAgentStep is the projection of a, whose step runs on evs past
-// ifs under env and whose values that reach the agent are vals: its values
+// projectAgentStep is the projection of a, whose step of the job j (nil
+// in an action.yml or a composite action of another repository) runs on
+// evs past ifs under env and whose values that reach the agent are vals
+// (agent.Prompts of the step in j): its values
 // without their positions, which the handles keep. The subprocess env
 // scrub of env decides what claude's modes allow (agent.ScrubOf).
-func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivity, ifs []attacker.PlacedIf, vals []taint.StepValue, sets []taint.StepValue, env []workflow.Field[workflow.Map[workflow.String]], composite []EveryRunRef) *AgentStep {
+func (x *IR) projectAgentStep(pl place, a agent.Step, j *workflow.Job, evs []analysis.EventActivity, ifs []attacker.PlacedIf, vals []taint.StepValue, sets []taint.StepValue, env []workflow.Field[workflow.Map[workflow.String]], composite []EveryRunRef) *AgentStep {
 	evs = agent.Supported(a.Action, evs)
 	scrub, scrubSrc := agent.ScrubOf(a, env)
 	a = a.UnderScrub(scrub, scrubSrc)
@@ -497,7 +499,11 @@ func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivi
 		}
 		o.inconclusiveSettings = append(o.inconclusiveSettings, s)
 	}
-	ps := agent.Prompts(a.Step, a.Action)
+	var w *workflow.Workflow
+	if j != nil {
+		w = x.workflow
+	}
+	ps := agent.Prompts(a.Step, a.Action, j, w)
 	for _, v := range vals {
 		p := ps[v.Index]
 		text := v.Value.Text()
@@ -507,11 +513,7 @@ func (x *IR) projectAgentStep(pl place, a agent.Step, evs []analysis.EventActivi
 			pr.EveryRunOn = everyRunOn(a.Action, r)
 			o.promptRefs = append(o.promptRefs, pr)
 			if len(pr.EveryRunOn) > 0 {
-				route := analysis.AgentValueRoutePromptInput
-				if p.Route == analysis.PromptRouteEnv {
-					route = analysis.AgentValueRouteStepEnv
-				}
-				o.everyRunRefs = append(o.everyRunRefs, everyRunRefOf(route, p.Input, p.Env, pr.Ref, pr.EveryRunOn, r))
+				o.everyRunRefs = append(o.everyRunRefs, everyRunRefOf(agentValueRouteOf(p.Route), p.Input, p.Env, pr.Ref, pr.EveryRunOn, r))
 			}
 		}
 	}
@@ -585,12 +587,26 @@ func everyRunOn(a analysis.AgentAction, r taint.ExprRef) []analysis.EventActivit
 	return out
 }
 
+// agentValueRouteOf is the AgentValueRoute of a value that reaches the
+// agent as text by route.
+func agentValueRouteOf(route analysis.PromptRoute) analysis.AgentValueRoute {
+	switch route {
+	case analysis.PromptRouteEnv:
+		return analysis.AgentValueRouteStepEnv
+	case analysis.PromptRouteJobEnv:
+		return analysis.AgentValueRouteJobEnv
+	case analysis.PromptRouteWorkflowEnv:
+		return analysis.AgentValueRouteWorkflowEnv
+	}
+	return analysis.AgentValueRoutePromptInput
+}
+
 // everyRunRefOf is the EveryRunRef of the reference ref, by route (of the
 // input in or the env env), the attacker's in every run on on, read from
 // r: the reference of vars or secrets its value comes from.
 func everyRunRefOf(route analysis.AgentValueRoute, in analysis.AgentInput, env workflow.EnvName, ref ExprRef, on []analysis.EventActivity, r taint.ExprRef) EveryRunRef {
 	out := EveryRunRef{Route: route, Ref: ref, EveryRunOn: on}
-	if route == analysis.AgentValueRouteStepEnv {
+	if route == analysis.AgentValueRouteStepEnv || route == analysis.AgentValueRouteJobEnv || route == analysis.AgentValueRouteWorkflowEnv {
 		out.Env = env
 	} else {
 		out.Input = in

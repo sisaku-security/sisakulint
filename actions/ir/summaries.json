@@ -279,7 +279,7 @@
       "name": "EveryRunRef",
       "doc": "EveryRunRef is a reference that reaches the agent of a step of an agent action and whose value the attacker chooses in every run, whoever starts the run: a variable or a secret, in a run of an attacker who writes vars or secrets.",
       "fields": [
-        {"name": "Route", "type": "analysis.AgentValueRoute", "doc": "an input written into the prompt, an env of the step, a setting input, or an input of a composite action of another repository whose step runs the agent"},
+        {"name": "Route", "type": "analysis.AgentValueRoute", "doc": "an input written into the prompt, an env of the step, of the job or of the workflow, a setting input, or an input of a composite action of another repository whose step runs the agent"},
         {"name": "Input", "type": "analysis.AgentInput", "doc": "the input, by the route of an input"},
         {"name": "Env", "type": "workflow.EnvName", "doc": "the name of the env, by the route of an env"},
         {"name": "CompositeInput", "type": "workflow.InputName", "doc": "the input of the composite action that the with of the step gives, by the route of an input of a composite action; the zero InputName when the with is a ${{ }} as a whole"},
@@ -621,9 +621,9 @@
     },
     {
       "name": "PromptRef",
-      "doc": "PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step.",
+      "doc": "PromptRef is a ${{ }} reference in a value of a step of an agent action that reaches the agent as text (actions/agent): an input written into its prompt, or an env of the step, of the job or of the workflow.",
       "fields": [
-        {"name": "Route", "type": "analysis.PromptRoute", "doc": "an input or an env"},
+        {"name": "Route", "type": "analysis.PromptRoute", "doc": "an input, or an env of the step, of the job or of the workflow"},
         {"name": "Input", "type": "analysis.AgentInput", "doc": "the input, by the route of an input"},
         {"name": "Env", "type": "workflow.EnvName", "doc": "the env's name, by the route of an env"},
         {"name": "Ref", "type": "ExprRef", "doc": "the reference"},

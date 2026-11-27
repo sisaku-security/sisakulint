@@ -1,0 +1,8 @@
+name: triage
+description: label the issue
+runs:
+  using: composite
+  steps:
+    - uses: google-github-actions/run-gemini-cli@v0
+      with:
+        prompt: "Label the issue whose body is in ISSUE_BODY"
