@@ -13,8 +13,8 @@ import (
 // runner does not mask, where the runner prints it in the log. Whether
 // the repository is public tells who reads the log, so each gives a
 // finding of each kind, on repo.public true and false.
-// It reads no summary in a job that GitHub skips in every run
-// (AlwaysSkipped): nothing of such a job runs.
+// It reads no summary in a job or a run step that GitHub skips in every
+// run (AlwaysSkipped): the runner prints no header of such a step.
 var UnmaskedSecretExposure lint.Rule = withExamples(lint.WithView[ir.UnmaskedSecretExposureReader](unmaskedSecretExposure{}, ir.UnmaskedSecretExposureView))
 
 // UnmaskedSecretExposureID is the ID of unmasked-secret-exposure.
@@ -28,7 +28,7 @@ func (unmaskedSecretExposure) Check(_ context.Context, c *lint.RuleContext, v ir
 	seen := map[ir.Key]anchors{} // by the value: one value can have several
 	for _, p := range v.SecretParts() {
 		if p.AlwaysSkipped() {
-			continue // GitHub skips its job in every run
+			continue // GitHub skips its job or its step in every run
 		}
 		at := c.At(p.At())
 		var related []lint.Related
