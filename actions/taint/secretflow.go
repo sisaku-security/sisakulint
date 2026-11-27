@@ -84,11 +84,14 @@ type secretFlow struct {
 	script  *shell.Script
 	assigns []assignment // in the order of the script
 	funcs   []function   // the functions the script defines
-	vis     *shell.NameVisibility
-	byAt    map[int]*assignment // the assignments by where they start
-	regs    *[]maskRegistration
-	logs    *[]shell.Write
-	out     *shell.OutputReading // the readings of outputs, which nest at the $( ) of words
+	// declared: the arguments of declare and its like whose name is not
+	// literal; f.vis reads which name each assigns
+	declared []declared
+	vis      *shell.NameVisibility
+	byAt     map[int]*assignment // the assignments by where they start
+	regs     *[]maskRegistration
+	logs     *[]shell.Write
+	out      *shell.OutputReading // the readings of outputs, which nest at the $( ) of words
 	// carried keeps the secrets of what is read once (memoized): a variable
 	// at an assignment (an *assignment) or in env (an envLevel), a
 	// parameter of a function (argKey), a $( ) (substKey); reading are the
@@ -277,6 +280,13 @@ func (c scope) secretFlowOf(s *Sink) *secretFlow {
 	f.vis = c.scripts.Visibility(f.text, f.script)
 	s.CallsNotRead.Join(f.vis.CallsNotRead())
 	f.out = shell.NewOutputReading(f.text, f.script, f.vis, &s.CallsNotRead)
+	for _, d := range f.declared {
+		// declare "$n=value", n holding one literal name: an assignment to it
+		if name, from, ok := f.vis.DeclaredName(f.text, d.w); ok && !f.holeIn(d.w.Span.Start, from) {
+			f.assigns = append(f.assigns, assignment{at: d.w.Span.Start, name: name, parts: d.w.Parts, from: from, fn: d.fn})
+		}
+	}
+	slices.SortStableFunc(f.assigns, func(a, b assignment) int { return a.at - b.at })
 	f.byAt = map[int]*assignment{}
 	for i := range f.assigns {
 		f.byAt[f.assigns[i].at] = &f.assigns[i] // one before a call of a function reaches its body
@@ -333,10 +343,19 @@ func (f *secretFlow) funcAt(at int) *function {
 	return in
 }
 
+// declared is an argument w of declare and its like, in the function fn.
+type declared struct {
+	w  shell.Word
+	fn *function
+}
+
 // assign adds w when it is NAME=value, or an element NAME[subscript]=value:
 // a literal NAME at its head (shell.AssignedName).
 func (f *secretFlow) assign(w shell.Word, cmd *shell.Simple, fn *function) {
 	name, from, _, ok := shell.AssignedName(f.text, w)
+	if !ok && cmd == nil {
+		f.declared = append(f.declared, declared{w, fn}) // its name may be a parameter's value: read once f.vis is
+	}
 	if !ok || f.holeIn(w.Span.Start, from) {
 		return
 	}
@@ -676,10 +695,57 @@ type seg struct {
 const segLimit = 64
 
 // valueOf is the value of the parts ps from the byte from on, as pieces, a
-// variable read as the script has it at at.
+// variable read as the script has it at at: of the values that reach, the
+// one of each variable's assignment that comes last in the run.
 func (f *secretFlow) valueOf(ps []shell.Part, from, at, depth int) []seg {
+	return f.valueWith(ps, from, at, depth, func(i int) []seg {
+		return f.varValue(ps[i].Name.String(), ps[i].Span.Start, depth)
+	})
+}
+
+// valueLimit is how many values of a word valuesOf reads.
+const valueLimit = 8
+
+// valuesOf are the values the parts ps may have from the byte from on, as
+// pieces, a variable read as the script has it at at: one for each
+// assignment that reaches at (if/else, the arms of case) of the one
+// variable of ps that more than one reaches, up to valueLimit. When more
+// than one variable of ps has more than one, the values are not combined
+// (a run may set them together): valueOf's is the one. The first is
+// valueOf's.
+func (f *secretFlow) valuesOf(ps []shell.Part, from, at, depth int) [][]seg {
+	several, alts := -1, [][]seg(nil)
+	for i, p := range ps {
+		if p.Span.End <= from || p.Kind != shell.PartParam && p.Kind != shell.PartParamOp {
+			continue
+		}
+		if vs := f.varValues(p.Name.String(), p.Span.Start, depth); len(vs) > 1 {
+			if several >= 0 {
+				return [][]seg{f.valueOf(ps, from, at, depth)}
+			}
+			several, alts = i, vs
+		}
+	}
+	if several < 0 {
+		return [][]seg{f.valueOf(ps, from, at, depth)}
+	}
+	out := make([][]seg, 0, min(len(alts), valueLimit))
+	for _, v := range alts[:min(len(alts), valueLimit)] {
+		out = append(out, f.valueWith(ps, from, at, depth, func(i int) []seg {
+			if i == several {
+				return v
+			}
+			return f.varValue(ps[i].Name.String(), ps[i].Span.Start, depth)
+		}))
+	}
+	return out
+}
+
+// valueWith is the value of the parts ps from the byte from on, as pieces,
+// with value(i), the value of the variable the i-th part reads.
+func (f *secretFlow) valueWith(ps []shell.Part, from, at, depth int, value func(i int) []seg) []seg {
 	var out []seg
-	for _, p := range ps {
+	for i, p := range ps {
 		if p.Span.End <= from {
 			continue
 		}
@@ -692,7 +758,7 @@ func (f *secretFlow) valueOf(ps []shell.Part, from, at, depth int) []seg {
 		case shell.PartLiteral:
 			out = append(out, f.literalSegs(max(p.Span.Start, from), p.Span.End)...)
 		case shell.PartParam, shell.PartParamOp:
-			for _, s := range f.varValue(p.Name.String(), p.Span.Start, depth) {
+			for _, s := range value(i) {
 				s.span, s.v = span, p.Name
 				out = append(out, s)
 			}
@@ -744,25 +810,16 @@ func (f *secretFlow) literalSegs(start, end int) []seg {
 	return out
 }
 
-// varValue is the value of the variable name at at: of its last assignment
-// before at, of env, or the URL of GitHub the runner gives.
+// varValue is the value of the variable name at at: of its assignment
+// that reaches at and comes last in the run, of env, or the URL of GitHub
+// the runner gives.
 func (f *secretFlow) varValue(name string, at, depth int) []seg {
 	if depth > 16 {
 		return []seg{{kind: segUnknown}}
 	}
-	switch as, before, valueless := f.reaching(name, at); {
+	switch as, _, valueless := f.reaching(name, at); {
 	case len(as) > 0:
-		// more than one value reaches: the last of them in the run, as the
-		// destination was read before the paths were (one value a host is
-		// judged by)
-		last := as[0]
-		for _, a := range as[1:] {
-			if a.at > last.at {
-				last = a
-			}
-		}
-		_ = before
-		return f.assignValue(last, depth)
+		return f.assignValue(lastAssignment(as), depth)
 	case valueless:
 		return []seg{{kind: segUnknown}} // a value not written
 	}
@@ -785,6 +842,34 @@ func (f *secretFlow) varValue(name string, at, depth int) []seg {
 		return []seg{{kind: segGitHub}}
 	}
 	return []seg{{kind: segUnknown}}
+}
+
+// varValues are the values the variable name may have at at: one for each
+// assignment that reaches at, varValue's first.
+func (f *secretFlow) varValues(name string, at, depth int) [][]seg {
+	as, _, _ := f.reaching(name, at)
+	if len(as) < 2 || depth > 16 {
+		return [][]seg{f.varValue(name, at, depth)}
+	}
+	last := lastAssignment(as)
+	out := [][]seg{f.assignValue(last, depth)}
+	for _, a := range as {
+		if a != last {
+			out = append(out, f.assignValue(a, depth))
+		}
+	}
+	return out
+}
+
+// lastAssignment is the assignment of as that comes last in the run.
+func lastAssignment(as []*assignment) *assignment {
+	last := as[0]
+	for _, a := range as[1:] {
+		if a.at > last.at {
+			last = a
+		}
+	}
+	return last
 }
 
 // withRef is v, the value of env, with r given to the pieces whose ${{ }}

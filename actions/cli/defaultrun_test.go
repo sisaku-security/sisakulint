@@ -329,3 +329,84 @@ func TestImpostorCommitNotCheckedByFix(t *testing.T) {
 		t.Errorf("--facts: unchecked_rules %v, want no impostor-commit", got)
 	}
 }
+
+// TestDefaultRunUnreadUses: a run that does not ask the definition of a
+// reusable workflow or an action of another repository lists the uses once
+// in unread_uses and in a not read line, whatever rules run, and sets no
+// bit; a run that answers or asks the fact does not list it.
+func TestDefaultRunUnreadUses(t *testing.T) {
+	const sha = "3e8b1c2d3e8b1c2d3e8b1c2d3e8b1c2d3e8b1c2d"
+	dir := t.TempDir()
+	wf := filepath.Join(dir, ".github", "workflows")
+	if err := os.MkdirAll(wf, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	src := "on: push\npermissions: {}\njobs:\n  build:\n    uses: example-org/shared/.github/workflows/build.yml@" + sha + "\n  steps:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: example-org/composite@" + sha + "\n"
+	if err := os.WriteFile(filepath.Join(wf, "w.yml"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file := func(state string) string {
+		p := filepath.Join(t.TempDir(), "facts.json")
+		entries := `{"query": {"kind": "workflow.definition", "repo": "example-org/shared", "path": ".github/workflows/build.yml", "ref": "` + sha + `"}, ` + state + `}, ` +
+			`{"query": {"kind": "action.definition", "repo": "example-org/composite", "ref": "` + sha + `"}, ` + state + `}`
+		if err := os.WriteFile(p, []byte(`{"schema": "sisakulint/facts/v0", "facts": [`+entries+`]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "down", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	type entry struct {
+		Uses   string `json:"uses"`
+		Reason string `json:"reason"`
+		Query  struct {
+			Kind string `json:"kind"`
+		} `json:"query"`
+		Location struct {
+			Line int `json:"line"`
+		} `json:"location"`
+	}
+	want := []entry{{Uses: "example-org/shared/.github/workflows/build.yml@" + sha, Reason: "offline: pass --facts or --online"}, {Uses: "example-org/composite@" + sha, Reason: "offline: pass --facts or --online"}}
+	want[0].Query.Kind, want[0].Location.Line = "workflow.definition", 5
+	want[1].Query.Kind, want[1].Location.Line = "action.definition", 9
+	// code-injection asks no action.definition
+	only := slices.Clone(want)
+	only[1].Reason = "no rule that ran asked the fact"
+	for _, c := range []struct {
+		name   string
+		args   []string
+		listed []entry
+	}{
+		{"--rule code-injection", []string{"--rule", "code-injection"}, only},
+		{"offline", nil, want},
+		{"--facts answering absent", []string{"--facts", file(`"state": "absent"`)}, nil},
+		{"--facts of unknown answers", []string{"--facts", file(`"state": "unknown", "reason": "rate limited"`)}, nil},
+		{"--online", []string{"--online", "--github-api", srv.URL}, nil},
+	} {
+		base := append([]string{"--root", dir}, c.args...)
+		js := run(t, raw(append(slices.Clone(base), "--format", "json")...))
+		text := run(t, raw(append(slices.Clone(base), "--color", "never", "--detail", "summary")...))
+		var rep struct {
+			UnreadUses []entry `json:"unread_uses"`
+		}
+		if err := json.Unmarshal([]byte(js.stdout), &rep); err != nil {
+			t.Fatalf("%s: %v: %s", c.name, err, js.stdout)
+		}
+		lines := strings.Count(text.stdout, "\nnot read  ")
+		if c.listed != nil {
+			if !slices.Equal(rep.UnreadUses, c.listed) {
+				t.Errorf("%s: unread_uses %+v, want %+v", c.name, rep.UnreadUses, c.listed)
+			}
+			if lines != 2 || !strings.Contains(text.stdout, "\nnot read  .github/workflows/w.yml:5:11 example-org/shared/.github/workflows/build.yml@"+sha+": workflow.definition: offline: pass --facts or --online\n") {
+				t.Errorf("%s: %d not read lines:\n%s", c.name, lines, text.stdout)
+			}
+			if js.code != 0 || text.code != 0 {
+				t.Errorf("%s: exit code %d in json, %d in text, want 0", c.name, js.code, text.code)
+			}
+		} else if len(rep.UnreadUses) != 0 || lines != 0 {
+			t.Errorf("%s: unread_uses %+v, %d not read lines", c.name, rep.UnreadUses, lines)
+		}
+	}
+}

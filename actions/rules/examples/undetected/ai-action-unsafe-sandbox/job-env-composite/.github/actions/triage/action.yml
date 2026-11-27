@@ -1,0 +1,9 @@
+name: triage
+description: triage the issue
+runs:
+  using: composite
+  steps:
+    - uses: anthropics/claude-code-action@v1
+      with:
+        prompt: Triage the issue by the guide in the env GUIDE
+        claude_args: --dangerously-skip-permissions

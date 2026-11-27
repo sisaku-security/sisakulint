@@ -210,7 +210,7 @@
       "x-remedy": "run the agent as the last step of a job of its own, and pass its output to a new job; keep the secrets of the steps after it out of that job"
     },
     "ai-action-prompt-injection.env": {
-      "description": "A ${{ }} an attacker controls, in an env of a step of an agent action, which the agent reads through its tools.",
+      "description": "A ${{ }} an attacker controls, in the env of a step of an agent action or in the env of the job or of the workflow of that step, which the agent reads through the tools of the agent.",
       "type": "object",
       "properties": {
         "kind_id": {"const": "ai-action-prompt-injection.env"},

@@ -71,6 +71,9 @@ func (x *IR) projectDownloadSite(s prcode.DownloadSite) *DownloadSite {
 	for _, v := range s.InconclusiveValues {
 		d.inconclusiveValues = append(d.inconclusiveValues, v.Text())
 	}
+	for _, v := range s.SameRunUnknown {
+		d.sameRunUnknown = append(d.sameRunUnknown, v.Text())
+	}
 	if s.DestinationValue != nil {
 		d.destinationText = s.DestinationValue.Text()
 	}

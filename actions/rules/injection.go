@@ -455,7 +455,7 @@ var callAfterExecLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("call
 
 // nameNotLiteralLimit is an assignment whose variable name is not literal,
 // which the shell walk does not follow.
-var nameNotLiteralLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("name-not-literal"), Text: "an assignment whose variable name the script does not write as a literal word (n=key; declare \"$n=$X\"; or read -r \"$n\"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment", Disposition: lint.Todo(lint.NeedSameFile)}
+var nameNotLiteralLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("name-not-literal"), Text: "an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=$(printf key); declare \"$n=$X\"; or read -r \"$n\"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment", Disposition: lint.Todo(lint.NeedSameFile)}
 
 // recursiveUnsetLocalLimit is a variable a function unsets in a recursive
 // call deeper than the shell walk reads in place, where a calling function
@@ -467,15 +467,25 @@ var recursiveUnsetLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID
 // function, followed by an assignment or a second unset.
 var unsetCallerLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("unset-caller-local"), Text: "a variable that a shell function unsets after a calling function made the variable local, when an assignment to the variable or a second unset of the variable follows the unset (s=x; reset() { unset s; }; point() { local s=y; reset; s=z; }; point): bash takes away the local of the calling function, so that the assignment after the unset sets the variable outside the calling function, and a second unset takes away the local of the next calling function or unsets the variable outside the functions; the rule keeps the local of the calling function after the unset, gives the variable back the value from before the calling function made the variable local when the calling function returns, and reads the second unset as the first unset", Disposition: lint.Todo(lint.NeedSameFile)}
 
-// severalDestinationsLimit is a destination variable that more than one
-// assignment reaches: the rule reads the last one in the script.
-var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-values"), Text: "a request whose host comes from a variable that more than one assignment of the script may set before the request (if c; then U=https://hooks.example.com; else U=https://api.github.com; fi; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule reads the host of the request from the assignment that comes last in the text of the script, and does not judge the hosts of the other assignments", Disposition: lint.Todo(lint.NeedSameFile)}
+// severalDestinationsLimit is a destination variable that copies another
+// variable that more than one assignment may set: the rule reads the copied
+// variable from its last assignment.
+var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-values"), Text: "a request whose host comes from a variable that copies another variable that more than one assignment of the script may set before the copy (if c; then A=https://hooks.example.com; else A=https://api.github.com; fi; U=$A; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule judges each assignment of U that reaches the request, but reads the value of A in U=$A from the assignment of A that comes last in the text of the script, and does not judge the hosts of the other assignments of A", Disposition: lint.Todo(lint.NeedSameFile)}
+
+// destinationValueLimit is a destination variable with more assignments
+// that reach the request than the rule judges.
+var destinationValueLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("destination-value-limit"), Text: "a request whose host comes from a variable that more than 8 assignments of the script may set before the request (an if with 11 arms, the 8th of which sets U=https://hooks.example.com): the rule judges the host of the assignment that comes last in the text of the script and of 7 others, and does not judge the hosts of the rest", Disposition: lint.Todo(lint.NeedSameFile)}
+
+// severalDestinationVariablesLimit is a destination word with two or more
+// variables that more than one assignment may set: the rule does not
+// combine their values.
+var severalDestinationVariablesLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-variables"), Text: "a request whose destination word reads two or more variables that more than one assignment of the script each may set before the request (if c; then A=hooks; B=example.com; else A=api; B=github.com; fi; curl -H \"x-apikey: $KEY\" \"https://$A.$B/x\"): a run may set the variables together, so the rule does not combine their values, and reads each variable from its assignment that comes last in the text of the script", Disposition: lint.Todo(lint.NeedSameFile)}
 
 // nameNotLiteralFalsePositive is a variable of env the script sets again
 // by an assignment whose variable name is not literal: the rule reads the
 // variable as env's value.
 func nameNotLiteralFalsePositive(kinds ...lint.FindingKindID) lint.FalsePositiveForm {
-	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("name-not-literal"), Text: "a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare \"$n=echo safe\"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step", FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile)}
+	return lint.FalsePositiveForm{ID: lint.MustFalsePositiveFormID("name-not-literal"), Text: "a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=$(printf TITLE); declare \"$n=echo safe\"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step", FindingKinds: kinds, Disposition: lint.Todo(lint.NeedSameFile)}
 }
 
 // reassignedEnvFalsePositive is a variable of env the script sets again,

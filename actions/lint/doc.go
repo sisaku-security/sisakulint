@@ -92,6 +92,8 @@
 //	               (actions/cli writes them, and what came of it, Report.Fix)
 //	unchecked.go   Unchecked, Changed, FixBy: a rule that did not run, a field of whose
 //	               summaries the fixes change, so that --fix did not check the fixes against it
+//	unread.go      UnreadUses: the uses of other repositories whose definition the run did
+//	               not ask, which set no bit
 //	fingerprint.go the fingerprint and the path of keys it rests on
 //	report.go      Report, Finding, Certainty, RunError, FixResult, and their JSON; ReportedInputs, Narrow,
 //	               FindingsWith, Finding.FixInput, Finding.KindText, InconclusiveKindText

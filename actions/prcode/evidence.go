@@ -38,6 +38,14 @@ type tool struct {
 	readOptions []string
 	collects    bool
 	stops       []stop
+	// toolchain: a first word with + names a toolchain, not the command
+	// (rustup's cargo +nightly); camel: a command in camelCase is read
+	// in kebab-case (npm's cleanInstall is clean-install); operands: the
+	// words after the command are paths of code it reads (dotnet build
+	// pr/app.csproj)
+	toolchain bool
+	camel     bool
+	operands  bool
 }
 
 // stop is a setting that stops the code of the tree a tool runs: each of
@@ -87,11 +95,31 @@ func (t tool) command(words []runWord) (string, []runWord, bool) {
 			skip = false
 		case strings.HasPrefix(w.lookup, "-"):
 			skip = slices.Contains(t.dirOptions, w.lookup) || slices.Contains(t.readOptions, w.lookup)
-		case len(t.commands) == 0 || slices.Contains(t.commands, w.lookup):
-			return w.lookup, words[i+1:], true
+		case t.toolchain && i == 0 && strings.HasPrefix(w.lookup, "+"):
+		case len(t.commands) == 0 || slices.Contains(t.commands, t.name(w.lookup)):
+			return t.name(w.lookup), words[i+1:], true
 		}
 	}
 	return "", nil, false
+}
+
+// name is the command the word c names: with camel, c's capitals as a -
+// and the letter in lower case (lib/utils/cmd-list.js of npm/cli
+// 787f1520fa412e91a5792468f1c7f25b166867a6: "Translate camelCase to
+// snake-case").
+func (t tool) name(c string) string {
+	if !t.camel || strings.ToLower(c) == c {
+		return c
+	}
+	var b strings.Builder
+	for _, r := range c {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteString("-")
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // runs is whether the command cmd of t, followed by rest, runs code; with
@@ -189,7 +217,7 @@ var tools = []tool{
 	// the scripts of the workspaces the tree's package.json names), and
 	// their aliases; npm runs no script by its name alone, and its
 	// abbreviations are not read
-	{names: []string{"npm"}, cite: npmScripts, commands: npmCommands, subs: []string{
+	{names: []string{"npm"}, cite: npmScripts, commands: npmCommands, camel: true, subs: []string{
 		"install", "i", "add", "in", "ins", "inst", "insta", "instal", "isnt", "isnta", "isntal", "isntall",
 		"ci", "clean-install", "ic", "install-clean", "isntall-clean", "install-test", "it",
 		"install-ci-test", "cit", "clean-install-test", "sit", "run", "run-script", "rum", "urn",
@@ -231,7 +259,11 @@ var tools = []tool{
 	// --manifest-path: "Path to the Cargo.toml file" (cargo-build.txt of
 	// the same tag)
 	{names: []string{"cargo"}, subs: []string{"build", "test", "run", "bench", "check", "install"}, cite: cite("https://github.com/rust-lang/cargo/blob/0.99.0/src/doc/src/reference/build-scripts.md"),
-		readOptions: []string{"--manifest-path"}},
+		readOptions: []string{"--manifest-path"},
+		// "If the first argument to cargo ... begins with +, it will be
+		// interpreted as a rustup toolchain name" (rust-lang/rustup
+		// 00f1bea4e7a6529be446d2b035fba55c681d1faa, overrides.md)
+		toolchain: true},
 	// -f, --file: "Force the use of an alternate POM file (or directory with
 	// pom.xml)" (https://github.com/apache/maven/blob/5223074e77771a93a3670af95f2155fbde6f38f3/compat/maven-embedder/src/main/java/org/apache/maven/cli/CLIManager.java)
 	{names: []string{"mvn"}, cite: cite("https://github.com/apache/maven-site/blob/75816eac1598f0d0b58e09da9b881f7b657df29c/content/markdown/guides/introduction/introduction-to-the-lifecycle.md"),
@@ -240,8 +272,15 @@ var tools = []tool{
 	// (command_line_interface.adoc of the same tag)
 	{names: []string{"gradle"}, cite: cite("https://github.com/gradle/gradle/blob/v9.8.0/platforms/documentation/docs/src/docs/userguide/reference/runtime-configuration/build_lifecycle.adoc"),
 		dirOptions: []string{"-p", "--project-dir"}},
-	{names: []string{"bundle"}, subs: []string{"install", "exec"}, cite: cite("https://github.com/rubygems/rubygems/blob/8e5c0371e619f1a7abc996c661fba0c6b60622dd/lib/bundler/man/gemfile.5.ronn")},
-	{names: []string{"rake"}, cite: cite("https://github.com/ruby/rake/blob/e5be0795721804e5e26a820b70049b41e7ad863f/README.rdoc")},
+	// --gemfile=GEMFILE (bundle-install.1.ronn of rubygems
+	// a7de0cda3142f789a3c84ad85602df13cf3cc931)
+	{names: []string{"bundle"}, subs: []string{"install", "exec"}, cite: cite("https://github.com/rubygems/rubygems/blob/8e5c0371e619f1a7abc996c661fba0c6b60622dd/lib/bundler/man/gemfile.5.ronn"),
+		readOptions: []string{"--gemfile"}},
+	// -C, --directory: "Change to DIRECTORY before doing anything."; -f,
+	// --rakefile: the Rakefile (lib/rake/application.rb of ruby/rake
+	// a1953315801cd03b21d12b171b9cedebd740ab9d)
+	{names: []string{"rake"}, cite: cite("https://github.com/ruby/rake/blob/e5be0795721804e5e26a820b70049b41e7ad863f/README.rdoc"),
+		dirOptions: []string{"-C", "--directory"}, readOptions: []string{"-f", "--rakefile"}},
 	// every command of composer runs the pre-command-run script of the
 	// tree's composer.json (BaseCommand.php of 2.10.3), and a word that is no
 	// command of composer a script of it as a command (scripts.md)
@@ -258,7 +297,15 @@ var tools = []tool{
 			"depends", "diagnose", "dump-autoload", "fund", "global", "browse", "init", "install", "licenses",
 			"outdated", "policy", "prohibits", "reinstall", "remove", "repository", "require", "search",
 			"self-update", "show", "status", "suggests", "update", "validate"}}}},
-	{names: []string{"dotnet"}, subs: []string{"build", "test", "run"}, cite: cite("https://github.com/MicrosoftDocs/visualstudio-docs/blob/083bf98e2f8590b1796f2c7411363050956fad8e/docs/msbuild/exec-task.md")},
+	// dotnet build [<PROJECT>|<SOLUTION>|<FILE>] (dotnet-build.md of
+	// dotnet/docs 23ff6057f7a415cc18090fdb4dd715122c58d6b1)
+	{names: []string{"dotnet"}, subs: []string{"build", "test", "run"}, cite: cite("https://github.com/MicrosoftDocs/visualstudio-docs/blob/083bf98e2f8590b1796f2c7411363050956fad8e/docs/msbuild/exec-task.md"),
+		operands: true},
+	// "Use bun run <script> to execute these scripts" (the scripts of
+	// package.json); install runs the root's lifecycle scripts too
+	{names: []string{"bun"}, cite: cite("https://github.com/oven-sh/bun/blob/6bd9289db8f2dfedb4a83beef6b20676a45ad606/docs/runtime/index.mdx")},
+	// "deno task <script>  # run a script defined in package.json"
+	{names: []string{"deno"}, subs: []string{"task", "run", "test", "bench", "serve", "install"}, cite: cite("https://github.com/denoland/docs/blob/eff351baff03c2133a70bf89982fe83bec5641f1/runtime/fundamentals/configuration.md")},
 	// pytest collects the tests, and loads the conftest.py, of its test
 	// paths, else of its directory, and under them
 	{names: []string{"pytest"}, collects: true, cite: cite("https://github.com/pytest-dev/pytest/blob/9efd0121a4396da80c20d7c3b7844825966612f6/doc/en/how-to/writing_plugins.rst")},
@@ -635,6 +682,15 @@ func (t tool) readsTree(words []runWord, cwd runWord, at Placement) bool {
 		reads = append(reads, from, from.join(d))
 		if l, ok := dirOf(words, t.readOptions); ok {
 			reads = append(reads, from.join(l))
+		}
+		if t.operands {
+			if _, after, ok := t.command(words); ok {
+				for _, w := range after {
+					if !strings.HasPrefix(w.lookup, "-") {
+						reads = append(reads, from.join(w))
+					}
+				}
+			}
 		}
 		if t.collects {
 			// the words that are not options, the values of options among

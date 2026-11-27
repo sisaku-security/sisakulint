@@ -69,3 +69,40 @@ go test ./...
 - Read `${{ }}` expressions and shell scripts with their parsers (`actions/expr`, `actions/shell`), not with string comparison. String comparison misses other spellings of the same meaning, such as `always ()`.
 - When a change adds, removes, or renames a type, a file, a layer, or a step that the `doc.go` of a package names, update that `doc.go` in the same commit.
 - Releases fire only on a `v*.*.*` tag push. `go build` takes the version that `--version` prints from the VCS tag.
+
+## Before opening a pull request
+
+Reviews of earlier pull requests found the same kinds of defect many times. Ask each question below of your own diff before you open a pull request. Fix what does not hold, or say in the pull request body why the question does not apply. The numbers in parentheses are pull requests where a review found the defect.
+
+The input:
+
+- Equivalent spellings: does the rule find every spelling that has the same meaning (a wrapper such as `env`, `sudo` or `timeout`; quoting; `a['b']` for `a.b`; a here-document; `|&`; a command substitution inside double quotes), by walking the syntax tree, with a test for each spelling? (#292, #659)
+- Near misses: does every decision about trust or membership compare whole normalized tokens, and is there a test with a near miss that must not match, such as `openai/codex-action-malicious`, `${{ runner.temp }}/../x`, or a bucket host under `storage.googleapis.com`? (#427, #538)
+- Effective values: does the rule read the value that GitHub uses, such as the default activity types when `types` is absent, the `if` of the job, or the event of the caller, and not only the value that the file writes? (#238)
+- Closed lists: is each list of known things (events, actions, hosts, git configuration keys that run code) complete, the same list for the rules that need the same list, and no shorter than the list that the change replaces? (#644, #750)
+
+The analysis:
+
+- Order and scope: does the analysis follow the order of statements and steps, the scope of shells and functions, and the case rules of the runner (environment variable names differ only in case on Linux and macOS), and does the analysis read two variables that one branch sets together as one pair of values, not as any combination of the values of each variable? (#434, #758, #788)
+- Calls across files: for a reusable workflow or a composite action, does the change tell a value of the caller from a value of the callee that has the same name, and handle a callee whose caller is not among the inputs, a middle workflow that also runs on its own event, a workflow of another repository with the same path as a local file, and each caller of one callee? (#729, #747, #757)
+- Unknown input: when the rule cannot read an input, a pattern or a fact (the rule does not parse the input or the pattern, the API gives no answer, or no source answers the fact), does the rule give an `Inconclusive` or a declared `UndetectedForm`, and not a Finding or nothing? (#356, #728, #744)
+- Bounded work: can the work grow exponentially or quadratically with the shape of the input (the number of jobs to the power of the levels of calls, a chain of merges, a chain of assignments) when the depth is the only bound? Then bound the total, give an `Inconclusive` past the bound, and add a test with the worst shape. (#434, #784)
+- Stable identity: can one defect give two Findings (two matrix combinations, two jobs that use one composite action), and does an anchor or a fingerprint (the values that identify a Finding from one run to the next) depend on what the rule computed for other elements, so that the anchor or the fingerprint moves when an unrelated element changes? (#744, #754, #785)
+- Shared state: is state that lives across files, jobs or runs (a package variable, a shared slice) reset or copied before the next file, job or run reads the state? (#492, #672)
+
+Fixes:
+
+- Fix output: at the place where a `Fix` writes text (inside `bash -c '...'`, inside a quoted string literal, with several fixes on one step), does the script still parse after the `Fix`, and does the script still mean the same? Run the script before the `Fix` and the script after the `Fix`, each with harmless values and with an attack value, and compare the results. (#513, #748)
+- New names: does a name that a `Fix` adds avoid every name that the step, the job, the workflow or the script already binds, in any letter case? (#514)
+
+Claims and declarations:
+
+- Primary source: is each claim about GitHub, a runner, an action or a command-line tool backed by the primary text (the GitHub documentation, or the source code of the action or the tool) or by a run on a runner, and does the test or the comment say which? (#374, #748, #780)
+- Meta: when a change narrows or removes a declared `UndetectedForm` or `FalsePositiveForm`, is every form that the rule still misses, or still reports wrongly, still declared with an example? (#748, #750, #758)
+- Text: do the text of the Finding, `--help`, `--explain` and README.md still match the code after the last change? (#477, #728)
+- Tests: does each new test fail when the change is reverted, and does the test cover every path that the change touches (each severity, the composite and reusable forms)? Does a new detection also add an example under `actions/rules/examples/`? (#426, #728)
+
+The pull request:
+
+- Other open pull requests: does the pull request still build and pass the tests when it is merged together with the other open pull requests, and does the pull request avoid adding a function that computes the same value as a function that another open pull request adds? (#795, #798, #808)
+- Closing keywords: does the body say `Refs #N`, not `Closes #N`, when the pull request finishes only part of the issue? (#785, #798)

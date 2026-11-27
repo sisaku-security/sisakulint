@@ -436,3 +436,37 @@ func chainScript(n int) string {
 	}
 	return b.String()
 }
+
+// declare "$n=value" assigns the variable whose name n holds, when n holds
+// one literal name on every path; otherwise the assignment is not read.
+func TestNameVisibilityDeclaredName(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		want []string
+	}{
+		{"n=VAL; declare \"$n=$TITLE\"; echo @$VAL", []string{"\"$n=$TITLE\""}},
+		{"n=VAL; declare \"$n=fixed\"; echo @$VAL", []string{"\"$n=fixed\""}},
+		{"n=VAL; declare -g ${n}=x; echo @$VAL", []string{"${n}=x"}},
+		{"n=VAL; export \"$n=x\"; echo @$VAL", []string{"\"$n=x\""}},
+		{"n=VAL; readonly \"$n=x\"; echo @$VAL", []string{"\"$n=x\""}},
+		{"f() { local n=VAL; local \"$n=x\"; echo @$VAL; }; f", []string{"\"$n=x\""}},
+		{"f() { n=VAL; local \"$n=x\"; }; VAL=o; f; echo @$VAL", []string{"VAL=o"}}, // local: gone after the call
+		// n unknown, or one of two names: not read
+		{"declare \"$n=x\"; echo @$VAL", nil},
+		{"n=$1; declare \"$n=x\"; echo @$VAL", nil},
+		{"n=VAL; c && n=W; declare \"$n=x\"; echo @$VAL", nil},
+		{"n=VAL; declare \"$n+=x\"; echo @$VAL", nil},
+	} {
+		i := strings.Index(tc.src, "@")
+		script := tc.src[:i] + tc.src[i+1:]
+		var name VarName
+		Walk(script, Parse(script).List, Enclosing{}, Visitor{Part: func(p *Part, _ Enclosing) {
+			if p.Span.Start == i && p.Kind == PartParam {
+				name = p.Name
+			}
+		}})
+		if got := assignmentTexts(script, readFlow(script, Parse(script)).Reaching(name, Span{i, i})); fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

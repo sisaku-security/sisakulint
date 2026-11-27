@@ -14,12 +14,13 @@
     "quality_rules": {"description": "The quality rules that ran, by ID. A quality rule's finding alone gives no attacker a gain: an attack needs another flaw. The flaw that a quality rule finds may still let an attack through another flaw give the attacker more, or keep a vulnerability unfixed for longer. The quality rules check reliability and maintainability, in the words of GitHub Code Quality. A quality rule has no threat, no CVSS and no severity. The findings of a quality rule set no bit of the exit code; the findings of the other rules, of every certainty, and the inputs set the bits as in a run without the quality rules.", "type": "array", "items": {"$ref": "registry-v0.json#/$defs/id"}},
     "quality_findings": {"description": "The findings of the quality rules, in the order of their places. A quality finding sets no bit of the exit code (Classify). The kinds are in the registry (finding_kinds of each of quality_rules).", "type": "array", "items": {"$ref": "#/$defs/quality-finding"}},
     "facts": {"description": "The facts the rules asked about, and the answers.", "type": "array", "items": {"$ref": "facts-v0.json#/$defs/entry"}},
+    "unread_uses": {"description": "The uses of the reported inputs that name a reusable workflow or an action of another repository whose definition the run did not ask (workflow.definition of the uses of a job, action.definition of the uses of a step), in the order of the inputs and the places in them: no rule read the jobs or the steps it runs, so no finding about them is in findings. One entry for each place and fact, whatever the rules that ran. A place whose fact was answered (--facts) or asked (--online) is not here. An entry is no finding: it sets no bit of the exit code, and an acceptance does not apply to it.", "type": "array", "items": {"$ref": "#/$defs/unread-uses"}},
     "errors": {"description": "Internal errors: a rule that failed, a finding or a fix that broke the contract.", "type": "array", "items": {"$ref": "#/$defs/error"}},
     "remote_revision": {"description": "What a run read of a repository of GitHub (--remote of the CLI): the repository, the commit, its tree and the files whose contents the run read or tried to read. Null for a run of files on disk.", "oneOf": [{"$ref": "#/$defs/remote-revision"}, {"type": "null"}]},
     "added_attackers": {"description": "The attackers that the run added with --add-attacker. The report has this field only when the run added an attacker; only then can a finding have added_attackers. The run adds each of these attackers alone, as a separate attacker: the report does not have a place that only two or more of these attackers together give.", "$ref": "registry-v0.json#/$defs/added-attackers"},
     "fix": {"description": "What came of applying the fixes to the files: there only when they were applied (--fix of the CLI). It counts for nothing in the bits of the exit code (Classify): the findings are of the files before the fixes. The CLI exits 70 when error is there.", "$ref": "#/$defs/fix-result"}
   },
-  "required": ["schema", "inputs", "complete", "excluded", "reported_inputs", "rules", "skipped_rules", "findings", "quality_rules", "quality_findings", "facts", "errors", "remote_revision"],
+  "required": ["schema", "inputs", "complete", "excluded", "reported_inputs", "rules", "skipped_rules", "findings", "quality_rules", "quality_findings", "facts", "unread_uses", "errors", "remote_revision"],
   "additionalProperties": false,
   "$defs": {
     "remote-revision": {"description": "A repository of GitHub as a run read it.", "type": "object", "properties": {
@@ -266,6 +267,18 @@
         "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       },
       "required": ["rule", "certainty", "location", "args", "detected", "consequence", "remedy", "related", "evidence", "fingerprint"],
+      "additionalProperties": false
+    },
+    "unread-uses": {
+      "description": "A uses whose definition the run did not ask: its place, the uses as written, the fact not asked (its kind is workflow.definition or action.definition), and the reason of the answer no one gave: the reason of the unknown answer the run recorded (offline: pass --facts or --online in a run without --online and --facts), or no rule that ran asked the fact, when no rule that ran asked it (a run of --rule).",
+      "type": "object",
+      "properties": {
+        "location": {"$ref": "#/$defs/location"},
+        "uses": {"type": "string"},
+        "query": {"$ref": "facts-v0.json#/$defs/query"},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "required": ["location", "uses", "query", "reason"],
       "additionalProperties": false
     },
     "error": {

@@ -3,6 +3,7 @@ package rules
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -667,6 +668,10 @@ func TestEveryRunNote(t *testing.T) {
 			"vars.P reaches the agent through the input prompt of anthropics/claude-code-action, and an attacker who can write the variable P chooses the value of vars.P for every workflow run, whoever starts the workflow run"},
 		{false, ir.EveryRunRef{Route: analysis.AgentValueRouteStepEnv, Env: envA, Ref: ir.ExprRef{Text: "env.A"}, Source: "vars.P", SourceName: "P"},
 			"env.A reaches the agent through the env A of the step; the value of env.A comes from vars.P, and an attacker who can write the variable P chooses the value of vars.P for every workflow run, whoever starts the workflow run"},
+		{false, ir.EveryRunRef{Route: analysis.AgentValueRouteJobEnv, Env: envA, Ref: ir.ExprRef{Text: "vars.P"}, Source: "vars.P", SourceName: "P", Direct: true},
+			"vars.P reaches the agent through the variable A in the env of the job, and an attacker who can write the variable P chooses the value of vars.P for every workflow run, whoever starts the workflow run"},
+		{true, ir.EveryRunRef{Route: analysis.AgentValueRouteWorkflowEnv, Env: envA, Ref: ir.ExprRef{Text: "secrets.S"}, Source: "secrets.S", SourceName: "S", Direct: true},
+			"secrets.S reaches the agent through the variable A in the env of the workflow, and an attacker who can write the secret S chooses the value of secrets.S for every workflow run, whoever starts the workflow run"},
 		{false, ir.EveryRunRef{Route: analysis.AgentValueRouteSettingInput, Input: analysis.AgentInputClaudeArgs, Ref: ir.ExprRef{Text: "vars.A"}, Source: "vars.A", SourceName: "A", Direct: true},
 			"vars.A reaches the settings of the agent through the input claude_args of anthropics/claude-code-action, and an attacker who can write the variable A chooses the value of vars.A for every workflow run, whoever starts the workflow run"},
 		{true, ir.EveryRunRef{Route: analysis.AgentValueRoutePromptInput, Input: analysis.AgentInputPrompt, Ref: ir.ExprRef{Text: "inputs.x"}},
@@ -822,25 +827,26 @@ func TestAIActionUnsafeSandboxEveryRun(t *testing.T) {
 
 // TestJobEnvEveryRun: in a run that adds variables-writer, a variable in
 // an env of the job reaches the process of the agent, and the rules of the
-// steps do not count it (the undetected form job-env): no step kind of
-// ai-action-excessive-tools, ai-action-execution-order or
-// ai-action-unsafe-sandbox, where a variable in the prompt gives one
-// (TestAIActionExcessiveToolsEveryRun and the others).
+// steps count it as one in the prompt: the step kind of
+// ai-action-excessive-tools, ai-action-execution-order and
+// ai-action-unsafe-sandbox (TestAIActionExcessiveToolsEveryRun and the
+// others).
 func TestJobEnvEveryRun(t *testing.T) {
 	jobEnv := func(runsOn, with, after string) string {
 		return "on: {issues: {types: [assigned]}}\njobs:\n  a:\n    runs-on: " + runsOn + "\n    if: " + ownerIf + "\n    env:\n      GUIDE: ${{ vars.GUIDE }}\n    steps:\n      - uses: anthropics/claude-code-action@v1\n        with:\n          prompt: Triage the issue by the guide in the env GUIDE\n" + with + after
 	}
 	for _, c := range []struct {
-		id  lint.RuleID
-		src string
+		id   lint.RuleID
+		src  string
+		want string
 	}{
-		{AIActionExcessiveToolsID, jobEnv("ubuntu-latest", "          claude_args: --allowedTools Bash\n", "")},
-		{AIActionExecutionOrderID, jobEnv("self-hosted", "          claude_args: --allowedTools Bash\n", "      - run: ./deploy.sh\n        env:\n          TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n")},
-		{AIActionUnsafeSandboxID, jobEnv("ubuntu-latest", "          claude_args: --dangerously-skip-permissions\n", "")},
+		{AIActionExcessiveToolsID, jobEnv("ubuntu-latest", "          claude_args: --allowedTools Bash\n", ""), ".github/workflows/w.yml ai-action-excessive-tools.run-code Bash [variables-writer]"},
+		{AIActionExecutionOrderID, jobEnv("self-hosted", "          claude_args: --allowedTools Bash\n", "      - run: ./deploy.sh\n        env:\n          TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n"), ".github/workflows/w.yml ai-action-execution-order.later-secrets anthropics/claude-code-action@v1 [variables-writer]"},
+		{AIActionUnsafeSandboxID, jobEnv("ubuntu-latest", "          claude_args: --dangerously-skip-permissions\n", ""), ".github/workflows/w.yml ai-action-unsafe-sandbox.commands --dangerously-skip-permissions [variables-writer]"},
 	} {
 		rep, in := runAdded(t, map[string]string{".github/workflows/w.yml": c.src}, lint.AddedAttackerVariablesWriter)
-		if got := marked(t, rep, in, c.id); len(got) != 0 {
-			t.Errorf("%s: %v, want none (job-env)", c.id, got)
+		if got := marked(t, rep, in, c.id); !slices.Equal(got, []string{c.want}) {
+			t.Errorf("%s: %v, want %s", c.id, got, c.want)
 		}
 	}
 }
@@ -880,5 +886,105 @@ func TestAgentPlaceInconclusiveRelated(t *testing.T) {
 	}
 	if len(g.Evidence) != 0 {
 		t.Errorf("evidence %+v, want none", g.Evidence)
+	}
+}
+
+// injectionLines are the places of ai-action-prompt-injection in rep, each
+// as <kind> <certainty> <line> <the text it points at>, sorted; with the
+// action of the arguments of a finding when action is set.
+func injectionLines(rep lint.Report, action bool) []string {
+	var out []string
+	for _, f := range rep.Findings {
+		if f.Rule != AIActionPromptInjectionID {
+			continue
+		}
+		kind := f.InconclusiveKind.String()
+		if f.Certainty != lint.CertaintyInconclusive {
+			kind = f.Args.KindID().String()
+		}
+		l := fmt.Sprintf("%s %s %d %s", kind, f.Certainty, f.Location.Position().Line, f.SpanText)
+		if a, ok := f.Args.(AIActionPromptInjectionEnv); ok && action {
+			l += " " + a.Action.String()
+		}
+		out = append(out, l)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// TestJobEnvTwoAgentSteps: a value of the env of the job or of the
+// workflow that reaches several agent steps is one place, at the env,
+// whatever the order of the steps: a finding with no condition when one
+// step gives one, else one with the condition, else each kind of
+// inconclusive place once; and no error of a finding reported twice
+// (runAdded fails on one). An env of a step whose name differs only in
+// case replaces it only where runs-on decides Windows, whose runner folds
+// the names.
+func TestJobEnvTwoAgentSteps(t *testing.T) {
+	const prompt = "Label the issue whose body is in the env BODY"
+	const anyUser, anyBot, users = `allowed_non_write_users: "*"`, `allowed_bots: "*"`, `allowed_non_write_users: ${{ vars.USERS }}`
+	claude := func(gate, prompt, env string) string {
+		return "      - uses: anthropics/claude-code-action@v1\n" + env + "        with:\n          " + gate + "\n          github_token: t\n          prompt: \"" + prompt + "\"\n          claude_args: --allowedTools Bash\n"
+	}
+	// gemini-cli passes ISSUE_BODY to its tools, not BODY, with no settings
+	gemini := "      - uses: google-github-actions/run-gemini-cli@v0\n        with:\n          prompt: Label the issue whose body is in ISSUE_BODY\n"
+	job := func(runsOn, body string) string {
+		return "on: {issues: {types: [opened]}}\njobs:\n  a:\n    runs-on: " + runsOn + "\n    env:\n      BODY: " + body + "\n    steps:\n"
+	}
+	const body = "${{ github.event.issue.body }}"
+	const env, envPublic = "ai-action-prompt-injection.env confirmed 6 github.event.issue.body", "ai-action-prompt-injection.env conditional 6 github.event.issue.body"
+	for _, c := range []struct {
+		name, src string
+		action    bool
+		want      []string
+	}{
+		{"two steps", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"the first step has the value in its prompt too", job("ubuntu-latest", body) + claude(anyUser, "Label this issue: "+body, "") + claude(anyUser, prompt, ""), false,
+			[]string{env, "ai-action-prompt-injection.prompt confirmed 12 github.event.issue.body"}},
+		{"a bot's gate, then anyone's", job("ubuntu-latest", body) + claude(anyBot, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"anyone's gate, then a bot's", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + claude(anyBot, prompt, ""), false, []string{env}},
+		{"two bots' gates", job("ubuntu-latest", body) + claude(anyBot, prompt, "") + claude(anyBot, prompt, ""), false, []string{envPublic}},
+		{"an undecided gate, then anyone's", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(anyUser, prompt, ""), false, []string{env}},
+		{"an undecided gate alone", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(users, prompt, ""), false,
+			[]string{"gate-expr inconclusive 6 github.event.issue.body"}},
+		{"the action of the strongest step", strings.Replace(job("ubuntu-latest", body), "BODY:", "ISSUE_BODY:", 1) + claude(anyBot, prompt, "") + gemini, true,
+			[]string{env + " run-gemini-cli"}},
+		{"one text twice in the value", job("ubuntu-latest", `"`+body+` `+body+`"`) + claude(anyUser, prompt, "") + claude(anyUser, prompt, ""), false,
+			[]string{env, env}},
+		{"a case-only name on Linux", job("ubuntu-latest", body) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false, []string{env}},
+		{"a case-only name on Windows", job("windows-latest", body) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false, nil},
+		{"a case-only name where runs-on does not decide the OS (unknown-os-case)", strings.Replace(job("${{ matrix.os }}", body), "    runs-on:", "    strategy: {matrix: {os: [ubuntu-latest, windows-latest]}}\n    runs-on:", 1) + claude(anyUser, prompt, "        env:\n          body: fixed text\n"), false,
+			[]string{"ai-action-prompt-injection.env confirmed 7 github.event.issue.body"}},
+		{"a step before writes the name to $GITHUB_ENV (github-env-write)", job("ubuntu-latest", body) + "      - run: echo \"BODY=fixed\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before with an if writes the name to $GITHUB_ENV", job("ubuntu-latest", body) + "      - if: github.event_name == 'push'\n        run: echo \"BODY=fixed\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the value back to $GITHUB_ENV", job("ubuntu-latest", body) + "      - run: echo \"BODY=${BODY}\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the value back in a heredoc", job("ubuntu-latest", body) + "      - run: |\n          {\n            echo \"BODY<<EOF\"\n            echo \"$BODY\"\n            echo EOF\n          } >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the name in a branch", job("ubuntu-latest", body) + "      - run: |\n          if [ -z \"$BODY\" ]; then echo \"BODY=none\" >> \"$GITHUB_ENV\"; fi\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the name after &&", job("ubuntu-latest", body) + "      - run: test -z \"$BODY\" && echo \"BODY=none\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the name in another case to $GITHUB_ENV on Linux", job("ubuntu-latest", body) + "      - run: echo \"body=fixed\" >> \"$GITHUB_ENV\"\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step before writes the name in another case to $GITHUB_ENV on Windows (github-env-write)", job("windows-latest", body) + "      - run: echo \"body=fixed\" >> \"$GITHUB_ENV\"\n        shell: bash\n" + claude(anyUser, prompt, ""), false, []string{env}},
+		{"a step after writes the name to $GITHUB_ENV", job("ubuntu-latest", body) + claude(anyUser, prompt, "") + "      - run: echo \"BODY=fixed\" >> \"$GITHUB_ENV\"\n", false, []string{env}},
+		{"a step env that is one whole ${{ }} (whole-with)", job("ubuntu-latest", body) + claude(anyUser, prompt, "        env: ${{ fromJSON(vars.STEP_ENV) }}\n"), false, nil},
+		{"an undecided gate, then a bot's", job("ubuntu-latest", body) + claude(users, prompt, "") + claude(anyBot, prompt, ""), false,
+			[]string{envPublic, "gate-expr inconclusive 6 github.event.issue.body"}},
+	} {
+		rep, _ := runAdded(t, map[string]string{".github/workflows/w.yml": c.src})
+		if got := injectionLines(rep, c.action); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	// an input of workflow_dispatch in the env of the job: the dispatcher's
+	// for a step that runs on workflow_dispatch, not analyzed for a step
+	// that runs on issues only
+	dispatch := "on:\n  workflow_dispatch:\n    inputs:\n      x: {type: string}\n  issues:\n    types: [opened]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    env:\n      X: ${{ inputs.x }}\n    steps:\n" + claude(anyUser, prompt, "") + strings.Replace(claude(anyUser, prompt, ""), "      - uses:", "      - if: github.event_name == 'issues'\n        uses:", 1)
+	rep0, _ := runAdded(t, map[string]string{".github/workflows/w.yml": dispatch})
+	if got, want := injectionLines(rep0, false), []string{"input-dispatch inconclusive 11 inputs.x", "value-unknown inconclusive 11 inputs.x"}; !slices.Equal(got, want) {
+		t.Errorf("an input of workflow_dispatch in the env of the job: %q, want %q", got, want)
+	}
+	// a value of the env of the workflow that reaches the agent steps of two jobs
+	wf := "on: {issues: {types: [opened]}}\nenv:\n  BODY: " + body + "\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "") + "  b:\n    runs-on: ubuntu-latest\n    steps:\n" + claude(anyUser, prompt, "")
+	rep, _ := runAdded(t, map[string]string{".github/workflows/w.yml": wf})
+	if got, want := injectionLines(rep, false), []string{"ai-action-prompt-injection.env confirmed 3 github.event.issue.body"}; !slices.Equal(got, want) {
+		t.Errorf("the env of the workflow: %q, want %q", got, want)
 	}
 }

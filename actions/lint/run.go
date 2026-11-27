@@ -255,6 +255,7 @@ func RunWithBarriers(ctx context.Context, in Inputs, reg *Registry, r facts.Reso
 	}
 	st.finished = true
 	sortPlaces(&rep)
+	rep.UnreadUses = unreadUsesOf(in, rec)
 	rep.Facts = rec.Entries()
 	rep.Errors = st.errors
 	return rep
@@ -1057,4 +1058,13 @@ func sortPlaces(rep *Report) {
 	slices.SortFunc(rep.QualityFindings, func(a, b QualityFinding) int {
 		return compareFindings(a.FindingDraft, b.FindingDraft, a.Fingerprint, b.Fingerprint)
 	})
+}
+
+// Refuted is whether the answers of c.Resolver make cond false: a rule
+// asks it to leave out a place whose consequence needs cond, as a finding
+// with cond as its Condition would be left out. An unknown answer does not
+// refute.
+func (c *RuleContext) Refuted(ctx context.Context, cond Condition) bool {
+	return Eval(cond, func(q facts.Query) facts.RawAnswer { return c.Resolver.Resolve(ctx, q) },
+		func(facts.InputPath) LookupState { return LookupUnknown }) == expr.TruthFalse
 }

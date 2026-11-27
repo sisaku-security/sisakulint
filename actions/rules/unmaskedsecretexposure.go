@@ -13,8 +13,8 @@ import (
 // runner does not mask, where the runner prints it in the log. Whether
 // the repository is public tells who reads the log, so each gives a
 // finding of each kind, on repo.public true and false.
-// It reads no summary in a job that GitHub skips in every run
-// (AlwaysSkipped): nothing of such a job runs.
+// It reads no summary in a job or a run step that GitHub skips in every
+// run (AlwaysSkipped): the runner prints no header of such a step.
 var UnmaskedSecretExposure lint.Rule = withExamples(lint.WithView[ir.UnmaskedSecretExposureReader](unmaskedSecretExposure{}, ir.UnmaskedSecretExposureView))
 
 // UnmaskedSecretExposureID is the ID of unmasked-secret-exposure.
@@ -28,7 +28,7 @@ func (unmaskedSecretExposure) Check(_ context.Context, c *lint.RuleContext, v ir
 	seen := map[ir.Key]anchors{} // by the value: one value can have several
 	for _, p := range v.SecretParts() {
 		if p.AlwaysSkipped() {
-			continue // GitHub skips its job in every run
+			continue // GitHub skips its job or its step in every run
 		}
 		at := c.At(p.At())
 		var related []lint.Related
@@ -131,7 +131,7 @@ var unmaskedSecretExposureMeta = lint.Meta{
 	InconclusiveKinds: withRemoteCalleeUnknown(nil),
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		{ID: lint.MustUndetectedFormID("debug-if"), Text: "a value taken out of a secret by fromJSON in an if, through an env that holds the secret, as an if cannot refer to the secrets context (env: CONFIG: ${{ secrets.CONFIG }} and if: fromJSON(env.CONFIG).user != ''): a rerun with debug logging prints, in the log of the run, the values that the if evaluates; a credential with read access to the repository can open the log, and a credential whose only write access is to the permission Actions can start the rerun; on 2026-10-23 a rerun with debug logging printed the value that fromJSON took out of a JSON literal in an if, in the lines ##[debug]Evaluating and ##[debug]Expanded. In the workflow file, the rule reads only the places whose values the header of a step prints in the log (the env, the run, the with and the name of the step), and not the if", Disposition: lint.Todo(lint.NeedSameFile)},
-		{ID: lint.MustUndetectedFormID("output-with-secret"), Text: "an output of a job whose value the rule reads as having a value that the runner masks in every run, while the value has no value that the runner masks in some runs: a whole secret that is empty in some runs (a secret that is not set), an operand before && that is false in some runs (github.event_name == 'push' && env), or env[INDEX] whose INDEX names a variable that the env does not have in some runs. The rule assumes that the runner drops the output, and so the rule does not follow the output to the jobs that read the output; in a run where the value has no value that the runner masks, the value taken out of a secret reaches the later job", Disposition: lint.Todo(lint.NeedSameFile)},
+		{ID: lint.MustUndetectedFormID("output-with-secret"), Text: "an output of a job whose value the rule reads as having a value that the runner masks in every run, while the value has no value that the runner masks in some runs: a whole secret that is empty in some runs (a secret that is not set). The rule assumes that the runner drops the output, and so the rule does not follow the output to the jobs that read the output; in a run where the value has no value that the runner masks, the value taken out of a secret reaches the later job", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("called-output"), Text: "a value taken out of a secret in an output of a reusable workflow (on.workflow_call.outputs), which a job of the caller reads with needs and prints: the rule does not follow the outputs of a called workflow to the caller", Disposition: lint.Todo(lint.NeedRepoFile)},
 		{ID: lint.MustUndetectedFormID("needs-other-place"), Text: "a value taken out of a secret in an output of a job, read with needs in a key where GitHub does not allow the secrets context in an expression but where the runner prints the value, such as the image, options, ports or volumes of a container or a service, or defaults.run.shell; or such a value passed to a reusable workflow in the with of a job that calls the reusable workflow, where a step of the called workflow may print the value: the rule inspects only the keys where GitHub allows the secrets context", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("escaped-twice"), Text: "toJSON(secrets), toJSON(secrets.X), or toJSON(env.X) where the variable X of the env holds a whole secret, in the env of the job's container or of a service: the runner prints the docker create command with each value of the JSON escaped a second time, the mask does not match a value escaped twice, and so the runner prints a secret that has a double quote in its value unmasked. Whether unmasked-secret-exposure reports a toJSON in the env of a container or of a service is not decided, because the harm depends on whether a secret has a double quote in its value, which the workflow does not show. secret-exposure reports toJSON(secrets) for a different harm, every secret reaching the job; no rule reports toJSON(secrets.X) or toJSON(env.X) in the env of a container", Disposition: lint.Todo(lint.NeedSameFile)},

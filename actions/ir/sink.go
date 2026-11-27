@@ -29,7 +29,7 @@ func (x *IR) allSinks() []*Sink {
 func (x *IR) projectSink(s taint.Sink) *Sink {
 	text := s.Value.Text()
 	out := &Sink{key: keyOf(x.paths, x.input, x.tree, s.Value.Base),
-		alwaysSkipped: x.alwaysSkipped(s.Value.Base), at: x.handleOf(s.Value.Base), kind: s.Kind}
+		alwaysSkipped: x.alwaysSkipped(s.Value.Base), forkPullRequestOnly: x.forkPullRequestOnly(s.Value.Base), at: x.handleOf(s.Value.Base), kind: s.Kind}
 	var places []shell.Place // of the ${{ }} of the script, read once
 	for _, r := range s.Refs {
 		e := x.exprRefOf(r, text[r.Span.Start:r.Span.End], x.spanOf(s.Value, r.Span))

@@ -282,3 +282,33 @@ func TestRequestSiteHostForms(t *testing.T) {
 	checkRequests(t, envT, `curl -H "A: $T" "" https://a.example/`,
 		"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal a.example")
 }
+
+func TestRequestSiteEveryReachingValue(t *testing.T) {
+	run := "if [ \"$X\" = 1 ]; then URL=https://api.github.com; else URL=https://hooks.example.com; fi\ncurl -d \"$T\" \"$URL\""
+	got := requests(t, onIssues("          T: ${{ secrets.T }}\n", run), false)
+	want := []string{
+		"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal hooks.example.com",
+		"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal api.github.com",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	run = "if [ \"$X\" = 1 ]; then URL=https://api.github.com; else URL=https://api.github.com/; fi\ncurl -d \"$T\" \"$URL\"\ncurl https://c.example/"
+	got = requests(t, onIssues("          T: ${{ secrets.T }}\n", run), false)
+	want = []string{
+		"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal api.github.com",
+		"curl#2 host=[] path=[] secrets=[] enterprise=false dest=literal c.example",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestRequestSiteSeveralVariablesNotCombined(t *testing.T) {
+	run := "if [ \"$X\" = 1 ]; then A=api; B=github.com; else A=api.github; B=com; fi\ncurl -d \"$T\" \"https://$A.$B/x\""
+	got := requests(t, onIssues("          T: ${{ secrets.T }}\n", run), false)
+	want := []string{"curl#1 host=[] path=[] secrets=[T] enterprise=false dest=literal api.github.com"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}

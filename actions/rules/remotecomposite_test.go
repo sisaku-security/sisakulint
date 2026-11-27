@@ -125,8 +125,9 @@ func TestRemoteCalledArchivedUses(t *testing.T) {
 // step or a job runs, all at the uses of the step or the job, are told
 // apart by the path of each place in its file: two jobs of a called
 // workflow with the same uses, two steps with the same name in a composite
-// action, and two agent steps with the same prompt give a finding each and
-// no error.
+// action, two agent steps with the same prompt, and two steps that use one
+// composite action whose step runs an agent give a finding each and no
+// error.
 func TestRemoteDuplicates(t *testing.T) {
 	const pr = "on: issue_comment\njobs:\n  a:\n    runs-on: ubuntu-latest\n    cache-mode: write\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: refs/pull/${{ github.event.issue.number }}/head\n      - uses: example-org/two-save-composite@v1\n"
 	for _, c := range []struct {
@@ -140,6 +141,7 @@ func TestRemoteDuplicates(t *testing.T) {
 		{"two jobs, deprecated-node-runtime", nil, DeprecatedNodeRuntimeID, "on: push\njobs:\n  call:\n    uses: example-org/two-jobs-workflow/.github/workflows/w.yml@v1\n", "deprecated-node-runtime.used-action"},
 		{"two saves, cache-poisoning", CachePoisoning, lint.RuleID{}, pr, "cache-poisoning.saved-checkout"},
 		{"two agents, prompt-injection", AIActionPromptInjection, lint.RuleID{}, "on:\n  issues:\n    types: [opened, labeled]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: example-org/two-agent-composite@v1\n", "ai-action-prompt-injection.prompt"},
+		{"one agent composite in two steps, prompt-injection", AIActionPromptInjection, lint.RuleID{}, "on:\n  issues:\n    types: [opened, labeled]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: example-org/claude-prompt-composite@v1\n      - uses: example-org/claude-prompt-composite@v1\n", "ai-action-prompt-injection.prompt"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var kinds []string

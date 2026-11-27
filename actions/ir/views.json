@@ -176,6 +176,7 @@
         "download-site.pr-run-refs",
         "download-site.same-run-uploads",
         "download-site.inconclusive-values",
+        "download-site.same-run-unknown",
         "download-site.dynamic",
         "download-site.pr-code-on",
         "download-site.dispatch-on",
@@ -510,7 +511,8 @@
       "fields": [
         "sink.requests",
         "sink.calls-not-read",
-        "sink.always-skipped"
+        "sink.always-skipped",
+        "sink.fork-pull-request-only"
       ],
       "fixes": []
     },

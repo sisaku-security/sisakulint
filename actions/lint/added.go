@@ -102,15 +102,22 @@ func RunAdded(ctx context.Context, in Inputs, reg *Registry, r facts.Resolver, v
 	for i, f := range out.Findings {
 		at[f.Fingerprint] = i
 	}
-	// the forms of the places of each added run, and the marks
-	findingMarks := func(f Finding) []AddedAttacker {
-		var marks []AddedAttacker
+	// f marked with the added runs that give its place in its form, with
+	// the evidence and the related places of each of those runs, so that
+	// the finding says why each attacker of its marks is there
+	marked := func(f Finding) Finding {
+		f.Evidence, f.Related = slices.Clip(f.Evidence), slices.Clip(f.Related)
 		for _, a := range runs {
-			if slices.ContainsFunc(a.rep.Findings, func(g Finding) bool { return g.Fingerprint == f.Fingerprint && sameForm(g, f) }) {
-				marks = append(marks, a.vs...)
+			k := slices.IndexFunc(a.rep.Findings, func(g Finding) bool { return g.Fingerprint == f.Fingerprint && sameForm(g, f) })
+			if k < 0 {
+				continue
 			}
+			f.AddedAttackers = append(f.AddedAttackers, a.vs...)
+			g := a.rep.Findings[k]
+			f.Evidence = appendNewRelated(f.Evidence, g.Evidence)
+			f.Related = appendNewRelated(f.Related, g.Related)
 		}
-		return marks
+		return f
 	}
 	// the runs from the last value first: when two runs give a place in two
 	// forms, the form the later value gives is reported
@@ -121,13 +128,11 @@ func RunAdded(ctx context.Context, in Inputs, reg *Registry, r facts.Resolver, v
 				if out.Findings[j].AddedAttackers != nil || sameForm(out.Findings[j], f) {
 					continue // marked already, or as the run adding none gives it
 				}
-				f.AddedAttackers = findingMarks(f)
-				out.Findings[j] = f
+				out.Findings[j] = marked(f)
 				continue
 			}
-			f.AddedAttackers = findingMarks(f)
 			at[f.Fingerprint] = len(out.Findings)
-			out.Findings = append(out.Findings, f)
+			out.Findings = append(out.Findings, marked(f))
 		}
 		out.Facts = mergeFacts(out.Facts, a.rep.Facts)
 		for _, e := range a.rep.Errors {
@@ -145,6 +150,22 @@ func uniqueAdded(vs []AddedAttacker) []AddedAttacker {
 	out := slices.Clone(vs)
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// appendNewRelated is to with the entries of from that to does not have.
+func appendNewRelated(to, from []Related) []Related {
+	for _, r := range from {
+		if !slices.ContainsFunc(to, func(x Related) bool { return sameRelated(x, r) }) {
+			to = append(to, r)
+		}
+	}
+	return to
+}
+
+// sameRelated is whether a and b are the same place with the same note.
+func sameRelated(a, b Related) bool {
+	return a.Note == b.Note && a.Location.File == b.Location.File && a.Location.Span == b.Location.Span &&
+		a.Location.Exact == b.Location.Exact && slices.Equal(a.Location.Via, b.Location.Via)
 }
 
 // sameForm is whether f and g say the same of their place: the same

@@ -530,19 +530,151 @@ func (p *ParamExpansion) ValueWords() []Word {
 	return nil
 }
 
-// cutsLines is whether p removes from its value the longest end that
-// starts at a white-space character or a line break (${T%%[[:space:]]*},
-// ${T%%[[:cntrl:]]*}, ${T%%$'\n'*}), so that it writes no line break.
+// cutsLines is whether p removes from its value every line break: the
+// longest end that starts at a character of a set that holds the line
+// break (${T%%[[:space:]]*}, ${T%%[[:space:]_]*}, ${T%%$'\n'*}), or the
+// longest start that ends at one (${T##*[[:space:]]}), so that it writes
+// no line break.
 func (p *ParamExpansion) cutsLines(script string) bool {
-	if p.Prefix != ParamPrefixNone || p.Op != ParamOpRemoveLongestSuffix || len(p.Words) != 1 {
+	if p.Prefix != ParamPrefixNone || len(p.Words) != 1 {
 		return false
 	}
-	text := func(q Part) string { return script[q.Span.Start:q.Span.End] }
-	switch ps := p.Words[0].Parts; {
-	case len(ps) == 1 && ps[0].Kind == PartLiteral && ps[0].Quote == QuoteNone:
-		return text(ps[0]) == "[[:space:]]*" || text(ps[0]) == "[[:cntrl:]]*"
-	case len(ps) == 2 && ps[0].Kind == PartLiteral && ps[0].Quote == QuoteANSI && ps[1].Kind == PartLiteral && ps[1].Quote == QuoteNone:
-		return text(ps[0]) == `\n` && text(ps[1]) == "*"
+	pat, ok := patternChars(script, p.Words[0])
+	if !ok {
+		return false
+	}
+	star := func(c patChar) bool { return c.c == '*' && !c.quoted }
+	switch n := len(pat); {
+	case p.Op == ParamOpRemoveLongestSuffix && n >= 2 && star(pat[n-1]):
+		return matchesLF(pat[:n-1])
+	case p.Op == ParamOpRemoveLongestPrefix && n >= 2 && star(pat[0]):
+		return matchesLF(pat[1:])
 	}
 	return false
+}
+
+// patChar is a byte of a pattern, and whether a quote made it literal.
+type patChar struct {
+	c      byte
+	quoted bool
+}
+
+// patternChars are the bytes of the pattern word w as bash matches them;
+// false for a word that is not of literals only.
+func patternChars(script string, w Word) ([]patChar, bool) {
+	var out []patChar
+	for _, q := range w.Parts {
+		if q.Kind != PartLiteral {
+			return nil, false
+		}
+		t := script[q.Span.Start:q.Span.End]
+		switch q.Quote {
+		case QuoteANSI:
+			t = ansiDecode(t)
+		case QuoteNone:
+			for i := 0; i < len(t); i++ {
+				if t[i] == '\\' && i+1 < len(t) {
+					i++
+					out = append(out, patChar{t[i], true})
+					continue
+				}
+				out = append(out, patChar{t[i], false})
+			}
+			continue
+		default:
+			u, ok := unescape(t, q.Quote, false)
+			if !ok {
+				return nil, false
+			}
+			t = u
+		}
+		for i := 0; i < len(t); i++ {
+			out = append(out, patChar{t[i], true})
+		}
+	}
+	return out, true
+}
+
+// ansiDecode is what bash makes of the bytes inside $'...' for the escapes
+// that stand for one byte (\n, \t, \r, \\, \', \", \NNN in octal); other
+// escapes are kept as they are.
+func ansiDecode(t string) string {
+	var b strings.Builder
+	for i := 0; i < len(t); i++ {
+		if t[i] != '\\' || i+1 == len(t) {
+			b.WriteByte(t[i])
+			continue
+		}
+		i++
+		switch d := t[i]; {
+		case d == 'n':
+			b.WriteByte('\n')
+		case d == 't':
+			b.WriteByte('\t')
+		case d == 'r':
+			b.WriteByte('\r')
+		case d == '\\' || d == '\'' || d == '"':
+			b.WriteByte(d)
+		case d >= '0' && d <= '7':
+			v, j := 0, i
+			for ; j < len(t) && j < i+3 && t[j] >= '0' && t[j] <= '7'; j++ {
+				v = v*8 + int(t[j]-'0')
+			}
+			b.WriteByte(byte(v))
+			i = j - 1
+		default:
+			b.WriteByte('\\')
+			b.WriteByte(d)
+		}
+	}
+	return b.String()
+}
+
+// matchesLF is whether pat is one character, and the line break is it: a
+// quoted line break, or a bracket expression that is not negated and holds
+// the line break or a class of it ([:space:], [:cntrl:]).
+func matchesLF(pat []patChar) bool {
+	if len(pat) == 1 {
+		return pat[0].c == '\n' && pat[0].quoted
+	}
+	n := len(pat)
+	if n < 3 || pat[0].c != '[' || pat[0].quoted || pat[n-1].c != ']' || pat[n-1].quoted {
+		return false
+	}
+	in := pat[1 : n-1]
+	if in[0].c == '!' || in[0].c == '^' {
+		return false
+	}
+	found := false
+	for i := 0; i < len(in); i++ {
+		c := in[i]
+		switch {
+		case c.c == '[' && !c.quoted && i+1 < len(in) && in[i+1].c == ':':
+			j := i + 2
+			for ; j+1 < len(in) && !(in[j].c == ':' && in[j+1].c == ']'); j++ {
+			}
+			if j+1 >= len(in) {
+				return false
+			}
+			var name []byte
+			for _, x := range in[i+2 : j] {
+				name = append(name, x.c)
+			}
+			if string(name) == "space" || string(name) == "cntrl" {
+				found = true
+			}
+			i = j + 1
+		case c.c == ']' && !c.quoted && i > 0:
+			// a ] that ends the expression early: what follows is
+			// not inside it
+			return false
+		case c.c == '[' && !c.quoted:
+			return false // [. .] and [= =]: not read here
+		case c.c == '-' && !c.quoted && i > 0 && i+1 < len(in):
+			return false // a range: not read here
+		case c.c == '\n':
+			found = true
+		}
+	}
+	return found
 }

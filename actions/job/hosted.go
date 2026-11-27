@@ -7,17 +7,12 @@ import (
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
-// hostedLabelsSource is the table of GitHub-hosted runners the labels are
-// from. Their Linux and macOS virtual machines run with passwordless sudo
-// (content/actions/reference/runners/github-hosted-runners.md of commit
-// ae648a1d328cb15fb173e80984aac748cf4b5af2). A label the table no longer
-// has, such as macos-14 (retired, github/docs commit 2eefcb3a), is not read
-// as a GitHub-hosted label.
-const hostedLabelsSource = "https://raw.githubusercontent.com/github/docs/2eefcb3a7f7cfafb15d77da07c691324f6696e69/data/reusables/actions/supported-github-runners.md"
-
 // hostedSudoLabels are the labels of the GitHub-hosted Linux and macOS
-// runners of hostedLabelsSource. ubuntu-slim is not among them: its runner
-// is a container run in unprivileged mode, not a virtual machine
+// runners of workflow.HostedRunnerLabelsSource, whose virtual machines run
+// with passwordless sudo
+// (content/actions/reference/runners/github-hosted-runners.md of commit
+// ae648a1d328cb15fb173e80984aac748cf4b5af2). ubuntu-slim is not among
+// them: its runner is a container run in unprivileged mode, not a virtual machine
 // (github-hosted-runners.md, "ubuntu-slim runners execute Actions
 // workflows in Ubuntu Linux, inside a container rather than a full VM
 // instance").
@@ -28,10 +23,8 @@ var hostedSudoLabels = mustLabels(
 )
 
 // hostedLabels are the labels of every GitHub-hosted runner of
-// hostedLabelsSource: hostedSudoLabels and the Windows ones.
-var hostedLabels = append(slices.Clone(hostedSudoLabels), mustLabels(
-	"windows-latest", "windows-2025", "windows-2025-vs2026", "windows-2022", "windows-11-arm", "windows-11-vs2026-arm",
-)...)
+// workflow.HostedRunnerLabelsSource: hostedSudoLabels and the Windows ones.
+var hostedLabels = append(slices.Clone(hostedSudoLabels), workflow.HostedWindowsLabels()...)
 
 func mustLabels(names ...string) []workflow.RunnerLabelName {
 	out := make([]workflow.RunnerLabelName, len(names))

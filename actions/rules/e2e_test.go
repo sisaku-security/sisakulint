@@ -436,6 +436,20 @@ jobs:
           curl -fsS "http://$BODY/healthz"
           curl -fsS "http://$PAGE/healthz"
 `)},
+	// secret-exfiltration: a job that runs only for a pull request from a
+	// fork, which holds on repo.fork-pr-secrets
+	".github/workflows/fork-request.yml": {Data: []byte(`on: pull_request
+permissions: {}
+jobs:
+  fork:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+`)},
 	".github/workflows/wiki.yml": {Data: []byte(`on: [gollum, issues]
 jobs:
   w:

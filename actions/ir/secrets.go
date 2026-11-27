@@ -114,7 +114,7 @@ func (x *IR) allSecretParts() []*SecretPart {
 					via = append(via, SecretPartVia{Job: v.Job, Output: v.Output, At: x.spanOf(v.Value, v.Value.Parts[v.Part].Span)})
 				}
 				out = append(out, &SecretPart{key: keyOf(x.paths, x.input, x.tree, s.Value.Base),
-					alwaysSkipped: x.jobAlwaysSkipped(s.Value.Base), at: x.spanOf(s.Value, p.Span),
+					alwaysSkipped: x.alwaysSkipped(s.Value.Base), at: x.spanOf(s.Value, p.Span),
 					secrets: s.Secrets, via: via, text: s.Value.Text()[p.Span.Start:p.Span.End]})
 			}
 		}

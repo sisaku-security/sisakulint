@@ -57,7 +57,14 @@ type DownloadSite struct {
 	PRRunRefs          []PRRunRef        // what makes it take an attacker's run
 	SameRunUploads     []SameRunUpload   // the uploads of the current run that check out the code of a pull request, when it takes the current run
 	InconclusiveValues []workflow.String // the inputs the tables cannot tell
-	Dynamic            bool              // whether with is a whole ${{ }}
+	// SameRunUnknown are what makes the artifacts it takes of the current
+	// run not known: the uses in the jobs it needs whose uploads are not
+	// known (a ./ workflow or action the inputs do not have, a merge whose
+	// pattern is a ${{ }} or one the rule does not read, a merge when the
+	// rule stops reading the merges), and its own pattern when the rule
+	// does not read it
+	SameRunUnknown []workflow.String
+	Dynamic        bool // whether with is a whole ${{ }}
 
 	PRCodeOn    []analysis.EventActivity // the privileged events it can run on, narrowed to those of PRRunRefs
 	Approval    analysis.Approval
@@ -133,7 +140,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 		if onCall(w) {
 			all = append(all, taint.CalledMark()) // a caller not among the inputs runs it on its own event
 		}
-		ups := sameRunUploads(c, w, AnalyzeIn(c, name, w, nil, m))
+		ups := sameRunUploadsIn(c, name, w, m, 0, &callReader{read: map[calledAt][]upload{}})
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
 		}
