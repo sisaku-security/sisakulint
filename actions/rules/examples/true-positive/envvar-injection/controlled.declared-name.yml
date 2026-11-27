@@ -1,0 +1,20 @@
+# situation: on issues opened, a step sets n to the name out, assigns
+#   $GITHUB_ENV to the variable that n names with declare, and writes V=$V
+#   to "$out".
+# reason: n holds one literal name when declare runs, and bash assigns
+#   $GITHUB_ENV to out, so the value goes to $GITHUB_ENV.
+# attack-value: github.event.issue.body = "x\nPWNED=1"
+# attack-run-behavior: the value goes to $GITHUB_ENV.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.body }}
+        run: |
+          n=out
+          declare "$n=$GITHUB_ENV"
+          echo "V=$V" >> "$out"

@@ -27677,6 +27677,31 @@
               run: eval "echo $ISSUE_TITLE"
       ```
   - true negatives:
+    - env-variable.declared-name.yml (workflow, true-negative)
+      ```yaml
+      # situation: on issues opened, a step passes the issue's title in the
+      #   environment variable TITLE, sets n to the name TITLE, assigns a fixed
+      #   command to the variable that n names with declare, and runs TITLE with
+      #   eval.
+      # reason: n holds one literal name when declare runs, and bash assigns the
+      #   fixed command to TITLE, so TITLE holds the fixed command when eval runs,
+      #   and the title of the issue does not run.
+      # attack-value: github.event.issue.title = "echo PWNED"
+      # attack-run-behavior: eval runs the fixed command, which prints "safe".
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                TITLE: ${{ github.event.issue.title }}
+              run: |
+                n=TITLE
+                declare "$n=echo safe"
+                eval "$TITLE"
+      ```
     - env-variable.git-config-data.yml (workflow, true-negative)
       ```yaml
       # situation: on an opened issue, a step passes the issue's title in the
@@ -30341,18 +30366,19 @@
               true | TITLE="echo safe"
               eval "$TITLE"
     ```
-- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
+- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf TITLE); declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
   - finding kinds: code-injection.env-variable
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, false-positive)
     ```yaml
     # situation: on issues opened, a step passes the issue's title in the
-    #   environment variable TITLE, sets n to the name TITLE, assigns a fixed
-    #   command to the variable that n names with declare, and runs TITLE with
-    #   eval.
+    #   environment variable TITLE, sets n to the name TITLE by a command
+    #   substitution, assigns a fixed command to the variable that n names with
+    #   declare, and runs TITLE with eval.
     # reason: bash assigns the fixed command to TITLE, so TITLE holds the fixed
     #   command when eval runs, and the title of the issue does not run.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule reads TITLE as holding the value of the env.
     # attack-value: github.event.issue.title = "echo PWNED"
     # attack-run-behavior: eval runs the fixed command, which prints "safe".
@@ -30366,7 +30392,7 @@
           - env:
               TITLE: ${{ github.event.issue.title }}
             run: |
-              n=TITLE
+              n=$(printf TITLE)
               declare "$n=echo safe"
               eval "$TITLE"
     ```
@@ -36435,6 +36461,29 @@
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-reads-path, path-lookup, attacker-executable, attacker-writes, attacker-event, callers-events, app-status-check
   - true positives:
+    - controlled.declared-name.yml (workflow, true-positive)
+      ```yaml
+      # situation: on issues opened, a step sets n to the name out, assigns
+      #   $GITHUB_PATH to the variable that n names with declare, and writes $V to
+      #   "$out".
+      # reason: n holds one literal name when declare runs, and bash assigns
+      #   $GITHUB_PATH to out, so the value goes to $GITHUB_PATH.
+      # attack-value: github.event.issue.title = "/tmp/PWNED"
+      # attack-run-behavior: the value goes to $GITHUB_PATH.
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                V: ${{ github.event.issue.title }}
+              run: |
+                n=out
+                declare "$n=$GITHUB_PATH"
+                echo "$V" >> "$out"
+      ```
     - controlled.default-assignment.yml (workflow, true-positive)
       ```yaml
       # situation: on issues opened, a step sets out to $GITHUB_PATH with the operator
@@ -36568,15 +36617,15 @@
       # situation: a job calls the reusable workflow .github/workflows/w.yml of
       #   the repository example-org/envpath-injection-remote, which the fact
       #   workflow.definition answers with the workflow of the true positive
-      #   controlled (controlled.default-assignment.yml) of the rule, with on:
-      #   workflow_call in place of the on of controlled.default-assignment.yml.
-      #   The job passes its secrets with secrets: inherit. In the true positive,
-      #   on issues opened, a step sets out to $GITHUB_PATH with the operator :=
-      #   of a parameter expansion, and writes $V to "$out".
+      #   controlled (controlled.declared-name.yml) of the rule, with on:
+      #   workflow_call in place of the on of controlled.declared-name.yml. The
+      #   job passes its secrets with secrets: inherit. In the true positive, on
+      #   issues opened, a step sets n to the name out, assigns $GITHUB_PATH to
+      #   the variable that n names with declare, and writes $V to "$out".
       # reason: the jobs of a reusable workflow run on the event that started the
-      #   run of the calling job, so the reason of the true positive holds: bash
-      #   assigns $GITHUB_PATH to out, which is unset, so the value goes to
-      #   $GITHUB_PATH.
+      #   run of the calling job, so the reason of the true positive holds: n
+      #   holds one literal name when declare runs, and bash assigns $GITHUB_PATH
+      #   to out, so the value goes to $GITHUB_PATH.
       # attack-value: github.event.issue.title = "/tmp/PWNED"
       # attack-run-behavior: the value goes to $GITHUB_PATH.
       on:
@@ -37367,17 +37416,18 @@
               true | out=$GITHUB_PATH
               echo "$V" >> "$out"
     ```
-- name-not-literal: an assignment whose variable name the script does not write as a literal word (n=key; declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
+- name-not-literal: an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf key); declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
   - finding kinds: envpath-injection.controlled, envpath-injection.wiki
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on issues opened, a step sets n to the name out, assigns
-    #   $GITHUB_PATH to the variable that n names with declare, and writes
-    #   $V to "$out".
-    # reason: a todo (the same file): bash assigns $GITHUB_PATH to out, so
-    #   the value goes to $GITHUB_PATH.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # situation: on issues opened, a step sets n to the name out by a command
+    #   substitution, assigns $GITHUB_PATH to the variable that n names with
+    #   declare, and writes $V to "$out".
+    # reason: a todo (the same file): bash assigns $GITHUB_PATH to out, so the
+    #   value goes to $GITHUB_PATH.
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule does not read the assignment.
     # attack-value: github.event.issue.title = "/tmp/PWNED"
     # attack-run-behavior: the value goes to $GITHUB_PATH.
@@ -37391,7 +37441,7 @@
           - env:
               V: ${{ github.event.issue.title }}
             run: |
-              n=out
+              n=$(printf out)
               declare "$n=$GITHUB_PATH"
               echo "$V" >> "$out"
     ```
@@ -37900,9 +37950,9 @@
     # situation: a job calls the reusable workflow .github/workflows/w.yml of
     #   the repository example-org/envpath-injection-unanswered, whose content
     #   is the workflow of the true positive controlled
-    #   (controlled.default-assignment.yml) of the rule, with on: workflow_call
-    #   in place of the on of controlled.default-assignment.yml. The linter has
-    #   no answer of the fact workflow.definition for the reusable workflow.
+    #   (controlled.declared-name.yml) of the rule, with on: workflow_call in
+    #   place of the on of controlled.declared-name.yml. The linter has no
+    #   answer of the fact workflow.definition for the reusable workflow.
     # reason: a todo (a fact): the jobs of a reusable workflow run on the event
     #   that started the run of the calling job, and the linter does not read
     #   the reusable workflow.
@@ -38391,10 +38441,9 @@
     # situation: a job calls the reusable workflow .github/workflows/w.yml of
     #   the repository example-org/envpath-injection-unknown, whose content is
     #   the workflow of the true positive controlled
-    #   (controlled.default-assignment.yml) of the rule, with on: workflow_call
-    #   in place of the on of controlled.default-assignment.yml. The linter
-    #   asked the fact workflow.definition for the reusable workflow and got no
-    #   answer.
+    #   (controlled.declared-name.yml) of the rule, with on: workflow_call in
+    #   place of the on of controlled.declared-name.yml. The linter asked the
+    #   fact workflow.definition for the reusable workflow and got no answer.
     # reason: what the jobs of the reusable workflow do is in the file that the
     #   linter could not read; whoever changes the uses, such as the author of a
     #   pull request, can name a reusable workflow that the token that the
@@ -39182,6 +39231,29 @@
                 BODY: ${{ github.event.issue.body }}
               run: echo "body=$BODY" >> "$GITHUB_ENV"
       ```
+    - controlled.declared-name.yml (workflow, true-positive)
+      ```yaml
+      # situation: on issues opened, a step sets n to the name out, assigns
+      #   $GITHUB_ENV to the variable that n names with declare, and writes V=$V
+      #   to "$out".
+      # reason: n holds one literal name when declare runs, and bash assigns
+      #   $GITHUB_ENV to out, so the value goes to $GITHUB_ENV.
+      # attack-value: github.event.issue.body = "x\nPWNED=1"
+      # attack-run-behavior: the value goes to $GITHUB_ENV.
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                V: ${{ github.event.issue.body }}
+              run: |
+                n=out
+                declare "$n=$GITHUB_ENV"
+                echo "V=$V" >> "$out"
+      ```
     - controlled.default-assignment.yml (workflow, true-positive)
       ```yaml
       # situation: on issues opened, a step sets out to $GITHUB_ENV with the operator
@@ -39685,6 +39757,30 @@
                 if [ -z "$QUIET" ]; then exec {fd}>>"$GITHUB_ENV"; else exec {fd}>/dev/null; fi
                 exec {fd}>&-
                 echo "V=$V" >&$fd || true
+      ```
+    - controlled.declared-name.yml (workflow, true-negative)
+      ```yaml
+      # situation: on issues opened, a step passes the issue's body in the
+      #   environment variable BODY, sets n to the name VAL, assigns a fixed word
+      #   to the variable that n names with declare, and writes X=$VAL to
+      #   $GITHUB_ENV.
+      # reason: n holds one literal name when declare runs, so bash assigns the
+      #   fixed word to VAL, and VAL holds no value of the env when echo runs.
+      # attack-value: github.event.issue.body = "x\nPWNED=1"
+      # attack-run-behavior: echo appends the one line X=fixed to $GITHUB_ENV.
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                BODY: ${{ github.event.issue.body }}
+              run: |
+                n=VAL
+                declare "$n=fixed"
+                echo "X=$VAL" >> "$GITHUB_ENV"
       ```
     - controlled.descriptor-closed-before-call.yml (workflow, true-negative)
       ```yaml
@@ -40622,17 +40718,18 @@
               true | out=$GITHUB_ENV
               echo "V=$V" >> "$out"
     ```
-- name-not-literal: an assignment whose variable name the script does not write as a literal word (n=key; declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
+- name-not-literal: an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf key); declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
   - finding kinds: envvar-injection.controlled, envvar-injection.wiki
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on issues opened, a step sets n to the name out, assigns
-    #   $GITHUB_ENV to the variable that n names with declare, and writes
-    #   V=$V to "$out".
-    # reason: a todo (the same file): bash assigns $GITHUB_ENV to out, so
-    #   the value goes to $GITHUB_ENV.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # situation: on issues opened, a step sets n to the name out by a command
+    #   substitution, assigns $GITHUB_ENV to the variable that n names with
+    #   declare, and writes V=$V to "$out".
+    # reason: a todo (the same file): bash assigns $GITHUB_ENV to out, so the
+    #   value goes to $GITHUB_ENV.
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule does not read the assignment.
     # attack-value: github.event.issue.body = "x\nPWNED=1"
     # attack-run-behavior: the value goes to $GITHUB_ENV.
@@ -40646,7 +40743,7 @@
           - env:
               V: ${{ github.event.issue.body }}
             run: |
-              n=out
+              n=$(printf out)
               declare "$n=$GITHUB_ENV"
               echo "V=$V" >> "$out"
     ```
@@ -45016,6 +45113,29 @@
   - attackers: fork-pr-author, issue-author, commenter, merged-commit-author, anyone-who-forks
   - preconditions: runner-reads-lines, attacker-writes-lines, attacker-event, callers-events, app-status-check
   - true positives:
+    - controlled.declared-name.yml (workflow, true-positive)
+      ```yaml
+      # situation: on issues opened, a step sets n to the name out, assigns
+      #   $GITHUB_OUTPUT to the variable that n names with declare, and writes
+      #   v=$V to "$out".
+      # reason: n holds one literal name when declare runs, and bash assigns
+      #   $GITHUB_OUTPUT to out, so the value goes to $GITHUB_OUTPUT.
+      # attack-value: github.event.issue.body = "x\nPWNED=1"
+      # attack-run-behavior: the value goes to $GITHUB_OUTPUT.
+      on:
+        issues:
+          types: [opened]
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                V: ${{ github.event.issue.body }}
+              run: |
+                n=out
+                declare "$n=$GITHUB_OUTPUT"
+                echo "v=$V" >> "$out"
+      ```
     - controlled.default-assignment.yml (workflow, true-positive)
       ```yaml
       # situation: on issues opened, a step sets out to $GITHUB_OUTPUT with the operator
@@ -45142,15 +45262,15 @@
       # situation: a job calls the reusable workflow .github/workflows/w.yml of
       #   the repository example-org/output-clobbering-remote, which the fact
       #   workflow.definition answers with the workflow of the true positive
-      #   controlled (controlled.default-assignment.yml) of the rule, with on:
-      #   workflow_call in place of the on of controlled.default-assignment.yml.
-      #   The job passes its secrets with secrets: inherit. In the true positive,
-      #   on issues opened, a step sets out to $GITHUB_OUTPUT with the operator :=
-      #   of a parameter expansion, and writes v=$V to "$out".
+      #   controlled (controlled.declared-name.yml) of the rule, with on:
+      #   workflow_call in place of the on of controlled.declared-name.yml. The
+      #   job passes its secrets with secrets: inherit. In the true positive, on
+      #   issues opened, a step sets n to the name out, assigns $GITHUB_OUTPUT to
+      #   the variable that n names with declare, and writes v=$V to "$out".
       # reason: the jobs of a reusable workflow run on the event that started the
-      #   run of the calling job, so the reason of the true positive holds: bash
-      #   assigns $GITHUB_OUTPUT to out, which is unset, so the value goes to
-      #   $GITHUB_OUTPUT.
+      #   run of the calling job, so the reason of the true positive holds: n
+      #   holds one literal name when declare runs, and bash assigns
+      #   $GITHUB_OUTPUT to out, so the value goes to $GITHUB_OUTPUT.
       # attack-value: github.event.issue.body = "x\nPWNED=1"
       # attack-run-behavior: the value goes to $GITHUB_OUTPUT.
       on:
@@ -46139,17 +46259,18 @@
               true | out=$GITHUB_OUTPUT
               echo "v=$V" >> "$out"
     ```
-- name-not-literal: an assignment whose variable name the script does not write as a literal word (n=key; declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
+- name-not-literal: an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf key); declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
   - finding kinds: output-clobbering.controlled, output-clobbering.wiki
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on issues opened, a step sets n to the name out, assigns
-    #   $GITHUB_OUTPUT to the variable that n names with declare, and writes
-    #   v=$V to "$out".
-    # reason: a todo (the same file): bash assigns $GITHUB_OUTPUT to out, so
-    #   the value goes to $GITHUB_OUTPUT.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # situation: on issues opened, a step sets n to the name out by a command
+    #   substitution, assigns $GITHUB_OUTPUT to the variable that n names with
+    #   declare, and writes v=$V to "$out".
+    # reason: a todo (the same file): bash assigns $GITHUB_OUTPUT to out, so the
+    #   value goes to $GITHUB_OUTPUT.
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule does not read the assignment.
     # attack-value: github.event.issue.body = "x\nPWNED=1"
     # attack-run-behavior: the value goes to $GITHUB_OUTPUT.
@@ -46163,7 +46284,7 @@
           - env:
               V: ${{ github.event.issue.body }}
             run: |
-              n=out
+              n=$(printf out)
               declare "$n=$GITHUB_OUTPUT"
               echo "v=$V" >> "$out"
     ```
@@ -46630,9 +46751,9 @@
     # situation: a job calls the reusable workflow .github/workflows/w.yml of
     #   the repository example-org/output-clobbering-unanswered, whose content
     #   is the workflow of the true positive controlled
-    #   (controlled.default-assignment.yml) of the rule, with on: workflow_call
-    #   in place of the on of controlled.default-assignment.yml. The linter has
-    #   no answer of the fact workflow.definition for the reusable workflow.
+    #   (controlled.declared-name.yml) of the rule, with on: workflow_call in
+    #   place of the on of controlled.declared-name.yml. The linter has no
+    #   answer of the fact workflow.definition for the reusable workflow.
     # reason: a todo (a fact): the jobs of a reusable workflow run on the event
     #   that started the run of the calling job, and the linter does not read
     #   the reusable workflow.
@@ -47122,10 +47243,9 @@
     # situation: a job calls the reusable workflow .github/workflows/w.yml of
     #   the repository example-org/output-clobbering-unknown, whose content is
     #   the workflow of the true positive controlled
-    #   (controlled.default-assignment.yml) of the rule, with on: workflow_call
-    #   in place of the on of controlled.default-assignment.yml. The linter
-    #   asked the fact workflow.definition for the reusable workflow and got no
-    #   answer.
+    #   (controlled.declared-name.yml) of the rule, with on: workflow_call in
+    #   place of the on of controlled.declared-name.yml. The linter asked the
+    #   fact workflow.definition for the reusable workflow and got no answer.
     # reason: what the jobs of the reusable workflow do is in the file that the
     #   linter could not read; whoever changes the uses, such as the author of a
     #   pull request, can name a reusable workflow that the token that the
@@ -48772,6 +48892,33 @@
                 curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ github.event.issue.title }}/status"
       ```
   - true negatives:
+    - credential-host.declared-name.yml (workflow, true-negative)
+      ```yaml
+      # situation: on issues, a step passes the issue's title in the environment
+      #   variable HOST, sets n to the name HOST, assigns a fixed host to the
+      #   variable that n names with declare, and sends a request with curl and
+      #   the secret DEPLOY_TOKEN to HOST.
+      # reason: n holds one literal name when declare runs, and bash assigns the
+      #   fixed host to HOST, so HOST holds the fixed host when curl runs, and the
+      #   request goes to the fixed host.
+      # attack: the attacker opens an issue titled attacker.example, the host of a
+      #   server the attacker runs.
+      # attack-run-behavior: curl sends the request to api.example.com, and the
+      #   server of the attacker gets nothing.
+      on: issues
+      jobs:
+        j:
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - env:
+                HOST: ${{ github.event.issue.title }}
+              run: |
+                n=HOST
+                declare "$n=api.example.com"
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"
+      ```
     - credential-host.subshell-assignment.yml (workflow, true-negative)
       ```yaml
       # situation: on issues opened, a step defines the function send, which
@@ -50528,18 +50675,19 @@
               true | HOST=api.example.com
               curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"
     ```
-- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
+- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf TITLE); declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
   - finding kinds: request-forgery.credential-host
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, false-positive)
     ```yaml
     # situation: on issues, a step passes the issue's title in the environment
-    #   variable HOST, sets n to the name HOST, assigns a fixed host to the
-    #   variable that n names with declare, and sends a request with curl and
-    #   the secret DEPLOY_TOKEN to HOST.
+    #   variable HOST, sets n to the name HOST by a command substitution,
+    #   assigns a fixed host to the variable that n names with declare, and
+    #   sends a request with curl and the secret DEPLOY_TOKEN to HOST.
     # reason: bash assigns the fixed host to HOST, so HOST holds the fixed host
     #   when curl runs, and the request goes to the fixed host.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule reads HOST as holding the value of the env.
     # attack: the attacker opens an issue titled attacker.example, the host of a
     #   server the attacker runs.
@@ -50555,7 +50703,7 @@
           - env:
               HOST: ${{ github.event.issue.title }}
             run: |
-              n=HOST
+              n=$(printf HOST)
               declare "$n=api.example.com"
               curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"
     ```
@@ -51362,6 +51510,29 @@
                 echo "KEY=$API_KEY" >> "$GITHUB_ENV"
             - run: |
                 curl -fsS -H "x-apikey: $KEY" https://hooks.example.com/
+      ```
+    - untrusted-destination.declared-name.yml (workflow, true-positive)
+      ```yaml
+      # situation: on push, a step sets n to the name key, assigns the secret
+      #   API_KEY to the variable that n names with declare, and sends key to
+      #   hooks.example.com with curl.
+      # reason: n holds one literal name when declare runs, and key holds the
+      #   secret when curl runs, so the request carries the secret to the host.
+      # attack: the attacker takes over the server of the destination, by a breach
+      #   of the vendor or by registering the domain when the domain lapses.
+      # attack-run-behavior: curl sends the secret to hooks.example.com, whose
+      #   server, now the attacker's, logs the secret.
+      on: push
+      jobs:
+        j:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                API_KEY: ${{ secrets.API_KEY }}
+              run: |
+                n=key
+                declare "$n=$API_KEY"
+                curl -fsS -H "x-apikey: $key" https://hooks.example.com/
       ```
     - untrusted-destination.default-assignment.yml (workflow, true-positive)
       ```yaml
@@ -52291,17 +52462,18 @@
               true | key=$API_KEY
               curl -fsS -H "x-apikey: $key" https://hooks.example.com/
     ```
-- name-not-literal: an assignment whose variable name the script does not write as a literal word (n=key; declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
+- name-not-literal: an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf key); declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
   - finding kinds: secret-exfiltration.untrusted-destination
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on push, a step sets n to the name key, assigns the secret
-    #   API_KEY to the variable that n names with declare, and sends key to
-    #   hooks.example.com with curl.
+    # situation: on push, a step sets n to the name key by a command
+    #   substitution, assigns the secret API_KEY to the variable that n names
+    #   with declare, and sends key to hooks.example.com with curl.
     # reason: a todo (the same file): key holds the secret when curl runs, so
     #   the request carries the secret to the host.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule does not read the assignment.
     # attack: the attacker takes over the server of the destination, by a breach
     #   of the vendor or by registering the domain when the domain lapses.
@@ -52315,7 +52487,7 @@
           - env:
               API_KEY: ${{ secrets.API_KEY }}
             run: |
-              n=key
+              n=$(printf key)
               declare "$n=$API_KEY"
               curl -fsS -H "x-apikey: $key" https://hooks.example.com/
     ```
@@ -53825,6 +53997,31 @@
                 TOKEN: ${{ secrets.TOKEN }}
               run: PREFIX=${TOKEN:0:12}
       ```
+    - public.declared-name.yml (workflow, true-positive)
+      ```yaml
+      # situation: on push, in a public repository (repo.public true), a step sets
+      #   n to the name PRIVATE_KEY, assigns the private key out of the secret
+      #   GCP_SA_KEY to the variable that n names with declare, and prints
+      #   PRIVATE_KEY.
+      # reason: n holds one literal name when declare runs, and bash assigns the
+      #   private key to PRIVATE_KEY, and the runner does not mask the private
+      #   key.
+      # attack: anyone signed in to GitHub opens the run's log and reads the
+      #   private key.
+      # attack-run-behavior: the step prints "key:" and the private key.
+      on: push
+      permissions: {}
+      jobs:
+        deploy:
+          runs-on: ubuntu-latest
+          steps:
+            - env:
+                GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+              run: |
+                n=PRIVATE_KEY
+                declare "$n=$(echo "$GCP_SA_KEY" | jq -r '.private_key')"
+                echo "key: $PRIVATE_KEY"
+      ```
     - public.default-assignment.yml (workflow, true-positive)
       ```yaml
       # situation: on push, in a public repository (repo.public true), a step sets a
@@ -54605,18 +54802,19 @@
               true | PRIVATE_KEY=$(echo "$GCP_SA_KEY" | jq -r '.private_key')
               echo "key: $PRIVATE_KEY"
     ```
-- name-not-literal: an assignment whose variable name the script does not write as a literal word (n=key; declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
+- name-not-literal: an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf key); declare "\$n=\$X"; or read -r "\$n"): bash assigns the word after = (with declare) or the line that read reads (with read) to the variable whose name is the value of n, and the rule does not read the assignment
   - finding kinds: secret-in-log.private, secret-in-log.public
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, undetected)
     ```yaml
-    # situation: on push, in a public repository (repo.public true), a step sets n
-    #   to the name PRIVATE_KEY, assigns the private key out of the secret
+    # situation: on push, in a public repository (repo.public true), a step sets
+    #   n to the name PRIVATE_KEY, assigns the private key out of the secret
     #   GCP_SA_KEY to the variable that n names with declare, and prints
     #   PRIVATE_KEY.
     # reason: a todo (the same file): bash assigns the private key to
     #   PRIVATE_KEY, and the runner does not mask the private key.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule does not read the assignment.
     # attack: anyone signed in to GitHub opens the run's log and reads the
     #   private key.
@@ -54630,7 +54828,7 @@
           - env:
               GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
             run: |
-              n=PRIVATE_KEY
+              n=$(printf PRIVATE_KEY)
               declare "$n=$(echo "$GCP_SA_KEY" | jq -r '.private_key')"
               echo "key: $PRIVATE_KEY"
     ```
@@ -58396,6 +58594,34 @@
             - run: ./release.sh "${{ steps.p.outputs.tag }}"
       ```
   - true negatives:
+    - controlled.declared-name.yml (workflow, true-negative)
+      ```yaml
+      # situation: on issues, the step p passes the title of the issue in the
+      #   environment variable TITLE, sets n to the name TITLE, assigns a fixed
+      #   word to the variable that n names with declare, and prints TITLE; the
+      #   release step writes the output tag of the step p into its script.
+      # reason: n holds one literal name when declare runs, and bash assigns the
+      #   fixed word to TITLE, so TITLE holds the fixed word when echo runs, and
+      #   the step does not print the title.
+      # attack: the attacker opens an issue titled x ##[set-output
+      #   name=tag;]$(id).
+      # attack-run-behavior: the step prints "issue: safe", the output tag stays
+      #   empty, and the release step runs with an empty tag.
+      on: issues
+      permissions: {}
+      jobs:
+        j:
+          runs-on: ubuntu-latest
+          steps:
+            - id: p
+              env:
+                TITLE: ${{ github.event.issue.title }}
+              run: |
+                n=TITLE
+                declare "$n=safe"
+                echo "issue: $TITLE"
+            - run: ./release.sh "${{ steps.p.outputs.tag }}"
+      ```
     - controlled.pusher.yml (workflow, true-negative)
       ```yaml
       # situation: on push, the step p prints the name and the email of the
@@ -59697,18 +59923,20 @@
               echo "issue: $TITLE"
           - run: ./release.sh "${{ steps.p.outputs.tag }}"
     ```
-- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
+- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf TITLE); declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
   - finding kinds: set-output-injection.controlled
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, false-positive)
     ```yaml
     # situation: on issues, the step p passes the title of the issue in the
-    #   environment variable TITLE, sets n to the name TITLE, assigns a fixed
-    #   word to the variable that n names with declare, and prints TITLE; the
-    #   release step writes the output tag of the step p into its script.
+    #   environment variable TITLE, sets n to the name TITLE by a command
+    #   substitution, assigns a fixed word to the variable that n names with
+    #   declare, and prints TITLE; the release step writes the output tag of the
+    #   step p into its script.
     # reason: bash assigns the fixed word to TITLE, so TITLE holds the fixed
     #   word when echo runs, and the step does not print the title.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule reads TITLE as holding the value of the env.
     # attack: the attacker opens an issue titled x ##[set-output
     #   name=tag;]$(id).
@@ -59724,7 +59952,7 @@
             env:
               TITLE: ${{ github.event.issue.title }}
             run: |
-              n=TITLE
+              n=$(printf TITLE)
               declare "$n=safe"
               echo "issue: $TITLE"
           - run: ./release.sh "${{ steps.p.outputs.tag }}"
@@ -62989,6 +63217,33 @@
             - run: echo next
       ```
   - true negatives:
+    - controlled.declared-name.yml (workflow, true-negative)
+      ```yaml
+      # situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
+      #   in its env; a step passes the title of the issue in the environment
+      #   variable T, sets n to the name T, assigns a fixed word to the variable
+      #   that n names with declare, and prints T; a step comes after.
+      # reason: n holds one literal name when declare runs, and bash assigns the
+      #   fixed word to T, so T holds the fixed word when echo runs, and the step
+      #   does not print the title.
+      # attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
+      # attack-run-behavior: the step prints "issue: safe"; nothing is set.
+      on: issues
+      permissions: {}
+      jobs:
+        j:
+          runs-on: ubuntu-latest
+          env:
+            ACTIONS_ALLOW_UNSECURE_COMMANDS: true
+          steps:
+            - env:
+                T: ${{ github.event.issue.title }}
+              run: |
+                n=T
+                declare "$n=safe"
+                echo "issue: $T"
+            - run: echo next
+      ```
     - controlled.pusher.yml (workflow, true-negative)
       ```yaml
       # situation: on push, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true,
@@ -64574,18 +64829,20 @@
               echo "issue: $T"
           - run: echo next
     ```
-- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word (n=TITLE; declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
+- name-not-literal: a variable of the env of the step that the script sets again by an assignment whose variable name the script does not write as a literal word, and whose name n does not hold one literal name on every path to it (n=\$(printf TITLE); declare "\$n=echo safe"): bash assigns the word after = to the variable whose name is the value of n, so after the assignment the variable of the env holds the word that the script assigns, and the rule still reads the variable as holding the value of the env of the step
   - finding kinds: unsecure-commands.controlled
   - disposition: todo (needs: same-file)
   - example: name-not-literal.yml (workflow, false-positive)
     ```yaml
     # situation: on issues, a job sets ACTIONS_ALLOW_UNSECURE_COMMANDS to true
     #   in its env; a step passes the title of the issue in the environment
-    #   variable T, sets n to the name T, assigns a fixed word to the variable
-    #   that n names with declare, and prints T; a step comes after.
+    #   variable T, sets n to the name T by a command substitution, assigns a
+    #   fixed word to the variable that n names with declare, and prints T; a
+    #   step comes after.
     # reason: bash assigns the fixed word to T, so T holds the fixed word when
     #   echo runs, and the step does not print the title.
-    # cause: the variable name of the assignment is not a literal word, so the
+    # cause: the variable name of the assignment is not a literal word, and n
+    #   holds the output of a command substitution, not one literal name, so the
     #   rule reads T as holding the value of the env.
     # attack: the attacker titles the issue ##[set-env name=BASH_ENV;]$(id).
     # attack-run-behavior: the step prints "issue: safe"; nothing is set.
@@ -64600,7 +64857,7 @@
           - env:
               T: ${{ github.event.issue.title }}
             run: |
-              n=T
+              n=$(printf T)
               declare "$n=safe"
               echo "issue: $T"
           - run: echo next

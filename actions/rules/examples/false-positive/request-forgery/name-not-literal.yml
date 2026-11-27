@@ -1,10 +1,11 @@
 # situation: on issues, a step passes the issue's title in the environment
-#   variable HOST, sets n to the name HOST, assigns a fixed host to the
-#   variable that n names with declare, and sends a request with curl and
-#   the secret DEPLOY_TOKEN to HOST.
+#   variable HOST, sets n to the name HOST by a command substitution,
+#   assigns a fixed host to the variable that n names with declare, and
+#   sends a request with curl and the secret DEPLOY_TOKEN to HOST.
 # reason: bash assigns the fixed host to HOST, so HOST holds the fixed host
 #   when curl runs, and the request goes to the fixed host.
-# cause: the variable name of the assignment is not a literal word, so the
+# cause: the variable name of the assignment is not a literal word, and n
+#   holds the output of a command substitution, not one literal name, so the
 #   rule reads HOST as holding the value of the env.
 # attack: the attacker opens an issue titled attacker.example, the host of a
 #   server the attacker runs.
@@ -20,6 +21,6 @@ jobs:
       - env:
           HOST: ${{ github.event.issue.title }}
         run: |
-          n=HOST
+          n=$(printf HOST)
           declare "$n=api.example.com"
           curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://$HOST/status"
