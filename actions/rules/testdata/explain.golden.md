@@ -15558,6 +15558,67 @@
             - name: Install dependencies (pnpm)
               run: pnpm i
       ```
+    - .github/workflows/labeled.yml (workflow, true-positive)
+      ```yaml
+      # situation: labeler.yml runs actions/labeler on pull_request_target with a
+      #   personal access token; the configuration .github/labeler.yml adds the
+      #   label safe-to-test to a pull request that changes a file under site/;
+      #   labeled.yml runs on pull_request_target on labeled, and when the label is
+      #   safe-to-test, the job build checks out the head of the pull request, runs
+      #   npm ci and npm run build, and uploads dist, and the job deploy, which
+      #   needs build, downloads dist and runs ./dist/deploy.sh.
+      # reason: actions/labeler adds the label safe-to-test to the pull request of
+      #   the attacker, so no person approves the labeled run, and the job deploy
+      #   runs the deploy.sh that the code of the pull request wrote in the run of
+      #   the job build.
+      # attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
+      # attack-run-behavior: the attacker opens a pull request from a fork that
+      #   changes a file under site/ and whose build writes dist/deploy.sh;
+      #   actions/labeler adds the label safe-to-test, which starts labeled.yml;
+      #   the job build uploads dist, and the job deploy downloads dist and runs
+      #   ./dist/deploy.sh, which prints PWNED.
+      on:
+        pull_request_target:
+          types: [labeled]
+      jobs:
+        build:
+          if: github.event.label.name == 'safe-to-test'
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/checkout@v4.2.2
+              with:
+                ref: ${{ github.event.pull_request.head.sha }}
+            - run: npm ci && npm run build
+            - uses: actions/upload-artifact@v4
+              with: {name: dist, path: dist}
+        deploy:
+          needs: build
+          if: github.event.label.name == 'safe-to-test'
+          runs-on: ubuntu-latest
+          steps:
+            - uses: actions/download-artifact@v4
+              with: {name: dist}
+            - run: ./dist/deploy.sh
+      ```
+      - finding on: .github/workflows/labeled.yml
+      - .github/labeler.yml (repo-file)
+        ```yaml
+        safe-to-test:
+          - changed-files:
+              - any-glob-to-any-file: 'site/**'
+        ```
+      - .github/workflows/labeler.yml (workflow)
+        ```yaml
+        on: pull_request_target
+        permissions: {}
+        jobs:
+          label:
+            runs-on: ubuntu-latest
+            steps:
+              - uses: actions/labeler@v5
+                with:
+                  repo-token: ${{ secrets.LABELER_PAT }}
+        ```
     - executed.no-caller.action.yml (action-metadata, true-positive)
       ```yaml
       # situation: a composite action with no caller among the files that the
@@ -16184,72 +16245,6 @@
       jobs:
         call:
           uses: ./.github/workflows/called.yml
-      ```
-- labeler-same-run: a job on pull_request_target with the activity type labeled that downloads and runs an artifact that another job of the same run uploads after the other job checks out the code of the pull request, where the if of each job requires a label that actions/labeler adds to the pull request of the attacker. The rule reads an upload of the same run only from a job that no label and no environment approves, and does not read whether actions/labeler adds the label that the job that uploads requires. untrusted-checkout reports the checkout of the job that uploads.
-  - finding kinds: artifact-poisoning.executed, artifact-poisoning.download
-  - disposition: todo (needs: same-file)
-  - example: .github/workflows/labeled.yml (workflow, undetected)
-    ```yaml
-    # situation: labeler.yml runs actions/labeler on pull_request_target with a
-    #   personal access token; the configuration .github/labeler.yml adds the
-    #   label safe-to-test to a pull request that changes a file under site/;
-    #   labeled.yml runs on pull_request_target on labeled, and when the label is
-    #   safe-to-test, the job build checks out the head of the pull request, runs
-    #   npm ci and npm run build, and uploads dist, and the job deploy, which
-    #   needs build, downloads dist and runs ./dist/deploy.sh.
-    # reason: actions/labeler adds the label safe-to-test to the pull request of
-    #   the attacker, so no person approves the labeled run, and the job deploy
-    #   runs the deploy.sh that the code of the pull request wrote in the run of
-    #   the job build.
-    # cause: the rule reads an upload of the same run only from a job that no
-    #   label and no environment approves, and does not read whether
-    #   actions/labeler adds the label that the job build requires.
-    # attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
-    # attack-run-behavior: the attacker opens a pull request from a fork that
-    #   changes a file under site/ and whose build writes dist/deploy.sh;
-    #   actions/labeler adds the label safe-to-test, which starts labeled.yml;
-    #   the job build uploads dist, and the job deploy downloads dist and runs
-    #   ./dist/deploy.sh, which prints PWNED.
-    on:
-      pull_request_target:
-        types: [labeled]
-    jobs:
-      build:
-        if: github.event.label.name == 'safe-to-test'
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/checkout@v4.2.2
-            with:
-              ref: ${{ github.event.pull_request.head.sha }}
-          - run: npm ci && npm run build
-          - uses: actions/upload-artifact@v4
-            with: {name: dist, path: dist}
-      deploy:
-        needs: build
-        if: github.event.label.name == 'safe-to-test'
-        runs-on: ubuntu-latest
-        steps:
-          - uses: actions/download-artifact@v4
-            with: {name: dist}
-          - run: ./dist/deploy.sh
-    ```
-    - .github/labeler.yml (repo-file)
-      ```yaml
-      safe-to-test:
-        - changed-files:
-            - any-glob-to-any-file: 'site/**'
-      ```
-    - .github/workflows/labeler.yml (workflow)
-      ```yaml
-      on: pull_request_target
-      permissions: {}
-      jobs:
-        label:
-          runs-on: ubuntu-latest
-          steps:
-            - uses: actions/labeler@v5
-              with:
-                repo-token: ${{ secrets.LABELER_PAT }}
       ```
 - run-command: an artifact downloaded by a command of a run: gh run download, gh api …/zip, curl
   - finding kinds: artifact-poisoning.executed, artifact-poisoning.download

@@ -56786,6 +56786,367 @@
               }
             },
             {
+              "input_kind": "workflow",
+              "name": ".github/workflows/labeled.yml",
+              "text": "# situation: labeler.yml runs actions/labeler on pull_request_target with a\n#   personal access token; the configuration .github/labeler.yml adds the\n#   label safe-to-test to a pull request that changes a file under site/;\n#   labeled.yml runs on pull_request_target on labeled, and when the label is\n#   safe-to-test, the job build checks out the head of the pull request, runs\n#   npm ci and npm run build, and uploads dist, and the job deploy, which\n#   needs build, downloads dist and runs ./dist/deploy.sh.\n# reason: actions/labeler adds the label safe-to-test to the pull request of\n#   the attacker, so no person approves the labeled run, and the job deploy\n#   runs the deploy.sh that the code of the pull request wrote in the run of\n#   the job build.\n# attack-value: the file dist/deploy.sh in the artifact dist of the job build = \"#!/bin/sh\\necho PWNED\\n\"\n# attack-run-behavior: the attacker opens a pull request from a fork that\n#   changes a file under site/ and whose build writes dist/deploy.sh;\n#   actions/labeler adds the label safe-to-test, which starts labeled.yml;\n#   the job build uploads dist, and the job deploy downloads dist and runs\n#   ./dist/deploy.sh, which prints PWNED.\non:\n  pull_request_target:\n    types: [labeled]\njobs:\n  build:\n    if: github.event.label.name == 'safe-to-test'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: dist, path: dist}\n  deploy:\n    needs: build\n    if: github.event.label.name == 'safe-to-test'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
+              "others": [
+                {
+                  "input_kind": "repo-file",
+                  "name": ".github/labeler.yml",
+                  "text": "safe-to-test:\n  - changed-files:\n      - any-glob-to-any-file: 'site/**'\n"
+                },
+                {
+                  "input_kind": "workflow",
+                  "name": ".github/workflows/labeler.yml",
+                  "text": "on: pull_request_target\npermissions: {}\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.LABELER_PAT }}\n"
+                }
+              ],
+              "facts": [
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/download-artifact",
+                    "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/labeler",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/labeler",
+                    "ref": "v5"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.definition",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "archive_substituted": false,
+                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "content": "runs:\n  using: node24\n  main: index.js\n",
+                    "file": "action.yml"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/labeler",
+                    "ref": "v5"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "action.runs-using",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": "node24"
+                },
+                {
+                  "query": {
+                    "kind": "dependabot.version-updates",
+                    "package_ecosystem": "github-actions",
+                    "input_path": ".github/workflows/labeled.yml"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "dependabot.version-updates",
+                    "package_ecosystem": "github-actions",
+                    "input_path": ".github/workflows/labeler.yml"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "git.commit-tags",
+                    "repo": "actions/download-artifact",
+                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/checkout",
+                    "ref": "v4.2.2"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4.2.2",
+                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/download-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/labeler",
+                    "ref": "v5"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v5",
+                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "git.ref-commit",
+                    "repo": "actions/upload-artifact",
+                    "ref": "v4"
+                  },
+                  "state": "found",
+                  "value": {
+                    "ref": "refs/tags/v4",
+                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
+                  }
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/download-artifact"
+                  },
+                  "state": "found",
+                  "value": [
+                    {
+                      "first_patched_version": "4.1.3",
+                      "ghsa_id": "GHSA-cxww-7g56-2vh6",
+                      "severity": "high",
+                      "vulnerable_version_range": ">= 4.0.0, < 4.1.3"
+                    }
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/labeler"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "package.advisories",
+                    "package": "actions/upload-artifact"
+                  },
+                  "state": "found",
+                  "value": []
+                },
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/checkout"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/download-artifact"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/labeler"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.archived",
+                    "repo": "actions/upload-artifact"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.pull-request-target-allowed",
+                    "input_path": ".github/workflows/labeled.yml"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
+                    "kind": "repo.pull-request-target-allowed",
+                    "input_path": ".github/workflows/labeler.yml"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                }
+              ],
+              "notes": {
+                "situation": "labeler.yml runs actions/labeler on pull_request_target with a personal access token; the configuration .github/labeler.yml adds the label safe-to-test to a pull request that changes a file under site/; labeled.yml runs on pull_request_target on labeled, and when the label is safe-to-test, the job build checks out the head of the pull request, runs npm ci and npm run build, and uploads dist, and the job deploy, which needs build, downloads dist and runs ./dist/deploy.sh.",
+                "reason": "actions/labeler adds the label safe-to-test to the pull request of the attacker, so no person approves the labeled run, and the job deploy runs the deploy.sh that the code of the pull request wrote in the run of the job build.",
+                "attack_value": {
+                  "carrier": "the file dist/deploy.sh in the artifact dist of the job build",
+                  "value": "#!/bin/sh\necho PWNED\n"
+                },
+                "attack_run_behavior": "the attacker opens a pull request from a fork that changes a file under site/ and whose build writes dist/deploy.sh; actions/labeler adds the label safe-to-test, which starts labeled.yml; the job build uploads dist, and the job deploy downloads dist and runs ./dist/deploy.sh, which prints PWNED."
+              }
+            },
+            {
               "input_kind": "action-metadata",
               "name": "executed.no-caller.action.yml",
               "text": "# situation: a composite action with no caller among the files that the\n#   linter reads; a step downloads, with actions/download-artifact and the id\n#   of the run that started workflow_run, the artifact of that run into the\n#   workspace, and then runs npm ci.\n# reason: with no caller among the files that the linter reads, the rule\n#   reads the action on every event an attacker triggers, workflow_run among\n#   the events. npm ci reads the package.json and package-lock.json of the\n#   workspace and runs the install scripts of the two files, so the files the\n#   artifact puts in the workspace decide the code that runs, in the run of\n#   workflow_run with the token of the base repository, not in the run that\n#   made the artifact.\n# attack-value: the file package.json in the artifact of the ci run of the pull request = \"{\\\"scripts\\\":{\\\"preinstall\\\":\\\"echo PWNED\\\"}}\"\n# attack-run-behavior: the pull request from the fork changes ci so the run\n#   of ci uploads package.json; when the run of ci completes, the download\n#   takes the artifact by workflow_run.id with the token into the workspace,\n#   and npm ci runs the preinstall, which prints PWNED, with the secrets that\n#   the job of a workflow that calls the action gives the step and the token\n#   of the job.\nname: install\ndescription: install the built packages\nruns:\n  using: composite\n  steps:\n    - uses: actions/download-artifact@v4\n      with:\n        run-id: ${{ github.event.workflow_run.id }}\n        github-token: ${{ github.token }}\n    - run: npm ci\n      shell: bash\n",
@@ -59610,382 +59971,6 @@
                   "value": "{\"scripts\":{\"preinstall\":\"echo PWNED\"}}"
                 },
                 "attack_run_behavior": "ci.yml calls it on push, whose event has no workflow_run, so run-id is empty, the download does not name the fork's ci run, and npm ci reads no package.json of the pull request. A workflow of another repository that calls it on workflow_run would download the fork's artifact, with that repository's token."
-              }
-            }
-          ]
-        },
-        {
-          "id": "labeler-same-run",
-          "text": "a job on pull_request_target with the activity type labeled that downloads and runs an artifact that another job of the same run uploads after the other job checks out the code of the pull request, where the if of each job requires a label that actions/labeler adds to the pull request of the attacker. The rule reads an upload of the same run only from a job that no label and no environment approves, and does not read whether actions/labeler adds the label that the job that uploads requires. untrusted-checkout reports the checkout of the job that uploads.",
-          "finding_kinds": [
-            "artifact-poisoning.executed",
-            "artifact-poisoning.download"
-          ],
-          "disposition": "todo",
-          "needs": [
-            "same-file"
-          ],
-          "examples": [
-            {
-              "input_kind": "workflow",
-              "name": ".github/workflows/labeled.yml",
-              "text": "# situation: labeler.yml runs actions/labeler on pull_request_target with a\n#   personal access token; the configuration .github/labeler.yml adds the\n#   label safe-to-test to a pull request that changes a file under site/;\n#   labeled.yml runs on pull_request_target on labeled, and when the label is\n#   safe-to-test, the job build checks out the head of the pull request, runs\n#   npm ci and npm run build, and uploads dist, and the job deploy, which\n#   needs build, downloads dist and runs ./dist/deploy.sh.\n# reason: actions/labeler adds the label safe-to-test to the pull request of\n#   the attacker, so no person approves the labeled run, and the job deploy\n#   runs the deploy.sh that the code of the pull request wrote in the run of\n#   the job build.\n# cause: the rule reads an upload of the same run only from a job that no\n#   label and no environment approves, and does not read whether\n#   actions/labeler adds the label that the job build requires.\n# attack-value: the file dist/deploy.sh in the artifact dist of the job build = \"#!/bin/sh\\necho PWNED\\n\"\n# attack-run-behavior: the attacker opens a pull request from a fork that\n#   changes a file under site/ and whose build writes dist/deploy.sh;\n#   actions/labeler adds the label safe-to-test, which starts labeled.yml;\n#   the job build uploads dist, and the job deploy downloads dist and runs\n#   ./dist/deploy.sh, which prints PWNED.\non:\n  pull_request_target:\n    types: [labeled]\njobs:\n  build:\n    if: github.event.label.name == 'safe-to-test'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: dist, path: dist}\n  deploy:\n    needs: build\n    if: github.event.label.name == 'safe-to-test'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: dist}\n      - run: ./dist/deploy.sh\n",
-              "others": [
-                {
-                  "input_kind": "repo-file",
-                  "name": ".github/labeler.yml",
-                  "text": "safe-to-test:\n  - changed-files:\n      - any-glob-to-any-file: 'site/**'\n"
-                },
-                {
-                  "input_kind": "workflow",
-                  "name": ".github/workflows/labeler.yml",
-                  "text": "on: pull_request_target\npermissions: {}\njobs:\n  label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/labeler@v5\n        with:\n          repo-token: ${{ secrets.LABELER_PAT }}\n"
-                }
-              ],
-              "facts": [
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/checkout",
-                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/checkout",
-                    "ref": "v4.2.2"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/download-artifact",
-                    "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/download-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/labeler",
-                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/labeler",
-                    "ref": "v5"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/upload-artifact",
-                    "ref": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.definition",
-                    "repo": "actions/upload-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": {
-                    "archive_substituted": false,
-                    "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-                    "content": "runs:\n  using: node24\n  main: index.js\n",
-                    "file": "action.yml"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "action.runs-using",
-                    "repo": "actions/checkout",
-                    "ref": "v4.2.2"
-                  },
-                  "state": "found",
-                  "value": "node24"
-                },
-                {
-                  "query": {
-                    "kind": "action.runs-using",
-                    "repo": "actions/download-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": "node24"
-                },
-                {
-                  "query": {
-                    "kind": "action.runs-using",
-                    "repo": "actions/labeler",
-                    "ref": "v5"
-                  },
-                  "state": "found",
-                  "value": "node24"
-                },
-                {
-                  "query": {
-                    "kind": "action.runs-using",
-                    "repo": "actions/upload-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": "node24"
-                },
-                {
-                  "query": {
-                    "kind": "dependabot.version-updates",
-                    "package_ecosystem": "github-actions",
-                    "input_path": ".github/workflows/labeled.yml"
-                  },
-                  "state": "found",
-                  "value": true
-                },
-                {
-                  "query": {
-                    "kind": "dependabot.version-updates",
-                    "package_ecosystem": "github-actions",
-                    "input_path": ".github/workflows/labeler.yml"
-                  },
-                  "state": "found",
-                  "value": true
-                },
-                {
-                  "query": {
-                    "kind": "git.commit-tags",
-                    "repo": "actions/download-artifact",
-                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-                  },
-                  "state": "found",
-                  "value": []
-                },
-                {
-                  "query": {
-                    "kind": "git.ref-commit",
-                    "repo": "actions/checkout",
-                    "ref": "v4.2.2"
-                  },
-                  "state": "found",
-                  "value": {
-                    "ref": "refs/tags/v4.2.2",
-                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "git.ref-commit",
-                    "repo": "actions/download-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": {
-                    "ref": "refs/tags/v4",
-                    "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "git.ref-commit",
-                    "repo": "actions/labeler",
-                    "ref": "v5"
-                  },
-                  "state": "found",
-                  "value": {
-                    "ref": "refs/tags/v5",
-                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "git.ref-commit",
-                    "repo": "actions/upload-artifact",
-                    "ref": "v4"
-                  },
-                  "state": "found",
-                  "value": {
-                    "ref": "refs/tags/v4",
-                    "sha": "11bd71901bbe5b1630ceea73d27597364c9af683"
-                  }
-                },
-                {
-                  "query": {
-                    "kind": "package.advisories",
-                    "package": "actions/checkout"
-                  },
-                  "state": "found",
-                  "value": []
-                },
-                {
-                  "query": {
-                    "kind": "package.advisories",
-                    "package": "actions/download-artifact"
-                  },
-                  "state": "found",
-                  "value": [
-                    {
-                      "first_patched_version": "4.1.3",
-                      "ghsa_id": "GHSA-cxww-7g56-2vh6",
-                      "severity": "high",
-                      "vulnerable_version_range": ">= 4.0.0, < 4.1.3"
-                    }
-                  ]
-                },
-                {
-                  "query": {
-                    "kind": "package.advisories",
-                    "package": "actions/labeler"
-                  },
-                  "state": "found",
-                  "value": []
-                },
-                {
-                  "query": {
-                    "kind": "package.advisories",
-                    "package": "actions/upload-artifact"
-                  },
-                  "state": "found",
-                  "value": []
-                },
-                {
-                  "query": {
-                    "kind": "repo.action-list"
-                  },
-                  "state": "found",
-                  "value": [
-                    "*",
-                    "!untrusted/*",
-                    "!suspicious/*",
-                    "!tj-actions/changed-files@v39",
-                    "!docker://aquasec/trivy:*",
-                    "!example-org/unlisted-*",
-                    "!docker://example-org/unlisted-*",
-                    "!example-org/partly-listed/hidden@*"
-                  ]
-                },
-                {
-                  "query": {
-                    "kind": "repo.archived",
-                    "repo": "actions/checkout"
-                  },
-                  "state": "found",
-                  "value": false
-                },
-                {
-                  "query": {
-                    "kind": "repo.archived",
-                    "repo": "actions/download-artifact"
-                  },
-                  "state": "found",
-                  "value": false
-                },
-                {
-                  "query": {
-                    "kind": "repo.archived",
-                    "repo": "actions/labeler"
-                  },
-                  "state": "found",
-                  "value": false
-                },
-                {
-                  "query": {
-                    "kind": "repo.archived",
-                    "repo": "actions/upload-artifact"
-                  },
-                  "state": "found",
-                  "value": false
-                },
-                {
-                  "query": {
-                    "kind": "repo.default-token-write"
-                  },
-                  "state": "found",
-                  "value": true
-                },
-                {
-                  "query": {
-                    "kind": "repo.pull-request-target-allowed",
-                    "input_path": ".github/workflows/labeled.yml"
-                  },
-                  "state": "unknown",
-                  "reason": "the example does not answer it"
-                },
-                {
-                  "query": {
-                    "kind": "repo.pull-request-target-allowed",
-                    "input_path": ".github/workflows/labeler.yml"
-                  },
-                  "state": "unknown",
-                  "reason": "the example does not answer it"
-                }
-              ],
-              "notes": {
-                "situation": "labeler.yml runs actions/labeler on pull_request_target with a personal access token; the configuration .github/labeler.yml adds the label safe-to-test to a pull request that changes a file under site/; labeled.yml runs on pull_request_target on labeled, and when the label is safe-to-test, the job build checks out the head of the pull request, runs npm ci and npm run build, and uploads dist, and the job deploy, which needs build, downloads dist and runs ./dist/deploy.sh.",
-                "reason": "actions/labeler adds the label safe-to-test to the pull request of the attacker, so no person approves the labeled run, and the job deploy runs the deploy.sh that the code of the pull request wrote in the run of the job build.",
-                "cause": "the rule reads an upload of the same run only from a job that no label and no environment approves, and does not read whether actions/labeler adds the label that the job build requires.",
-                "attack_value": {
-                  "carrier": "the file dist/deploy.sh in the artifact dist of the job build",
-                  "value": "#!/bin/sh\necho PWNED\n"
-                },
-                "attack_run_behavior": "the attacker opens a pull request from a fork that changes a file under site/ and whose build writes dist/deploy.sh; actions/labeler adds the label safe-to-test, which starts labeled.yml; the job build uploads dist, and the job deploy downloads dist and runs ./dist/deploy.sh, which prints PWNED."
               }
             }
           ]

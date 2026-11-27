@@ -40,3 +40,18 @@ func TestSameRunRefusedCheckout(t *testing.T) {
 		t.Errorf("placed: %+v", ups)
 	}
 }
+
+// TestSameRunLabel: a job that a label approves uploads in the labeled run
+// that its download takes; a job with an environment does not.
+func TestSameRunLabel(t *testing.T) {
+	const head = "on:\n  pull_request_target:\n    types: [labeled]\njobs:\n  a:\n    if: github.event.label.name == 'safe-to-test'\n    runs-on: ubuntu-latest\n"
+	const steps = "    steps:\n      - uses: actions/checkout@v4.2.2\n        with: {ref: '${{ github.event.pull_request.head.sha }}'}\n      - run: npm ci && npm run build\n      - uses: actions/upload-artifact@v4\n        with: {name: dist, path: dist/}\n"
+	label := head + steps
+	if ups := sameRunUploads(nil, mustWorkflow(t, label), Analyze(mustWorkflow(t, label), nil)); len(ups) != 1 {
+		t.Errorf("label: %+v", ups)
+	}
+	env := head + "    environment: test\n" + steps
+	if ups := sameRunUploads(nil, mustWorkflow(t, env), Analyze(mustWorkflow(t, env), nil)); len(ups) != 0 {
+		t.Errorf("environment: %+v", ups)
+	}
+}

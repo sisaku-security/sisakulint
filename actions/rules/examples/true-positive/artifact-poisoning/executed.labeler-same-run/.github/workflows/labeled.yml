@@ -9,9 +9,6 @@
 #   the attacker, so no person approves the labeled run, and the job deploy
 #   runs the deploy.sh that the code of the pull request wrote in the run of
 #   the job build.
-# cause: the rule reads an upload of the same run only from a job that no
-#   label and no environment approves, and does not read whether
-#   actions/labeler adds the label that the job build requires.
 # attack-value: the file dist/deploy.sh in the artifact dist of the job build = "#!/bin/sh\necho PWNED\n"
 # attack-run-behavior: the attacker opens a pull request from a fork that
 #   changes a file under site/ and whose build writes dist/deploy.sh;
