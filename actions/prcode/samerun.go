@@ -44,9 +44,10 @@ type SameRunUpload struct {
 // read it: a SameRunUpload, or, when unread, an upload whose content the
 // rule does not read, which may hold the code of a pull request. The
 // upload is then of cause (or of a merge of what cause uploads): a ./
-// workflow or action that the inputs do not have, or a merge whose pattern
-// is not known or whose reading the rule ends early (mergeReadMax); its
-// Checkout and Upload are those of cause.
+// workflow or action that the inputs do not have, a call of a ./ workflow
+// past callUploadMax, or a merge whose pattern is not known or whose
+// reading the rule ends early (mergeReadMax); its Checkout and Upload are
+// those of cause.
 type upload struct {
 	SameRunUpload
 	unread bool
@@ -131,6 +132,29 @@ func inputName(with workflow.Field[workflow.Map[workflow.String]], def string) (
 // GitHub runs at most ten levels of them, and refuses a cycle.
 const maxCallDepth = 10
 
+// callUploadMax bounds the uploads that the calls of reusable workflows
+// give, at every level of one reading: each calling job gives its own copy
+// of each upload of the workflow it calls, so the copies grow as the number
+// of calling jobs to the power of the levels. The uploads of a call are
+// counted before they are added; past callUploadMax, each further call gives
+// only an unread upload, as a call of a workflow that the inputs do not have.
+const callUploadMax = 100000
+
+// callReader is the state of one reading of sameRunUploadsIn through the
+// calls: the uploads of the workflows already read, by the workflow and its
+// depth, and the uploads that the calls gave (callUploadMax).
+type callReader struct {
+	read  map[calledAt][]upload
+	added int
+}
+
+// unreadCall is the unread upload of the call of job j (ID id) on the
+// events evs: a workflow that the inputs do not have, or a call past
+// callUploadMax.
+func unreadCall(j *workflow.Job, id string, evs []analysis.EventActivity) upload {
+	return upload{SameRunUpload: SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id, Checkout: j.Uses.Value.Base, Upload: j.Uses.Value.Base, anyName: true, events: evs}, unread: true, cause: j.Uses.Value.String}
+}
+
 // sameRunUploadsIn are sameRunUploads of w, the input name, with the
 // uploads that the upload-artifact steps do not show (the undetected form
 // same-run-pr-code): those inside a composite action that a step of the
@@ -139,10 +163,11 @@ const maxCallDepth = 10
 // events on which that call runs, and those that
 // actions/upload-artifact/merge uploads again under its name. A ./
 // workflow or action that the inputs do not have gives an unread upload.
-// read are the uploads of the workflows already read, by the workflow and
+// r.read are the uploads of the workflows already read, by the workflow and
 // its depth: each is read once, on the events of all its callers, and kept
-// to the events of each call.
-func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int, read map[calledAt][]upload) []upload {
+// to the events of each call. Past callUploadMax uploads of the calls, a
+// call gives an unread upload.
+func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m *shell.Memo, depth int, r *callReader) []upload {
 	g := c.Graph()
 	var called []calls.CalledCall
 	if g != nil {
@@ -178,16 +203,22 @@ func sameRunUploadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow, m
 			if i >= 0 {
 				f, _ = g.File(called[i].Called)
 			}
-			if f.Workflow == nil {
-				out = append(out, upload{SameRunUpload: SameRunUpload{job: strings.ToLower(id), Text: "jobs." + id, Checkout: j.Uses.Value.Base, Upload: j.Uses.Value.Base, anyName: true, events: callEvs}, unread: true, cause: j.Uses.Value.String})
+			if f.Workflow == nil || r.added >= callUploadMax {
+				out = append(out, unreadCall(&j, id, callEvs))
 				continue
 			}
 			at := calledAt{called[i].Called, depth + 1}
-			inner, ok := read[at]
+			inner, ok := r.read[at]
 			if !ok {
-				inner = sameRunUploadsIn(c, called[i].Called, f.Workflow, m, depth+1, read)
-				read[at] = inner
+				inner = sameRunUploadsIn(c, called[i].Called, f.Workflow, m, depth+1, r)
+				r.read[at] = inner
 			}
+			if r.added+len(inner) > callUploadMax {
+				r.added = callUploadMax
+				out = append(out, unreadCall(&j, id, callEvs))
+				continue
+			}
+			r.added += len(inner)
 			for _, u := range inner {
 				u.events = slices.DeleteFunc(slices.Clone(u.events), func(e analysis.EventActivity) bool { return !slices.Contains(callEvs, e) })
 				if len(u.events) == 0 {

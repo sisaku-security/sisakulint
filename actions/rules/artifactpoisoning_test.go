@@ -541,3 +541,53 @@ func TestArtifactPoisoningCalledPerCaller(t *testing.T) {
 		}
 	}
 }
+
+// TestArtifactPoisoningCallScale: each job that calls a reusable workflow
+// gives its own copy of each upload of the called workflow, so k calling
+// jobs on each of 8 levels give k^8 uploads; past callUploadMax the calls
+// give unread uploads, and the download of the current run that needs one
+// of them is inconclusive. One calling job on each level is read to the
+// upload at the end of the chain.
+func TestArtifactPoisoningCallScale(t *testing.T) {
+	files := func(k int) map[string]string {
+		calls := func(next int) string {
+			s := ""
+			for i := range k {
+				s += "  c" + strconv.Itoa(i) + ":\n    uses: ./.github/workflows/w" + strconv.Itoa(next) + ".yml\n"
+			}
+			return s
+		}
+		f := map[string]string{
+			".github/workflows/w0.yml": "on: pull_request_target\njobs:\n" + calls(1) + "  deploy:\n    needs: c0\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/download-artifact@v4\n        with: {name: out}\n      - run: ./deploy.sh\n",
+			".github/workflows/w8.yml": "on: workflow_call\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.2.2\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n      - uses: actions/upload-artifact@v4\n        with: {name: out, path: .}\n",
+		}
+		for n := 1; n <= 7; n++ {
+			f[".github/workflows/w"+strconv.Itoa(n)+".yml"] = "on: workflow_call\njobs:\n" + calls(n+1)
+		}
+		return f
+	}
+	for _, c := range []struct {
+		name                   string
+		k                      int
+		findings, inconclusive int
+	}{
+		{"one calling job on each level", 1, 1, 0},
+		{"8 calling jobs on each level, past callUploadMax", 8, 0, 1},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{ArtifactPoisoning}, files(c.k), downloadFacts{})
+		var findings, inconclusive int
+		for _, f := range rep.Findings {
+			if !strings.HasSuffix(f.Location.File.Input.String(), "/w0.yml") {
+				continue
+			}
+			if f.Certainty == lint.CertaintyInconclusive {
+				inconclusive++
+			} else {
+				findings++
+			}
+		}
+		if findings != c.findings || inconclusive != c.inconclusive {
+			t.Errorf("%s: %d findings and %d inconclusive in w0.yml, want %d and %d", c.name, findings, inconclusive, c.findings, c.inconclusive) // the Evidence of a finding past the bound has millions of places
+		}
+	}
+}

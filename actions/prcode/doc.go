@@ -34,7 +34,8 @@
 //	download.go  DownloadSite, PRRunRef: the run a download takes, the token's scope, where it puts the files
 //	downloadtables.go  the commits of the releases of the two download actions
 //	samerun.go   SameRunUpload: the uploads of the current run, after a checkout of a pull request's code, that a download of the current run takes:
-//	             those of actions/upload-artifact, of a composite action of the inputs, of a ./ reusable workflow, and of
+//	             those of actions/upload-artifact, of a composite action of the inputs, of a ./ reusable workflow (up to
+//	             callUploadMax uploads of the calls), and of
 //	             actions/upload-artifact/merge (mergeUploads: one upload for each merge step, first upload and
 //	             unread cause, up to mergeReadMax reads); upload: those uploads, and the unread ones of uses whose
 //	             uploads are not known

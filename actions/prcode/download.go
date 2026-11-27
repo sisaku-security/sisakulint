@@ -140,7 +140,7 @@ func AnalyzeDownloadsIn(c *taint.Callers, name calls.Node, w *workflow.Workflow,
 		if onCall(w) {
 			all = append(all, taint.CalledMark()) // a caller not among the inputs runs it on its own event
 		}
-		ups := sameRunUploadsIn(c, name, w, m, 0, map[calledAt][]upload{})
+		ups := sameRunUploadsIn(c, name, w, m, 0, &callReader{read: map[calledAt][]upload{}})
 		if c.Coverage(name) == analysis.CallerCoverageAll {
 			all, _ = c.Events(name, workflow.EventNames(), true)
 		}
