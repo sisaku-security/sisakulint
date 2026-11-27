@@ -1248,6 +1248,12 @@
           "display": true
         },
         {
+          "name": "sameRunUnknown",
+          "type": "[]string",
+          "doc": "as written, the uses in the jobs it needs whose uploads of the current run are not known, and its own pattern when the rule does not read it",
+          "display": true
+        },
+        {
           "name": "dynamic",
           "type": "bool",
           "doc": "whether with is a whole ${{ }}"

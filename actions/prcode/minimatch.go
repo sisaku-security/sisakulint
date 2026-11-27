@@ -1,0 +1,663 @@
+package prcode
+
+import (
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+// matchArtifactName is whether minimatch, with no options, matches the
+// name of an artifact (which has no /) to pattern, as
+// actions/upload-artifact/merge and actions/download-artifact filter the
+// artifacts of a run (new Minimatch(pattern).match(name)). It follows
+// minimatch v9.0.3 (https://github.com/isaacs/minimatch/tree/v9.0.3): the
+// comment and the negation, the brace expansion of brace-expansion v2.0.1,
+// the parts between /, the quick tests of parse, and the regular
+// expression that src/ast.ts builds of each part, which mmRegexp runs.
+// known is false for a pattern the rule does not read: one that minimatch
+// v10.2.4 or the brace-expansion its releases bundle may read differently
+// (an extglob inside an extglob, a * between an extglob and the start, the
+// end or another extglob, braces with a \ escape, more than
+// braceExpandMax names), a POSIX class, and one whose match takes more
+// than matchBudget steps.
+func matchArtifactName(pattern, name string) (match, known bool) {
+	pattern, name = utf16Units(pattern), utf16Units(name)
+	if strings.HasPrefix(pattern, "#") {
+		return false, true // a comment matches nothing
+	}
+	if pattern == "" {
+		return name == "", true
+	}
+	negate := false
+	for strings.HasPrefix(pattern, "!") {
+		pattern, negate = pattern[1:], !negate
+	}
+	var set [][]globPart
+	seen := map[string]bool{}
+	globs, ok := minimatchBraces(pattern)
+	if !ok {
+		return false, false
+	}
+	for _, g := range globs {
+		if seen[g] {
+			continue
+		}
+		seen[g] = true
+		var parts []globPart
+		for _, p := range levelOneOptimize(strings.FieldsFunc(g, isSlash), g) {
+			gp, ok := parseGlobPart(p)
+			if !ok {
+				return false, false
+			}
+			parts = append(parts, gp)
+		}
+		set = append(set, parts)
+	}
+	budget := matchBudget
+	for _, parts := range set {
+		hit := matchParts([]string{name}, parts, &budget)
+		if budget < 0 {
+			return false, false
+		}
+		if hit {
+			return !negate, true
+		}
+	}
+	return negate, true
+}
+
+// matchBudget bounds the steps of matchRegexp for one name.
+const matchBudget = 100000
+
+func isSlash(r rune) bool { return r == '/' }
+
+// utf16Units is s with each character above U+FFFF replaced by two
+// characters, one for each UTF-16 code unit of it, as JavaScript reads a
+// string: a ? or a [...] of minimatch takes one code unit. A code unit of
+// a surrogate pair is put at U+100000 plus the unit, so that it is a
+// character of a Go string; a range of a class from a code unit of a
+// surrogate pair to U+E000..U+FFFF compares differently than in
+// JavaScript.
+func utf16Units(s string) string {
+	ascii := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return s
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if r <= 0xffff {
+			b.WriteRune(r)
+			continue
+		}
+		r -= 0x10000
+		b.WriteRune(0x100000 + 0xd800 + r>>10)
+		b.WriteRune(0x100000 + 0xdc00 + r&0x3ff)
+	}
+	return b.String()
+}
+
+// levelOneOptimize is minimatch's levelOneOptimize of the parts of g, as
+// split by /+: a ** after a ** is dropped, and a .. after a part other
+// than .., . and ** removes that part. A g with no parts is [""].
+// strings.FieldsFunc drops the empty parts at the ends, which split(/\/+/)
+// keeps, so they are put back from g.
+func levelOneOptimize(fields []string, g string) []string {
+	var parts []string
+	if strings.HasPrefix(g, "/") {
+		parts = append(parts, "")
+	}
+	parts = append(parts, fields...)
+	if strings.HasSuffix(g, "/") {
+		parts = append(parts, "")
+	}
+	var out []string
+	for _, p := range parts {
+		prev := ""
+		if len(out) > 0 {
+			prev = out[len(out)-1]
+		}
+		if p == "**" && prev == "**" && len(out) > 0 {
+			continue
+		}
+		if p == ".." && len(out) > 0 && prev != "" && prev != ".." && prev != "." && prev != "**" {
+			out = out[:len(out)-1]
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
+}
+
+// globPart is a part of a pattern between /: **, a string to compare, or
+// a regular expression.
+type globPart struct {
+	globstar bool
+	literal  string
+	re       *mmRegexp
+	quick    func(string) bool
+}
+
+// quickTest is the test that minimatch's parse puts in place of the
+// regular expression of a part of a common form (starRE, starDotExtRE,
+// qmarksRE, starDotStarRE, dotStarRE of src/index.ts, with no options):
+// it compares the rest of the part as it is written, \ included. nil for
+// another part.
+func quickTest(p string) func(string) bool {
+	stars := len(p) - len(strings.TrimLeft(p, "*"))
+	marks := len(p) - len(strings.TrimLeft(p, "?"))
+	notDot := func(f string) bool { return !strings.HasPrefix(f, ".") }
+	plain := func(ext string) bool { return !strings.ContainsAny(ext, "+@!?*[(") }
+	switch {
+	case stars > 0 && stars == len(p):
+		return func(f string) bool { return f != "" && notDot(f) }
+	case stars > 0 && plain(p[stars:]):
+		ext := p[stars:]
+		return func(f string) bool { return notDot(f) && strings.HasSuffix(f, ext) }
+	case marks > 0 && plain(p[marks:]):
+		ext, n := p[marks:], utf8.RuneCountInString(p) // the length of the whole part, as qmarksTestNoExt takes $0
+		return func(f string) bool {
+			return utf8.RuneCountInString(f) == n && notDot(f) && strings.HasSuffix(f, ext)
+		}
+	}
+	if i := strings.Index(p, "."); stars > 0 && i == stars && len(strings.Trim(p[i+1:], "*")) == 0 && len(p) > i+1 {
+		return func(f string) bool { return notDot(f) && strings.Contains(f, ".") }
+	}
+	if strings.HasPrefix(p, ".") && len(p) > 1 && strings.Trim(p[1:], "*") == "" {
+		return func(f string) bool { return f != "." && f != ".." && strings.HasPrefix(f, ".") }
+	}
+	return nil
+}
+
+// parseGlobPart is minimatch's parse of a part; ok is false for a part
+// that the releases read differently.
+func parseGlobPart(p string) (globPart, bool) {
+	switch p {
+	case "**":
+		return globPart{globstar: true}, true
+	case "":
+		return globPart{}, true
+	}
+	if t := quickTest(p); t != nil {
+		return globPart{quick: t}, true
+	}
+	a := parseMMAST(p)
+	if a.unknown {
+		return globPart{}, false
+	}
+	src, body, magic := a.toRegExpSource(false)
+	if a.unknown {
+		return globPart{}, false
+	}
+	if !magic {
+		return globPart{literal: body}, true
+	}
+	re, ok := compileMMRegexp("^" + src + "$")
+	if !ok {
+		return globPart{}, false
+	}
+	return globPart{re: re}, true
+}
+
+func (g globPart) matches(f string, budget *int) bool {
+	if g.quick != nil {
+		return g.quick(f)
+	}
+	if g.re != nil {
+		return g.re.match(f, budget)
+	}
+	return f == g.literal
+}
+
+// matchParts is minimatch's matchOne (not partial, no dot) of the parts
+// of a file to the parts of a pattern.
+func matchParts(file []string, pattern []globPart, budget *int) bool {
+	fi, pi := 0, 0
+	for ; fi < len(file) && pi < len(pattern); fi, pi = fi+1, pi+1 {
+		p, f := pattern[pi], file[fi]
+		if p.globstar {
+			if pi+1 == len(pattern) {
+				for ; fi < len(file); fi++ {
+					if file[fi] == "." || file[fi] == ".." || strings.HasPrefix(file[fi], ".") {
+						return false
+					}
+				}
+				return true
+			}
+			for fr := fi; fr < len(file); fr++ {
+				if matchParts(file[fr:], pattern[pi+1:], budget) {
+					return true
+				}
+				if strings.HasPrefix(file[fr], ".") {
+					break // ** does not swallow ., .. or a name that starts with .
+				}
+			}
+			return false
+		}
+		if !p.matches(f, budget) {
+			return false
+		}
+	}
+	switch {
+	case fi == len(file) && pi == len(pattern):
+		return true
+	case fi == len(file):
+		return false
+	default:
+		return fi == len(file)-1 && file[fi] == ""
+	}
+}
+
+// minimatchBraces is minimatch's braceExpand: the pattern itself unless a
+// { is followed by a } with no { or line break between them. ok is false
+// when the releases may expand it differently: the brace expansion that
+// minimatch 10 bundles in the actions (brace-expansion 5.0.3 in
+// actions/upload-artifact v7, @isaacs/brace-expansion 5.0.0 in
+// actions/download-artifact v8) turns a \ and the character after it into
+// . (its periodPattern /\\./g), and keeps at most braceExpandMax names.
+func minimatchBraces(p string) ([]string, bool) {
+	has := false
+	for i := 0; i < len(p) && !has; i++ {
+		if p[i] != '{' {
+			continue
+		}
+		for j := i + 1; j < len(p); j++ {
+			if p[j] == '{' || isLineTerminatorAt(p, j) {
+				break
+			}
+			if p[j] == '}' {
+				has = true
+				break
+			}
+		}
+	}
+	if !has {
+		return []string{p}, true
+	}
+	if strings.Contains(p, `\`) {
+		return nil, false
+	}
+	return expandBraces(p)
+}
+
+// braceExpandMax is EXPANSION_MAX of brace-expansion 5, the names it keeps.
+const braceExpandMax = 100000
+
+// isLineTerminatorAt is whether a line terminator of JavaScript (which .
+// of a regular expression does not match) starts at s[i].
+func isLineTerminatorAt(s string, i int) bool {
+	if s[i] == '\n' || s[i] == '\r' {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(s[i:])
+	return r == 0x2028 || r == 0x2029
+}
+
+// The placeholders of the escaped characters of brace-expansion.
+const (
+	escSlash  = "\x00SLASH\x00"
+	escOpen   = "\x00OPEN\x00"
+	escClose  = "\x00CLOSE\x00"
+	escComma  = "\x00COMMA\x00"
+	escPeriod = "\x00PERIOD\x00"
+)
+
+// expandBraces is expandTop of brace-expansion v2.0.1
+// (https://github.com/juliangruber/brace-expansion/blob/v2.0.1/index.js).
+// ok is false when it would make more than braceExpandMax names.
+func expandBraces(str string) ([]string, bool) {
+	if str == "" {
+		return nil, true
+	}
+	if strings.HasPrefix(str, "{}") {
+		str = `\{\}` + str[2:]
+	}
+	u := strings.NewReplacer(escSlash, `\`, escOpen, "{", escClose, "}", escComma, ",", escPeriod, ".")
+	var b braceExpander
+	out := b.braceExpand(escapeBraces(str), true)
+	if b.over {
+		return nil, false
+	}
+	for i := range out {
+		out[i] = u.Replace(out[i])
+	}
+	return out, true
+}
+
+// braceExpander stops expand, and the pattern is not read (over), when a
+// list of names would be longer than braceExpandMax, when the strings it
+// reads and makes come to more than braceWorkMax bytes (brace-expansion
+// v2.0.1 has no bound: {1..2000000}, or {x} many times before {a,b}, takes
+// seconds), and where the releases differ: a number beyond 2^53 (which
+// JavaScript reads as a float), a step of 0 (which loops in JavaScript),
+// and a set that brace-expansion expands again as {a},b} (5.0.3, in
+// actions/upload-artifact v7, expands it again as the top, 2.0.1 does not).
+type braceExpander struct {
+	over bool
+	work int
+}
+
+// braceWorkMax bounds the bytes that one expansion reads and makes.
+const braceWorkMax = 4 << 20
+
+func (b *braceExpander) bounded(n int) bool {
+	if n > braceExpandMax {
+		b.over = true
+	}
+	return !b.over
+}
+
+func (b *braceExpander) spend(n int) bool {
+	if b.work += n; b.work > braceWorkMax {
+		b.over = true
+	}
+	return !b.over
+}
+
+// escapeBraces is escapeBraces of brace-expansion: the splits and joins
+// in order, each over the whole string (a strings.Replacer replaces them
+// in one pass, which differs when \\ is followed by {).
+func escapeBraces(s string) string {
+	for _, p := range [][2]string{{`\\`, escSlash}, {`\{`, escOpen}, {`\}`, escClose}, {`\,`, escComma}, {`\.`, escPeriod}} {
+		s = strings.ReplaceAll(s, p[0], p[1])
+	}
+	return s
+}
+
+// balanced is balanced-match v2.0.0's range of { and } in str
+// (https://github.com/juliangruber/balanced-match/blob/v2.0.0/index.js).
+func balanced(str string) (pre, body, post string, ok bool) {
+	ai := strings.IndexByte(str, '{')
+	bi := -1
+	if ai >= 0 {
+		if j := strings.IndexByte(str[ai+1:], '}'); j >= 0 {
+			bi = ai + 1 + j
+		}
+	}
+	if ai < 0 || bi <= 0 {
+		return "", "", "", false
+	}
+	index := func(c byte, from int) int {
+		if from > len(str) {
+			return -1
+		}
+		if j := strings.IndexByte(str[from:], c); j >= 0 {
+			return from + j
+		}
+		return -1
+	}
+	var begs []int
+	left, right := len(str), 0
+	start, end, found := 0, 0, false
+	i := ai
+	for i >= 0 && !found {
+		switch {
+		case i == ai:
+			begs = append(begs, i)
+			ai = index('{', i+1)
+		case len(begs) == 1:
+			start, end, found = begs[0], bi, true
+			begs = begs[:0]
+		default:
+			beg := begs[len(begs)-1]
+			begs = begs[:len(begs)-1]
+			if beg < left {
+				left, right = beg, bi
+			}
+			bi = index('}', i+1)
+		}
+		if ai < bi && ai >= 0 {
+			i = ai
+		} else {
+			i = bi
+		}
+	}
+	if len(begs) > 0 {
+		start, end, found = left, right, true
+	}
+	if !found {
+		return "", "", "", false
+	}
+	return str[:start], str[start+1 : end], str[end+1:], true
+}
+
+// braceExpand is expand of brace-expansion v2.0.1.
+func (b *braceExpander) braceExpand(str string, isTop bool) []string {
+	if b.over || !b.spend(len(str)) {
+		return nil
+	}
+	pre, body, post, ok := balanced(str)
+	if !ok {
+		return []string{str}
+	}
+	posts := []string{""}
+	if post != "" {
+		posts = b.braceExpand(post, false)
+	}
+	var out []string
+	if strings.HasSuffix(pre, "$") {
+		for _, p := range posts {
+			out = append(out, pre+"{"+body+"}"+p)
+		}
+		return out
+	}
+	numSeq, alphaSeq := numericSequence(body), alphaSequence(body)
+	seq := numSeq || alphaSeq
+	if !seq && !strings.Contains(body, ",") {
+		if commaThenClose(post) {
+			b.over = true // brace-expansion 5.0.3 expands it again as the top, 2.0.1 does not
+			return nil
+		}
+		return []string{str}
+	}
+	var n []string
+	if seq {
+		n = strings.Split(body, "..")
+	} else {
+		n = parseCommaParts(body)
+		if len(n) == 1 {
+			var e []string
+			for _, x := range b.braceExpand(n[0], false) {
+				e = append(e, "{"+x+"}")
+			}
+			n = e
+			if len(n) == 1 {
+				for _, p := range posts {
+					out = append(out, pre+n[0]+p)
+				}
+				return out
+			}
+		}
+	}
+	var vals []string
+	if seq {
+		x, okX := braceNumeric(n[0])
+		y, okY := braceNumeric(n[1])
+		incr, okI := 1, true
+		if len(n) == 3 {
+			incr, okI = braceNumeric(n[2])
+			if incr < 0 {
+				incr = -incr
+			}
+		}
+		if !okX || !okY || !okI || incr == 0 {
+			b.over = true // beyond 2^53, or a step of 0: not read
+			return nil
+		}
+		width := max(len(n[0]), len(n[1]))
+		reverse := y < x
+		if reverse {
+			incr = -incr
+		}
+		pad := false
+		for _, s := range n {
+			pad = pad || isPadded(s)
+		}
+		span := y - x
+		if span < 0 {
+			span = -span
+		}
+		count := span/max(incr, -incr) + 1
+		if !b.bounded(count) {
+			return nil
+		}
+		for k := 0; k < count; k++ {
+			i := x + k*incr
+			var c string
+			if alphaSeq {
+				c = string(rune(i))
+				if c == `\` {
+					c = ""
+				}
+			} else {
+				c = strconv.Itoa(i)
+				if pad {
+					if need := width - len(c); need > 0 {
+						z := strings.Repeat("0", need)
+						if i < 0 {
+							c = "-" + z + c[1:]
+						} else {
+							c = z + c
+						}
+					}
+				}
+			}
+			if !b.spend(len(c)) {
+				return nil
+			}
+			vals = append(vals, c)
+		}
+	} else {
+		for _, s := range n {
+			vals = append(vals, b.braceExpand(s, false)...)
+			if !b.bounded(len(vals)) {
+				return nil
+			}
+		}
+	}
+	if !b.bounded(len(vals) * len(posts)) {
+		return nil
+	}
+	for _, v := range vals {
+		for _, p := range posts {
+			e := pre + v + p
+			if !b.spend(len(e)) {
+				return nil
+			}
+			if !isTop || seq || e != "" {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
+}
+
+// parseCommaParts is parseCommaParts of brace-expansion v2.0.1.
+func parseCommaParts(str string) []string {
+	if str == "" {
+		return []string{""}
+	}
+	pre, body, post, ok := balanced(str)
+	if !ok {
+		return strings.Split(str, ",")
+	}
+	p := strings.Split(pre, ",")
+	p[len(p)-1] += "{" + body + "}"
+	postParts := parseCommaParts(post)
+	if post != "" {
+		p[len(p)-1] += postParts[0]
+		p = append(p, postParts[1:]...)
+	}
+	return p
+}
+
+// commaThenClose is /,.*\}/.test(s): a , and a later } with no line break
+// between them.
+func commaThenClose(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] != ',' {
+			continue
+		}
+		for j := i + 1; j < len(s); j++ {
+			if isLineTerminatorAt(s, j) {
+				break
+			}
+			if s[j] == '}' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// numericSequence is /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.
+func numericSequence(s string) bool {
+	parts := strings.Split(s, "..")
+	if len(parts) != 2 && len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts {
+		if !isInteger(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// alphaSequence is /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.
+func alphaSequence(s string) bool {
+	parts := strings.Split(s, "..")
+	if len(parts) != 2 && len(parts) != 3 {
+		return false
+	}
+	for _, p := range parts[:2] {
+		if len(p) != 1 || !('a' <= p[0] && p[0] <= 'z' || 'A' <= p[0] && p[0] <= 'Z') {
+			return false
+		}
+	}
+	return len(parts) == 2 || isInteger(parts[2])
+}
+
+func isInteger(s string) bool {
+	s = strings.TrimPrefix(s, "-")
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// isPadded is /^-?0\d/.
+func isPadded(s string) bool {
+	s = strings.TrimPrefix(s, "-")
+	return len(s) >= 2 && s[0] == '0' && s[1] >= '0' && s[1] <= '9'
+}
+
+// braceNumeric is numeric of brace-expansion for a part of a sequence:
+// the integer of s, or the code of its first character. ok is false for an
+// integer beyond 2^53, which JavaScript reads as a float.
+func braceNumeric(s string) (int, bool) {
+	if isInteger(s) {
+		n, err := strconv.Atoi(s)
+		if err != nil || n > 1<<53 || n < -(1<<53) {
+			return 0, false
+		}
+		return n, true
+	}
+	for _, r := range s {
+		return int(r), true
+	}
+	return 0, true
+}

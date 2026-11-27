@@ -206,8 +206,9 @@ func notesOf(p, text string) lint.ExampleNotes {
 // first there: a called workflow or action, whose callers are the others;
 // a workflow on repository_dispatch, whose sender is another; a workflow on
 // labeled, whose labeler is another; a workflow whose step runs a composite
-// action of the repository, which is another.
-var mainExampleFiles = []string{".github/workflows/called.yml", "called/action.yml", "called/action.yaml", ".github/workflows/receiver.yml", ".github/workflows/labeled.yml", ".github/workflows/composite-caller.yml"}
+// action of the repository, which is another; a workflow whose job calls a
+// reusable workflow of the repository, which is another.
+var mainExampleFiles = []string{".github/workflows/called.yml", "called/action.yml", "called/action.yaml", ".github/workflows/receiver.yml", ".github/workflows/labeled.yml", ".github/workflows/composite-caller.yml", ".github/workflows/caller.yml"}
 
 // severalFiles is the example of several files in dir: a repository whose
 // file of mainExampleFiles is the example's file, the rest the others.

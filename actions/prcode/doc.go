@@ -33,7 +33,15 @@
 //	checkoutv1.go     the refs of actions/checkout v1, which moves github.workspace
 //	download.go  DownloadSite, PRRunRef: the run a download takes, the token's scope, where it puts the files
 //	downloadtables.go  the commits of the releases of the two download actions
-//	samerun.go   SameRunUpload: the uploads of the current run, after a checkout of a pull request's code, that a download of the current run takes
+//	samerun.go   SameRunUpload: the uploads of the current run, after a checkout of a pull request's code, that a download of the current run takes:
+//	             those of actions/upload-artifact, of a composite action of the inputs, of a ./ reusable workflow (up to
+//	             callUploadMax uploads of the calls), and of
+//	             actions/upload-artifact/merge (mergeUploads: one upload for each merge step, first upload and
+//	             unread cause, up to mergeReadMax reads); upload: those uploads, and the unread ones of uses whose
+//	             uploads are not known
+//	minimatch.go matchArtifactName: the names that a pattern of the merge or the download takes, as minimatch reads it
+//	             (the brace expansion, the parts between /, matchParts); minimatch_ast.go the regular expression of a
+//	             part (src/ast.ts of minimatch), minimatch_regexp.go which it runs by backtracking
 //	cache.go     CacheSaveStep, CacheActionOf: the steps that save to the cache what a checkout brings,
 //	             those of the composite actions a step runs (Inner, of actions/composite), and the
 //	             uses of other repositories on the way with no answer (UnansweredCall)
@@ -54,6 +62,7 @@
 //	runword_test.go   the words of bash and pwsh: runner.temp, github.workspace, other ${{ }}, escapes, quotes
 //	checkoutplace_test.go  the path of a checkout: runner.temp, v1, the runner, the steps before
 //	samerun_test.go   the lines of the path of an upload, and a checkout that fails on its path
+//	minimatch_test.go the cases of the tests of minimatch and of the runs of the actions (testdata/minimatch), and the brace expansion
 //	download_test.go  each row of the tables of downloads, destinations, the token's scope, the tables of releases, the uploads of the current run
 //	cache_test.go     the steps that save to the cache the tree a checkout brings
 //	pathline_test.go  the workspace and runner.temp in their spellings, the other ${{ }}, folded literals
