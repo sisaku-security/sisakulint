@@ -480,6 +480,12 @@ func (c *Callers) givenBy(st *resolving, call calls.Call, called calls.Node, id 
 	if !ok {
 		return ExprRef{Verdict: analysis.Inconclusive, InconclusiveKind: analysis.InconclusiveRefInputCall}
 	}
+	if call.With.Status == workflow.Dynamic && call.With.Expr != nil {
+		// with is one ${{ }}: its content, unknown, may give any input
+		// any part of the expression's value
+		v := *call.With.Expr
+		return via(merge(sc.refs(v, 0, writtenJSON)), Via{Node: call.Caller, Value: v})
+	}
 	if v, ok := withValue(call.With, id); ok {
 		return via(merge(sc.refs(v, 0, writtenText)), Via{Node: call.Caller, Value: v})
 	}
