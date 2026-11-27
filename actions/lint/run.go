@@ -1058,3 +1058,12 @@ func sortPlaces(rep *Report) {
 		return compareFindings(a.FindingDraft, b.FindingDraft, a.Fingerprint, b.Fingerprint)
 	})
 }
+
+// Refuted is whether the answers of c.Resolver make cond false: a rule
+// asks it to leave out a place whose consequence needs cond, as a finding
+// with cond as its Condition would be left out. An unknown answer does not
+// refute.
+func (c *RuleContext) Refuted(ctx context.Context, cond Condition) bool {
+	return Eval(cond, func(q facts.Query) facts.RawAnswer { return c.Resolver.Resolve(ctx, q) },
+		func(facts.InputPath) LookupState { return LookupUnknown }) == expr.TruthFalse
+}

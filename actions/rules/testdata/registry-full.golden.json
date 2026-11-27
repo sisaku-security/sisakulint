@@ -168441,6 +168441,13 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.public"
+                  },
+                  "state": "found",
+                  "value": true
                 }
               ],
               "notes": {
@@ -168484,6 +168491,13 @@
                 {
                   "query": {
                     "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.public"
                   },
                   "state": "found",
                   "value": true
@@ -228824,6 +228838,13 @@
                     "!docker://example-org/unlisted-*",
                     "!example-org/partly-listed/hidden@*"
                   ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.public"
+                  },
+                  "state": "found",
+                  "value": true
                 }
               ],
               "notes": {
@@ -230206,6 +230227,13 @@
                   "value": [
                     "RUNNER_LABEL"
                   ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.public"
+                  },
+                  "state": "found",
+                  "value": true
                 }
               ],
               "notes": {
@@ -230302,6 +230330,13 @@
                   },
                   "state": "found",
                   "value": []
+                },
+                {
+                  "query": {
+                    "kind": "repo.public"
+                  },
+                  "state": "found",
+                  "value": true
                 }
               ],
               "notes": {

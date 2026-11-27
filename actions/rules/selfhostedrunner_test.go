@@ -179,3 +179,26 @@ func TestSelfHostedRunnerTrusted(t *testing.T) {
 		}
 	}
 }
+
+// TestSelfHostedRunnerExprReached: a runs-on the rule cannot read is
+// undecided only while a pull request from a fork may reach a runner of
+// the repository.
+func TestSelfHostedRunnerExprReached(t *testing.T) {
+	src := "on: push\njobs:\n  a:\n    runs-on: ${{ vars.RUNNER || 'pool' }}\n    steps:\n      - run: echo\n"
+	for _, c := range []struct {
+		name string
+		f    forkFacts
+		gaps int
+	}{
+		{"unknown", forkFacts{}, 1},
+		{"public", forkFacts{public: ptr(true)}, 1},
+		{"private, forks run", forkFacts{public: ptr(false), forking: ptr(true), run: ptr(true)}, 1},
+		{"private, forks do not run", forkFacts{public: ptr(false), run: ptr(false)}, 0},
+		{"private, no fork", forkFacts{public: ptr(false), forking: ptr(false)}, 0},
+	} {
+		rep, _, _ := checkRules(t, []lint.Rule{SelfHostedRunner}, wfFile(src), c.f)
+		if got := len(rep.FindingsWith(lint.CertaintyInconclusive)); got != c.gaps {
+			t.Errorf("%s: %d inconclusive, want %d", c.name, got, c.gaps)
+		}
+	}
+}
