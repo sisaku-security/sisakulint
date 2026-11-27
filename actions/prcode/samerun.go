@@ -8,13 +8,16 @@ import (
 
 	"github.com/gh-intel/sisakulint/actions/analysis"
 	"github.com/gh-intel/sisakulint/actions/attacker"
+	"github.com/gh-intel/sisakulint/actions/job"
 	"github.com/gh-intel/sisakulint/actions/taint"
 	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // SameRunUpload is an upload of actions/upload-artifact in a job of the
 // same workflow that checks out the code of a pull request before the
-// upload, with no approval: a download of the current run that takes its
+// upload, with no approval or a label: a label approves the whole labeled
+// run, so the download of the same run decides it (artifact-poisoning reads
+// whether a labeler adds the label for the attacker); a download of the current run that takes its
 // artifact takes what the author of the pull request made, as a download
 // of the run of a fork does.
 type SameRunUpload struct {
@@ -51,16 +54,19 @@ func isUpload(u workflow.Uses) bool {
 }
 
 // sameRunUploads are the uploads, in the jobs of the checkouts, that may
-// run after a checkout of the code of a pull request that no approval
-// admits, on the events on which the checkout brings that code (the guard
+// run after a checkout of the code of a pull request that no environment
+// approves (a label approves the run of the download too), on the events on which the checkout brings that code (the guard
 // of actions/checkout, as untrusted-checkout reads it) and the if of the
 // upload lets the upload run; t is the table of the callers (nil for none),
 // and w the workflow of the checkouts.
 func sameRunUploads(t *taint.Callers, w *workflow.Workflow, checkouts []CheckoutSite) []SameRunUpload {
 	var out []SameRunUpload
 	for _, c := range checkouts {
-		if c.Job == nil || !c.Placed || c.CheckoutCode != analysis.CodePR || len(c.PRCodeOn) == 0 || c.Approval != analysis.ApprovalNone {
+		if c.Job == nil || !c.Placed || c.CheckoutCode != analysis.CodePR || len(c.PRCodeOn) == 0 || c.Approval == analysis.ApprovalEnvironment {
 			continue
+		}
+		if a, _ := job.ApprovalOf(nil, c.Job); a == analysis.ApprovalEnvironment {
+			continue // a label approves the run, and the environment of the job also the upload
 		}
 		events, unless := c.unguarded()
 		if len(events) == 0 {
