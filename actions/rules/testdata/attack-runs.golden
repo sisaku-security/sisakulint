@@ -161,6 +161,7 @@ actions/rules/examples/true-negative/code-injection/controlled.unlisted-activity
 actions/rules/examples/true-negative/code-injection/controlled.unnamed-format-argument.yml	true-negative	not run: carrier-wrapped
 actions/rules/examples/true-negative/code-injection/env-variable.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable-wiki.yml	true-negative	no harm
+actions/rules/examples/true-negative/code-injection/env-variable.declared-name.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable.git-config-data.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable.pipe-to-file.yml	true-negative	no harm
 actions/rules/examples/true-negative/code-injection/env-variable.reader-stdin-redirected.yml	true-negative	no harm
@@ -236,6 +237,7 @@ actions/rules/examples/inconclusive/envpath-injection/step-output-run.yml	inconc
 actions/rules/examples/inconclusive/envpath-injection/subst-value.yml	inconclusive	harm shows
 actions/rules/examples/inconclusive/envpath-injection/writer-unknown.yml	inconclusive	harm shows
 actions/rules/examples/true-positive/envpath-injection/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envpath-injection/controlled.declared-name.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envpath-injection/controlled.default-assignment.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envpath-injection/controlled.descriptor-per-path.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envpath-injection/controlled.jump-path.yml	true-positive	harm shows
@@ -329,6 +331,7 @@ actions/rules/examples/inconclusive/envvar-injection/subst-value.yml	inconclusiv
 actions/rules/examples/inconclusive/envvar-injection/writer-unknown.yml	inconclusive	harm shows
 actions/rules/examples/true-positive/envvar-injection/controlled.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envvar-injection/controlled.custom-shell.yml	true-positive	harm shows
+actions/rules/examples/true-positive/envvar-injection/controlled.declared-name.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envvar-injection/controlled.default-assignment.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envvar-injection/controlled.default-word.yml	true-positive	harm shows
 actions/rules/examples/true-positive/envvar-injection/controlled.descriptor-copied-before-close.yml	true-positive	harm shows
@@ -351,6 +354,7 @@ actions/rules/examples/true-negative/envvar-injection/controlled.assigned-in-bac
 actions/rules/examples/true-negative/envvar-injection/controlled.background-exec.yml	true-negative	no harm
 actions/rules/examples/true-negative/envvar-injection/controlled.called-before-definition.yml	true-negative	no harm
 actions/rules/examples/true-negative/envvar-injection/controlled.closed-on-each-path.yml	true-negative	no harm
+actions/rules/examples/true-negative/envvar-injection/controlled.declared-name.yml	true-negative	no harm
 actions/rules/examples/true-negative/envvar-injection/controlled.descriptor-closed-before-call.yml	true-negative	no harm
 actions/rules/examples/true-negative/envvar-injection/controlled.exec-in-compound.yml	true-negative	no harm
 actions/rules/examples/true-negative/envvar-injection/controlled.exec-in-compound-piped.yml	true-negative	no harm
@@ -437,6 +441,7 @@ actions/rules/examples/inconclusive/output-clobbering/step-output-run.yml	inconc
 actions/rules/examples/inconclusive/output-clobbering/subst-value.yml	inconclusive	harm shows
 actions/rules/examples/inconclusive/output-clobbering/writer-unknown.yml	inconclusive	harm shows
 actions/rules/examples/true-positive/output-clobbering/controlled.yml	true-positive	harm shows
+actions/rules/examples/true-positive/output-clobbering/controlled.declared-name.yml	true-positive	harm shows
 actions/rules/examples/true-positive/output-clobbering/controlled.default-assignment.yml	true-positive	harm shows
 actions/rules/examples/true-positive/output-clobbering/controlled.descriptor-per-path.yml	true-positive	harm shows
 actions/rules/examples/true-positive/output-clobbering/controlled.exec-in-braces.yml	true-positive	harm shows

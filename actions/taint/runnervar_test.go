@@ -77,6 +77,18 @@ func TestWindowsRunner(t *testing.T) {
 		{"ubuntu-latest", false},
 		{"${{ matrix.os }}", false},
 		{"[self-hosted, linux]", false},
+		{"Windows-Latest", true},
+		{"[self-hosted, linux, windows-build]", false},
+		{"windows-build", false},
+		{"[self-hosted, windows-2022]", false},
+		{"[self-hosted, windows, windows-2022]", true},
+		{"[self-hosted, linux, windows]", false},
+		{"[self-hosted, macOS, windows]", false},
+		{"{group: g, labels: windows-latest}", false},
+		{"{group: g, labels: [self-hosted, windows]}", true},
+		{"windows", true},
+		{"{labels: windows-latest}", false},
+		{"[windows-2022, gpu]", false},
 	} {
 		if got := WindowsRunner(jobOf(t, c.runsOn)); got != c.want {
 			t.Errorf("WindowsRunner(runs-on: %s) = %v, want %v", c.runsOn, got, c.want)

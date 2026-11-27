@@ -511,7 +511,8 @@
       "fields": [
         "sink.requests",
         "sink.calls-not-read",
-        "sink.always-skipped"
+        "sink.always-skipped",
+        "sink.fork-pull-request-only"
       ],
       "fixes": []
     },

@@ -6,6 +6,15 @@ conditional   impostor-commit.fork-commit  ×2, 1 unknown  (offline: pass --fact
 inconclusive  10 findings (code-injection, known-vulnerable-actions)
 inputs        5 read, 1 invalid  (every workflow and action.yml under --root)
 
+not read  .github/workflows/alias.yml:6:15 actions/checkout@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/alias.yml:10:15 via alias at 10:15 actions/checkout@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/issues.yml:6:15 actions/checkout@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/issues.yml:7:15 actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7: action.definition: offline: pass --facts or --online
+not read  .github/workflows/pins.yml:6:15 actions/setup-node@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/pins.yml:7:15 actions/setup-go@v5: action.definition: offline: pass --facts or --online
+not read  .github/workflows/pins.yml:8:15 actions/setup-node@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/wiki.yml:6:15 actions/checkout@v4: action.definition: offline: pass --facts or --online
+not read  .github/workflows/wiki.yml:7:15 actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7: action.definition: offline: pass --facts or --online
 25 findings: 13 confirmed (critical 6, high 7), 2 conditional, 10 inconclusive
 30 quality findings: the bits do not count quality findings
 bits 27 = 1 (confirmed findings) + 2 (conditional findings) + 8 (inconclusive findings) + 16 (inputs not valid)

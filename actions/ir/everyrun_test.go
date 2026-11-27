@@ -11,6 +11,7 @@ import (
 	"github.com/gh-intel/sisakulint/actions/facts"
 	"github.com/gh-intel/sisakulint/actions/internal/callerstest"
 	"github.com/gh-intel/sisakulint/actions/taint"
+	"github.com/gh-intel/sisakulint/actions/workflow"
 )
 
 // passesIR is the IR of the workflow src at .github/workflows/w.yml, read
@@ -105,7 +106,7 @@ func TestAgentStepEveryRun(t *testing.T) {
 	var refs []ref
 	for _, r := range a.everyRunRefs {
 		name := r.Input.String()
-		if r.Route == analysis.AgentValueRouteStepEnv {
+		if r.Env != (workflow.EnvName{}) {
 			name = r.Env.String()
 		}
 		refs = append(refs, ref{r.Route, name, r.Ref.Text, r.Source, r.Direct})
@@ -120,12 +121,16 @@ func TestAgentStepEveryRun(t *testing.T) {
 		{analysis.AgentValueRoutePromptInput, "prompt", "vars.P", "vars.P", true},
 		{analysis.AgentValueRouteStepEnv, "GUIDE", "vars.G", "vars.G", true},
 		{analysis.AgentValueRouteStepEnv, "B", "env.FROM_VAR", "vars.V", false},
+		{analysis.AgentValueRouteJobEnv, "FROM_VAR", "vars.V", "vars.V", true},
 		{analysis.AgentValueRouteSettingInput, "claude_args", "vars.A", "vars.A", true},
 	}
 	if !slices.Equal(refs, want) {
 		t.Errorf("every run refs\n %+v\nwant\n %+v", refs, want)
 	}
 	for _, p := range a.promptRefs {
+		if p.Ref.Text == "secrets.S" {
+			continue // the job's env FROM_VAR: not the attacker's in a run that adds variables-writer
+		}
 		if !slices.Equal(eventNameSet(p.EveryRunOn), both) {
 			t.Errorf("prompt ref %s: every run on %v, want %v", p.Ref.Text, eventNameSet(p.EveryRunOn), both)
 		}
@@ -194,5 +199,33 @@ func TestAgentStepEveryRunGrants(t *testing.T) {
 	}
 	if b, g := laterOn(base[0]), laterOn(got[0]); len(b) != 0 || !slices.Equal(g, []string{"pull_request"}) {
 		t.Errorf("later steps on: with no attacker added %v, with variables-writer %v", b, g)
+	}
+}
+
+// TestAgentStepEveryRunWorkflowEnv: a variable in the env of the workflow
+// reaches the agent by the route of the env of the workflow, also when a
+// step before writes it to $GITHUB_ENV, which the rules do not read as
+// replacing it (github-env-write).
+func TestAgentStepEveryRunWorkflowEnv(t *testing.T) {
+	p := analysis.BarrierPasses{}.With(analysis.BarrierVariableValue)
+	for _, c := range []struct {
+		name, before string
+		want         []string
+	}{
+		{"the env of the workflow", "", []string{"workflow-env W vars.W"}},
+		{"written to $GITHUB_ENV before, which the rules do not read (github-env-write)", "      - run: echo \"W=fixed\" >> \"$GITHUB_ENV\"\n", []string{"workflow-env W vars.W"}},
+	} {
+		src := "on: {schedule: [{cron: '0 0 * * *'}]}\nenv:\n  W: ${{ vars.W }}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n" + c.before + "      - uses: anthropics/claude-code-action@v1\n        with:\n          prompt: Triage by the guide in W\n"
+		got := passesIR(t, src, p).allAgentSteps()
+		if len(got) != 1 {
+			t.Fatalf("%s: %d steps", c.name, len(got))
+		}
+		var refs []string
+		for _, r := range got[0].everyRunRefs {
+			refs = append(refs, r.Route.String()+" "+r.Env.String()+" "+r.Ref.Text)
+		}
+		if !slices.Equal(refs, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, refs, c.want)
+		}
 	}
 }

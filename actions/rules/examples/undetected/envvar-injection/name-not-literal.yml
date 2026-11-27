@@ -1,9 +1,10 @@
-# situation: on issues opened, a step sets n to the name out, assigns
-#   $GITHUB_ENV to the variable that n names with declare, and writes
-#   V=$V to "$out".
-# reason: a todo (the same file): bash assigns $GITHUB_ENV to out, so
-#   the value goes to $GITHUB_ENV.
-# cause: the variable name of the assignment is not a literal word, so the
+# situation: on issues opened, a step sets n to the name out by a command
+#   substitution, assigns $GITHUB_ENV to the variable that n names with
+#   declare, and writes V=$V to "$out".
+# reason: a todo (the same file): bash assigns $GITHUB_ENV to out, so the
+#   value goes to $GITHUB_ENV.
+# cause: the variable name of the assignment is not a literal word, and n
+#   holds the output of a command substitution, not one literal name, so the
 #   rule does not read the assignment.
 # attack-value: github.event.issue.body = "x\nPWNED=1"
 # attack-run-behavior: the value goes to $GITHUB_ENV.
@@ -17,6 +18,6 @@ jobs:
       - env:
           V: ${{ github.event.issue.body }}
         run: |
-          n=out
+          n=$(printf out)
           declare "$n=$GITHUB_ENV"
           echo "V=$V" >> "$out"

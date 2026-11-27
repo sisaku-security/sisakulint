@@ -15,6 +15,10 @@ func TestUnmaskedSecretExposure(t *testing.T) {
 	step := func(v string) map[string]string {
 		return wfFile("on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          X: \"" + v + "\"\n        run: \"true\"\n")
 	}
+	// output is a job whose output, of env and v, a later job prints
+	output := func(env, v string) map[string]string {
+		return wfFile("on: [push, pull_request]\njobs:\n  a:\n    runs-on: ubuntu-latest\n    env:\n      " + env + "\n    outputs:\n      o: \"" + v + "\"\n    steps:\n      - run: \"true\"\n  b:\n    needs: a\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ needs.a.outputs.o }}\"\n")
+	}
 	for _, c := range []struct {
 		name   string
 		files  map[string]string
@@ -26,6 +30,11 @@ func TestUnmaskedSecretExposure(t *testing.T) {
 		{"private", step("${{ fromJSON(secrets.J).pass }}"), ptr(false), []string{"unmasked-secret-exposure.private", "confirmed", "J"}},
 		{"compared", step("${{ fromJSON(secrets.J).pass == 'x' }}"), ptr(true), nil},
 		{"whole", step("${{ secrets.J }}"), ptr(true), nil},
+		{"and-false-output", output("TOKEN: ${{ secrets.TOKEN }}", "${{ toJSON(github.event_name == 'push' && env) }}-${{ fromJSON(secrets.DB).password }}"), ptr(true), []string{"unmasked-secret-exposure.public", "confirmed", "TOKEN,DB"}},
+		{"and-true-output", output("TOKEN: ${{ secrets.TOKEN }}", "${{ toJSON(true && env) }}-${{ fromJSON(secrets.DB).password }}"), ptr(true), nil},
+		{"env-missing-output", output("push: ${{ secrets.TOKEN }}", "${{ env[github.event_name] }}-${{ fromJSON(secrets.DB).password }}"), ptr(true), []string{"unmasked-secret-exposure.public", "confirmed", "TOKEN,DB"}},
+		{"env-named-output", output("push: ${{ secrets.TOKEN }}", "${{ env['push'] }}-${{ fromJSON(secrets.DB).password }}"), ptr(true), nil},
+		{"whole-output", output("N: plain", "${{ secrets.TOKEN }}-${{ fromJSON(secrets.DB).password }}"), ptr(true), nil},
 	} {
 		rep, _, _ := checkRules(t, []lint.Rule{UnmaskedSecretExposure}, c.files, exposureFacts{public: c.public})
 		var got []string

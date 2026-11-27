@@ -44,8 +44,13 @@ type Report struct {
 	QualityRules    []RuleID
 	QualityFindings []QualityFinding
 	Facts           []facts.Entry // what the rules asked, and the answers
-	Errors          []RunError
-	Fix             *FixResult // nil unless the fixes were applied; Run leaves it nil
+	// UnreadUses are the uses of the inputs whose reusable workflow or
+	// action of another repository the run did not ask of its definition,
+	// in the order of the inputs and the places in them. They are no
+	// findings and set no bit of the exit code.
+	UnreadUses []UnreadUses
+	Errors     []RunError
+	Fix        *FixResult // nil unless the fixes were applied; Run leaves it nil
 	// Remote is what a run read of a repository of GitHub (--remote of the
 	// CLI); nil for files on disk. Run leaves it nil.
 	Remote *RemoteRevision
@@ -195,7 +200,13 @@ func (r Report) narrowTo(names []facts.InputPath) Report {
 			quality = append(quality, f)
 		}
 	}
-	r.Findings, r.QualityFindings = findings, quality
+	var unread []UnreadUses
+	for _, u := range r.UnreadUses {
+		if slices.Contains(names, u.Location.File.Input) {
+			unread = append(unread, u)
+		}
+	}
+	r.Findings, r.QualityFindings, r.UnreadUses = findings, quality, unread
 	return r
 }
 
@@ -582,12 +593,13 @@ func (r Report) MarshalJSON() ([]byte, error) {
 		QualityRules []RuleID          `json:"quality_rules"`
 		Quality      []QualityFinding  `json:"quality_findings"`
 		Facts        []facts.Entry     `json:"facts"`
+		UnreadUses   []UnreadUses      `json:"unread_uses"`
 		Errors       []errorJSON       `json:"errors"`
 		Remote       *RemoteRevision   `json:"remote_revision"`
 		Fix          *fixResultJSON    `json:"fix,omitempty"`
 		Added        []AddedAttacker   `json:"added_attackers,omitempty"`
 	}{Added: r.AddedAttackers, Remote: r.Remote, Schema: ReportSchema, Inputs: []inputJSON{}, Complete: r.Complete, Excluded: nonNil(r.Excluded), Reported: r.reportedNames(), Rules: []ruleJSON{}, Skipped: nonNil(r.SkippedRules),
-		Findings: nonNil(r.Findings), QualityRules: nonNil(r.QualityRules), Quality: nonNil(r.QualityFindings), Facts: nonNil(r.Facts), Errors: []errorJSON{}}
+		Findings: nonNil(r.Findings), QualityRules: nonNil(r.QualityRules), Quality: nonNil(r.QualityFindings), Facts: nonNil(r.Facts), UnreadUses: nonNil(r.UnreadUses), Errors: []errorJSON{}}
 	for _, i := range r.Inputs {
 		ij := inputJSON{Name: i.Name, Kind: i.InputKind, State: i.State.String(), Reason: i.Reason, Diagnostics: []diagJSON{}}
 		for _, d := range i.Diagnostics {
@@ -619,6 +631,19 @@ func (r Report) MarshalJSON() ([]byte, error) {
 		out.Fix = &fixResultJSON{Safety: f.Safety, Written: nonNil(f.Written), Error: f.Error, UncheckedRules: ids}
 	}
 	return marshal(out)
+}
+
+func (u UnreadUses) MarshalJSON() ([]byte, error) {
+	q, err := facts.EncodeQuery(u.Query)
+	if err != nil {
+		return nil, err
+	}
+	return marshal(struct {
+		At     Location        `json:"location"`
+		Uses   string          `json:"uses"`
+		Query  json.RawMessage `json:"query"`
+		Reason string          `json:"reason"`
+	}{u.Location, u.Uses, q, u.Reason})
 }
 
 type fixResultJSON struct {

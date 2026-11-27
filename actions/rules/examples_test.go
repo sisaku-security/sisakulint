@@ -123,6 +123,14 @@ var exampleVariables = map[string]map[string]string{
 	"false-positive/unset-configuration-variable/action-empty-input":       {"": `[]`},
 }
 
+// exampleRepoFacts are the answers of facts of the repository of --repo
+// (repo.*) that the examples give, by <what>/<rule>/<id>, as JSON by the
+// kind. The examples not here answer such a fact unknown.
+var exampleRepoFacts = map[string]map[facts.Kind]string{
+	"true-positive/secret-exfiltration/untrusted-destination.fork-pr-secrets": {facts.KindRepoForkPRSecrets: "true"},
+	"true-negative/secret-exfiltration/untrusted-destination.fork-only":       {facts.KindRepoForkPRSecrets: "false"},
+}
+
 // exampleAllowedActions are the settings of allowed actions of GitHub
 // (repo.allowed-actions) that the examples answer, by <what>/<rule>/<id>, as
 // JSON. The examples not here answer none, so allowed-actions does not run
@@ -263,6 +271,12 @@ func actionDefinitionAnswer(q facts.ActionDefinition) facts.RawAnswer {
 		v.Content = "inputs:\n  anthropic-api-key:\n    description: The API key of Anthropic.\n  note:\n    description: A note for the triage.\nruns:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        anthropic_api_key: ${{ inputs.anthropic-api-key }}\n        prompt: \"Triage the open issues. ${{ inputs.note }}\"\n        claude_args: --allowedTools Bash\n"
 	case "example-org/claude-note-unsafe-composite":
 		v.Content = "inputs:\n  anthropic-api-key:\n    description: The API key of Anthropic.\n  note:\n    description: A note for the triage.\nruns:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        anthropic_api_key: ${{ inputs.anthropic-api-key }}\n        prompt: \"Triage the open issues. ${{ inputs.note }}\"\n        claude_args: --dangerously-skip-permissions\n"
+	case "example-org/claude-guide-composite": // job-env-composite of the agent rules
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        prompt: Triage the issue by the guide in the env GUIDE\n        claude_args: --allowedTools Bash\n"
+	case "example-org/claude-guide-unsafe-composite": // job-env-composite of ai-action-unsafe-sandbox
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: anthropics/claude-code-action@v1\n      with:\n        prompt: Triage the issue by the guide in the env GUIDE\n        claude_args: --dangerously-skip-permissions\n"
+	case "example-org/gemini-label-composite": // job-env-composite of ai-action-prompt-injection
+		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: google-github-actions/run-gemini-cli@v0\n      with:\n        prompt: \"Label the issue whose body is in ISSUE_BODY\"\n"
 	case "example-org/codex-fix-composite":
 		v.Content = "runs:\n  using: composite\n  steps:\n    - uses: openai/codex-action@v1\n      with:\n        openai-api-key: ${{ inputs.openai-api-key }}\n        allow-users: \"*\"\n        sandbox: danger-full-access\n        prompt: \"Fix issue #${{ github.event.issue.number }}\"\n"
 	case "example-org/substituted-agent-composite":
@@ -796,7 +810,7 @@ func TestExampleFacts(t *testing.T) {
 					if what == "false-positive" && n.id == actionsNotAllowed.String() {
 						allowed = actionsNotAllowedSetting
 					}
-					want := generatedFacts(t, n.e, kinds[what+"/"+decl], list, exampleVariables[what+"/"+id+"/"+n.id], allowed)
+					want := generatedFacts(t, n.e, kinds[what+"/"+decl], list, exampleVariables[what+"/"+id+"/"+n.id], allowed, exampleRepoFacts[what+"/"+id+"/"+n.id])
 					p := path.Join("examples", what, id, factsName(n.id))
 					if *update {
 						if err := os.WriteFile(p, want, 0o644); err != nil {
@@ -824,7 +838,7 @@ func TestExampleFacts(t *testing.T) {
 // and the check runs the rule of the declaration and the rule its
 // disposition names. An unknown answer says so without the generator's
 // words.
-func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList string, vars map[string]string, allowed string) []byte {
+func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList string, vars map[string]string, allowed string, repo map[facts.Kind]string) []byte {
 	t.Helper()
 	in := inputOf(t, e)
 	asked := map[string]facts.Entry{}
@@ -858,6 +872,9 @@ func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList 
 					continue // the run has no list (exampleActionLists)
 				}
 				a = facts.RawAnswer{State: facts.StateFound, Value: []byte(actionList)}
+			}
+			if v, ok := repo[x.Query.Kind()]; ok {
+				a = facts.RawAnswer{State: facts.StateFound, Value: []byte(v)}
 			}
 			if a.State == facts.StateUnknown {
 				a.Reason = "the example does not answer it"

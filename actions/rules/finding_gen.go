@@ -280,7 +280,7 @@ var kindAIActionPromptInjectionEnv = lint.MustFindingKindID("ai-action-prompt-in
 // textAIActionPromptInjectionEnv is what the kind ai-action-prompt-injection.env says, for its rule's Meta.
 var textAIActionPromptInjectionEnv = lint.FindingText{ID: kindAIActionPromptInjectionEnv, Detected: "{expr_ref} in env {env} of {action} gives the agent what an attacker wrote", Consequence: "the agent reads the env through its tools, as the workflow means it to, and the attacker's text in it steers the agent with the run's token and its API key", Remedy: "keep what an attacker writes out of the agent: run it only on events whose payload holds only what those who can write wrote, and allow it only the tools the task needs", Arguments: []lint.KindArgument{{Name: lint.MustKindArgumentName("expr_ref"), Text: "The ${{ }} as written.", InDetected: true}, {Name: lint.MustKindArgumentName("env"), Text: "The env's name.", InDetected: true}, {Name: lint.MustKindArgumentName("action"), Text: "An action that runs an AI agent.", InDetected: true}}}
 
-// AIActionPromptInjectionEnv is the finding ai-action-prompt-injection.env: A ${{ }} an attacker controls, in an env of a step of an agent action, which the agent reads through its tools.
+// AIActionPromptInjectionEnv is the finding ai-action-prompt-injection.env: A ${{ }} an attacker controls, in the env of a step of an agent action or in the env of the job or of the workflow of that step, which the agent reads through the tools of the agent.
 type AIActionPromptInjectionEnv struct {
 	Action  analysis.AgentAction
 	Env     string

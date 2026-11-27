@@ -88,3 +88,11 @@ func (r *Recorder) Entries() []Entry {
 
 // WriteFile writes the facts asked as a file of facts (EncodeFile).
 func (r *Recorder) WriteFile() ([]byte, error) { return EncodeFile(r.Entries()) }
+
+// Asked is the answer the Recorder keeps for q, and whether q was asked.
+func (r *Recorder) Asked(q Query) (RawAnswer, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	got, ok := r.m[q]
+	return got.raw, ok
+}

@@ -31,6 +31,10 @@ func (aiActionPromptInjection) Meta() lint.Meta { return aiActionPromptInjection
 var valueUnknown = lint.MustInconclusiveKindID("value-unknown")
 
 func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v ir.AIActionPromptInjectionReader) error {
+	// a value of the env of a job or of the workflow reaches each agent
+	// step under it from one place: what each step gives it is joined there
+	// and reported after all the steps (outerReports)
+	outer := outerReports{}
 	for _, s := range v.AgentSteps() {
 		if s.Substituted() {
 			substitutedAgent(c, s.At(), s.Chain())
@@ -39,8 +43,35 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 		rp := agentPlace{c: c, at: s.At(), chain: s.Chain(), inner: s.InnerAt()}
 		gr := gateReachOf(c, s.Action(), s.ActorOn(), s.OpenGates(), s.InconclusiveSettings())
 		seen := anchors{}
+		outerSeen := map[string]anchors{} // by the key path of the value of the env
 		for _, p := range s.PromptRefs() {
 			r := p.Ref
+			loc := rp.At(r.At)
+			isOuter := p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv
+			var anchor string
+			if isOuter {
+				// each reference of one text of the value, whatever the
+				// step gives it, so that every step counts it the same
+				k := loc.KeyPath().String()
+				if outerSeen[k] == nil {
+					outerSeen[k] = anchors{}
+				}
+				anchor = outerSeen[k].next(r.Text, ir.FixPlan{})
+			}
+			report := func(f lint.FindingDraft) {
+				if isOuter {
+					outer.finding(rp, f)
+					return
+				}
+				rp.Report(f)
+			}
+			inconclusive := func(d lint.InconclusiveDraft) {
+				if isOuter {
+					outer.inconclusive(rp, anchor, d)
+					return
+				}
+				rp.Inconclusive(d)
+			}
 			switch r.Verdict {
 			case analysis.Controlled:
 				// the runs the attacker triggers as the actor reach it only
@@ -55,36 +86,103 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 				case len(within(own, gr.bot)) > 0:
 					cond = isPublic(c)
 				case len(within(own, gr.undecided)) > 0:
-					rp.Inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: rp.At(r.At), Related: slices.Concat(evidence, related), Note: r.Text + " reaches the agent only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
+					inconclusive(lint.InconclusiveDraft{KindID: gateExpr, Location: loc, Related: slices.Concat(evidence, related), Note: r.Text + " reaches the agent only in a run the attacker triggers, and whom the step lets start the agent then is not decided"})
 					continue
 				default:
 					continue
 				}
 				// one value can have several: which one, and which of the same text
-				f := lint.FindingDraft{Location: rp.At(r.At), Condition: cond, Evidence: evidence, Related: related, Anchor: seen.next(r.Text, ir.FixPlan{})}
-				if p.Route == analysis.PromptRouteEnv {
+				if !isOuter {
+					anchor = seen.next(r.Text, ir.FixPlan{})
+				}
+				f := lint.FindingDraft{Location: loc, Condition: cond, Evidence: evidence, Related: related, Anchor: anchor}
+				if p.Route.InEnv() {
 					f.Args = AIActionPromptInjectionEnv{Action: s.Action(), Env: p.Env.String(), ExprRef: r.Text}
 				} else {
 					f.Args = AIActionPromptInjectionPrompt{Action: s.Action(), Input: p.Input, ExprRef: r.Text}
 				}
-				rp.Report(f)
+				report(f)
 			case analysis.Inconclusive:
 				if r.InconclusiveKind == analysis.InconclusiveRefInputDispatch && s.PromptDispatch() {
 					// whether the gate lets the dispatcher in is the dispatcher's
-					rp.Inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: rp.At(r.At),
+					inconclusive(lint.InconclusiveDraft{KindID: inputDispatch, Location: loc,
 						Note: r.Text + " reaches the agent as text and refers to an input of workflow_dispatch, whose value the one who dispatches the workflow chooses; the rule does not determine the text that the value gives the agent"})
 					continue
 				}
 				if len(s.AttackerOn()) == 0 && len(s.WrittenValueOn()) == 0 {
 					continue // no run has a value the attacker writes
 				}
-				rp.Inconclusive(lint.InconclusiveDraft{KindID: valueUnknown, Location: rp.At(r.At),
+				inconclusive(lint.InconclusiveDraft{KindID: valueUnknown, Location: loc,
 					Note: fmt.Sprintf("%s reaches the agent as text; whether an attacker controls it is not analyzed (%s)", r.Text, r.InconclusiveKind)})
 			}
 		}
 	}
+	outer.report()
 	unansweredAgents(c, v.CompositeCalls(), false)
 	return nil
+}
+
+// outerReports are what the agent steps give each reference of a value of
+// the env of a job or of the workflow, by its place, in the order the
+// places are first given: the finding with no condition of the steps that
+// give one, else the one with the condition, the first of the steps of the
+// file that gives it; and, but when the finding has no condition, each
+// kind of inconclusive place the steps give it, once (where the condition
+// is false, an inconclusive step may still let the attacker in).
+type outerReports struct {
+	order []string
+	at    map[string]*outerReport
+}
+
+type outerReport struct {
+	rp           agentPlace
+	finding      *lint.FindingDraft
+	inconclusive []lint.InconclusiveDraft
+}
+
+// of is what the steps give the reference at l whose anchor (of the
+// references of one text in its value) is anchor.
+func (o *outerReports) of(rp agentPlace, l lint.Location, anchor string) *outerReport {
+	k := fmt.Sprintf("%s %s %s", l.File.Input, l.KeyPath(), anchor)
+	if o.at == nil {
+		o.at = map[string]*outerReport{}
+	}
+	r, ok := o.at[k]
+	if !ok {
+		r = &outerReport{rp: rp}
+		o.at[k] = r
+		o.order = append(o.order, k)
+	}
+	return r
+}
+
+func (o *outerReports) finding(rp agentPlace, f lint.FindingDraft) {
+	r := o.of(rp, f.Location, f.Anchor)
+	if r.finding == nil || r.finding.Condition != nil && f.Condition == nil {
+		r.rp, r.finding = rp, &f
+	}
+}
+
+func (o *outerReports) inconclusive(rp agentPlace, anchor string, d lint.InconclusiveDraft) {
+	r := o.of(rp, d.Location, anchor)
+	if !slices.ContainsFunc(r.inconclusive, func(e lint.InconclusiveDraft) bool { return e.KindID == d.KindID }) {
+		r.inconclusive = append(r.inconclusive, d)
+	}
+}
+
+func (o *outerReports) report() {
+	for _, k := range o.order {
+		r := o.at[k]
+		if r.finding != nil {
+			r.rp.Report(*r.finding)
+			if r.finding.Condition == nil {
+				continue
+			}
+		}
+		for _, d := range r.inconclusive {
+			r.rp.Inconclusive(d)
+		}
+	}
 }
 
 // gateReach are the events of a step's ActorOn on which its gates let the
@@ -177,7 +275,7 @@ var promptCVSS = func() lint.CVSS {
 
 var aiActionPromptInjectionMeta = lint.Meta{
 	ID:       AIActionPromptInjectionID,
-	Problem:  "a value an attacker writes reaches an AI agent as text: a ${{ }} in an input the action writes into the agent's prompt, or in an env of the step that the agent reads, on a run that gets past the action's check of the actor",
+	Problem:  "a value an attacker writes reaches an AI agent as text: a ${{ }} in an input the action writes into the agent's prompt, or a ${{ }} in the env of the step, in the env of the job or in the env of the workflow, which the agent reads, on a run that gets past the action's check of the actor",
 	Expected: "what an attacker writes does not reach the agent: the step runs only on events whose payload holds only what those who can write wrote and inputs of workflow_dispatch that the prompt does not read, or the agent is given the number of an issue and not its text",
 	Facets:   lint.Facets{Weakness: []lint.Weakness{lint.WeaknessAgentHijack}, AttackMeans: []lint.AttackMeans{lint.AttackMeansString}},
 	FindingKinds: []lint.FindingKind{
@@ -204,7 +302,7 @@ var aiActionPromptInjectionMeta = lint.Meta{
 			attackerWritesPre,
 			promptSteersPre,
 			{ID: textInPrompt, Text: "the action writes the input into the agent's prompt: claude-code-action's prompt in its agent mode, its base-action's, codex-action's and run-gemini-cli's prompt, ai-inference's prompt, system-prompt and the variables of input", Cites: []lint.Citation{claudeAgentMode, aiInferencePrompt}},
-			{ID: agentReadsEnv, Text: "an env of the step reaches the agent's process, inside a composite action too, and its tools read it; the workflow puts it there for the agent, as run-gemini-cli's own commands read ISSUE_TITLE", Cites: []lint.Citation{runnerComposite, geminiTriage}},
+			{ID: agentReadsEnv, Text: "the env of the step, the env of the job and the env of the workflow reach the process of the agent, inside a composite action too, and the tools of the agent read the variables of the env of the step, of the job and of the workflow; a workflow puts a value in the env of the step, of the job or of the workflow for the agent, as the commands of run-gemini-cli read ISSUE_TITLE", Cites: []lint.Citation{runnerComposite, geminiTriage}},
 			actorNotAuthorPre,
 			callersEventsPre,
 		},
@@ -214,14 +312,15 @@ var aiActionPromptInjectionMeta = lint.Meta{
 	UndetectedForms: withRemoteCallee([]lint.UndetectedForm{
 		forkReviewLimit,
 		repositoryDispatchLimit, appCommitEventLimit, dispatchRelayLimit, dispatchInputCallLimit, dispatchDerivedLimit,
-		{ID: lint.MustUndetectedFormID("job-env"), Text: "a value that an attacker writes, which the workflow puts in the env of the job or in the env of the workflow: the process of the agent also gets the env of the job and the env of the workflow, and the rule does not count the env of the job or the env of the workflow, because the env of the job or the env of the workflow may be set for a step other than the step of the agent", Disposition: lint.Todo(lint.NeedSameFile)},
+		jobEnvComposite(false),
+		windowsLabelOtherOS(false),
 		{ID: lint.MustUndetectedFormID("action-fetches"), Text: "what the action fetches itself into the prompt: claude-code-action's tag mode (no prompt input) puts the title, the body and the comments of the issue or the pull request in it", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("agent-reads"), Text: "what the agent reads through its tools on its own, such as gh issue view: the prompt and the agent decide it", Disposition: lint.Limitation(lint.DeciderRunTime)},
 		{ID: lint.MustUndetectedFormID("other-agent-action"), Text: "an action that runs an AI agent and is not in the linter's table of the actions that run an AI agent, such as a wrapper action in another repository", Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustUndetectedFormID("remote-composite"), Text: agentRemoteCompositeText, Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustUndetectedFormID("prompt-file"), Text: "an input that names a file of the prompt (prompt_file, prompt-file, system-prompt-file, file_input): what the file holds is not read", Disposition: lint.Todo(lint.NeedRepoFile)},
 		{ID: lint.MustUndetectedFormID("args-value"), Text: "a value an attacker writes in claude_args: the value of --system-prompt or --append-system-prompt is a prompt, and another flag it adds may allow tools; ai-action-excessive-tools reports it", Disposition: lint.OtherRule(AIActionExcessiveToolsID)},
-		{ID: lint.MustUndetectedFormID("whole-with"), Text: "a with or an env of the step that is one whole ${{ }}, where no value that reaches the agent is outside that ${{ }}: which inputs the action gets and the values of those inputs, or the names and the values of the env, are not known, so the values that reach the agent are not known (gate-expr is the form where a value outside the whole ${{ }}, such as a value in an env of the step, reaches the agent, and whom the gate lets in is not known)", Disposition: lint.Todo(lint.NeedSameFile)},
+		{ID: lint.MustUndetectedFormID("whole-with"), Text: "a with or an env of the step, or an env of the job or of the workflow, that is one whole ${{ }}, when no value that reaches the agent is outside that ${{ }}. The rule does not know which inputs the action gets and the values of those inputs, or the names and the values of the variables of the env that is one whole ${{ }}, so the rule does not know the values that reach the agent. An env that is one whole ${{ }} may also set a variable with the same name as a variable of an outer env (the env of the job and the env of the workflow are outer envs of an env of the step; the env of the workflow is the outer env of an env of the job), and the variable of the inner env replaces the variable of the outer env, so the rule does not count the values of the outer envs of an env that is one whole ${{ }} either. The form where a value outside the whole ${{ }} of the with, such as a value in an env of the step, reaches the agent, and the rule does not know whom the gate lets in, is gate-expr", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("merged-commit"), Text: "a value an attacker writes on push or merge_group, such as the message of their commit a maintainer merged: the run's actor is the maintainer, whom a check of the actor lets in, but the rule reads the events of the attacker run table, which has no rows of them", Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustUndetectedFormID("wiki-title"), Text: "a value an attacker writes only on gollum, the title of a wiki page", Disposition: lint.Todo(lint.NeedFact)},
 		{ID: lint.MustUndetectedFormID("old-cli-env"), Text: "an env of run-gemini-cli whose name gemini-cli drops from its tools now, which an older version of the CLI, pinned by gemini_cli_version, passes", Disposition: lint.Todo(lint.NeedFact)},
@@ -237,7 +336,9 @@ var aiActionPromptInjectionMeta = lint.Meta{
 	}),
 	FalsePositiveForms: withCallee([]lint.FalsePositiveForm{
 		forkFlagReview(kindAIActionPromptInjectionPrompt),
-		{ID: lint.MustFalsePositiveFormID("no-env-tool"), Text: "an env of a step whose agent has no tool to read it: ai-inference without copilot-allow-tools, claude-code-action's tag mode, which allows no shell but git", FindingKinds: []lint.FindingKindID{kindAIActionPromptInjectionEnv}, Disposition: lint.Todo(lint.NeedSameFile)},
+		unknownOSCase(nil, kindAIActionPromptInjectionEnv),
+		githubEnvWrite(nil, kindAIActionPromptInjectionEnv),
+		{ID: lint.MustFalsePositiveFormID("no-env-tool"), Text: "an env of the step, of the job or of the workflow, where the agent of the step has no tool to read the env: ai-inference without copilot-allow-tools, claude-code-action's tag mode, which allows no shell but git", FindingKinds: []lint.FindingKindID{kindAIActionPromptInjectionEnv}, Disposition: lint.Todo(lint.NeedSameFile)},
 		{ID: lint.MustFalsePositiveFormID("indirect-value"), Text: "a value through an env or an input (${{ env.X }}, ${{ inputs.x }}) that is the attacker's only in their own run, such as the body of a comment, read as theirs in a maintainer's run too, past a closed gate", FindingKinds: []lint.FindingKindID{kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv}, Disposition: lint.Todo(lint.NeedSameFile)},
 		writerString(kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv), ifUnnarrowedFalsePositive(kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv),
 	}, kindAIActionPromptInjectionPrompt, kindAIActionPromptInjectionEnv),

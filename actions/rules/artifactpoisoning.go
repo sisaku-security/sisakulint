@@ -345,7 +345,6 @@ var artifactPoisoningMeta = lint.Meta{
 // artifactPoisoningLimits are the forms the rule does not report.
 var artifactPoisoningLimits = []lint.UndetectedForm{
 	outsideCallerLimit,
-	{ID: lint.MustUndetectedFormID("labeler-same-run"), Text: "a job on pull_request_target with the activity type labeled that downloads and runs an artifact that another job of the same run uploads after the other job checks out the code of the pull request, where the if of each job requires a label that actions/labeler adds to the pull request of the attacker. The rule reads an upload of the same run only from a job that no label and no environment approves, and does not read whether actions/labeler adds the label that the job that uploads requires. untrusted-checkout reports the checkout of the job that uploads.", Disposition: lint.Todo(lint.NeedSameFile)},
 	{ID: lint.MustUndetectedFormID("run-command"), Text: "an artifact downloaded by a command of a run: gh run download, gh api …/zip, curl", Disposition: lint.Todo(lint.NeedSameFile)},
 	{ID: lint.MustUndetectedFormID("github-script"), Text: "an artifact downloaded by github-script (downloadArtifact)", Disposition: lint.Todo(lint.NeedSameFile)},
 	{ID: lint.MustUndetectedFormID("other-action"), Text: "an artifact downloaded by an action other than actions/download-artifact and dawidd6/action-download-artifact", Disposition: lint.Todo(lint.NeedFact)},

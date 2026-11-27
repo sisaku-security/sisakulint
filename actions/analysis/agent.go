@@ -228,20 +228,28 @@ func (s SubprocessScrub) String() string { return subprocessScrubNames[s] }
 type PromptRoute uint8
 
 const (
-	PromptRouteUnset PromptRoute = iota
-	PromptRouteInput             // an input the action writes into the agent's prompt
-	PromptRouteEnv               // an env of the step, which the agent's tools read
+	PromptRouteUnset       PromptRoute = iota
+	PromptRouteInput                   // an input the action writes into the agent's prompt
+	PromptRouteEnv                     // an env of the step, which the agent's tools read
+	PromptRouteJobEnv                  // an env of the job of the step, which the agent's tools read too
+	PromptRouteWorkflowEnv             // an env of the workflow of the step, which the agent's tools read too
 )
 
-var promptRouteNames = [...]string{"PromptRouteUnset", "input", "env"}
+var promptRouteNames = [...]string{"PromptRouteUnset", "input", "env", "job-env", "workflow-env"}
+
+// InEnv is whether r is the route of an env, of the step, the job or the
+// workflow.
+func (r PromptRoute) InEnv() bool {
+	return r == PromptRouteEnv || r == PromptRouteJobEnv || r == PromptRouteWorkflowEnv
+}
 
 func (r PromptRoute) String() string { return promptRouteNames[r] }
 
 // AgentValueRoute is how a value of a step of an agent action reaches the
 // agent: as text, through an input the action writes into the prompt or
-// an env of the step (PromptRoute), through an input whose words or JSON
-// set what the agent may do, or through an input of a composite action of
-// another repository whose step runs the agent.
+// an env of the step, the job or the workflow (PromptRoute), through an
+// input whose words or JSON set what the agent may do, or through an input
+// of a composite action of another repository whose step runs the agent.
 type AgentValueRoute uint8
 
 const (
@@ -254,8 +262,10 @@ const (
 	// gives: the steps of the composite action are read without the with,
 	// so the input is read as a value that reaches the agent
 	AgentValueRouteCompositeInput
+	AgentValueRouteJobEnv      // an env of the job of the step, which the agent's tools read too
+	AgentValueRouteWorkflowEnv // an env of the workflow of the step, which the agent's tools read too
 )
 
-var agentValueRouteNames = [...]string{"AgentValueRouteUnset", "prompt-input", "step-env", "setting-input", "composite-input"}
+var agentValueRouteNames = [...]string{"AgentValueRouteUnset", "prompt-input", "step-env", "setting-input", "composite-input", "job-env", "workflow-env"}
 
 func (r AgentValueRoute) String() string { return agentValueRouteNames[r] }

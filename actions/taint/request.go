@@ -1,6 +1,7 @@
 package taint
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 
@@ -122,17 +123,30 @@ func (c scope) requests(s *Sink, f *secretFlow) {
 			if words[i].Known && words[i].Text == "" {
 				continue // an empty word names no destination
 			}
-			segs := f.valueOf(w.Parts, f.literalPos(w, rws[i].ValueAt), w.Span.Start, 0)
-			form := urlFull
-			if rws[i].Reading == shell.RequestReadingEndpoint && !urlAtHead(segs) {
-				form = urlAPIPath
-			}
 			r.DestinationSpan = expr.Span{Start: w.Span.Start, End: w.Span.End}
-			f.place(&r, segs, form, args[i], w.Span.Start)
-			if form == urlAPIPath {
-				c.apiHost(&r, s, f, x, hostname, rws, args)
+			// each value that may reach the word is judged: one site for
+			// each origin of the host they give, with what every value of
+			// that origin carries
+			var sites []RequestSite
+			for _, segs := range f.valuesOf(w.Parts, f.literalPos(w, rws[i].ValueAt), w.Span.Start, 0) {
+				v := r
+				v.Secrets = slices.Clone(r.Secrets)
+				form := urlFull
+				if rws[i].Reading == shell.RequestReadingEndpoint && !urlAtHead(segs) {
+					form = urlAPIPath
+				}
+				f.place(&v, segs, form, args[i], w.Span.Start)
+				if form == urlAPIPath {
+					c.apiHost(&v, s, f, x, hostname, rws, args)
+				}
+				sites = mergeSite(sites, v)
 			}
-			add(r)
+			add(sites[0])
+			for _, v := range sites[1:] {
+				v.Secrets = uniqueCarried(v.Secrets)
+				v.Occurrence = seen[v.Command] // the same request as the first
+				s.Requests = append(s.Requests, v)
+			}
 		}
 	})
 }
@@ -246,6 +260,33 @@ func (c scope) apiHost(r *RequestSite, s *Sink, f *secretFlow, x *shell.Simple, 
 		return
 	}
 	r.Destination = f.originOfSegs(segs, layoutOf(segs, urlHostname))
+}
+
+// mergeSite is sites with v: added to the site of the same origin of its
+// host, or as a site of its own.
+func mergeSite(sites []RequestSite, v RequestSite) []RequestSite {
+	for i := range sites {
+		o := &sites[i]
+		if o.Destination.String() != v.Destination.String() || !slices.Equal(o.Destination.Ref.Source, v.Destination.Ref.Source) {
+			continue
+		}
+		o.HostRefs = appendNewArgs(o.HostRefs, v.HostRefs)
+		o.PathRefs = appendNewArgs(o.PathRefs, v.PathRefs)
+		o.Secrets = append(o.Secrets, v.Secrets...)
+		o.EnterpriseToken = o.EnterpriseToken || v.EnterpriseToken
+		return sites
+	}
+	return append(sites, v)
+}
+
+// appendNewArgs is as with each of bs that as does not hold.
+func appendNewArgs(as, bs []CommandArgument) []CommandArgument {
+	for _, b := range bs {
+		if !slices.ContainsFunc(as, func(a CommandArgument) bool { return reflect.DeepEqual(a, b) }) {
+			as = append(as, b)
+		}
+	}
+	return as
 }
 
 // uniqueCarried is cs with each secret at a place once.

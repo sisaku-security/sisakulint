@@ -56,8 +56,8 @@
 // Where things are:
 //
 //	analyze.go      Analyze, AnalyzeIn, Analysis, Sink, ExprRef: the sinks and their references (Verdict and InconclusiveRefKind are of actions/analysis);
-//	                WrittenRefs: the references whose value a ${{ }} writes out; StepValues: other values of a step,
-//	                read as those of a sink; ReadScript
+//	                WrittenRefs: the references whose value a ${{ }} writes out; StepValues, StepValuesIn: other values
+//	                of a step, read as those of a sink; ReadScript
 //	callers.go      Callers, NewCallers, NewCallersIn: the events and the inputs of a called workflow or composite action, read from its callers;
 //	                a remote called workflow (calls.Node) runs on its caller's events alone; ValuePartOn: the events on which a value
 //	                a step gives may hold a variable or a secret that the attacker of a run that adds one writes

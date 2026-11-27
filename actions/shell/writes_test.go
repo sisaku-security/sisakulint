@@ -282,12 +282,27 @@ func TestLineFree(t *testing.T) {
 		{`$(cat f | tr -d '\n')`, false},
 		{`$(echo "$A")`, false},
 		{`$(tr -d '\n' <<< "$A")`, false},
-		// a ${ } that removes the end from the first white-space character or
-		// line break
+		// a ${ } that removes the longest end from, or the longest start to,
+		// a character of a set that holds the line break
 		{`${A%%[[:space:]]*}`, true},
 		{`${A%%$'\n'*}`, true},
 		{`${A%[[:space:]]*}`, false},
 		{`${A%%x*}`, false},
+		{`${A%%[[:cntrl:]]*}`, true},
+		{`${A%%[[:space:]_]*}`, true},
+		{`${A%%[[:space:][:punct:]]*}`, true},
+		{"${A%%[$' \\n']*}", true},
+		{`${A##*[[:space:]]}`, true},
+		{`${A##*[[:space:]_]}`, true},
+		{`${A##*$'\n'}`, true},
+		{`${A%%[[:blank:]]*}`, false},
+		{`${A%%[ ]*}`, false},
+		{`${A%%[![:space:]]*}`, false},
+		{`${A#*[[:space:]]}`, false},
+		{`${A##[[:space:]]*}`, false},
+		{`${A%%*[[:space:]]}`, false},
+		{`${A%%'[[:space:]]'*}`, false},
+		{`${A%%[[:space:]]}`, false},
 	} {
 		src := "echo " + c.src
 		p := &Parse(src).List[0].(*Simple).Words[1].Parts[0]

@@ -450,7 +450,8 @@ func (r secretReader) envValue(p []expr.PathElem) secretValue {
 		return secretValue{} // a property of a string: null
 	}
 	// env is an object, a star makes an array; a name not written is
-	// one of the variables
+	// one of the variables, or none (null) in a run where the env has no
+	// variable of that name
 	whole := len(p) == 1 || p[1].Star
 	named := len(p) == 2 && p[1].Name != ""
 	key := func(name string) string {
@@ -478,7 +479,7 @@ func (r secretReader) envValue(p []expr.PathElem) secretValue {
 				above.envs = r.envs[lvl+1:]
 				v = above.stringValue(x.Value.Value)
 			}
-			if !r.sure(lvl, x.Key.AsString()) {
+			if !r.sure(lvl, x.Key.AsString()) || !whole && !named {
 				v.has &^= hasMust
 			}
 			switch {
@@ -564,26 +565,22 @@ func (r secretReader) of(n expr.Node) secretValue {
 	case *expr.Group:
 		return r.of(x.X)
 	case *expr.Property:
-		return deref(r.of(x.X))
+		return r.access(x.X, deref)
 	case *expr.Index:
-		return deref(r.of(x.X))
+		return r.access(x.X, deref)
 	case *expr.Star:
-		// an array, which a string makes Array: a value only through
-		// join, toJSON or an index
-		v := r.of(x.X)
-		if v.has&(hasParsed|hasPart|hasHolding) != 0 {
-			var has secretHas
-			if v.has&(hasParsed|hasPart) != 0 {
-				has |= hasParsed
-			}
-			return v.as(has | v.has&hasHolding) // the values of an object of the env are the values of the array
-		}
-		return deref(v)
+		return r.access(x.X, star)
 	case *expr.Logical:
 		if x.Op == expr.OpAnd {
 			// a falsy operand or the last (the runner's And.cs): a value
-			// taken out of a secret only as the last
-			return r.of(x.Xs[len(x.Xs)-1])
+			// taken out of a secret only as the last, and in every run only
+			// when each operand before it is truthy in every run, as a
+			// falsy value has no value the runner masks
+			out := r.of(x.Xs[len(x.Xs)-1])
+			if !alwaysTruthy(x.Xs[:len(x.Xs)-1]) {
+				return out.either(secretValue{})
+			}
+			return out
 		}
 		out := r.of(x.Xs[0])
 		for _, c := range x.Xs[1:] {
@@ -594,6 +591,47 @@ func (r secretReader) of(n expr.Node) secretValue {
 		return r.call(x)
 	}
 	return secretValue{} // a literal, a comparison, a not: no value of a secret
+}
+
+// access is what get (deref or star) gives of the value of n. Of A && B it
+// is what get gives of B, as a property of a falsy A is null, and in every
+// run only when A is truthy in every run.
+func (r secretReader) access(n expr.Node, get func(secretValue) secretValue) secretValue {
+	if g, ok := n.(*expr.Group); ok {
+		return r.access(g.X, get)
+	}
+	if x, ok := n.(*expr.Logical); ok && x.Op == expr.OpAnd {
+		out := r.access(x.Xs[len(x.Xs)-1], get)
+		if !alwaysTruthy(x.Xs[:len(x.Xs)-1]) {
+			out.has &^= hasMust
+		}
+		return out
+	}
+	return get(r.of(n))
+}
+
+// alwaysTruthy is whether each of xs is truthy in every run, as a literal
+// true, a number other than 0 or a string not empty is.
+func alwaysTruthy(xs []expr.Node) bool {
+	for _, c := range xs {
+		if expr.Partial(c, func([]expr.PathElem) (expr.Value, bool) { return expr.Value{}, false }).Truthy() != expr.TruthTrue {
+			return false
+		}
+	}
+	return true
+}
+
+// star is what .* of a value v gives: an array, which a string makes
+// Array: a value only through join, toJSON or an index.
+func star(v secretValue) secretValue {
+	if v.has&(hasParsed|hasPart|hasHolding) != 0 {
+		var has secretHas
+		if v.has&(hasParsed|hasPart) != 0 {
+			has |= hasParsed
+		}
+		return v.as(has | v.has&hasHolding) // the values of an object of the env are the values of the array
+	}
+	return deref(v)
 }
 
 // deref is what .y, [i] or .* of a value v gives.

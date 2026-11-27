@@ -17,6 +17,9 @@
 // --online, or of a file of facts that records one) or no one answered at
 // all (a run without --online or --facts).
 //
+// Queries are the facts a uses of another repository is read from, without
+// asking them.
+//
 // ExpandCall reads, the same way, the reusable workflows of other
 // repositories a job calls, to a depth of three (the workflow the job calls
 // is at depth 1): the fact workflow.definition, the file at the commit

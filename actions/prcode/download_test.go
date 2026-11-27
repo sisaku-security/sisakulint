@@ -332,7 +332,7 @@ func TestSameRunUploads(t *testing.T) {
 		{"upload of the workspace", "pull_request_target", "", srCheckoutPR + srUploadPath("."), srNeeds, srDownload, []string{"jobs.build"}, []string{"pull_request_target"}},
 		{"code runs", "pull_request_target", "", srCheckoutPR + "      - run: ./pr/build.sh\n" + srUploadPath("number.txt"), srNeeds, srDownload, []string{"jobs.build"}, []string{"pull_request_target"}},
 		{"upload path expression", "pull_request_target", "", srCheckoutPR + srUploadPath("${{ inputs.dir }}"), srNeeds, srDownload, []string{"jobs.build"}, []string{"pull_request_target"}},
-		{"label approval", "\n  pull_request_target:\n    types: [labeled]", "    if: github.event.label.name == 'safe to test'\n", srCheckout + srUpload, srNeeds, srDownload, nil, nil},
+		{"label approval", "\n  pull_request_target:\n    types: [labeled]", "    if: github.event.label.name == 'safe to test'\n", srCheckout + srUpload, srNeeds, srDownload, []string{"jobs.build"}, []string{"pull_request_target"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

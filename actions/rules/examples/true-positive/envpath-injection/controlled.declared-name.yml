@@ -1,0 +1,20 @@
+# situation: on issues opened, a step sets n to the name out, assigns
+#   $GITHUB_PATH to the variable that n names with declare, and writes $V to
+#   "$out".
+# reason: n holds one literal name when declare runs, and bash assigns
+#   $GITHUB_PATH to out, so the value goes to $GITHUB_PATH.
+# attack-value: github.event.issue.title = "/tmp/PWNED"
+# attack-run-behavior: the value goes to $GITHUB_PATH.
+on:
+  issues:
+    types: [opened]
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          V: ${{ github.event.issue.title }}
+        run: |
+          n=out
+          declare "$n=$GITHUB_PATH"
+          echo "$V" >> "$out"

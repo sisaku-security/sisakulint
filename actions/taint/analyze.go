@@ -177,7 +177,24 @@ func walk(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.Action
 // Pick is a value of a step that StepValues reads.
 type Pick struct {
 	Value workflow.String
-	InEnv bool // an env of the step's own: its env.<name> are read from the job's on
+	// Route is the env the value is of, when it is a value of an env: its
+	// env.<name> are read from the level above on (the job's for the
+	// step's, the workflow's for the job's, none for the workflow's)
+	Route analysis.PromptRoute
+}
+
+// envFrom are the levels of env, from the step's, above which the
+// env.<name> of a value of the env of route are read: 0 for no env.
+func envFrom(route analysis.PromptRoute) int {
+	switch route {
+	case analysis.PromptRouteEnv:
+		return 1
+	case analysis.PromptRouteJobEnv:
+		return 2
+	case analysis.PromptRouteWorkflowEnv:
+		return 3
+	}
+	return 0
 }
 
 // StepValue is a value of a step other than a sink, such as an input of
@@ -205,14 +222,16 @@ type StepValue struct {
 // StepValues are the values pick chooses of each step of w, or of the
 // composite steps of a, with what AnalyzeIn reads (cl, name).
 func StepValues(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.ActionMetadata, pick func(workflow.Step) []Pick) []StepValue {
+	return StepValuesIn(cl, name, w, a, func(s workflow.Step, _ *workflow.Job) []Pick { return pick(s) })
+}
+
+// StepValuesIn is StepValues with pick given the job of the step too (nil
+// in an action.yml).
+func StepValuesIn(cl *Callers, name calls.Node, w *workflow.Workflow, a *workflow.ActionMetadata, pick func(workflow.Step, *workflow.Job) []Pick) []StepValue {
 	var out []StepValue
 	walk(cl, name, w, a, nil, func(c scope, s workflow.Step) {
-		for i, p := range pick(s) {
-			from := 0
-			if p.InEnv {
-				from = 1
-			}
-			out = append(out, StepValue{Step: s, Job: c.job, StepIndex: len(c.before), Index: i, Value: p.Value, InEnv: p.InEnv, ReachableOn: c.events, WrittenValueOn: c.anyEvents, Refs: c.refs(p.Value, from, writtenText)})
+		for i, p := range pick(s, c.job) {
+			out = append(out, StepValue{Step: s, Job: c.job, StepIndex: len(c.before), Index: i, Value: p.Value, InEnv: p.Route.InEnv(), ReachableOn: c.events, WrittenValueOn: c.anyEvents, Refs: c.refs(p.Value, envFrom(p.Route), writtenText)})
 		}
 	})
 	return out

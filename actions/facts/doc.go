@@ -33,7 +33,7 @@
 //	              and Allows, how GitHub reads the setting for a uses
 //	kind.go       Kind, Provider, Permission: what a kind is (the constants are in query_gen.go)
 //	store.go      Store, LoadStore, Entry, EncodeFile: the file of facts
-//	resolve.go    First, Recorder
+//	resolve.go    First, Recorder (Recorder.Asked: the answer kept of a fact, if it was asked)
 //	arguments.go  Arguments: the facts given on the command line (--fact)
 //	online.go     OnlineAnswer, OnlineAnswerOf: how the GitHub API source (package github)
 //	              answers each kind
