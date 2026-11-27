@@ -11,6 +11,7 @@ func TestXAssumeValues(t *testing.T) {
 		KindRepoPublic:                   "true",
 		KindRepoWikiOpen:                 "true",
 		KindRepoDefaultTokenWrite:        "true",
+		KindRepoForkPRSecrets:            "true",
 		KindRepoEnvironmentProtected:     "false",
 		KindRepoForkPRAppChecks:          "true",
 		KindRepoMergeCommitAppChecks:     "true",

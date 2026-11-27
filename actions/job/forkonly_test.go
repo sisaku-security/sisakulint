@@ -9,7 +9,8 @@ import (
 
 // TestForkPullRequestOnly: a job runs only for a pull request from a fork
 // when its if is false for a pull request from a branch of the repository,
-// on pull_request alone.
+// on pull_request, pull_request_review and pull_request_review_comment
+// alone.
 func TestForkPullRequestOnly(t *testing.T) {
 	for _, c := range []struct {
 		on, cond string
@@ -24,7 +25,12 @@ func TestForkPullRequestOnly(t *testing.T) {
 		{"[pull_request, push]", "github.event.pull_request.head.repo.fork", true},
 		{"[pull_request, push]", "github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork", true},
 		{"pull_request_target", "github.event.pull_request.head.repo.fork", false},
-		{"pull_request_review", "github.event.pull_request.head.repo.fork", false},
+		{"pull_request_review", "github.event.pull_request.head.repo.fork", true},
+		{"pull_request_review", "github.event.pull_request.head.repo.fork || github.event.review.state == 'approved'", false},
+		{"pull_request_review_comment", "github.event.pull_request.head.repo.full_name != github.repository", true},
+		{"pull_request_review_comment", "", false},
+		{"[pull_request_review, pull_request]", "github.event.pull_request.head.repo.fork", true},
+		{"[pull_request_review, pull_request_target]", "github.event.pull_request.head.repo.fork", false},
 	} {
 		src := "on: " + c.on + "\njobs:\n  a:\n"
 		if c.cond != "" {
