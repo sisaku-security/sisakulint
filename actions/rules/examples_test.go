@@ -123,6 +123,14 @@ var exampleVariables = map[string]map[string]string{
 	"false-positive/unset-configuration-variable/action-empty-input":       {"": `[]`},
 }
 
+// exampleRepoFacts are the answers of facts of the repository of --repo
+// (repo.*) that the examples give, by <what>/<rule>/<id>, as JSON by the
+// kind. The examples not here answer such a fact unknown.
+var exampleRepoFacts = map[string]map[facts.Kind]string{
+	"true-positive/secret-exfiltration/untrusted-destination.fork-pr-secrets": {facts.KindRepoForkPRSecrets: "true"},
+	"true-negative/secret-exfiltration/untrusted-destination.fork-only":       {facts.KindRepoForkPRSecrets: "false"},
+}
+
 // exampleAllowedActions are the settings of allowed actions of GitHub
 // (repo.allowed-actions) that the examples answer, by <what>/<rule>/<id>, as
 // JSON. The examples not here answer none, so allowed-actions does not run
@@ -802,7 +810,7 @@ func TestExampleFacts(t *testing.T) {
 					if what == "false-positive" && n.id == actionsNotAllowed.String() {
 						allowed = actionsNotAllowedSetting
 					}
-					want := generatedFacts(t, n.e, kinds[what+"/"+decl], list, exampleVariables[what+"/"+id+"/"+n.id], allowed)
+					want := generatedFacts(t, n.e, kinds[what+"/"+decl], list, exampleVariables[what+"/"+id+"/"+n.id], allowed, exampleRepoFacts[what+"/"+id+"/"+n.id])
 					p := path.Join("examples", what, id, factsName(n.id))
 					if *update {
 						if err := os.WriteFile(p, want, 0o644); err != nil {
@@ -830,7 +838,7 @@ func TestExampleFacts(t *testing.T) {
 // and the check runs the rule of the declaration and the rule its
 // disposition names. An unknown answer says so without the generator's
 // words.
-func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList string, vars map[string]string, allowed string) []byte {
+func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList string, vars map[string]string, allowed string, repo map[facts.Kind]string) []byte {
 	t.Helper()
 	in := inputOf(t, e)
 	asked := map[string]facts.Entry{}
@@ -864,6 +872,9 @@ func generatedFacts(t *testing.T, e lint.Example, flip []facts.Kind, actionList 
 					continue // the run has no list (exampleActionLists)
 				}
 				a = facts.RawAnswer{State: facts.StateFound, Value: []byte(actionList)}
+			}
+			if v, ok := repo[x.Query.Kind()]; ok {
+				a = facts.RawAnswer{State: facts.StateFound, Value: []byte(v)}
 			}
 			if a.State == facts.StateUnknown {
 				a.Reason = "the example does not answer it"

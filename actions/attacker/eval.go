@@ -232,3 +232,19 @@ func below(ctx string, p []expr.PathElem) (string, bool) {
 	}
 	return strings.Join(names, "."), true
 }
+
+// branchPullRequestRows are the head of a run of pull_request for a pull
+// request from a branch of the repository, in a repository that is not a
+// fork: the head is the repository itself, which is no fork.
+var branchPullRequestRows = slices.Concat(repositoryRows, baseHeadRows, []row{{"event.pull_request.head.repo.fork", expr.Bool(false)}})
+
+// BranchPullRequestFalse is whether p is false in every run of e, an
+// event of pull_request, for a pull request from a branch of the
+// repository, in a repository that is not a fork: p lets in only the runs
+// for a pull request from a fork. False for any other event.
+func BranchPullRequestFalse(p PlacedIf, e analysis.EventActivity) bool {
+	if e.Name() != workflow.EventNamePullRequest {
+		return false
+	}
+	return p.truth(eventOf(e), lookupRows(e, branchPullRequestRows), nil) == expr.TruthFalse
+}

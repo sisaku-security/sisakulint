@@ -23,6 +23,7 @@ type skippedJob struct {
 	span    cst.Span
 	skipped bool
 	steps   []cst.Span // the run steps GitHub skips in every run (job.StepAlwaysSkipped)
+	fork    bool       // it runs only for a pull request from a fork (job.ForkPullRequestOnly)
 }
 
 // alwaysSkipped is whether GitHub skips, in every run, the job that the
@@ -43,6 +44,24 @@ func (x *IR) alwaysSkipped(b workflow.Base) bool {
 // if-false of s1-secrets.yml).
 func (x *IR) jobAlwaysSkipped(b workflow.Base) bool {
 	return x.skippedAt(b, false)
+}
+
+// forkPullRequestOnly is whether the job that the element b is in runs
+// only on pull_request, for a pull request from a fork
+// (job.ForkPullRequestOnly): never of an element in no job, of an
+// action.yml, or of a remote called workflow.
+func (x *IR) forkPullRequestOnly(b workflow.Base) bool {
+	s := x.skippedJobsOf()
+	if x.workflow == nil {
+		return false
+	}
+	p := b.Primary()
+	for _, j := range s.jobs {
+		if j.span.Start <= p.Start && p.End <= j.span.End {
+			return j.fork
+		}
+	}
+	return false
 }
 
 func (x *IR) skippedAt(b workflow.Base, steps bool) bool {
@@ -90,7 +109,7 @@ func (x *IR) skippedJobsOf() *skippedJobs {
 			}
 			j := je.Value.Value
 			skipped := job.AlwaysSkipped(w, &j)
-			sj := skippedJob{span: j.Base.Primary(), skipped: skipped}
+			sj := skippedJob{span: j.Base.Primary(), skipped: skipped, fork: x.origin == nil && job.ForkPullRequestOnly(w, &j)}
 			if !skipped && j.Steps.Status == workflow.Present {
 				for i := range j.Steps.Value.Items {
 					st := &j.Steps.Value.Items[i]
