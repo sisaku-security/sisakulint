@@ -75,16 +75,21 @@ func TestAlwaysSkipped(t *testing.T) {
 	}
 }
 
-// TestAlwaysSkippedCalled: a called workflow whose callers among the
-// inputs are all skipped is not skipped (a caller in another repository
-// is not seen); a remote called workflow is skipped when the job of the
+// TestAlwaysSkippedCalled: a called workflow whose callers are all among
+// the inputs and all skipped is skipped, unless it has another trigger; a
+// remote called workflow is skipped when the job of the
 // input that calls it is.
 func TestAlwaysSkippedCalled(t *testing.T) {
 	const called = "on: workflow_call\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          K: v\n        run: echo\n"
 	x := calledIR(t, [2]string{".github/workflows/called.yml", called},
 		[2]string{".github/workflows/ci.yml", "on: push\njobs:\n  c:\n    if: false\n    uses: ./.github/workflows/called.yml\n"})
+	if !x.alwaysSkipped(firstStepEnv(t, x.workflow, "x")) {
+		t.Errorf("a called workflow whose callers are all skipped is not skipped")
+	}
+	x = calledIR(t, [2]string{".github/workflows/called.yml", strings.Replace(called, "on: workflow_call", "on: [workflow_call, push]", 1)},
+		[2]string{".github/workflows/ci.yml", "on: push\njobs:\n  c:\n    if: false\n    uses: ./.github/workflows/called.yml\n"})
 	if x.alwaysSkipped(firstStepEnv(t, x.workflow, "x")) {
-		t.Errorf("a called workflow whose callers among the inputs are skipped is skipped")
+		t.Errorf("a called workflow that also runs on push is skipped")
 	}
 	for _, c := range []struct {
 		cond string

@@ -3,6 +3,7 @@ package ir
 import (
 	"sync"
 
+	"github.com/gh-intel/sisakulint/actions/analysis"
 	"github.com/gh-intel/sisakulint/actions/calls"
 	"github.com/gh-intel/sisakulint/actions/job"
 	"github.com/gh-intel/sisakulint/actions/workflow"
@@ -74,6 +75,8 @@ func (x *IR) skippedJobsOf() *skippedJobs {
 	s.once.Do(func() {
 		if x.origin != nil {
 			s.whole = x.remoteCallSkipped()
+		} else if cl := x.callersOf(); cl != nil && cl.Graph() != nil && !x.name.IsZero() {
+			s.whole = calledSkipped(cl.Graph(), x.name, map[calls.Node]bool{})
 		}
 		w := x.workflow
 		if w == nil || w.Jobs.Status != workflow.Present {
@@ -120,4 +123,39 @@ func (x *IR) remoteCallSkipped() bool {
 		return false
 	}
 	return job.AlwaysSkipped(f.Workflow, r.TopJob)
+}
+
+// calledSkipped is whether the local workflow name runs only when called
+// (its on has workflow_call and no other event), every caller of it is
+// among the inputs (CallerCoverageAll), and GitHub skips each call in every
+// run: the job that calls it is skipped (job.AlwaysSkipped), or its caller
+// is a workflow that is itself called only by such calls. A call that comes
+// back to a workflow on the way is not known to be skipped.
+func calledSkipped(g *calls.Graph, name calls.Node, seen map[calls.Node]bool) bool {
+	if seen[name] {
+		return false
+	}
+	f, ok := g.File(name)
+	if !ok || f.Workflow == nil || f.Workflow.On.Status != workflow.Present {
+		return false
+	}
+	on := f.Workflow.On.Value
+	if _, call := on.Event(workflow.EventNameWorkflowCall); !call || len(on.Events) != 1 {
+		return false
+	}
+	if g.Coverage(name) != analysis.CallerCoverageAll {
+		return false
+	}
+	seen[name] = true
+	defer delete(seen, name)
+	for _, c := range g.CallsOf(name) {
+		cf, ok := g.File(c.Caller)
+		if !ok || cf.Workflow == nil || c.Job == nil {
+			return false
+		}
+		if !job.AlwaysSkipped(cf.Workflow, c.Job) && !calledSkipped(g, c.Caller, seen) {
+			return false
+		}
+	}
+	return true
 }
