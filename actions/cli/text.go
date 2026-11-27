@@ -649,6 +649,7 @@ func (p *printer) worst(folds []fold, inconclusive []lint.Finding) {
 func (p *printer) summary(rep lint.Report, threshold lint.Severity) {
 	p.rules(rep)
 	p.notRun(rep)
+	p.unreadUses(rep)
 	var confirmed, conditional, below int
 	bySev := map[lint.Severity]int{}
 	decided := rep.FindingsWith(lint.CertaintyConfirmed, lint.CertaintyConditional)
@@ -726,6 +727,15 @@ func (p *printer) notRun(rep lint.Report) {
 		if _, ok := d.FactKinds(); ok && p.reg.NotRunByDefault(id) {
 			p.line("not run  %s: %s", id, d.Text())
 		}
+	}
+}
+
+// unreadUses is a line for each uses whose reusable workflow or action of
+// another repository the run did not ask of its definition
+// (lint.UnreadUses): no rule read what it runs, and the line sets no bit.
+func (p *printer) unreadUses(rep lint.Report) {
+	for _, u := range rep.UnreadUses {
+		p.line("not read  %s %s: %s: %s", p.loc(u.Location), clean(u.Uses), u.Query.Kind(), clean(u.Reason))
 	}
 }
 

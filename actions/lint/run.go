@@ -255,6 +255,7 @@ func RunWithBarriers(ctx context.Context, in Inputs, reg *Registry, r facts.Reso
 	}
 	st.finished = true
 	sortPlaces(&rep)
+	rep.UnreadUses = unreadUsesOf(in, rec)
 	rep.Facts = rec.Entries()
 	rep.Errors = st.errors
 	return rep

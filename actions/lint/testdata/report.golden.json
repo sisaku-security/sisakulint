@@ -315,6 +315,55 @@
       "reason": "no token"
     }
   ],
+  "unread_uses": [
+    {
+      "location": {
+        "file": {
+          "input": ".github/workflows/a.yml"
+        },
+        "start": 115,
+        "end": 134,
+        "line": 8,
+        "column": 15,
+        "exact": true,
+        "via": []
+      },
+      "uses": "actions/checkout@v4",
+      "query": {
+        "kind": "action.definition",
+        "repo": "actions/checkout",
+        "ref": "v4"
+      },
+      "reason": "no rule that ran asked the fact"
+    },
+    {
+      "location": {
+        "file": {
+          "input": ".github/workflows/a.yml"
+        },
+        "start": 236,
+        "end": 245,
+        "line": 14,
+        "column": 9,
+        "exact": true,
+        "via": [
+          {
+            "start": 236,
+            "end": 245,
+            "line": 14,
+            "column": 9
+          }
+        ]
+      },
+      "uses": "actions/checkout@v4",
+      "query": {
+        "kind": "action.definition",
+        "repo": "actions/checkout",
+        "ref": "v4"
+      },
+      "reason": "no rule that ran asked the fact"
+    }
+  ],
   "errors": [
     {
       "rule": "fails",

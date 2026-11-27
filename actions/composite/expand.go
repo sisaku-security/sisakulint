@@ -249,3 +249,28 @@ func hops(chain []Hop, h Hop) []Hop {
 	copy(out, chain)
 	return append(out, h)
 }
+
+// Queries are the facts a uses of another repository is read from: the
+// workflow.definition of each workflow a job calls when call is set, else
+// the action.definition of each action a step runs; none for a uses of
+// the repository, or one whose path no fact asks about.
+func Queries(u workflow.Uses, call bool) []facts.Query {
+	kind := u.Kind
+	if kind == workflow.UsesFolded {
+		kind = u.Folded
+	}
+	if kind != workflow.UsesRemote {
+		return nil
+	}
+	var out []facts.Query
+	for _, run := range u.Actions() {
+		if call {
+			if q, ok := workflowOf(run.Owner+"/"+run.Repo, run.Path.String(), run.Ref); ok {
+				out = append(out, q)
+			}
+		} else if q, ok := definitionOf(run); ok {
+			out = append(out, q)
+		}
+	}
+	return out
+}
