@@ -467,9 +467,19 @@ var recursiveUnsetLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID
 // function, followed by an assignment or a second unset.
 var unsetCallerLocalLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("unset-caller-local"), Text: "a variable that a shell function unsets after a calling function made the variable local, when an assignment to the variable or a second unset of the variable follows the unset (s=x; reset() { unset s; }; point() { local s=y; reset; s=z; }; point): bash takes away the local of the calling function, so that the assignment after the unset sets the variable outside the calling function, and a second unset takes away the local of the next calling function or unsets the variable outside the functions; the rule keeps the local of the calling function after the unset, gives the variable back the value from before the calling function made the variable local when the calling function returns, and reads the second unset as the first unset", Disposition: lint.Todo(lint.NeedSameFile)}
 
-// severalDestinationsLimit is a destination variable that more than one
-// assignment reaches: the rule reads the last one in the script.
-var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-values"), Text: "a request whose host comes from a variable that more than one assignment of the script may set before the request (if c; then U=https://hooks.example.com; else U=https://api.github.com; fi; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule reads the host of the request from the assignment that comes last in the text of the script, and does not judge the hosts of the other assignments", Disposition: lint.Todo(lint.NeedSameFile)}
+// severalDestinationsLimit is a destination variable that copies another
+// variable that more than one assignment may set: the rule reads the copied
+// variable from its last assignment.
+var severalDestinationsLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-values"), Text: "a request whose host comes from a variable that copies another variable that more than one assignment of the script may set before the copy (if c; then A=https://hooks.example.com; else A=https://api.github.com; fi; U=$A; curl -H \"x-apikey: $KEY\" \"$U/x\"): the rule judges each assignment of U that reaches the request, but reads the value of A in U=$A from the assignment of A that comes last in the text of the script, and does not judge the hosts of the other assignments of A", Disposition: lint.Todo(lint.NeedSameFile)}
+
+// destinationValueLimit is a destination variable with more assignments
+// that reach the request than the rule judges.
+var destinationValueLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("destination-value-limit"), Text: "a request whose host comes from a variable that more than 8 assignments of the script may set before the request (an if with 11 arms, the 8th of which sets U=https://hooks.example.com): the rule judges the host of the assignment that comes last in the text of the script and of 7 others, and does not judge the hosts of the rest", Disposition: lint.Todo(lint.NeedSameFile)}
+
+// severalDestinationVariablesLimit is a destination word with two or more
+// variables that more than one assignment may set: the rule does not
+// combine their values.
+var severalDestinationVariablesLimit = lint.UndetectedForm{ID: lint.MustUndetectedFormID("several-destination-variables"), Text: "a request whose destination word reads two or more variables that more than one assignment of the script each may set before the request (if c; then A=hooks; B=example.com; else A=api; B=github.com; fi; curl -H \"x-apikey: $KEY\" \"https://$A.$B/x\"): a run may set the variables together, so the rule does not combine their values, and reads each variable from its assignment that comes last in the text of the script", Disposition: lint.Todo(lint.NeedSameFile)}
 
 // nameNotLiteralFalsePositive is a variable of env the script sets again
 // by an assignment whose variable name is not literal: the rule reads the
