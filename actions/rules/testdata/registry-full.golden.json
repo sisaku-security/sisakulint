@@ -151744,6 +151744,13 @@
                 },
                 {
                   "query": {
+                    "kind": "repo.fork-pr-secrets"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                },
+                {
+                  "query": {
                     "kind": "request.destination-trusted",
                     "secret": "DEPLOY_TOKEN",
                     "destination": "${{ secrets.status_url }}"
@@ -151956,7 +151963,8 @@
           "incidents": [],
           "fixes": [],
           "fact_kinds": [
-            "request.destination-trusted"
+            "request.destination-trusted",
+            "repo.fork-pr-secrets"
           ],
           "true_positives": [
             {
@@ -152317,6 +152325,58 @@
                 "reason": "bash refuses the assignment of the element before the command word and runs curl, which carries the secret to the host.",
                 "attack": "the attacker takes over the server of the destination, by a breach of the vendor or by registering the domain when the domain lapses.",
                 "attack_run_behavior": "curl sends the secret to hooks.example.com, whose server, now the attacker's, logs the secret."
+              }
+            },
+            {
+              "input_kind": "workflow",
+              "name": "untrusted-destination.fork-pr-secrets.yml",
+              "text": "# situation: on pull_request, a job that runs only when the head repository\n#   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN\n#   with curl to a host that the variable DEPLOY_HOST names; the settings of\n#   the private repository send secrets to the workflow runs for pull\n#   requests from forks (repo.fork-pr-secrets true).\n# reason: the workflow run for a pull request from a fork gets DEPLOY_TOKEN,\n#   so the request carries the secret to the host, and no file of facts says\n#   that the host is trusted with the secret.\n# attack: whoever runs the server of the host that DEPLOY_HOST names, or\n#   takes the server over, reads the Authorization header of the request.\n# attack-run-behavior: a pull request from a fork starts the job, and curl\n#   sends Authorization: Bearer with the value of DEPLOY_TOKEN to the host.\non: pull_request\njobs:\n  j:\n    if: github.event.pull_request.head.repo.fork\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ vars.DEPLOY_HOST }}/status\"\n",
+              "facts": [
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.fork-pr-secrets"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "request.destination-trusted",
+                    "secret": "DEPLOY_TOKEN",
+                    "destination": "${{ vars.deploy_host }}"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                }
+              ],
+              "notes": {
+                "situation": "on pull_request, a job that runs only when the head repository of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN with curl to a host that the variable DEPLOY_HOST names; the settings of the private repository send secrets to the workflow runs for pull requests from forks (repo.fork-pr-secrets true).",
+                "reason": "the workflow run for a pull request from a fork gets DEPLOY_TOKEN, so the request carries the secret to the host, and no file of facts says that the host is trusted with the secret.",
+                "attack": "whoever runs the server of the host that DEPLOY_HOST names, or takes the server over, reads the Authorization header of the request.",
+                "attack_run_behavior": "a pull request from a fork starts the job, and curl sends Authorization: Bearer with the value of DEPLOY_TOKEN to the host."
               }
             },
             {
@@ -153038,6 +153098,58 @@
             }
           ],
           "true_negatives": [
+            {
+              "input_kind": "workflow",
+              "name": "untrusted-destination.fork-only.yml",
+              "text": "# situation: on pull_request, a job that runs only when the head repository\n#   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN\n#   with curl to a host that the variable DEPLOY_HOST names; the repository\n#   does not send secrets to the workflow runs for pull requests from forks\n#   (repo.fork-pr-secrets false).\n# reason: in a base repository that is not a fork, the job runs only for a\n#   pull request from a fork, and such a workflow run has no secret except\n#   GITHUB_TOKEN; DEPLOY_TOKEN is empty, so the request carries no secret to\n#   the host.\n# attack: whoever runs the server of the host that DEPLOY_HOST names reads\n#   the Authorization header of the request.\n# attack-run-behavior: a pull request from a branch of the repository does\n#   not start the job; a pull request from a fork starts the job, and curl\n#   sends Authorization: Bearer with an empty value.\non: pull_request\njobs:\n  j:\n    if: github.event.pull_request.head.repo.fork\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ vars.DEPLOY_HOST }}/status\"\n",
+              "facts": [
+                {
+                  "query": {
+                    "kind": "repo.action-list"
+                  },
+                  "state": "found",
+                  "value": [
+                    "*",
+                    "!untrusted/*",
+                    "!suspicious/*",
+                    "!tj-actions/changed-files@v39",
+                    "!docker://aquasec/trivy:*",
+                    "!example-org/unlisted-*",
+                    "!docker://example-org/unlisted-*",
+                    "!example-org/partly-listed/hidden@*"
+                  ]
+                },
+                {
+                  "query": {
+                    "kind": "repo.default-token-write"
+                  },
+                  "state": "found",
+                  "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.fork-pr-secrets"
+                  },
+                  "state": "found",
+                  "value": false
+                },
+                {
+                  "query": {
+                    "kind": "request.destination-trusted",
+                    "secret": "DEPLOY_TOKEN",
+                    "destination": "${{ vars.deploy_host }}"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
+                }
+              ],
+              "notes": {
+                "situation": "on pull_request, a job that runs only when the head repository of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN with curl to a host that the variable DEPLOY_HOST names; the repository does not send secrets to the workflow runs for pull requests from forks (repo.fork-pr-secrets false).",
+                "reason": "in a base repository that is not a fork, the job runs only for a pull request from a fork, and such a workflow run has no secret except GITHUB_TOKEN; DEPLOY_TOKEN is empty, so the request carries no secret to the host.",
+                "attack": "whoever runs the server of the host that DEPLOY_HOST names reads the Authorization header of the request.",
+                "attack_run_behavior": "a pull request from a branch of the repository does not start the job; a pull request from a fork starts the job, and curl sends Authorization: Bearer with an empty value."
+              }
+            },
             {
               "input_kind": "workflow",
               "name": "untrusted-destination.github.yml",
@@ -154706,6 +154818,13 @@
                   },
                   "state": "found",
                   "value": true
+                },
+                {
+                  "query": {
+                    "kind": "repo.fork-pr-secrets"
+                  },
+                  "state": "unknown",
+                  "reason": "the example does not answer it"
                 },
                 {
                   "query": {

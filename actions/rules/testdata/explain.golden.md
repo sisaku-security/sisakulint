@@ -51253,7 +51253,7 @@
   - consequence: whoever runs the server of the destination, or takes the server over (a breached vendor, or whoever registers a lapsed domain), receives the secret or the job's token and can use the secret or the token as the job would
   - remedy: if the destination is the service that the secret is for, answer true for the pair of the secret (GITHUB_TOKEN for the job's token) and the destination, with --fact 'request.destination-trusted&#91;secret=API_KEY,destination=api.example.com]=true' or the same query in a file of facts given with --facts; if the destination is not, remove the secret from the request
   - severity: medium (found from the CVSS metrics below by the table)
-  - fact kinds: request.destination-trusted (provider: user-supplied)
+  - fact kinds: request.destination-trusted (provider: user-supplied), repo.fork-pr-secrets (provider: repo-setting)
   - attackers: destination-holder
   - preconditions: request-carries, github-holds-secrets
   - true positives:
@@ -51425,6 +51425,31 @@
                 API_KEY: ${{ secrets.API_KEY }}
               run: |
                 a[0]=x curl -fsS -H "x-apikey: $API_KEY" https://hooks.example.com/
+      ```
+    - untrusted-destination.fork-pr-secrets.yml (workflow, true-positive)
+      ```yaml
+      # situation: on pull_request, a job that runs only when the head repository
+      #   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN
+      #   with curl to a host that the variable DEPLOY_HOST names; the settings of
+      #   the private repository send secrets to the workflow runs for pull
+      #   requests from forks (repo.fork-pr-secrets true).
+      # reason: the workflow run for a pull request from a fork gets DEPLOY_TOKEN,
+      #   so the request carries the secret to the host, and no file of facts says
+      #   that the host is trusted with the secret.
+      # attack: whoever runs the server of the host that DEPLOY_HOST names, or
+      #   takes the server over, reads the Authorization header of the request.
+      # attack-run-behavior: a pull request from a fork starts the job, and curl
+      #   sends Authorization: Bearer with the value of DEPLOY_TOKEN to the host.
+      on: pull_request
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.fork
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ vars.DEPLOY_HOST }}/status"
       ```
     - untrusted-destination.function-output.yml (workflow, true-positive)
       ```yaml
@@ -51747,6 +51772,33 @@
                 curl -fsS -H "x-apikey: $API_KEY" https://www.virustotal.com/api/v3/files -F file=@dist/app.zip
       ```
   - true negatives:
+    - untrusted-destination.fork-only.yml (workflow, true-negative)
+      ```yaml
+      # situation: on pull_request, a job that runs only when the head repository
+      #   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN
+      #   with curl to a host that the variable DEPLOY_HOST names; the repository
+      #   does not send secrets to the workflow runs for pull requests from forks
+      #   (repo.fork-pr-secrets false).
+      # reason: in a base repository that is not a fork, the job runs only for a
+      #   pull request from a fork, and such a workflow run has no secret except
+      #   GITHUB_TOKEN; DEPLOY_TOKEN is empty, so the request carries no secret to
+      #   the host.
+      # attack: whoever runs the server of the host that DEPLOY_HOST names reads
+      #   the Authorization header of the request.
+      # attack-run-behavior: a pull request from a branch of the repository does
+      #   not start the job; a pull request from a fork starts the job, and curl
+      #   sends Authorization: Bearer with an empty value.
+      on: pull_request
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.fork
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ vars.DEPLOY_HOST }}/status"
+      ```
     - untrusted-destination.github.yml (workflow, true-negative)
       ```yaml
       # situation: on push, a step sends the secret API_KEY to GitHub's API with

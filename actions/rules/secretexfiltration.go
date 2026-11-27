@@ -63,13 +63,28 @@ func (secretExfiltration) Check(_ context.Context, c *lint.RuleContext, v ir.Sec
 					Location:  c.At(sec.At),
 					Anchor:    fmt.Sprintf("%s#%d", key, seen[key]),
 					Related:   []lint.Related{{Location: c.At(r.At), Note: "the request goes to " + dest.String() + " here"}},
-					Condition: factCond(facts.RequestDestinationTrusted{Secret: name, Destination: dest}, false),
+					Condition: exfiltrationCondition(c, s, x.secret, name, dest),
 					Args:      SecretExfiltrationUntrustedDestination{Command: r.Command, Secret: name.String(), Destination: dest.String()},
 				})
 			}
 		}
 	}
 	return nil
+}
+
+// exfiltrationCondition is the condition of the finding of the secret sec
+// of the name name that a request of the sink s sends to dest: the
+// destination is not trusted with it, and, in a job that runs only for a
+// pull request from a fork (ForkPullRequestOnly), the repository sends its
+// secrets to such runs (repo.fork-pr-secrets). The token of the job is
+// given to those runs whatever the fact says.
+func exfiltrationCondition(c *lint.RuleContext, s ir.SecretExfiltrationOfSink, sec ir.CarriedSecret, name facts.SecretName, dest facts.RequestDestination) *lint.Condition {
+	trusted := factCond(facts.RequestDestinationTrusted{Secret: name, Destination: dest}, false)
+	if !s.ForkPullRequestOnly() || secretName(sec) == "GITHUB_TOKEN" {
+		return trusted
+	}
+	all := lint.All(*trusted, *factCond(facts.RepoForkPRSecrets{Repo: c.Repo()}, true))
+	return &all
 }
 
 // attackerDestination is whether an attacker's value may decide the host
@@ -190,7 +205,7 @@ var secretExfiltrationMeta = lint.Meta{
 			FindingText:     textSecretExfiltrationUntrustedDestination,
 			Attackers:       []lint.Attacker{lint.AttackerDestinationHolder},
 			Preconditions:   []lint.PreconditionID{requestCarries, githubHoldsSecrets},
-			FactKinds:       []facts.Kind{facts.KindRequestDestinationTrusted},
+			FactKinds:       []facts.Kind{facts.KindRequestDestinationTrusted, facts.KindRepoForkPRSecrets},
 			CVSS:            exfiltrationBase,
 			ExploitMaturity: metric(lint.ExploitMaturityUnreported, "no report was found of a secret a workflow sent to a destination that its holder misused (searched 2026-10-19: the 43 findings of the upstream rule on 4,974 workflows of public repositories, none of which looked like a theft, and the issues and pull requests of sisakulint that ported the rule)"),
 		},

