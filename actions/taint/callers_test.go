@@ -280,6 +280,17 @@ func TestCallersInputComposite(t *testing.T) {
 	}
 }
 
+// TestCallersInputCompositeDynamicWith: a with that is one ${{ }} may
+// give the input any part of the expression's value.
+func TestCallersInputCompositeDynamicWith(t *testing.T) {
+	ci := "on: issues\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./x\n        with: ${{ fromJSON(github.event.issue.body) }}\n"
+	action := "inputs:\n  t:\n    default: ''\nruns:\n  using: composite\n  steps:\n    - run: echo \"${{ inputs.t }}\"\n      shell: bash\n"
+	c := callersOf(t, true, [2]string{"x/action.yml", action}, [2]string{".github/workflows/ci.yml", ci})
+	if r := sinkRef(t, c, "x/action.yml"); r.Verdict != analysis.Controlled || len(r.With) != 1 {
+		t.Fatalf("ref = %+v", r)
+	}
+}
+
 // TestCallersInputStepIf: the events of the called step's if narrow what
 // the caller gives.
 func TestCallersInputStepIf(t *testing.T) {
