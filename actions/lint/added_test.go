@@ -38,7 +38,16 @@ func barrierRule() Rule {
 			report("both", nil)
 		}
 		if g.Passes(analysis.BarrierAssociationMember) || g.Passes(analysis.BarrierLabelApproval) {
-			report("either", nil)
+			// the evidence says which of the two the attacker gets past
+			var ev []Related
+			at := At(c.input, c.workflow.Base)
+			if g.Passes(analysis.BarrierAssociationMember) {
+				ev = append(ev, Related{Location: at, Note: "member"})
+			}
+			if g.Passes(analysis.BarrierLabelApproval) {
+				ev = append(ev, Related{Location: at, Note: "label"})
+			}
+			c.Report(FindingDraft{Args: said("either"), Location: at, Anchor: "either", Evidence: ev})
 		}
 		if g.Passes(analysis.BarrierEnvironmentApproval) {
 			report("env", nil)
@@ -120,6 +129,21 @@ func TestAddedTwoValues(t *testing.T) {
 	}
 	if !slices.Equal(rep.AddedAttackers, []AddedAttacker{AddedAttackerReadMember, AddedAttackerTriageAccount}) {
 		t.Errorf("the report's added attackers: %v, want them in their order", rep.AddedAttackers)
+	}
+}
+
+// TestAddedTwoValuesEvidence: a place each of two added attackers gives,
+// with its own evidence, has the evidence of both.
+func TestAddedTwoValuesEvidence(t *testing.T) {
+	_, by := runAdded(t, AddedAttackerTriageAccount, AddedAttackerReadMember)
+	wantMarks(t, by, "either", AddedAttackerReadMember, AddedAttackerTriageAccount)
+	var notes []string
+	for _, e := range by["either"][0].Evidence {
+		notes = append(notes, e.Note)
+	}
+	slices.Sort(notes)
+	if !slices.Equal(notes, []string{"label", "member"}) {
+		t.Errorf("either: evidence %v, want the evidence of both attackers", notes)
 	}
 }
 
