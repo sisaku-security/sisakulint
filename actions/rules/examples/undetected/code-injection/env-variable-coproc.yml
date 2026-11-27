@@ -9,7 +9,8 @@
 #   coproc's array.
 # attack-value: github.event.issue.title = "echo PWNED"
 # attack-run-behavior: the coproc's bash runs echo PWNED, and cat prints
-#   PWNED from the coproc's output.
+#   PWNED from the coproc's output through descriptor 5, a copy made before
+#   the input is closed, because bash unsets the array when the coproc exits.
 on:
   issues:
     types: [opened]
@@ -21,7 +22,8 @@ jobs:
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
           coproc bash
+          exec 5<&"${COPROC[0]}"
           exec 4>&"${COPROC[1]}"
           echo "$ISSUE_TITLE" >&4
           exec 4>&- {COPROC[1]}>&-
-          cat <&"${COPROC[0]}"
+          cat <&5

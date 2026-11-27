@@ -28146,7 +28146,8 @@
     #   coproc's array.
     # attack-value: github.event.issue.title = "echo PWNED"
     # attack-run-behavior: the coproc's bash runs echo PWNED, and cat prints
-    #   PWNED from the coproc's output.
+    #   PWNED from the coproc's output through descriptor 5, a copy made before
+    #   the input is closed, because bash unsets the array when the coproc exits.
     on:
       issues:
         types: [opened]
@@ -28158,10 +28159,11 @@
               ISSUE_TITLE: ${{ github.event.issue.title }}
             run: |
               coproc bash
+              exec 5<&"${COPROC[0]}"
               exec 4>&"${COPROC[1]}"
               echo "$ISSUE_TITLE" >&4
               exec 4>&- {COPROC[1]}>&-
-              cat <&"${COPROC[0]}"
+              cat <&5
     ```
 - associative-scope: a variable of env in a subscript of an indexed array whose name a declare, typeset or local command of the script declares associative with -A where the declaration does not hold at the subscript: a declaration inside a function, a declaration after the subscript, a declaration followed by an unset of the name, or a declaration that bash refuses because the name already holds an indexed array (f() { declare -A m; }; m=(1); echo "\${m&#91;\$KEY]}", or echo "\${m&#91;\$KEY]}"; declare -A m, or declare -A m; unset m; m=(1); echo "\${m&#91;\$KEY]}", or m=(1); declare -A m; echo "\${m&#91;\$KEY]}"): the rule reads every name that such a command declares with -A as associative in the whole script, so the rule does not read the subscript as arithmetic. A \${{ }} written in such a subscript gets no fix
   - finding kinds: code-injection.controlled, code-injection.env-variable, code-injection.env-variable-wiki, code-injection.wiki
