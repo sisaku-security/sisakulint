@@ -21,7 +21,7 @@ func TestForkPullRequestOnly(t *testing.T) {
 		{"pull_request", "", false},
 		{"pull_request", "github.event.pull_request.head.repo.fork || github.event.pull_request.head.repo.full_name == github.repository", false},
 		{"pull_request", "!github.event.pull_request.head.repo.fork", false},
-		{"[pull_request, push]", "github.event.pull_request.head.repo.fork", false},
+		{"[pull_request, push]", "github.event.pull_request.head.repo.fork", true},
 		{"[pull_request, push]", "github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork", true},
 		{"pull_request_target", "github.event.pull_request.head.repo.fork", false},
 		{"pull_request_review", "github.event.pull_request.head.repo.fork", false},
