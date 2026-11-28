@@ -166,6 +166,8 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 		seen := anchors{}
 		report := func(k int, refs []ir.ExprRef, args func(r ir.ExprRef, on []analysis.EventActivity) lint.FindingArgs, what string) {
 			for n, r := range refs {
+				// every reference of a text counts, whatever it gives
+				anchor := seen.next(what+" "+r.Text, ir.FixPlan{})
 				sh := shared[[2]int{k, n}]
 				if sh.Elsewhere {
 					continue
@@ -186,7 +188,7 @@ func (cachePoisoning) Check(_ context.Context, c *lint.RuleContext, v ir.CachePo
 							related = append(related, lint.Related{Location: c.At(o), Note: "runs " + hopsText(chain) + " too, in a job that saves " + r.Text + " to the cache"})
 						}
 					}
-					c.Report(lint.FindingDraft{Location: at, Anchor: seen.next(what+" "+r.Text, ir.FixPlan{}), Args: args(r, on), Evidence: evidence, Related: append(related, labeler...), Condition: cond})
+					c.Report(lint.FindingDraft{Location: at, Anchor: anchor, Args: args(r, on), Evidence: evidence, Related: append(related, labeler...), Condition: cond})
 				case analysis.Inconclusive:
 					if dispatched && r.InconclusiveKind == analysis.InconclusiveRefInputDispatch {
 						continue // reported above

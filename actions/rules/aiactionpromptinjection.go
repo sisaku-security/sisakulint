@@ -48,15 +48,21 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 			r := p.Ref
 			loc := rp.At(r.At)
 			isOuter := p.Route == analysis.PromptRouteJobEnv || p.Route == analysis.PromptRouteWorkflowEnv
+			// every reference of one text counts, whatever the reference
+			// gives, so that the anchor of one reference does not move with
+			// what another reference gives. The references of the step are
+			// counted for the step; the references of the value of an outer
+			// env are counted by the key path of the value, so every step
+			// counts the references of the value the same
 			var anchor string
 			if isOuter {
-				// each reference of one text of the value, whatever the
-				// step gives it, so that every step counts it the same
 				k := loc.KeyPath().String()
 				if outerSeen[k] == nil {
 					outerSeen[k] = anchors{}
 				}
 				anchor = outerSeen[k].next(r.Text, ir.FixPlan{})
+			} else {
+				anchor = seen.next(r.Text, ir.FixPlan{})
 			}
 			report := func(f lint.FindingDraft) {
 				if isOuter {
@@ -92,9 +98,6 @@ func (aiActionPromptInjection) Check(_ context.Context, c *lint.RuleContext, v i
 					continue
 				}
 				// one value can have several: which one, and which of the same text
-				if !isOuter {
-					anchor = seen.next(r.Text, ir.FixPlan{})
-				}
 				f := lint.FindingDraft{Location: loc, Condition: cond, Evidence: evidence, Related: related, Anchor: anchor}
 				if p.Route.InEnv() {
 					f.Args = AIActionPromptInjectionEnv{Action: s.Action(), Env: p.Env.String(), ExprRef: r.Text}

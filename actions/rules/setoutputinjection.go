@@ -40,13 +40,14 @@ func (setOutputInjection) Check(_ context.Context, c *lint.RuleContext, v ir.Set
 				ref = refs[w.RefIndex]
 			}
 			at := c.At(w.At)
+			anchor := seen.next(w.Path, ir.FixPlan{}) // every write of a path counts, whatever the write gives
 			// the editor of a wiki is not an attacker of the rule: a value of
 			// gollum gives an inconclusive place
 			cmds := withoutGollum(w.Commands)
 			evidence, related := valueEvidence(c, ref, w.Text)
 			switch {
 			case len(cmds) > 0:
-				c.Report(lint.FindingDraft{Location: at, Anchor: seen.next(w.Path, ir.FixPlan{}), Evidence: evidence, Related: related,
+				c.Report(lint.FindingDraft{Location: at, Anchor: anchor, Evidence: evidence, Related: related,
 					Args: SetOutputInjectionControlled{ExprRef: w.Text, ControlledOn: eventsOf(cmds)}})
 			case len(w.Commands) > 0 || len(w.CommandsUndecided) > 0:
 				c.Inconclusive(lint.InconclusiveDraft{KindID: structuredValueKind, Location: at, Related: slices.Concat(evidence, related),
