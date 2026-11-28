@@ -11,7 +11,7 @@ import (
 )
 
 // skippedJobs are where the jobs of the workflow of an IR are, and whether
-// GitHub skips each in every run (job.AlwaysSkipped), made once for the IR.
+// GitHub skips each in every run (job.Reach), made once for the IR.
 type skippedJobs struct {
 	once  sync.Once
 	jobs  []skippedJob
@@ -22,7 +22,7 @@ type skippedJobs struct {
 type skippedJob struct {
 	span    cst.Span
 	skipped bool
-	steps   []cst.Span // the run steps GitHub skips in every run (job.StepAlwaysSkipped)
+	steps   []cst.Span // the run steps GitHub skips in every run (job.StepReach)
 	fork    bool       // it runs only for a pull request from a fork (job.ForkPullRequestOnly)
 }
 
@@ -32,7 +32,7 @@ type skippedJob struct {
 // in no job, every job of the workflow. An element of an action.yml is not
 // in a job. The job of a remote called workflow is skipped when the job of
 // the input that calls it is. An element of a run step that GitHub skips
-// in every run (job.StepAlwaysSkipped) is skipped too.
+// in every run (job.StepReach) is skipped too.
 func (x *IR) alwaysSkipped(b workflow.Base) bool {
 	return x.skippedAt(b, true)
 }
@@ -108,12 +108,12 @@ func (x *IR) skippedJobsOf() *skippedJobs {
 				continue
 			}
 			j := je.Value.Value
-			skipped := job.AlwaysSkipped(w, &j)
+			skipped := job.JobReach(w, &j).AlwaysSkipped()
 			sj := skippedJob{span: j.Base.Primary(), skipped: skipped, fork: x.origin == nil && job.ForkPullRequestOnly(w, &j)}
 			if !skipped && j.Steps.Status == workflow.Present {
 				for i := range j.Steps.Value.Items {
 					st := &j.Steps.Value.Items[i]
-					if job.StepAlwaysSkipped(w, &j, st) {
+					if job.StepReach(w, &j, st).AlwaysSkipped() {
 						sj.steps = append(sj.steps, st.Base.Primary())
 					}
 				}
@@ -141,13 +141,13 @@ func (x *IR) remoteCallSkipped() bool {
 	if !ok || f.Workflow == nil {
 		return false
 	}
-	return job.AlwaysSkipped(f.Workflow, r.TopJob)
+	return job.JobReach(f.Workflow, r.TopJob).AlwaysSkipped()
 }
 
 // calledSkipped is whether the local workflow name runs only when called
 // (its on has workflow_call and no other event), every caller of it is
 // among the inputs (CallerCoverageAll), and GitHub skips each call in every
-// run: the job that calls it is skipped (job.AlwaysSkipped), or its caller
+// run: the job that calls it is skipped (job.Reach), or its caller
 // is a workflow that is itself called only by such calls. A call that comes
 // back to a workflow on the way is not known to be skipped.
 func calledSkipped(g *calls.Graph, name calls.Node, seen map[calls.Node]bool) bool {
@@ -172,7 +172,7 @@ func calledSkipped(g *calls.Graph, name calls.Node, seen map[calls.Node]bool) bo
 		if !ok || cf.Workflow == nil || c.Job == nil {
 			return false
 		}
-		if !job.AlwaysSkipped(cf.Workflow, c.Job) && !calledSkipped(g, c.Caller, seen) {
+		if !job.JobReach(cf.Workflow, c.Job).AlwaysSkipped() && !calledSkipped(g, c.Caller, seen) {
 			return false
 		}
 	}

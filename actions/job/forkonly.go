@@ -10,7 +10,7 @@ import (
 // ForkPullRequestOnly is whether the job j of w runs only on pull_request,
 // and there only for a pull request from a fork, in a repository that is
 // not a fork: on every event and activity type of the on of w, an if that
-// a run of j goes through (attacker.JobIfs) is false by the event alone,
+// a run of j goes through (JobReach) is false by the event alone,
 // or the event is pull_request and that if is false in a run for a pull
 // request from a branch of the repository (attacker.BranchPullRequestFalse).
 // False when j is skipped on every event, or the events of w are not known.
@@ -19,7 +19,7 @@ func ForkPullRequestOnly(w *workflow.Workflow, j *workflow.Job) bool {
 	if !known {
 		return false
 	}
-	ifs := attacker.JobIfs(w, j)
+	ifs := JobReach(w, j).Ifs()
 	runs := false
 	for _, e := range evs {
 		stopped, fork := false, false

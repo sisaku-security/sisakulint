@@ -57,5 +57,5 @@ func Privileged() []workflow.EventName { return slices.Clone(privileged) }
 // can be called runs on its callers' events, which its callers' jobs are
 // read for.
 func eventsOf(w *workflow.Workflow, j workflow.Job, t attacker.Table) []analysis.EventActivity {
-	return taint.Filter(t, taint.EventsOn(w, privileged), attacker.JobIfs(w, &j)...)
+	return taint.Filter(t, taint.EventsOn(w, privileged), JobReach(w, &j).Ifs()...)
 }

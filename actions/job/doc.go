@@ -37,7 +37,10 @@
 //	needs.go     every job a job depends on through needs (Ancestors), and
 //	             the jobs by name (ByName); the jobs whose ifs a run of a job
 //	             goes through are attacker.NeedJobs
-//	skipped.go   whether GitHub skips a job in every run (AlwaysSkipped);
+//	reach.go     whether a job or a step ever runs (Reach, made by JobReach
+//	             and StepReach: the ifs a run goes through, and whether
+//	             GitHub skips it in every run, on every event and, for the
+//	             if of a run step, on every value of the matrix it reads);
 //	             calledReader does not read the jobs of a called workflow
 //	             that GitHub skips
 //	job.go       Analyze and AnalyzeIn: each job with all of the above

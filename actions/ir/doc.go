@@ -40,7 +40,7 @@
 // steps of the composite actions of other repositories the same way;
 // place.go makes the handles of a summary in the file of an input or of
 // such an action. skipped.go finds the job a summary is in, and whether
-// GitHub skips that job in every run (job.AlwaysSkipped), for the field
+// GitHub skips that job in every run (job.Reach), for the field
 // always-skipped of the summaries. NewRemote is the IR of a remote called workflow (a
 // reusable workflow of another repository, read for a chain of calls from
 // a job of an input): its handles are in the value of workflow.definition,

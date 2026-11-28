@@ -36,14 +36,14 @@ func TestCalledRunEventName(t *testing.T) {
 	} {
 		w := parse(t, "on: workflow_call\njobs:\n  a:\n    if: ${{ "+c.cond+" }}\n    runs-on: x\n    steps:\n      - run: a\n")
 		j := w.Jobs.Value.Entries[0].Value.Value
-		if got := AlwaysSkipped(w, &j); got != c.want {
+		if got := JobReach(w, &j).AlwaysSkipped(); got != c.want {
 			t.Errorf("%s: skipped %v, want %v", c.cond, got, c.want)
 		}
 	}
 	// pull_request without types runs on its default activity types alone.
 	w := parse(t, "on: pull_request\njobs:\n  a:\n    if: ${{ github.event.action == 'closed' }}\n    runs-on: x\n    steps:\n      - run: a\n")
 	j := w.Jobs.Value.Entries[0].Value.Value
-	if !AlwaysSkipped(w, &j) {
+	if !JobReach(w, &j).AlwaysSkipped() {
 		t.Errorf("pull_request closed: not skipped")
 	}
 }
