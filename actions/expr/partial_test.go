@@ -83,6 +83,8 @@ func TestPartial(t *testing.T) {
 		// what was not seen on GitHub is not guessed
 		{"'é' == 'É'", "push", nil, TruthUnknown},
 		{"true == 1", "push", nil, TruthUnknown},
+		{"null == true", "push", nil, TruthFalse},
+		{"false == null", "push", nil, TruthUnknown},
 		{"1 < 2", "push", nil, TruthUnknown},
 		{"'a'", "push", nil, TruthTrue},
 		{"''", "push", nil, TruthFalse},

@@ -123,6 +123,7 @@ func (v Value) Truthy() Truth {
 //
 // What it follows: strings compare ignoring case, which is only known of ASCII; a
 // number and a numeric string, and null and a string, compare as numbers;
+// true and null are not equal;
 // && and || are Kleene's and and or of the truthiness of their operands.
 func Partial(n Node, lookup func(path []PathElem) (Value, bool)) Value {
 	return PartialWith(n, lookup, nil)
@@ -260,8 +261,10 @@ func ascii(s string) bool {
 	return true
 }
 
-// equal is ==: strings ignore the case of ASCII letters; a number and a
-// numeric string, and null and a string, compare as numbers.
+// equal is ==: strings ignore the case of ASCII letters; a number and
+// a numeric string, and null and a string, compare as numbers; true and
+// null are not equal, as GitHub reads true as 1 and null as 0
+// (https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#operators).
 func equal(a, b Value) Truth {
 	if a.k == vAbstract {
 		return a.a.Equal(b)
@@ -301,6 +304,9 @@ func equal(a, b Value) Truth {
 		return 0, false
 	}
 	if a.k == vBool || b.k == vBool {
+		if (a.k == vNull && b.b) || (b.k == vNull && a.b) {
+			return TruthFalse // true is 1 and null is 0
+		}
 		return TruthUnknown
 	}
 	x, okA := asNumber(a)

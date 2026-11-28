@@ -23,6 +23,18 @@ func EventOnly(p PlacedIf, e analysis.EventActivity) expr.Truth {
 	return p.truth(eventOf(e), eventLookup(e), nil)
 }
 
+// EventOnlyWith is EventOnly with the values of values first: a reader
+// gives the values of other paths (the matrix of a job, for one).
+func EventOnlyWith(p PlacedIf, e analysis.EventActivity, values func([]expr.PathElem) (expr.Value, bool)) expr.Truth {
+	base := eventLookup(e)
+	return p.truth(eventOf(e), func(path []expr.PathElem) (expr.Value, bool) {
+		if v, ok := values(path); ok {
+			return v, true
+		}
+		return base(path)
+	}, nil)
+}
+
 // EventNameOnly is what p is on a run of the event e, of github.event_name
 // alone: EventOnly for an event read without its activity type (not known
 // on a run of a called workflow, eventNameOf). An if of
