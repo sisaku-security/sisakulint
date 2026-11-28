@@ -450,6 +450,20 @@ jobs:
       - run: |
           curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
 `)},
+	// secret-exfiltration: a job on pull_request_review that runs only for
+	// a pull request from a fork, which holds on repo.fork-pr-secrets
+	".github/workflows/fork-review.yml": {Data: []byte(`on: pull_request_review
+permissions: {}
+jobs:
+  notify:
+    if: github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/review
+`)},
 	".github/workflows/wiki.yml": {Data: []byte(`on: [gollum, issues]
 jobs:
   w:

@@ -37,6 +37,9 @@
 //	needs.go     every job a job depends on through needs (Ancestors), and
 //	             the jobs by name (ByName); the jobs whose ifs a run of a job
 //	             goes through are attacker.NeedJobs
+//	forkonly.go  whether a job runs only for a pull request from a fork, on
+//	             pull_request, pull_request_review and
+//	             pull_request_review_comment (ForkPullRequestOnly)
 //	reach.go     whether a job or a step ever runs (Reach, made by JobReach
 //	             and StepReach: the ifs a run goes through, and whether
 //	             GitHub skips it in every run, on every event and, for the

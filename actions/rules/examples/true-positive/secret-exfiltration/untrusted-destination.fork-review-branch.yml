@@ -1,0 +1,24 @@
+# situation: on pull_request_review, a job whose if lets in a review of a
+#   pull request from a fork and an approving review of any pull request
+#   sends the value of secrets.DEPLOY_TOKEN with curl to
+#   deploy.example.com; the settings of the repository send no secret to
+#   the workflow runs for pull requests from forks (repo.fork-pr-secrets
+#   false).
+# reason: an approving review of a pull request from a branch of the
+#   repository starts the job, whose run has DEPLOY_TOKEN, and the request
+#   carries it to deploy.example.com.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: an approving review of a pull request from a branch
+#   of the repository starts the job, and the server, now the attacker's,
+#   receives DEPLOY_TOKEN.
+on: pull_request_review
+jobs:
+  j:
+    if: github.event.pull_request.head.repo.fork || github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status

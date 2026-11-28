@@ -98,6 +98,12 @@
       "diagnostics": []
     },
     {
+      "name": ".github/workflows/fork-review.yml",
+      "input_kind": "workflow",
+      "state": "read",
+      "diagnostics": []
+    },
+    {
       "name": ".github/workflows/images.yml",
       "input_kind": "workflow",
       "state": "read",
@@ -207,6 +213,7 @@
     ".github/workflows/expression-called.yml",
     ".github/workflows/expression.yml",
     ".github/workflows/fork-request.yml",
+    ".github/workflows/fork-review.yml",
     ".github/workflows/images.yml",
     ".github/workflows/labeled-agent.yml",
     ".github/workflows/labeled.yml",
@@ -6432,6 +6439,104 @@
       "span_text": "$DEPLOY_TOKEN",
       "span_lines": "curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" https://deploy.example.com/status",
       "fingerprint": "b5a3bf73edbebfb77bf5eb16c4996fbceca4a158f648f2df89df95e29dad1a40"
+    },
+    {
+      "rule": "dangerous-triggers",
+      "severity": "high",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/fork-review.yml"
+        },
+        "start": 60,
+        "end": 309,
+        "line": 5,
+        "column": 5,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "dangerous-triggers.secrets",
+        "privileged_on": [
+          "pull_request_review"
+        ],
+        "secrets": [
+          "DEPLOY_TOKEN"
+        ]
+      },
+      "detected": "the job runs on pull_request_review, which an attacker triggers, with no approval, and reads the secrets DEPLOY_TOKEN",
+      "consequence": "a flaw that runs the attacker's code in the job, such as an injection or a checkout of their code, gives them the secrets and what they open past the repository",
+      "remedy": "move the secrets to a job that the attacker's events do not run, or have a person approve it with an environment that has required reviewers",
+      "related": [],
+      "evidence": [],
+      "key_path": "jobs.notify",
+      "span_text": "if: github.event.pull_request.head.repo.fork\nruns-on: ubuntu-latest\nenv:\n  DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\nsteps:\n  - run: |\n      curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" https://deploy.example.com/review",
+      "span_lines": "if: github.event.pull_request.head.repo.fork\nruns-on: ubuntu-latest\nenv:\n  DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}\nsteps:\n  - run: |\n      curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" https://deploy.example.com/review",
+      "fingerprint": "1249ba3c1b5f0ac6cbfe78cf19ea86e41c2c0cce05d93e3a1cbef2af88b84a95"
+    },
+    {
+      "rule": "secret-exfiltration",
+      "severity": "medium",
+      "certainty": "conditional",
+      "location": {
+        "file": {
+          "input": ".github/workflows/fork-review.yml"
+        },
+        "start": 261,
+        "end": 274,
+        "line": 11,
+        "column": 47,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "secret-exfiltration.untrusted-destination",
+        "command": "curl",
+        "secret": "DEPLOY_TOKEN",
+        "destination": "deploy.example.com"
+      },
+      "detected": "curl sends DEPLOY_TOKEN to deploy.example.com, and no file of facts says to trust deploy.example.com with DEPLOY_TOKEN",
+      "consequence": "whoever runs the server of the destination, or takes the server over (a breached vendor, or whoever registers a lapsed domain), receives the secret or the job's token and can use the secret or the token as the job would",
+      "remedy": "if the destination is the service that the secret is for, answer true for the pair of the secret (GITHUB_TOKEN for the job's token) and the destination, with --fact 'request.destination-trusted[secret=API_KEY,destination=api.example.com]=true' or the same query in a file of facts given with --facts; if the destination is not, remove the secret from the request",
+      "related": [
+        {
+          "location": {
+            "file": {
+              "input": ".github/workflows/fork-review.yml"
+            },
+            "start": 276,
+            "end": 309,
+            "line": 11,
+            "column": 62,
+            "exact": true,
+            "via": []
+          },
+          "note": "the request goes to deploy.example.com here"
+        }
+      ],
+      "evidence": [],
+      "condition": {
+        "all": [
+          {
+            "query": {
+              "kind": "request.destination-trusted",
+              "secret": "DEPLOY_TOKEN",
+              "destination": "deploy.example.com"
+            },
+            "eq": false
+          },
+          {
+            "query": {
+              "kind": "repo.fork-pr-secrets"
+            },
+            "eq": true
+          }
+        ]
+      },
+      "key_path": "jobs.notify.steps[0].run",
+      "span_text": "$DEPLOY_TOKEN",
+      "span_lines": "curl -fsS -H \"Authorization: Bearer $DEPLOY_TOKEN\" https://deploy.example.com/review",
+      "fingerprint": "8a9eb726d457f32ba09b728cde094f32d6bb33c25507b7594111caafecc9c7c5"
     },
     {
       "rule": "permissions",
@@ -15629,6 +15734,31 @@
       "related": [],
       "evidence": [],
       "fingerprint": "01ca635e4d9877833766c858f9d170d41486a8f7d94854e3933aeba96e98827d"
+    },
+    {
+      "rule": "missing-timeout-minutes",
+      "certainty": "confirmed",
+      "location": {
+        "file": {
+          "input": ".github/workflows/fork-review.yml"
+        },
+        "start": 48,
+        "end": 54,
+        "line": 4,
+        "column": 3,
+        "exact": true,
+        "via": []
+      },
+      "args": {
+        "kind_id": "missing-timeout-minutes.job",
+        "job": "notify"
+      },
+      "detected": "the job notify has no timeout-minutes",
+      "consequence": "a job that stops making progress runs until GitHub cancels the job after 360 minutes, and the job uses the runner for the whole 360 minutes",
+      "remedy": "write timeout-minutes on the job, a little above the time that the job usually takes",
+      "related": [],
+      "evidence": [],
+      "fingerprint": "47e2df269f41613a2ef51fc2bf42597f0ef215baf7daf38fd9ac4e315f356274"
     },
     {
       "rule": "missing-timeout-minutes",

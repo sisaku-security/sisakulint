@@ -1,0 +1,23 @@
+# situation: on pull_request_review_comment, a job that runs only when the
+#   head repository of the pull request is not the repository sends the
+#   value of secrets.DEPLOY_TOKEN with curl to deploy.example.com; no file
+#   of facts answers whether the settings of the repository send its
+#   secrets to the workflow runs for pull requests from forks
+#   (repo.fork-pr-secrets).
+# reason: the finding holds when the settings send the secrets, and the
+#   rule assumes that they do.
+# attack: the attacker takes over the server of the destination, by a breach
+#   of the vendor or by registering the domain when the domain lapses.
+# attack-run-behavior: a review comment on a pull request from a fork starts
+#   the job, and, where the settings send the secrets, the server, now the
+#   attacker's, receives DEPLOY_TOKEN.
+on: pull_request_review_comment
+jobs:
+  j:
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status

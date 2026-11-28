@@ -128,6 +128,7 @@ var exampleVariables = map[string]map[string]string{
 // kind. The examples not here answer such a fact unknown.
 var exampleRepoFacts = map[string]map[facts.Kind]string{
 	"true-positive/secret-exfiltration/untrusted-destination.fork-pr-secrets": {facts.KindRepoForkPRSecrets: "true"},
+	"true-positive/secret-exfiltration/untrusted-destination.fork-review":     {facts.KindRepoForkPRSecrets: "true"},
 	"true-negative/secret-exfiltration/untrusted-destination.fork-only":       {facts.KindRepoForkPRSecrets: "false"},
 }
 

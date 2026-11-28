@@ -7,9 +7,9 @@
 #   to the workflow runs for pull requests from forks (the fact
 #   repo.fork-pr-secrets); DEPLOY_TOKEN is empty, so the HTTP request that
 #   the job sends carries no secret to the host.
-# cause: the rule reads every workflow run of the event pull_request, and
-#   does not distinguish a workflow run for a pull request from a fork from
-#   a workflow run for a pull request from a branch of the repository.
+# cause: the rule does not know the settings of the repository, and
+#   assumes that they send secrets to the workflow runs for pull requests
+#   from forks until a file of facts says otherwise (repo.fork-pr-secrets).
 # attack: an attacker who operates the host that DEPLOY_HOST names reads
 #   the Authorization header of the HTTP request.
 # attack-run-behavior: a pull request from a branch of the repository does

@@ -52932,6 +52932,105 @@
             - run: |
                 curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" "https://${{ vars.DEPLOY_HOST }}/status"
       ```
+    - untrusted-destination.fork-review-branch.yml (workflow, true-positive)
+      ```yaml
+      # situation: on pull_request_review, a job whose if lets in a review of a
+      #   pull request from a fork and an approving review of any pull request
+      #   sends the value of secrets.DEPLOY_TOKEN with curl to
+      #   deploy.example.com; the settings of the repository send no secret to
+      #   the workflow runs for pull requests from forks (repo.fork-pr-secrets
+      #   false).
+      # reason: an approving review of a pull request from a branch of the
+      #   repository starts the job, whose run has DEPLOY_TOKEN, and the request
+      #   carries it to deploy.example.com.
+      # attack: the attacker takes over the server of the destination, by a breach
+      #   of the vendor or by registering the domain when the domain lapses.
+      # attack-run-behavior: an approving review of a pull request from a branch
+      #   of the repository starts the job, and the server, now the attacker's,
+      #   receives DEPLOY_TOKEN.
+      on: pull_request_review
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.fork || github.event.review.state == 'approved'
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+      ```
+    - untrusted-destination.fork-review-comment.yml (workflow, true-positive)
+      ```yaml
+      # situation: on pull_request_review_comment, a job that runs only when the
+      #   head repository of the pull request is not the repository sends the
+      #   value of secrets.DEPLOY_TOKEN with curl to deploy.example.com; no file
+      #   of facts answers whether the settings of the repository send its
+      #   secrets to the workflow runs for pull requests from forks
+      #   (repo.fork-pr-secrets).
+      # reason: the finding holds when the settings send the secrets, and the
+      #   rule assumes that they do.
+      # attack: the attacker takes over the server of the destination, by a breach
+      #   of the vendor or by registering the domain when the domain lapses.
+      # attack-run-behavior: a review comment on a pull request from a fork starts
+      #   the job, and, where the settings send the secrets, the server, now the
+      #   attacker's, receives DEPLOY_TOKEN.
+      on: pull_request_review_comment
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.full_name != github.repository
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+      ```
+    - untrusted-destination.fork-review-token.yml (workflow, true-positive)
+      ```yaml
+      # situation: on pull_request_review_comment, a job that runs only when the
+      #   head repository of the pull request is a fork sends the job's token
+      #   with curl to deploy.example.com; the settings of the repository send no
+      #   secret to the workflow runs for pull requests from forks
+      #   (repo.fork-pr-secrets false).
+      # reason: every workflow run has GITHUB_TOKEN, that for a pull request from
+      #   a fork too, and the request carries it to deploy.example.com.
+      # attack: the attacker takes over the server of the destination, by a breach
+      #   of the vendor or by registering the domain when the domain lapses.
+      # attack-run-behavior: a review comment on a pull request from a fork starts
+      #   the job, and the server, now the attacker's, receives the token.
+      on: pull_request_review_comment
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.fork
+          runs-on: ubuntu-latest
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: token ${{ github.token }}" https://deploy.example.com/status
+      ```
+    - untrusted-destination.fork-review.yml (workflow, true-positive)
+      ```yaml
+      # situation: on pull_request_review, a job that runs only when the head
+      #   repository of the pull request is a fork sends the value of
+      #   secrets.DEPLOY_TOKEN with curl to deploy.example.com; the settings of
+      #   the private repository send its secrets to the workflow runs for pull
+      #   requests from forks (repo.fork-pr-secrets true).
+      # reason: the workflow run for a pull request from a fork has DEPLOY_TOKEN,
+      #   and the request carries it to deploy.example.com.
+      # attack: the attacker takes over the server of the destination, by a breach
+      #   of the vendor or by registering the domain when the domain lapses.
+      # attack-run-behavior: a review of a pull request from a fork starts the
+      #   job, and the server, now the attacker's, receives DEPLOY_TOKEN.
+      on: pull_request_review
+      jobs:
+        j:
+          if: github.event.pull_request.head.repo.fork
+          runs-on: ubuntu-latest
+          env:
+            DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          steps:
+            - run: |
+                curl -fsS -H "Authorization: Bearer $DEPLOY_TOKEN" https://deploy.example.com/status
+      ```
     - untrusted-destination.function-output.yml (workflow, true-positive)
       ```yaml
       # situation: on push, a step defines a function f that prints the secret
@@ -54199,9 +54298,10 @@
             run: |
               curl -fsS -H "x-apikey: $API_KEY" https://www.virustotal.com/api/v3/files -F file=@dist/app.zip
     ```
-- fork-pull-request: a job that runs only for a pull request from a fork (pull_request, pull_request_review or pull_request_review_comment, with an if such as github.event.pull_request.head.repo.fork == true or github.event.pull_request.head.repo.full_name != github.repository), in a base repository that is not a fork: the workflow run for a pull request from a fork has no secret except GITHUB_TOKEN, unless the settings of a private repository send secrets to such workflow runs (the fact repo.fork-pr-secrets), so a request that the job sends to a host (with curl, wget or gh api) carries an empty value in the place of a secret other than GITHUB_TOKEN; the rule does not distinguish a workflow run for a pull request from a fork from a workflow run for a pull request from a branch of the repository
+- fork-pull-request: a job that runs only for a pull request from a fork (pull_request, pull_request_review or pull_request_review_comment, with an if such as github.event.pull_request.head.repo.fork == true or github.event.pull_request.head.repo.full_name != github.repository), in a base repository that is not a fork: the workflow run for a pull request from a fork has no secret except GITHUB_TOKEN, unless the settings of a private repository send secrets to such workflow runs (the fact repo.fork-pr-secrets), so a request that the job sends to a host (with curl, wget or gh api) carries an empty value in the place of a secret other than GITHUB_TOKEN; the rule assumes that the settings send the secrets until a file of facts says otherwise
   - finding kinds: secret-exfiltration.untrusted-destination
-  - disposition: todo (needs: same-file, fact)
+  - fact kinds:
+    - repo.fork-pr-secrets (provider: repo-setting, answer that removes the finding: false)
   - example: fork-pull-request.yml (workflow, false-positive)
     ```yaml
     # situation: on pull_request, a job that runs only when the head repository
@@ -54213,9 +54313,9 @@
     #   to the workflow runs for pull requests from forks (the fact
     #   repo.fork-pr-secrets); DEPLOY_TOKEN is empty, so the HTTP request that
     #   the job sends carries no secret to the host.
-    # cause: the rule reads every workflow run of the event pull_request, and
-    #   does not distinguish a workflow run for a pull request from a fork from
-    #   a workflow run for a pull request from a branch of the repository.
+    # cause: the rule does not know the settings of the repository, and
+    #   assumes that they send secrets to the workflow runs for pull requests
+    #   from forks until a file of facts says otherwise (repo.fork-pr-secrets).
     # attack: an attacker who operates the host that DEPLOY_HOST names reads
     #   the Authorization header of the HTTP request.
     # attack-run-behavior: a pull request from a branch of the repository does
