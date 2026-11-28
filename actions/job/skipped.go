@@ -126,7 +126,8 @@ func appendName(names []string, n string) []string {
 // written value of the name, of its type in the matrix context
 // (workflow.MatrixVariable.Types), and null when a combination may not
 // have the name (workflow.MatrixVariable.InEvery); not ok when a name has
-// values not known before the run, or when there are more than
+// values not known before the run, when a name has no value (os: [] with
+// no include that gives os a value), or when there are more than
 // maxMatrixCombinations combinations.
 func matrixValues(j *workflow.Job, names []string) ([][]expr.Value, bool) {
 	for _, v := range j.MatrixVariables {
@@ -157,6 +158,9 @@ func matrixValues(j *workflow.Job, names []string) ([][]expr.Value, bool) {
 		}
 		if !inEvery {
 			vs = append(vs, expr.Null())
+		}
+		if len(vs) == 0 {
+			return nil, false
 		}
 		out[i] = vs
 		total *= len(vs)
